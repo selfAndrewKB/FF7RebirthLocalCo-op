@@ -141,6 +141,36 @@ void TestMenusOfThree()
     EXPECT(!SkipWaitSoundOffAmong(-1, thirdWaits, 3));
 }
 
+void TestSlowDownSwitch()
+{
+    std::puts("slow-down switch: off asks full speed; at a switch, the grey and the muffle follow the waiting menus");
+    EXPECT(SlowAsked(true, 0.05f) == 0.05f);
+    EXPECT(SlowAsked(false, 0.05f) == kFullSpeed);
+    EXPECT(SlowAsked(false, 1.0f) == kFullSpeed);
+    // Three menus all asking the slow with the switch off: the frame stays at full speed.
+    const SlowValue offEarlier[2] = {{true, SlowAsked(false, 0.05f)}, {true, SlowAsked(false, 0.05f)}};
+    EXPECT(SlowWrittenAmong(offEarlier, 2, SlowAsked(false, 0.05f)) == kFullSpeed);
+
+    EXPECT(GreyAtSwitch(false, 5, true) == Flip::Lift);
+    EXPECT(GreyAtSwitch(false, 4, true) == Flip::Lift);  // closing but still held: taken down
+    EXPECT(GreyAtSwitch(false, 5, false) == Flip::Nothing);
+    EXPECT(GreyAtSwitch(true, 5, false) == Flip::Raise);
+    EXPECT(GreyAtSwitch(true, 1, false) == Flip::Raise);
+    EXPECT(GreyAtSwitch(true, 4, false) == Flip::Nothing);  // closing: its close would take it down at once
+    EXPECT(GreyAtSwitch(true, 0, false) == Flip::Nothing);
+    EXPECT(GreyAtSwitch(true, 5, true) == Flip::Nothing);
+
+    const std::int32_t none[3]    = {0, 0, 0};
+    const std::int32_t open[3]    = {0, 5, 0};
+    const std::int32_t closing[3] = {4, 0, 0};
+    EXPECT(SoundAtSwitch(false, open, 3) == Flip::Lift);
+    EXPECT(SoundAtSwitch(false, closing, 3) == Flip::Lift);  // its own close is skipped from now on
+    EXPECT(SoundAtSwitch(false, none, 3) == Flip::Nothing);
+    EXPECT(SoundAtSwitch(true, open, 3) == Flip::Raise);
+    EXPECT(SoundAtSwitch(true, closing, 3) == Flip::Nothing);
+    EXPECT(SoundAtSwitch(true, none, 3) == Flip::Nothing);
+}
+
 void TestJoinSetup()
 {
     std::puts("join setup: the first five tries on consecutive ticks, then every 30th tick, never given up; readiness");
@@ -196,6 +226,7 @@ int main()
     TestSharedState();
     TestMenusAsBefore();
     TestMenusOfThree();
+    TestSlowDownSwitch();
     TestJoinSetup();
     TestCanFollow();
 

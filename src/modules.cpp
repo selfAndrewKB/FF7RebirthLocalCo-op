@@ -11,6 +11,7 @@
 #include "battle/leader_reads.h"
 #include "battle/lock_group_coin.h"
 #include "battle/lock_on.h"
+#include "battle/menu_tint.h"
 #include "battle/player_hits.h"
 #include "battle/synergy_partner.h"
 #include "battle/target_coin.h"
@@ -856,6 +857,7 @@ void RegisterCommands(session::Session& session, views::column_source::Override&
         world::nav_strand::RegisterCommands();
         menu::coop_menu::RegisterCommands();
         battle::lock_on::RegisterCommands();
+        battle::menu_tint::RegisterCommands();
         camera::shoulder_scale::RegisterCommands();
         camera::camera_distance::RegisterCommands();
         world::charapop_centre::RegisterCommands();

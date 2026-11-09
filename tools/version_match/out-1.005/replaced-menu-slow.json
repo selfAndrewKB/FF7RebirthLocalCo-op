@@ -1,0 +1,10 @@
+{
+  "build": "1.005",
+  "research_build": "1.004",
+  "date": "2026-11-09",
+  "doc": "Rebirth/Documentation/research/RE-menu-slow.md (the address table)",
+  "facts": [
+    {"name": "EndSound_PostEvent", "old": "0x140B99F78", "new": "0x140A12BA0", "bytes": "", "same_semantics": true, "confidence": "CONFIRMED", "note": "void(event): the IDA pass MENUSLOW on both databases; the wait's open posts event[12] through it."},
+    {"name": "EndSound_SetAudioModeByName", "old": "0x140B9A2BC", "new": "0x140A12DE4", "bytes": "", "same_semantics": true, "confidence": "CONFIRMED", "note": "void(FName mode, float fade): the IDA pass MENUSLOW; the wait's open sets the mode \"WaitMode\", fade 0.05."}
+  ]
+}

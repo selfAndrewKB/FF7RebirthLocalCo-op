@@ -1,0 +1,14 @@
+# The command menu's slow-down switch (plan/remake-alignment.md step 10d): the setting's row switches it both ways and
+# its five calls are placed. A battle menu's grey and muffle following it need a fight: live check 6 of RE-menu-slow.md.
+# needs: control
+# expect: command menu: an open battle menu slows the world, greys the screen and muffles the sound, as the game does \(the console\)
+# expect: command menu: an open battle menu leaves the battle at full speed, with no grey and no muffled sound \(the console\)
+# expect: value menu-tint the slow-down on; calls placed
+# expect: value menu-tint the slow-down off; calls placed
+note regression: menu slow start
+get menu-slow
+menu-slow on
+get menu-tint
+menu-slow off
+get menu-tint
+note regression: menu slow done

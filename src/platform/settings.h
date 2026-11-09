@@ -145,6 +145,13 @@ inline constexpr Option kVerticalFov{  // views/player_view_point
     false, L"Vertical Split-Screen FOV", kFovWeightWords,
     L"For full-height views narrower than the game's picture. Low: more of the scene, everything smaller. High: characters at "
     L"their usual size, the sides cropped."};
+inline constexpr Option kMenuSlow{  // battle/command_menu_tick
+    L"Battle", L"menu-slow", kOnOffWords, L"off",
+    L"off (the default): no grey and no muffled sound, and the world and the ATB gauges run on at full speed while a battle "
+    L"command menu is open; on: an open menu slows the world, greys the screen and muffles the sound, as the game does",
+    false, L"Command Menu Slow-Down", kOnOffLabels,
+    L"On: an open battle command menu slows the battle, greys the screen and muffles the sound, as in single player. Off: "
+    L"the battle runs on at full speed and full sound while a player picks a command."};
 inline constexpr Option kBattleWarps{  // battle/battle_warps
     L"Battle", L"battle-warps", kBattleWarpsWords, L"players-stay",
     L"who the game warps at a battle's start and end: players-stay (every player's own character stays where it is), "
@@ -232,9 +239,10 @@ inline constexpr Option kLeadHolder{  // session/lead_gate
 /// Every option, in the order the settings file lists them.
 inline constexpr std::array kOptions{&kMultiMonitor,     &kMonitors,      &kColumnOrder,
                                      &kTwoPlayerSplit,  &kThreePlayerSplit, &kHorizontalFov,
-                                     &kVerticalFov,     &kBattleWarps,      &kEnemyDamage,
-                                     &kEnemyHp,         &kBossHp,           &kEnemyStagger,
-                                     &kExpGain,         &kApGain,           &kLeadHolder};
+                                     &kVerticalFov,     &kMenuSlow,         &kBattleWarps,
+                                     &kEnemyDamage,     &kEnemyHp,          &kBossHp,
+                                     &kEnemyStagger,    &kExpGain,          &kApGain,
+                                     &kLeadHolder};
 
 /// The option is a row of the table (Of and Why answer by the row).
 consteval bool Listed(const Option& option)
@@ -246,7 +254,8 @@ consteval bool Listed(const Option& option)
     return false;
 }
 static_assert(Listed(kMultiMonitor) && Listed(kMonitors) && Listed(kColumnOrder) && Listed(kTwoPlayerSplit) &&
-                  Listed(kThreePlayerSplit) && Listed(kHorizontalFov) && Listed(kVerticalFov) && Listed(kBattleWarps) &&
+                  Listed(kThreePlayerSplit) && Listed(kHorizontalFov) && Listed(kVerticalFov) && Listed(kMenuSlow) &&
+                  Listed(kBattleWarps) &&
                   Listed(kEnemyDamage) && Listed(kEnemyHp) && Listed(kBossHp) && Listed(kEnemyStagger) && Listed(kExpGain) &&
                   Listed(kApGain) && Listed(kLeadHolder),
               "every option is a row of kOptions");

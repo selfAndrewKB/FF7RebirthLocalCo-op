@@ -15,7 +15,9 @@
 //
 // What a second tick would change for player 1 is handled:
 //   - the world slow (slot 0, written by every tick): either menu slows the world (policy A, the
-//     smaller of the two values is written);
+//     smaller of the two values is written); with the slow-down switched off (the menu-slow setting, off by
+//     default) every write asks for full speed, the game's own value with no menu open, and the menu's grey and
+//     muffle are skipped (battle/menu_tint);
 //   - the per-type command snapshot: a seat's pass does not write it (its one reader cancels a
 //     pending command on the game's controller); the key guide is the seat's own inside the scope;
 //   - the leader-switch requests: cleared before each tick (a written exception: a seat's d-pad
@@ -65,5 +67,12 @@ bool RefocusMenu(void* controller) noexcept;
 
 /// The controller's battle input flag (+0x25C) is on.
 bool BattleInputOn(const void* controller) noexcept;
+
+/// Whether an open command menu slows the world, greys the screen and muffles the sound (the game's behaviour). The
+/// settings file's value is set at install, before any redirect is placed; SetMenuSlow switches it afterwards (the
+/// Co-op page and the console's `menu-slow on|off`), from the next controller tick, where the grey and the muffle of
+/// any waiting menu follow (battle/menu_tint). `why` names the source in the log line. Any thread.
+bool MenuSlow() noexcept;
+void SetMenuSlow(bool slows, const wchar_t* why) noexcept;
 
 }  // namespace lss::battle::command_menu_tick

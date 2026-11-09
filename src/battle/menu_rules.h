@@ -76,6 +76,16 @@ struct SlowValue
     float value     = 1.0F;
 };
 
+/// The world-slow value a tick writes while no menu waits: full speed.
+inline constexpr float kFullSpeed = 1.0F;
+
+/// The value a menu asks for under the slow-down switch: the game's own with the switch on, full speed with it off (an
+/// open menu then leaves the world running).
+constexpr float SlowAsked(bool slows, float value) noexcept
+{
+    return slows ? value : kFullSpeed;
+}
+
 /// The world-slow value written in a seat's pass, over the menus that ticked before it (player 1's, then the earlier
 /// seats'): any menu slows the world (policy A), so the smallest of its own and those that came this frame.
 constexpr float SlowWrittenAmong(const SlowValue* earlier, int count, float mine) noexcept
@@ -110,6 +120,49 @@ constexpr bool SkipWaitSoundOffAmong(int me, const std::int32_t* waits, int play
         }
     }
     return false;
+}
+
+// ---- the slow-down switch's grey and muffle (menu_tint) ----
+// With the switch off a menu's wait raises neither: its grey and its muffle are skipped at the wait's open, and its
+// close finds nothing to take down. A switch while menus wait settles what they hold, once, with the game's own calls.
+
+/// A wait state that has raised the grey and the muffle and has not begun to close (opening 1, open 5).
+constexpr bool Waiting(std::int32_t wait) noexcept
+{
+    return wait == 1 || wait == 5;
+}
+
+enum class Flip : std::uint8_t
+{
+    Nothing,
+    Raise,  // the game's own start (the grey's enable or count, the muffle's on)
+    Lift,   // the game's own stop (the grey's disable or count back, the muffle's off)
+};
+
+/// One menu's grey at a switch: `held` is whether it holds the grey (player 1's the latch, a seat's its count).
+/// Switched off, a held grey is taken down; switched on, a waiting menu without its grey raises it.
+constexpr Flip GreyAtSwitch(bool slows, std::int32_t wait, bool held) noexcept
+{
+    if (!slows)
+    {
+        return held ? Flip::Lift : Flip::Nothing;
+    }
+    return Waiting(wait) && !held ? Flip::Raise : Flip::Nothing;
+}
+
+/// The one muffle at a switch, over every menu's wait state (`players` of them). Switched off: lifted if any menu has
+/// raised it, a closing one too, since its own close is then skipped. Switched on: raised if any menu still waits, and
+/// its close then lifts it.
+constexpr Flip SoundAtSwitch(bool slows, const std::int32_t* waits, int players) noexcept
+{
+    for (int i = 0; i < players; ++i)
+    {
+        if (slows ? Waiting(waits[i]) : waits[i] != 0)
+        {
+            return slows ? Flip::Raise : Flip::Lift;
+        }
+    }
+    return Flip::Nothing;
 }
 
 // ---- a seat's controller following the game's (command_menu) ----

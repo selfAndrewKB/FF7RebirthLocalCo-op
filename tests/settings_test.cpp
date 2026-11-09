@@ -56,7 +56,7 @@ void TableConsistent()
             open = option->section;
         }
     }
-    EXPECT(kOptions.size() == 15);
+    EXPECT(kOptions.size() == 16);
     // The six battle rates: multipliers from 0.1 to 10.0 in tenths, each default the game's own 1.0.
     for (const Option* rate : {&kEnemyDamage, &kEnemyHp, &kBossHp, &kEnemyStagger, &kExpGain, &kApGain})
     {
@@ -66,6 +66,9 @@ void TableConsistent()
     }
     EXPECT(kLeadHolder.words.size() == 2 && std::wcscmp(kLeadHolder.fallback, L"guide") == 0 && kLeadHolder.experimental);
     EXPECT(kBattleWarps.words.size() == 3 && std::wcscmp(kBattleWarps.fallback, L"players-stay") == 0);
+    // The slow-down: on or off, off by default (an open battle menu leaves the battle running).
+    EXPECT(kMenuSlow.words.size() == 2 && std::wcscmp(kMenuSlow.fallback, L"off") == 0 && !kMenuSlow.experimental);
+    EXPECT(std::wstring_view(kMenuSlow.section) == L"Battle");
     EXPECT(kVerticalFov.words.size() == kFovWeightSteps && std::wcscmp(kVerticalFov.fallback, L"1.00") == 0);
     // The screen order's six words, by player number, the default 123; the three-player layouts in one window (no
     // columns: three equal columns are the span's only).

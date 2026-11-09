@@ -12,11 +12,13 @@
 #include "facts/party.h"
 #include "platform/build_value.h"
 #include "platform/call_redirect.h"
+#include "platform/command_registry.h"
 #include "platform/deferred_sites.h"
 #include "platform/entry_redirect.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
+#include "platform/settings.h"
 #include "platform/settled_log.h"
 #include "platform/verified_code.h"
 #include "players/generation.h"
@@ -30,6 +32,7 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <format>
@@ -164,6 +167,7 @@ platform::DeferredSites g_placement;  // 1.005: the calls placed from the game t
 constexpr const wchar_t* kUnavailable = L"UNAVAILABLE (a check failed): players 2 and 3 have no attack, guard or dodge";
 
 bool PlaceSites(const platform::GameImage& image) noexcept;
+void LogMenuSlow(const wchar_t* why) noexcept;  // the slow-down's state, at Info (below)
 HudModeFn      g_hudMode   = nullptr;
 ResumeHudInputFn  g_resumeHudInput  = nullptr;
 SuspendHudInputFn g_suspendHudInput = nullptr;
@@ -172,6 +176,10 @@ LeaderFn         g_resolveLeader  = nullptr;
 std::uintptr_t g_endUISystem  = 0;
 std::uintptr_t g_partyManager = 0;  // the address holding the party manager
 SetMenuLayerFn g_setMenuLayer = nullptr;
+
+// The slow-down switch (the menu-slow setting): read by every world-slow write and by the tint's gates, set by the
+// settings file at install and by the page or the console afterwards.
+std::atomic<bool> g_slows{true};
 
 // Game thread.
 bool         g_installed = false;
@@ -650,6 +658,7 @@ void SeatPass(int seat, float deltaTime) noexcept
 /// Replaces the game's controller tick call: the game's controller, then each seat's in seat order.
 void Tick(void* controller, float deltaTime) noexcept
 {
+    menu_tint::FollowSwitch();  // outside every pass: a switch since the last tick reaches any waiting menu first
     ++g_frame;
     SetPass(1, 0);
     reinterpret_cast<TickFn>(g_tickCall.Original())(controller, deltaTime);
@@ -668,10 +677,12 @@ void Tick(void* controller, float deltaTime) noexcept
     }
 }
 
-/// Replaces the world-slow write of every controller tick: any menu slows the world (policy A).
+/// Replaces the world-slow write of every controller tick: any menu slows the world (policy A); with the slow-down
+/// switched off every menu asks for full speed.
 void Slot(std::uint8_t slot, float value) noexcept
 {
     const auto original = reinterpret_cast<SlotFn>(g_slotCall.Original());
+    value               = menu_rules::SlowAsked(g_slows.load(std::memory_order_relaxed), value);
     if (g_pass == 2 && players::SeatIndex(g_passSeat))
     {
         const int seat                                 = g_passSeat;
@@ -758,6 +769,34 @@ void GuideMode8() noexcept
 
 bool Install(const platform::GameImage& image) noexcept
 {
+    // The menu-slow setting (one of the table's words), set before any redirect is placed: no write reads it yet.
+    g_slows.store(platform::settings::Of(platform::settings::kMenuSlow).word == L"on");
+    try
+    {
+        LogMenuSlow(platform::settings::Why(platform::settings::kMenuSlow).c_str());
+    }
+    catch (...)
+    {
+        LogMenuSlow(L"the settings file");  // out of memory for the reason's text
+    }
+    try
+    {
+        control::RegisterOption(
+            platform::settings::kMenuSlow,
+            [](const std::wstring& word) {
+                if (!g_installed)
+                {
+                    return control::Outcome{false, L"the command menu's calls are not in place; the switch does nothing"};
+                }
+                SetMenuSlow(word == L"on", L"the console");
+                return control::Outcome{};
+            },
+            [] { return std::wstring(MenuSlow() ? L"on" : L"off"); });
+    }
+    catch (...)
+    {
+        platform::Log(L"command menu: the slow-down option could not be registered (out of memory?); the page cannot set it");
+    }
     const auto find = [&image](const platform::FunctionFact& fact) { return platform::FindFunction(image, fact); };
     const auto tick = find(kTick), slot = find(kSlot), snapshot = find(kSnapshot), show = find(kGuideShow),
                mode8 = find(kGuideMode8), hud = find(kSetHudMode), resume = find(kResumeHudInput),
@@ -859,6 +898,39 @@ bool BattleInputOn(const void* controller) noexcept
     return controller != nullptr &&
            ReadAt<std::uint8_t>(reinterpret_cast<std::uintptr_t>(controller) + kCmdBattleInput) != 0;
 }
+
+bool MenuSlow() noexcept
+{
+    return g_slows.load(std::memory_order_relaxed);
+}
+
+void SetMenuSlow(bool slows, const wchar_t* why) noexcept
+{
+    if (g_slows.exchange(slows) != slows)
+    {
+        LogMenuSlow(why);  // a waiting menu's grey and muffle follow at the next controller tick (menu_tint)
+    }
+}
+
+namespace {
+
+void LogMenuSlow(const wchar_t* why) noexcept
+{
+    if (MenuSlow())
+    {
+        platform::Log(L"command menu: an open battle menu slows the world, greys the screen and muffles the sound, as the "
+                      L"game does ({})",
+                      why);
+    }
+    else
+    {
+        platform::Log(L"command menu: an open battle menu leaves the battle at full speed, with no grey and no muffled "
+                      L"sound ({})",
+                      why);
+    }
+}
+
+}  // namespace
 
 void Remove() noexcept
 {

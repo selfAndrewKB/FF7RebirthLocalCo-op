@@ -6,6 +6,7 @@
 #include "facts/command_controller.h"
 #include "facts/hud.h"
 #include "platform/call_redirect.h"
+#include "platform/command_registry.h"
 #include "platform/deferred_sites.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
@@ -42,9 +43,22 @@ constexpr platform::FunctionFact kFilterOff{L"EndUIFilter_DisableType", 0x1411F1
 constexpr platform::FunctionFact kMenuSound{L"EndSound_PostMenuEventIdx", 0x140B99E3C, kMenuSoundBytes};
 constexpr platform::FunctionFact kRefInc{L"EndUIFilter_RefInc", 0x1411F1B74, kRefIncBytes};
 constexpr platform::FunctionFact kRefDec{L"EndUIFilter_RefDec", 0x1411F14AC, kRefDecBytes};
-constexpr std::uintptr_t kFilterOnCall  = 0x140963943;  // wait mode 0 -> 1
-constexpr std::uintptr_t kFilterOffCall = 0x140963839;  // 5 -> 4
-constexpr std::uintptr_t kSoundOffCall  = 0x14096384B;  // 4 -> 0 (event 13, the audio mode cleared)
+// The wait's muffle at its open: the sound event (event table entry 12) and the audio mode "WaitMode", both inlined in
+// the wait machine (RE-menu-slow.md §1).
+constexpr std::uint8_t kSoundEventBytes[] = {0x48, 0x89, 0x4C, 0x24, 0x08, 0xB8, 0x38, 0x04,
+                                             0x00, 0x00, 0xE8, 0xA9, 0x4F, 0x51, 0x01, 0x48};
+constexpr std::uint8_t kSoundModeBytes[]  = {0x40, 0x53, 0xB8, 0x30, 0x00, 0x00, 0x00, 0xE8,
+                                             0x68, 0x4C, 0x51, 0x01, 0x48, 0x2B, 0xE0, 0xC5};
+constexpr platform::FunctionFact kSoundEvent{L"EndSound_PostEvent", 0x140B99F78, kSoundEventBytes};
+constexpr platform::FunctionFact kSoundMode{L"EndSound_SetAudioModeByName", 0x140B9A2BC, kSoundModeBytes};
+constexpr std::uintptr_t kFilterOnCall    = 0x140963943;  // wait mode 0 -> 1
+constexpr std::uintptr_t kSoundOnCall     = 0x14096394F;  // 0 -> 1, the muffle's event
+constexpr std::uintptr_t kSoundModeOnCall = 0x14096397F;  // 0 -> 1, the muffle's audio mode
+constexpr std::uintptr_t kFilterOffCall   = 0x140963839;  // 5 -> 4
+constexpr std::uintptr_t kSoundOffCall    = 0x14096384B;  // 4 -> 0 (event 13, the audio mode cleared)
+// EndSound_PostMenuEventIdx's two wait entries: 12 the muffle's event and audio mode together, 13 their end.
+constexpr std::uint8_t kWaitSoundOn  = 12;
+constexpr std::uint8_t kWaitSoundOff = 13;
 using facts::kUIFilterManager;  // EndUISystem[41]
 constexpr std::uint32_t  kFilterLatch   = 0x1C;         // u8 per type
 constexpr std::uint32_t  kFilterCount   = 0x2C;         // i32 per type
@@ -56,15 +70,17 @@ using FilterOnFn       = void (*)(void* world, std::uint8_t type);
 using FilterOffFn      = void (*)(std::uint8_t type);
 using MenuSoundFn      = void (*)(std::uint8_t index);
 using FilterCountFn    = void (*)(void* manager, std::uint8_t type);
+using SoundEventFn     = void (*)(void* event);
+using SoundModeFn      = void (*)(std::uint64_t mode, float fade);  // the mode's FName, by value
 
 // Set once at install.
-platform::CallRedirect g_filterOnCall, g_filterOffCall, g_soundOffCall;
+platform::CallRedirect g_filterOnCall, g_filterOffCall, g_soundOffCall, g_soundOnCall, g_soundModeOnCall;
 FilterCountFn          g_refInc = nullptr, g_refDec = nullptr;
 
 /// The calls' targets as Find found them, for the redirects (placed at once, or on 1.005 from the game thread).
 struct Targets
 {
-    std::uintptr_t filterOn = 0, filterOff = 0, menuSound = 0;
+    std::uintptr_t filterOn = 0, filterOff = 0, menuSound = 0, soundEvent = 0, soundMode = 0;
 };
 Targets g_targets;
 
@@ -73,6 +89,8 @@ Targets g_targets;
 // 1's menu keeps the game's latch).
 std::array<bool, players::kMaxPlayers> g_holdsTint{};
 int                                    g_tintLines = 0;
+bool                                   g_followed  = true;  // the slow-down switch as the waiting menus last followed it
+std::uint32_t g_greysSkipped = 0, g_mufflesSkipped = 0, g_switchesFollowed = 0;
 
 /// The tint's filter manager and, for the log, its latch and count for the tint type.
 std::uintptr_t FilterManager() noexcept
@@ -150,10 +168,17 @@ bool Holds(int seat) noexcept
 namespace {
 
 /// Replaces the wait mode's filter on: player 1's menu takes the latch as the game does; a seat's takes a count of
-/// its own.
+/// its own. Skipped with the slow-down switched off: no latch and no count are taken, so the menu's close and the
+/// game's restores after another menu find nothing to bring back.
 void TintOn(void* world, std::uint8_t type) noexcept
 {
     const int seat = command_menu_tick::PassSeat();
+    if (!command_menu_tick::MenuSlow())
+    {
+        ++g_greysSkipped;
+        TintLine(command_menu_tick::Pass() == 2 ? seat : 0, L"skipped (the slow-down is switched off)");
+        return;
+    }
     if (command_menu_tick::Pass() != 2 || !players::SeatIndex(seat))
     {
         reinterpret_cast<FilterOnFn>(g_filterOnCall.Original())(world, type);
@@ -181,11 +206,38 @@ void TintOff(std::uint8_t type) noexcept
     Release(seat, L"off (its count)");
 }
 
-/// Replaces the wait mode's sound off (event 13 and the audio mode cleared): skipped while another menu is still in
-/// wait mode. The menus tick in order (player 1's first, then each seat's), so if several close in one frame the last
-/// one plays it.
+/// Replaces the wait mode's sound event at its open (the muffle's first half): the game's call while the slow-down is
+/// on, else skipped.
+void WaitSoundOn(void* event) noexcept
+{
+    if (command_menu_tick::MenuSlow())
+    {
+        reinterpret_cast<SoundEventFn>(g_soundOnCall.Original())(event);
+        return;
+    }
+    ++g_mufflesSkipped;
+    platform::LogDebug(L"menu sound: a battle menu opened; the muffle is skipped (the slow-down is switched off)");
+}
+
+/// Replaces the wait mode's audio mode at its open (the muffle's second half): the same rule.
+void WaitSoundModeOn(std::uint64_t mode, float fade) noexcept
+{
+    if (command_menu_tick::MenuSlow())
+    {
+        reinterpret_cast<SoundModeFn>(g_soundModeOnCall.Original())(mode, fade);
+    }
+}
+
+/// Replaces the wait mode's sound off (event 13 and the audio mode cleared): skipped with the slow-down switched off
+/// (nothing was raised; a switch while the menu waited settled it), and while another menu is still in wait mode.
+/// The menus tick in order (player 1's first, then each seat's), so if several close in one frame the last one plays
+/// it.
 void WaitSoundOff(std::uint8_t index) noexcept
 {
+    if (!command_menu_tick::MenuSlow())
+    {
+        return;
+    }
     const int  pass  = command_menu_tick::Pass();
     const int  me    = pass == 1 ? 0 : pass == 2 ? command_menu_tick::PassSeat() : -1;
     const auto waits = Waits();
@@ -199,18 +251,106 @@ void WaitSoundOff(std::uint8_t index) noexcept
 
 }  // namespace
 
+void FollowSwitch() noexcept
+{
+    const bool slows = command_menu_tick::MenuSlow();
+    if (slows == g_followed || !g_filterOnCall.IsInstalled())
+    {
+        return;
+    }
+    g_followed = slows;
+    ++g_switchesFollowed;
+    const auto waits = Waits();
+    const auto fm    = FilterManager();
+    // Player 1's menu holds the game's latch.
+    const bool latched = fm != 0 && ReadAt<std::uint8_t>(fm + kFilterLatch + kTintType) != 0;
+    switch (menu_rules::GreyAtSwitch(slows, waits[0], latched))
+    {
+        case menu_rules::Flip::Lift:
+            platform::CallGuarded(reinterpret_cast<FilterOffFn>(g_targets.filterOff), kTintType);
+            TintLine(0, L"taken down for player 1's menu (the slow-down switched off)");
+            break;
+        case menu_rules::Flip::Raise:
+            platform::CallGuarded(reinterpret_cast<FilterOnFn>(g_targets.filterOn), static_cast<void*>(nullptr), kTintType);
+            TintLine(0, L"raised for player 1's waiting menu (the slow-down switched on)");
+            break;
+        case menu_rules::Flip::Nothing:
+            break;
+    }
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
+    {
+        auto& holds = g_holdsTint[static_cast<std::size_t>(seat)];
+        switch (menu_rules::GreyAtSwitch(slows, waits[static_cast<std::size_t>(seat)], holds))
+        {
+            case menu_rules::Flip::Lift:
+                Release(seat, L"taken down (the slow-down switched off)");
+                break;
+            case menu_rules::Flip::Raise:
+                if (fm != 0 && platform::CallGuarded(g_refInc, reinterpret_cast<void*>(fm), kTintType))
+                {
+                    holds = true;
+                }
+                TintLine(seat, L"raised for the waiting menu (the slow-down switched on)");
+                break;
+            case menu_rules::Flip::Nothing:
+                break;
+        }
+    }
+    const menu_rules::Flip sound = menu_rules::SoundAtSwitch(slows, waits.data(), 1 + players::kSeatsBuilt);
+    if (sound != menu_rules::Flip::Nothing)
+    {
+        const bool raise = sound == menu_rules::Flip::Raise;
+        if (platform::CallGuarded(reinterpret_cast<MenuSoundFn>(g_targets.menuSound), raise ? kWaitSoundOn : kWaitSoundOff))
+        {
+            platform::LogDebug(L"menu sound: the muffle {} for a waiting menu (the slow-down switched {})",
+                               raise ? L"raised" : L"lifted", slows ? L"on" : L"off");
+        }
+        else
+        {
+            platform::LogWarning(L"menu sound: the game's sound call raised; the muffle may not follow the switch until the "
+                                 L"menu closes");
+        }
+    }
+}
+
+#if LSS_DEV
+
+void RegisterCommands()
+{
+    control::Register({.name  = L"menu-tint",
+                       .shape = control::Shape::Text,
+                       .help  = L"an open battle menu's grey and muffle under the slow-down switch: the switch, the greys "
+                                L"and muffles skipped, the switches followed",
+                       .get   = [] {
+                           try
+                           {
+                               return control::Value{std::format(
+                                   L"the slow-down {}; calls {}; greys skipped {}, muffles skipped {}, switches followed {}",
+                                   command_menu_tick::MenuSlow() ? L"on" : L"off",
+                                   g_soundModeOnCall.IsInstalled() ? L"placed" : L"not placed", g_greysSkipped,
+                                   g_mufflesSkipped, g_switchesFollowed)};
+                           }
+                           catch (...)
+                           {
+                               return control::Value{std::wstring(L"unreadable (an exception)")};
+                           }
+                       }});
+}
+
+#endif
+
 bool Find(const platform::GameImage& image) noexcept
 {
     const auto find = [&image](const platform::FunctionFact& fact) { return platform::FindFunction(image, fact); };
     const auto filterOn = find(kFilterOn), filterOff = find(kFilterOff), menuSound = find(kMenuSound),
-               refInc = find(kRefInc), refDec = find(kRefDec);
-    if (!filterOn || !filterOff || !menuSound || !refInc || !refDec)
+               refInc = find(kRefInc), refDec = find(kRefDec), soundEvent = find(kSoundEvent), soundMode = find(kSoundMode);
+    if (!filterOn || !filterOff || !menuSound || !refInc || !refDec || !soundEvent || !soundMode)
     {
         return false;
     }
     g_refInc  = reinterpret_cast<FilterCountFn>(*refInc);
     g_refDec  = reinterpret_cast<FilterCountFn>(*refDec);
-    g_targets = {*filterOn, *filterOff, *menuSound};
+    g_targets = {*filterOn, *filterOff, *menuSound, *soundEvent, *soundMode};
     return true;
 }
 
@@ -220,9 +360,20 @@ bool Place(const platform::GameImage& image, platform::DeferredSites& placement)
         const auto live = image.Rebase(site, 5);
         return live && placement.Place(call, *live, target, reinterpret_cast<std::uintptr_t>(with));
     };
+    // The muffle's two on calls cross a 16-byte block on the research build (only the opcode in the first). They are
+    // placed from their own thread's side: at install no world exists, so no thread can be in the wait machine;
+    // otherwise the placement runs on the game thread between its ticks. After the grey's: the first block holds the
+    // grey's call too, and Remove puts the muffle's back first.
+    const auto ownThread = [&](platform::CallRedirect& call, std::uintptr_t site, std::uintptr_t target, auto* with) {
+        const auto live = image.Rebase(site, 5);
+        return live && call.InstallFromOwnThread(*live, target, reinterpret_cast<std::uintptr_t>(with));
+    };
+    g_followed = command_menu_tick::MenuSlow();
     return redirect(g_filterOnCall, kFilterOnCall, g_targets.filterOn, &TintOn) &&
            redirect(g_filterOffCall, kFilterOffCall, g_targets.filterOff, &TintOff) &&
-           redirect(g_soundOffCall, kSoundOffCall, g_targets.menuSound, &WaitSoundOff);
+           redirect(g_soundOffCall, kSoundOffCall, g_targets.menuSound, &WaitSoundOff) &&
+           ownThread(g_soundOnCall, kSoundOnCall, g_targets.soundEvent, &WaitSoundOn) &&
+           ownThread(g_soundModeOnCall, kSoundModeOnCall, g_targets.soundMode, &WaitSoundModeOn);
 }
 
 void Remove() noexcept
@@ -231,7 +382,8 @@ void Remove() noexcept
     {
         Release(seat, L"released: the stage is removed");
     }
-    for (auto* call : {&g_filterOnCall, &g_filterOffCall, &g_soundOffCall})
+    // The muffle's first: their first block holds the grey's redirected call in its snapshot.
+    for (auto* call : {&g_soundModeOnCall, &g_soundOnCall, &g_filterOnCall, &g_filterOffCall, &g_soundOffCall})
     {
         if (call->IsInstalled() && !call->Restore())
         {
