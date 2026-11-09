@@ -32,7 +32,6 @@ struct MemberSnapshot
     const void*  aiPawn            = nullptr;  // the retained AI controller's +0x258
     std::uint8_t playerControlled  = 0;        // +0x625
     bool         aiControllerValid = false;    // the switch's own gate on the AI component
-    bool         leaderSlot        = false;    // the field leader's or the default battle leader's type
     bool         battleReady       = true;     // passes player 1's battle switch's own member test
 };
 
@@ -42,7 +41,6 @@ enum class Eligibility
     NoCharacter,
     NotEndCharacter,
     PlayerOnes,
-    LeaderSlot,    // the game hands this type back to player 1 (battle end, or battle start)
     Requested,     // another controller has asked for it
     NotAiOwned,    // +0x580, +0x588, +0x260 and the AI's pawn do not all agree
     PlayerDriven,  // +0x625 says a player drives it
@@ -55,9 +53,34 @@ Eligibility Assess(const MemberSnapshot& member) noexcept;
 const wchar_t* Describe(Eligibility eligibility) noexcept;
 
 // ---- the member a seat plays: its slot of the party order (RE-p2-party-order.md §5) ----
+//
+// A seat's row is its place in the battle-member list after the field leader's row, whoever holds the rows before
+// it: player 2 the 2nd slot, player 3 the 3rd. Player 1 is on the field leader in the field; in a fight the game
+// may move player 1 onto another row (the battle leader option at the start, a switch). The row player 1 took
+// still counts as its seat's, and that seat plays the field leader's character player 1 left (RowOrFieldLeader).
+// A seat whose member the game's leader change took also remembers the character player 1 came from (the
+// stand-in mark, StandInFor) and plays it while it is deployed and not player 1's, so one leader change moves
+// one seat; the mark ends when the game's leader goes home to the field leader (a fight's end). Both taken from
+// Remake's players/party_member (its FreeRows and standIn).
+
+/// No stand-in: the roster's "none" type (facts::kNoPlayerType; asserted in party_lease.cpp).
+inline constexpr std::uint8_t kNoStandIn = 0x10;
 
 /// The field leader's ordinal in the battle-member list, the party panel's top row (0 if absent).
 std::int32_t LeaderOrdinal(const std::uint8_t* types, std::int32_t count, std::uint8_t fieldLeader) noexcept;
+
+/// The ordinal of `type` in the list, -1 if absent or none.
+constexpr std::int32_t OrdinalOfType(const std::uint8_t* types, std::int32_t count, std::uint8_t type) noexcept
+{
+    for (std::int32_t ordinal = 0; types != nullptr && type < kNoStandIn && ordinal < count; ++ordinal)
+    {
+        if (types[ordinal] == type)
+        {
+            return ordinal;
+        }
+    }
+    return -1;
+}
 
 /// The ordinal `step` rows below `anchor` (step from 1), wrapping as the panel and the battle switch's
 /// cycle do. `count` must be positive.
@@ -66,28 +89,45 @@ constexpr std::int32_t OrdinalAfter(std::int32_t anchor, std::int32_t step, std:
     return (anchor + step) % count;
 }
 
-/// The ordinal seat `seat` plays: of the rows below `anchor` (wrapping, the anchor's own last), those `skipped`
-/// does not step past (an empty row, player 1's character), the `seat`-th. Player 2 (seat 1) plays the first, the
-/// 2nd slot of the order; player 3 (seat 2) the second, the 3rd slot (the user's rule; plan/seats.md). A seat's
-/// slot is its place in the order, whoever holds the rows before it. -1 if the party has no such row. `skipped` is
-/// asked once per row, in order, and last of the chosen row (ChooseSlot keeps what it read there).
-template <class Skipped>
-constexpr std::int32_t SeatSlotOrdinal(std::int32_t anchor, std::int32_t count, std::int32_t seat, Skipped skipped)
+/// The ordinal of seat `seat`'s row: of the rows below `anchor` (wrapping, never the anchor's own), those `empty`
+/// does not pass over, the `seat`-th. Player 2 (seat 1) plays the first, the 2nd slot of the order; player 3
+/// (seat 2) the second, the 3rd slot (the user's rule; plan/seats.md). Player 1's character is not passed over:
+/// its row stays its seat's (RowOrFieldLeader). -1 if the party has no such row. `empty` is asked once per row,
+/// in order.
+template <class Empty>
+constexpr std::int32_t SeatSlotOrdinal(std::int32_t anchor, std::int32_t count, std::int32_t seat, Empty empty)
 {
     if (count <= 0 || seat < 1)
     {
         return -1;
     }
     std::int32_t passed = 0;
-    for (std::int32_t step = 1; step <= count; ++step)
+    for (std::int32_t step = 1; step < count; ++step)
     {
         const std::int32_t ordinal = OrdinalAfter(anchor, step, count);
-        if (!skipped(ordinal) && ++passed == seat)
+        if (!empty(ordinal) && ++passed == seat)
         {
             return ordinal;
         }
     }
     return -1;
+}
+
+/// The row the seat plays: its own, or, while player 1 is on it and the field leader is in the list (`anchor` is the
+/// field leader's row), the field leader's row, whose character player 1 left. With the field leader out of the
+/// list the seat's own row stands and is refused as player 1's (the seat waits).
+constexpr std::int32_t RowOrFieldLeader(std::int32_t row, bool rowIsPlayerOnes, std::int32_t anchor,
+                                        bool anchorIsFieldLeader) noexcept
+{
+    return rowIsPlayerOnes && anchorIsFieldLeader ? anchor : row;
+}
+
+/// The stand-in mark a seat takes when the game's leader change takes its member: the type player 1 comes from
+/// (`was`, player 1's leader before the change), unless the change goes home to the field leader (`home`: every mark
+/// ends), the type is unknown, or it is the seat's own. kNoStandIn otherwise.
+constexpr std::uint8_t StandInFor(bool home, std::uint8_t was, std::uint8_t own) noexcept
+{
+    return !home && was < kNoStandIn && was != own ? was : kNoStandIn;
 }
 
 // ---- the member's AI at the hand-over (RE-p2-member-handover.md §3) ----

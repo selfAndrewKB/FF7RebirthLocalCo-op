@@ -42,19 +42,29 @@ struct SlotChoice
     SlotWait       wait    = SlotWait::NoSlot;
     std::uint8_t   type    = 0xFF;     // the slot's player type (0xFF with no slot)
     std::int32_t   ordinal = -1;
+    bool           standsIn = false;   // the stand-in mark's row: player 1's former character
+    bool           fieldLeaderInstead = false;  // the seat's row is player 1's: the field leader's row instead
     Eligibility    verdict = Eligibility::NoCharacter;
     AiSnapshot     ai{};
     LinkRecordView link{};             // with LinkPartner: the game's link record that holds it
 };
 
 /// The member `seat`'s player plays: player 2 the 2nd slot of the game's party order, the row after the field
-/// leader in the battle-member list the party panel shows and player 1's battle switch cycles, stepping past
-/// player 1's character as that cycle does (RE-p2-party-order.md §5); player 3 the 3rd slot, the row after that
-/// (party_lease.h SeatSlotOrdinal). It is taken only when free by the battle switch's own member test and its AI is
-/// in the state the game hands players (FOLLOW, BATTLE), and not while it is a synergy partner the game has not
-/// given back yet (party_lease.h LinkPartnerBusy); otherwise the seat waits on it and never falls through to the
-/// next slot. Logged when `log` is set.
-SlotChoice ChooseSlot(int seat, void* playerOneController, bool log = true) noexcept;
+/// leader in the battle-member list the party panel shows and player 1's battle switch cycles (RE-p2-party-order.md
+/// §5); player 3 the 3rd slot, the row after that (party_lease.h SeatSlotOrdinal). While player 1 is on the seat's
+/// row (the battle leader option, a switch), the seat plays the field leader's character player 1 left
+/// (RowOrFieldLeader); with `standIn` set (party_lease.h StandInFor: the game's leader change took the seat's
+/// member), the seat plays that character instead while it is deployed and not player 1's. The member is taken
+/// only when free by the battle switch's own member test and its AI is in the state the game hands players (FOLLOW,
+/// BATTLE), and not while it is a synergy partner the game has not given back yet (party_lease.h LinkPartnerBusy);
+/// otherwise the seat waits on it and never falls through to the next slot. Logged when `log` is set.
+SlotChoice ChooseSlot(int seat, void* playerOneController, std::uint8_t standIn, bool log = true) noexcept;
+
+/// `character` is the field leader's (the character the game's leader goes home to at a fight's end). Guarded.
+bool IsFieldLeader(const void* character) noexcept;
+
+/// The game's leader is the field leader's character: player 1 is home, no stand-in can hold. Guarded.
+bool LeaderHome() noexcept;
 
 /// One of the game's link records (RE-p2-synergy-skills.md S-SYNTAKE §3, S-SYNSTUCK2 §1); every read guarded, so any
 /// thread that is running the record (an empty view for null).

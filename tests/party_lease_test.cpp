@@ -88,10 +88,6 @@ void TestEachRuleRefuses()
     EXPECT(Assess(member) == Eligibility::AiInvalid);
 
     member = AiOwned();
-    member.leaderSlot = true;
-    EXPECT(Assess(member) == Eligibility::LeaderSlot);
-
-    member = AiOwned();
     member.battleReady = false;
     EXPECT(Assess(member) == Eligibility::BattleUnavailable);
 }
@@ -109,8 +105,7 @@ void TestEveryVerdictHasText()
     std::puts("eligibility: every verdict describes itself");
     for (const auto verdict : {Eligibility::Eligible, Eligibility::NoCharacter, Eligibility::NotEndCharacter,
                                Eligibility::PlayerOnes, Eligibility::Requested, Eligibility::NotAiOwned,
-                               Eligibility::PlayerDriven, Eligibility::AiInvalid, Eligibility::LeaderSlot,
-                               Eligibility::BattleUnavailable})
+                               Eligibility::PlayerDriven, Eligibility::AiInvalid, Eligibility::BattleUnavailable})
     {
         const wchar_t* text = Describe(verdict);
         EXPECT(text != nullptr && text[0] != L'\0' && text != Describe(static_cast<Eligibility>(99)));
@@ -176,37 +171,51 @@ void TestSecondSlot()
 
 void TestSeatSlots()
 {
-    std::puts("slot: player 2 plays the 2nd slot, player 3 the 3rd, each stepping past player 1's");
-    const std::uint8_t squad[] = {0, 5, 3};  // Cloud (player 1's), Yuffie, Aerith
-    const auto playerOnes = [&](std::int32_t ordinal) { return squad[ordinal] == 0; };
-    EXPECT(SeatSlotOrdinal(0, 3, 1, playerOnes) == 1);   // player 2: Yuffie
-    EXPECT(SeatSlotOrdinal(0, 3, 2, playerOnes) == 2);   // player 3: Aerith
-    EXPECT(SeatSlotOrdinal(0, 3, 3, playerOnes) == -1);  // no 4th slot in three
-    // A story leader (Yuffie): the rows run from her, past player 1's Cloud.
+    std::puts("slot: player 2 plays the 2nd slot, player 3 the 3rd; the field leader's own row is never a slot");
+    const std::uint8_t squad[] = {0, 5, 3};  // Cloud (the field leader), Yuffie, Aerith
+    const auto none = [](std::int32_t) { return false; };
+    EXPECT(SeatSlotOrdinal(0, 3, 1, none) == 1);   // player 2: Yuffie
+    EXPECT(SeatSlotOrdinal(0, 3, 2, none) == 2);   // player 3: Aerith
+    EXPECT(SeatSlotOrdinal(0, 3, 3, none) == -1);  // no 4th slot in three
+    // A story leader (Yuffie) at ordinal 1: the rows run from her and wrap; her own row is never a slot.
     const std::int32_t anchor = LeaderOrdinal(squad, 3, 5);
-    EXPECT(SeatSlotOrdinal(anchor, 3, 1, playerOnes) == 2);  // Aerith
-    EXPECT(SeatSlotOrdinal(anchor, 3, 2, playerOnes) == 1);  // Yuffie herself, the anchor's row last
-    // Player 1's character in the 2nd row (a reorder): both seats step past it.
-    const std::uint8_t reordered[] = {5, 0, 3, 2};
-    const auto reorderedOnes = [&](std::int32_t ordinal) { return reordered[ordinal] == 0; };
-    EXPECT(SeatSlotOrdinal(0, 4, 1, reorderedOnes) == 2);
-    EXPECT(SeatSlotOrdinal(0, 4, 2, reorderedOnes) == 3);
+    EXPECT(SeatSlotOrdinal(anchor, 3, 1, none) == 2);   // Aerith
+    EXPECT(SeatSlotOrdinal(anchor, 3, 2, none) == 0);   // Cloud
+    EXPECT(SeatSlotOrdinal(anchor, 3, 3, none) == -1);  // not Yuffie herself
+    // An empty row (a type of none) is passed over; player 1's character is not (RowOrFieldLeader decides for it).
+    const std::uint8_t gapped[] = {0, 0x10, 3, 2};
+    const auto empty = [&](std::int32_t ordinal) { return gapped[ordinal] >= kNoStandIn; };
+    EXPECT(SeatSlotOrdinal(0, 4, 1, empty) == 2);
+    EXPECT(SeatSlotOrdinal(0, 4, 2, empty) == 3);
     // Two members: player 3 has no slot; the 1-player party: neither.
-    const std::uint8_t pair[] = {0, 5};
-    const auto pairOnes = [&](std::int32_t ordinal) { return pair[ordinal] == 0; };
-    EXPECT(SeatSlotOrdinal(0, 2, 1, pairOnes) == 1 && SeatSlotOrdinal(0, 2, 2, pairOnes) == -1);
-    EXPECT(SeatSlotOrdinal(0, 1, 1, [](std::int32_t) { return true; }) == -1);
-    EXPECT(SeatSlotOrdinal(0, 0, 1, playerOnes) == -1 && SeatSlotOrdinal(0, 3, 0, playerOnes) == -1);
-    // The seat-1 rule is the old one: the first row below the leader that is not skipped.
-    for (std::int32_t lead = 0; lead < 3; ++lead)
-    {
-        std::int32_t first = -1;
-        for (std::int32_t step = 1; step <= 3 && first < 0; ++step)
-        {
-            first = playerOnes(OrdinalAfter(lead, step, 3)) ? -1 : OrdinalAfter(lead, step, 3);
-        }
-        EXPECT(SeatSlotOrdinal(lead, 3, 1, playerOnes) == first);
-    }
+    EXPECT(SeatSlotOrdinal(0, 2, 1, none) == 1 && SeatSlotOrdinal(0, 2, 2, none) == -1);
+    EXPECT(SeatSlotOrdinal(0, 1, 1, none) == -1);
+    EXPECT(SeatSlotOrdinal(0, 0, 1, none) == -1 && SeatSlotOrdinal(0, 3, 0, none) == -1);
+}
+
+void TestRowOrFieldLeader()
+{
+    std::puts("slot: a row player 1 took gives the field leader's row instead, while the field leader is listed");
+    EXPECT(RowOrFieldLeader(1, false, 0, true) == 1);   // the seat's own row, nobody's
+    EXPECT(RowOrFieldLeader(1, true, 0, true) == 0);    // player 1 on it (the battle leader option, a switch): Cloud's row
+    EXPECT(RowOrFieldLeader(2, true, 1, true) == 1);    // a story leader's row as the anchor
+    EXPECT(RowOrFieldLeader(1, true, 0, false) == 1);   // the field leader not listed: the row stands (refused as player 1's)
+    EXPECT(RowOrFieldLeader(2, false, 0, false) == 2);
+}
+
+void TestStandIn()
+{
+    std::puts("stand-in: the type player 1 came from, unless the change goes home, is unknown or is the seat's own");
+    EXPECT(StandInFor(false, 0, 5) == 0);              // Cloud's player moved onto Yuffie: her player plays Cloud
+    EXPECT(StandInFor(true, 5, 0) == kNoStandIn);      // the game's leader goes home to Cloud: no mark
+    EXPECT(StandInFor(false, kNoStandIn, 5) == kNoStandIn);
+    EXPECT(StandInFor(false, 0xFF, 5) == kNoStandIn);  // unknown
+    EXPECT(StandInFor(false, 5, 5) == kNoStandIn);     // its own type
+    const std::uint8_t squad[] = {0, 5, 3};
+    EXPECT(OrdinalOfType(squad, 3, 0) == 0 && OrdinalOfType(squad, 3, 3) == 2);
+    EXPECT(OrdinalOfType(squad, 3, 2) == -1);           // not deployed
+    EXPECT(OrdinalOfType(squad, 3, kNoStandIn) == -1);  // no mark
+    EXPECT(OrdinalOfType(nullptr, 0, 0) == -1);
 }
 
 void TestAiReadiness()
@@ -357,6 +366,8 @@ int main()
 {
     TestSecondSlot();
     TestSeatSlots();
+    TestRowOrFieldLeader();
+    TestStandIn();
     TestLinkPartnerBusy();
     TestAiReadiness();
     TestAiOwnedMemberIsEligible();

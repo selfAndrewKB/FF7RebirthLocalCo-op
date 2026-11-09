@@ -52,7 +52,6 @@ struct Functions
     GlobalObjectFn    globalLeader        = nullptr;
     ObjectTestFn      isBattleActive      = nullptr;  // player 1's battle switch's member test T
     TypeFn            fieldLeaderType     = nullptr;
-    TypeFn            defaultBattleLeader = nullptr;
     TypeTestFn        isBattleMember      = nullptr;
 };
 Functions         g_fn;  // set once at install
@@ -104,11 +103,11 @@ bool BattleReady(const void* character) noexcept
     }
 }
 
-/// The types the game hands back to player 1: the field leader (at every battle end) and the default
-/// battle leader (at some battle starts).
-bool LeaderSlot(std::uint8_t playerType) noexcept
+/// The field leader's character (null if none is listed). Plain reads; the caller holds the SEH guard.
+void* FieldLeaderCharacter() noexcept
 {
-    return playerType == g_fn.fieldLeaderType() || playerType == g_fn.defaultBattleLeader();
+    const std::uint8_t type = g_fn.fieldLeaderType();
+    return type < facts::kNoPlayerType ? g_fn.characterByType(facts::kFieldLane, type) : nullptr;
 }
 
 template <class Fn>
@@ -123,7 +122,6 @@ MemberSnapshot Snapshot(void* character, void* playerOneController, std::uint8_t
 {
     MemberSnapshot member;
     member.character = character;
-    member.leaderSlot = LeaderSlot(playerType);
     if (character == nullptr)
     {
         return member;
@@ -163,7 +161,6 @@ bool Install(const platform::GameImage& image) noexcept
     found      = Find(image, facts::kResolvePartyLeader, g_fn.globalLeader) && found;
     found      = Find(image, facts::kIsBattleActive, g_fn.isBattleActive) && found;
     found      = Find(image, facts::kFieldLeaderType, g_fn.fieldLeaderType) && found;
-    found      = Find(image, facts::kDefaultBattleLeaderType, g_fn.defaultBattleLeader) && found;
     found      = Find(image, facts::kIsBattleMember, g_fn.isBattleMember) && found;
     found      = facts::InBattleKnown() && found;  // the game's in-battle test, found at startup (in_battle.h)
     if (!Find(image, facts::kSwitchAiControlAsync, g_fn.switchAi))  // optional (HandToAi)
@@ -224,8 +221,10 @@ struct SlotRead
     std::int32_t   count       = 0;
     std::uint8_t   fieldLeader = 0xFF;
     std::int32_t   anchor      = 0;
-    std::int32_t   ordinal     = -1;  // -1: no slot (fewer than two members, or all player 1's)
+    std::int32_t   ordinal     = -1;  // -1: no slot (fewer than two members, or no row for the seat)
     std::uint8_t   type        = 0xFF;
+    bool           standsIn    = false;  // the stand-in mark's row was taken
+    bool           fieldLeaderInstead = false;  // the seat's row is player 1's: the field leader's row
     void*          character   = nullptr;
     MemberSnapshot member{};
     AiSnapshot     ai{};
@@ -327,7 +326,7 @@ bool FindPartnerLinkGuarded(std::uint8_t playerType, LinkRecordView& out) noexce
     }
 }
 
-void ReadSlot(int seat, void* playerOneController, SlotRead& out) noexcept
+void ReadSlot(int seat, void* playerOneController, std::uint8_t standIn, SlotRead& out) noexcept
 {
     std::uint8_t types[facts::kMaxRosterEntries]{};
     out.count = std::min(g_fn.rosterCount(), facts::kMaxRosterEntries);
@@ -341,23 +340,43 @@ void ReadSlot(int seat, void* playerOneController, SlotRead& out) noexcept
     }
     out.fieldLeader = g_fn.fieldLeaderType();
     out.anchor      = LeaderOrdinal(types, out.count, out.fieldLeader);
-    // Player 1's character is stepped past, as player 1's battle switch steps past its own leader. The chosen row is
-    // the last one read, so its snapshot is the last one kept.
-    void*          character = nullptr;
-    MemberSnapshot member{};
-    const std::int32_t ordinal = SeatSlotOrdinal(out.anchor, out.count, seat, [&](std::int32_t at) noexcept {
-        const std::uint8_t type = types[at];
-        if (type >= facts::kNoPlayerType)
+    const auto snapshot = [&](std::int32_t at, void*& character) noexcept {
+        character = g_fn.characterByType(facts::kFieldLane, types[at]);
+        return Snapshot(character, playerOneController, types[at]);
+    };
+    // The stand-in mark's row first (party_lease.h StandInFor): player 1's former character, while it is deployed
+    // and not player 1's again.
+    void*              character = nullptr;
+    MemberSnapshot     member{};
+    std::int32_t       ordinal = OrdinalOfType(types, out.count, standIn);
+    if (ordinal >= 0)
+    {
+        member = snapshot(ordinal, character);
+        if (member.isPlayerOnes)
         {
-            return true;
+            ordinal = -1;
         }
-        character = g_fn.characterByType(facts::kFieldLane, type);
-        member    = Snapshot(character, playerOneController, type);
-        return member.isPlayerOnes;
-    });
+        out.standsIn = ordinal >= 0;
+    }
+    // Else the seat's own row; player 1 on it means the field leader's row instead (RowOrFieldLeader).
     if (ordinal < 0)
     {
-        return;
+        const std::int32_t row = SeatSlotOrdinal(out.anchor, out.count, seat, [&](std::int32_t at) noexcept {
+            return types[at] >= facts::kNoPlayerType;
+        });
+        if (row < 0)
+        {
+            return;
+        }
+        member  = snapshot(row, character);
+        // The field leader's row only when its type is read (none during a load) and the anchor is its row.
+        ordinal = RowOrFieldLeader(row, member.isPlayerOnes, out.anchor,
+                                   out.fieldLeader < facts::kNoPlayerType && types[out.anchor] == out.fieldLeader);
+        if (ordinal != row)
+        {
+            member                 = snapshot(ordinal, character);
+            out.fieldLeaderInstead = true;
+        }
     }
     const std::uint8_t type = types[ordinal];
     out.ordinal             = ordinal;
@@ -372,12 +391,37 @@ void ReadSlot(int seat, void* playerOneController, SlotRead& out) noexcept
 
 /// The party reads, guarded: during a reload the party's objects may be torn down under them. False
 /// (no slot this time) if they faulted.
-bool ReadSlotGuarded(int seat, void* playerOneController, SlotRead& out) noexcept
+bool ReadSlotGuarded(int seat, void* playerOneController, std::uint8_t standIn, SlotRead& out) noexcept
 {
     __try
     {
-        ReadSlot(seat, playerOneController, out);
+        ReadSlot(seat, playerOneController, standIn, out);
         return true;
+    }
+    __except (platform::GuardFilter(GetExceptionCode()))
+    {
+        return false;
+    }
+}
+
+bool IsFieldLeaderGuarded(const void* character) noexcept
+{
+    __try
+    {
+        return FieldLeaderCharacter() == character;
+    }
+    __except (platform::GuardFilter(GetExceptionCode()))
+    {
+        return false;
+    }
+}
+
+bool LeaderHomeGuarded() noexcept
+{
+    __try
+    {
+        void* const leader = g_fn.globalLeader();
+        return leader != nullptr && leader == FieldLeaderCharacter();
     }
     __except (platform::GuardFilter(GetExceptionCode()))
     {
@@ -387,12 +431,22 @@ bool ReadSlotGuarded(int seat, void* playerOneController, SlotRead& out) noexcep
 
 }  // namespace
 
+bool IsFieldLeader(const void* character) noexcept
+{
+    return g_installed && character != nullptr && IsFieldLeaderGuarded(character);
+}
+
+bool LeaderHome() noexcept
+{
+    return g_installed && LeaderHomeGuarded();
+}
+
 bool FindPartnerLink(std::uint8_t playerType, LinkRecordView& out) noexcept
 {
     return g_installed && *g_battleState != nullptr && FindPartnerLinkGuarded(playerType, out);
 }
 
-SlotChoice ChooseSlot(int seat, void* playerOneController, bool log) noexcept
+SlotChoice ChooseSlot(int seat, void* playerOneController, std::uint8_t standIn, bool log) noexcept
 {
     SlotChoice choice;
     SlotRead   read;
@@ -400,7 +454,7 @@ SlotChoice ChooseSlot(int seat, void* playerOneController, bool log) noexcept
     {
         return choice;
     }
-    if (!ReadSlotGuarded(seat, playerOneController, read))
+    if (!ReadSlotGuarded(seat, playerOneController, standIn, read))
     {
         if (log)
         {
@@ -413,14 +467,16 @@ SlotChoice ChooseSlot(int seat, void* playerOneController, bool log) noexcept
     {
         if (log)
         {
-            platform::Log(L"party slot: the party has {} member(s), none of them free of player 1; no {} slot for {}",
-                          read.count, SlotName(seat), players::SeatName(seat));
+            platform::Log(L"party slot: the party has {} member(s), no {} slot for {}", read.count, SlotName(seat),
+                          players::SeatName(seat));
         }
         return choice;
     }
-    choice.type    = read.type;
-    choice.ordinal = read.ordinal;
-    choice.verdict = Assess(read.member);
+    choice.type               = read.type;
+    choice.ordinal            = read.ordinal;
+    choice.standsIn           = read.standsIn;
+    choice.fieldLeaderInstead = read.fieldLeaderInstead;
+    choice.verdict            = Assess(read.member);
     choice.ai      = read.ai;
     const AiReadiness readiness = AssessAi(choice.ai);
     choice.wait                 = SlotWaitOf(choice.verdict, readiness, read.linkBusy);
@@ -434,10 +490,13 @@ SlotChoice ChooseSlot(int seat, void* playerOneController, bool log) noexcept
     }
     if (log)
     {
-        platform::Log(L"party slot: field leader type {} at ordinal {}; the {} slot is ordinal {} (type {}): {}; its "
+        platform::Log(L"party slot: field leader type {} at ordinal {}; the {} slot is ordinal {} (type {}){}: {}; its "
                       L"AI brain {} state {}: {}{}",
                       static_cast<unsigned>(read.fieldLeader), read.anchor, SlotName(seat), read.ordinal,
                       static_cast<unsigned>(read.type),
+                      read.standsIn             ? L" (player 1's former character, until the game's leader goes home)"
+                      : read.fieldLeaderInstead ? L" (player 1 plays this player's row: the field leader's character instead)"
+                                                : L"",
                       Describe(choice.verdict), static_cast<unsigned>(choice.ai.brainIndex),
                       static_cast<unsigned>(choice.ai.state), Describe(readiness),
                       choice.wait == SlotWait::LinkPartner ? L"; a synergy partner the game has not given back yet" : L"");

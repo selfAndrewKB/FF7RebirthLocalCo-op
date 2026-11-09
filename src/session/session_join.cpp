@@ -208,7 +208,7 @@ void Seat::Join() noexcept
     const bool riding = rides::shared_ride::Rides(one.controller);
     if (installed_.member && !riding && FreeMember(one.controller) == nullptr)
     {
-        party_member::ChooseSlot(seat_, one.controller);  // the slot's verdict, for the log
+        party_member::ChooseSlot(seat_, one.controller, standIn_);  // the slot's verdict, for the log
         AwaitMember(L"the player's slot of the party has no member free");
         return;
     }

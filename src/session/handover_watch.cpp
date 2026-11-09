@@ -251,17 +251,24 @@ std::int32_t AnchorOf(const Order& order) noexcept
     return 0;
 }
 
-/// `seat`'s slot of the order: the seat-th row after the field leader's, stepping past player 1's character like
-/// the game's cycle (RE-p2-party-order.md §5.1, §5.2; the session's rule without its checks of the row). -1 if none.
+/// `seat`'s slot of the order: the seat-th row after the field leader's, the field leader's own row while player 1
+/// is on that one (party_lease.h SeatSlotOrdinal, RowOrFieldLeader; the session's rule without its checks of the row
+/// and without a seat's stand-in mark). -1 if none.
 std::int32_t SlotRule(const Order& order, std::optional<std::uint8_t> playerOnes, int seat, std::int32_t anchor) noexcept
 {
     if (order.count < 2)
     {
         return -1;
     }
-    return SeatSlotOrdinal(anchor, order.count, seat, [&order, &playerOnes](std::int32_t slot) {
-        return playerOnes && order.types[static_cast<std::size_t>(slot)] == *playerOnes;
+    const std::int32_t row = SeatSlotOrdinal(anchor, order.count, seat, [&order](std::int32_t slot) {
+        return order.types[static_cast<std::size_t>(slot)] >= facts::kNoPlayerType;
     });
+    if (row < 0)
+    {
+        return -1;
+    }
+    return RowOrFieldLeader(row, playerOnes && order.types[static_cast<std::size_t>(row)] == *playerOnes, anchor,
+                            order.types[static_cast<std::size_t>(anchor)] == order.fieldLeader);
 }
 
 std::wstring OrderText(const Order& order)

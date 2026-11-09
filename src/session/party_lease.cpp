@@ -9,6 +9,8 @@ namespace lss::session {
 using facts::kAiStateBattle;
 using facts::kAiStateFollow;
 
+static_assert(kNoStandIn == facts::kNoPlayerType, "no stand-in is the roster's none");
+
 Eligibility Assess(const MemberSnapshot& member) noexcept
 {
     if (member.character == nullptr)
@@ -22,10 +24,6 @@ Eligibility Assess(const MemberSnapshot& member) noexcept
     if (member.isPlayerOnes)
     {
         return Eligibility::PlayerOnes;
-    }
-    if (member.leaderSlot)
-    {
-        return Eligibility::LeaderSlot;
     }
     if (member.requested != nullptr)
     {
@@ -63,7 +61,6 @@ const wchar_t* Describe(Eligibility eligibility) noexcept
         case Eligibility::NotAiOwned: return L"not owned by its AI";
         case Eligibility::PlayerDriven: return L"marked player-controlled";
         case Eligibility::AiInvalid: return L"its AI controller is not valid";
-        case Eligibility::LeaderSlot: return L"the field or default battle leader's slot (player 1's)";
         case Eligibility::BattleUnavailable: return L"unavailable to the battle switch";
     }
     return L"unknown";

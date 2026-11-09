@@ -172,6 +172,12 @@ void Seat::Tick(bool& commandMenusTicked) noexcept
     {
         return;
     }
+    // Player 1 home (the game's leader is the field leader): no stand-in can hold, whatever leader change was not
+    // heard (a party apply's own leader write, a retry). The change's own clear (OnLeaderChanging) is the fast path.
+    if (standIn_ != kNoStandIn && phase_ != Phase::Leaving && party_member::LeaderHome())
+    {
+        EndStandIn(L"the game's leader is on the field leader again");
+    }
     switch (phase_)
     {
         case Phase::SettlingPlayerOne: Settle(); break;
@@ -280,7 +286,7 @@ void Seat::Settle() noexcept
     }
     handover_watch::PartyOrder(players::BySeat(seat_, L"choosing player 2's member", L"choosing player 3's member"), seat_,
                                nullptr);
-    const auto choice = party_member::ChooseSlot(seat_, playerOneController_);
+    const auto choice = party_member::ChooseSlot(seat_, playerOneController_, standIn_);
     member_           = choice.member;
     if (choice.wait == party_member::SlotWait::NoSlot)
     {
@@ -417,7 +423,7 @@ void Seat::RetakeWhenFree() noexcept
     {
         return;
     }
-    const auto choice = party_member::ChooseSlot(seat_, playerOneController_, false);
+    const auto choice = party_member::ChooseSlot(seat_, playerOneController_, standIn_, false);
     void*      free   = choice.member;
     if (free == nullptr)
     {
@@ -500,7 +506,9 @@ void Seat::EventLine(const std::wstring& text) noexcept
 
 /// The game is about to make `character` the leader of `controller` (session/party_events.h). If it
 /// is the seat's member and player 1's controller, the seat lets go first, so the two controllers never
-/// both claim it; the game's switch then seats player 1 on it.
+/// both claim it; the game's switch then seats player 1 on it, and the seat plays the character player 1 came
+/// from until the game's leader goes home to the field leader (the stand-in, party_lease.h StandInFor). The game's
+/// leader going home ends every stand-in: the seat takes its own slot's member again.
 void Seat::OnLeaderChanging(void* controller, void* character) noexcept
 {
     using session_rules::LeaderEventAction;
@@ -512,9 +520,12 @@ void Seat::OnLeaderChanging(void* controller, void* character) noexcept
                                            MemberHeld(),
                                            member_ == nullptr};
     const auto action = session_rules::DecideLeaderEvent(event);
+    // Player 1's controller's leader is still the one before the change here (the funnel runs before the switch
+    // writes it); the party manager's leader fields are the new one's already.
+    const void* before = In() ? ReadPointer(controller, facts::kControllerLeader) : nullptr;
+    const bool  home   = event.controllerIsPlayerOne && party_member::IsFieldLeader(character);
     if (In())
     {
-        const void* before = ReadPointer(controller, facts::kControllerLeader);
         if (action == LeaderEventAction::Warn)
         {
             Log(L"WARNING: party event: the game makes {} the leader of {}'s controller (was {}); a game leader "
@@ -526,13 +537,46 @@ void Seat::OnLeaderChanging(void* controller, void* character) noexcept
                               event.controllerIsPlayerOne ? L"player 1's controller" : L"a controller that is not player 1's",
                               players::NameOf(before)));
     }
+    if (home && standIn_ != kNoStandIn && action != LeaderEventAction::Yield)
+    {
+        EndStandIn(L"the game's leader goes home to the field leader");
+    }
     switch (action)
     {
-        case LeaderEventAction::Yield: Yield(L"about to become player 1's leader (the game's leader change)"); break;
+        case LeaderEventAction::Yield:
+        {
+            // Read before the give-back: the roster walk names the member by its character.
+            const auto own = party_member::PlayerTypeOf(member_);
+            const auto was = party_member::PlayerTypeOf(before);
+            Yield(L"about to become player 1's leader (the game's leader change)");
+            const std::uint8_t mark = StandInFor(home, was.value_or(kNoStandIn), own.value_or(kNoStandIn));
+            if (home && standIn_ != kNoStandIn)
+            {
+                Log(L"{} stood in for player 1's character (type {}): the game's leader goes home, {} takes its own slot's "
+                    L"member again",
+                    Name(), standIn_, Name());
+            }
+            standIn_ = mark;
+            if (mark != kNoStandIn)
+            {
+                Log(L"{} plays player 1's former character (type {}) until the game's leader goes home", Name(), mark);
+            }
+            break;
+        }
         case LeaderEventAction::ArmLook: retakeLooks_ = kRetakeLookTicks; break;  // the member the game moved off may be free
         case LeaderEventAction::Warn:
         case LeaderEventAction::None: break;
     }
+}
+
+/// The stand-in mark cleared: the seat follows its own slot again (FollowSlot gives the member back when the slot
+/// names another; a seat without a member chooses by the slot anyway; a seat mid-take finishes it and follows at the
+/// next slot check).
+void Seat::EndStandIn(const wchar_t* why) noexcept
+{
+    Log(L"{} stood in for player 1's character (type {}): {}; {}'s own slot decides again", Name(), standIn_, why, Name());
+    standIn_ = kNoStandIn;
+    FollowSlot(why, true);
 }
 
 /// The game changed a party member's status (session/party_events.h): the seat's member is checked
@@ -599,7 +643,7 @@ void Seat::FollowSlot(const wchar_t* when, bool log) noexcept
     // Logged from the party-apply caller only: the party order after the game's apply is the one Info line a field
     // report needs for a hand-over question (the handover watch, which listed the whole order, is a dev tool now).
     // The slow slot check asks every kSlotCheckTicks and stays quiet (a line per poll spammed the log in play).
-    const auto choice = party_member::ChooseSlot(seat_, playerOneController_, log);
+    const auto choice = party_member::ChooseSlot(seat_, playerOneController_, standIn_, log);
     const auto held   = party_member::PlayerTypeOf(member_);
     if (choice.wait == party_member::SlotWait::NoSlot || !held || choice.type == *held)
     {
@@ -931,7 +975,7 @@ void Seat::LogGaveUp(outside_join::Reason reason) noexcept
 /// A party member the seat could take, by the game's own member test (null if none). Quiet.
 void* Seat::FreeMember(void* playerOneController) const noexcept
 {
-    return party_member::GameReady() ? party_member::ChooseSlot(seat_, playerOneController, false).member : nullptr;
+    return party_member::GameReady() ? party_member::ChooseSlot(seat_, playerOneController, standIn_, false).member : nullptr;
 }
 
 /// The seat is out, and waits for a party member to be free before it joins.
@@ -1207,7 +1251,10 @@ std::wstring Seat::MemberReading() const
     const int slot = seat_ + 1;  // the seat's slot of the party order (players/seats.h)
     if (PlaysMember())
     {
-        return std::format(L"{} (slot {} of the party order)", players::NameOf(players::generation::MemberOf(seat_)), slot);
+        return standIn_ != kNoStandIn
+                   ? std::format(L"{} (player 1's former character, until the game's leader goes home)",
+                                 players::NameOf(players::generation::MemberOf(seat_)))
+                   : std::format(L"{} (slot {} of the party order)", players::NameOf(players::generation::MemberOf(seat_)), slot);
     }
     if (!In())
     {
@@ -1283,6 +1330,7 @@ void Seat::Forget() noexcept
     slotWaitLogged_      = 0;
     slotWaitSince_.reset();
     slotWaitReason_      = party_member::SlotWait::None;
+    standIn_             = kNoStandIn;  // out: its own slot again when it joins (a new world, a rebuilt party, a wait)
     viewTargetResets_    = 0;
     viewOnOwnCamera_     = true;
     EndRideAlong(L"the player is out");

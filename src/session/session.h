@@ -24,11 +24,15 @@
 //   leave    the member is given back first and awaited, then the leftover actors are destroyed
 //            and the seat's player removed in one step (session/leave_sequence.h).
 //   party    the game's party funnels are heard (session/party_events.h): before the game makes
-//            the seat's member player 1's leader, the seat gives it back; after a status change, a
-//            member out of the deployed or battle party is given back and another chosen; after a party
-//            apply, a member no longer in the seat's slot is given back and the slot's taken. A slow
-//            check backs both up (story override party data passes neither funnel), and the battle
-//            controller component is checked every few ticks. A downed member stays the seat's.
+//            the seat's member player 1's leader, the seat gives it back and, unless the game's leader goes home
+//            to the field leader, remembers player 1's former character as its stand-in (party_lease.h StandInFor)
+//            and plays it for the fight (the battle leader option, a switch: one leader change moves one seat);
+//            the mark ends when the game's leader goes home (the change heard, or seen each tick), and the seat
+//            takes its own slot's member again. After a status change, a member out of the deployed or battle
+//            party is given back and another chosen; after a party apply, a member no longer in the seat's slot is
+//            given back and the slot's taken. A slow check backs both up (story override party data passes
+//            neither funnel), and the battle controller component is checked every few ticks. A downed member
+//            stays the seat's.
 //   no member with none free (player 1's character alone in a story party), the seat's player does not exist:
 //            a join creates nothing, and a seat whose member went leaves. The mod is then as
 //            with one player, and the seat joins once the game's party changes free a member (a
@@ -219,6 +223,7 @@ private:
     void EventLine(const std::wstring& text) noexcept;
     void CheckAfterPartyChange(bool followSlot) noexcept;
     void FollowSlot(const wchar_t* when, bool log) noexcept;  // log: the slot's verdict as an Info line
+    void EndStandIn(const wchar_t* why) noexcept;             // the mark cleared (logged) and the slot followed
     void WaitForSlot(const party_member::SlotChoice& choice) noexcept;
     bool ScriptNeedsMember(const AiSnapshot& ai) noexcept;
     void CheckHeldAi() noexcept;
@@ -248,6 +253,9 @@ private:
     std::optional<std::chrono::steady_clock::time_point> slotWaitSince_;  // when the slot wait began (on one monitor)
     party_member::SlotWait slotWaitReason_ = party_member::SlotWait::None;  // the wait's reason as last chosen
     bool                  sharedRide_       = false;    // player 1 rides a shared vehicle: the seat takes no member
+    std::uint8_t          standIn_          = kNoStandIn;  // player 1's former character's type the seat plays since the
+                                                           // game's leader change took its member, until the game's
+                                                           // leader goes home or the seat is out (party_lease.h StandInFor)
     bool                  rideAlong_        = false;    // a script has the seat's member, the player rides along (RidesAlong)
     void*                 rideMember_       = nullptr;  // that member (the seat's member_ while the ride lasts)
     std::uint32_t         rideTicks_        = 0;        // ticks riding along
