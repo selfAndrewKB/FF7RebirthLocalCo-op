@@ -152,6 +152,73 @@ inline constexpr Option kBattleWarps{  // battle/battle_warps
     false, L"Moves at a Battle's Start and End", kBattleWarpsLabels,
     L"Who the game moves into place when a battle starts and ends. Players Stay: every player's character stays where "
     L"it is. Nobody: no one is moved. Whole Party: everyone, as in single player."};
+// The battle's rates (battle/battle_rates): each a multiplier from 0.1 to 10.0 in steps of 0.1, written "1.5".
+inline constexpr std::size_t kTenthsMax = 100;  // 10.0
+using TenthsText = std::array<std::array<wchar_t, 5>, kTenthsMax>;
+consteval TenthsText MakeTenthsText()
+{
+    TenthsText text{};
+    for (std::size_t i = 0; i < kTenthsMax; ++i)
+    {
+        const std::size_t tenths = i + 1;
+        std::size_t       at     = 0;
+        if (tenths >= 100) text[i][at++] = static_cast<wchar_t>(L'0' + tenths / 100);
+        text[i][at++] = static_cast<wchar_t>(L'0' + tenths / 10 % 10);
+        text[i][at++] = L'.';
+        text[i][at++] = static_cast<wchar_t>(L'0' + tenths % 10);
+        text[i][at]   = L'\0';
+    }
+    return text;
+}
+inline constexpr TenthsText kTenthsText = MakeTenthsText();
+consteval std::array<const wchar_t*, kTenthsMax> MakeTenthsWords()
+{
+    std::array<const wchar_t*, kTenthsMax> words{};
+    for (std::size_t i = 0; i < kTenthsMax; ++i)
+    {
+        words[i] = kTenthsText[i].data();
+    }
+    return words;
+}
+/// "0.1" ... "10.0": the words and the page's values alike.
+inline constexpr std::array<const wchar_t*, kTenthsMax> kTenthsWords = MakeTenthsWords();
+
+inline constexpr Option kEnemyDamage{  // battle/battle_rates
+    L"Battle", L"enemy-damage", kTenthsWords, L"1.0",
+    L"the damage enemies deal to the players' party, times this (0.1 to 10.0, steps of 0.1; 1.0 is the game's); from the "
+    L"next hit, through the game's own difficulty step (its rounding and its limits)",
+    false, L"Enemy Damage", kTenthsWords,
+    L"Damage enemies deal to the party, times this. 1.0: as the game. From the next hit."};
+inline constexpr Option kEnemyHp{  // battle/battle_rates
+    L"Battle", L"enemy-hp", kTenthsWords, L"1.0",
+    L"every enemy's max HP but the bosses', times this (0.1 to 10.0); from the next fight (an enemy whose data fixes its "
+    L"HP keeps it, as the game's own difficulty does)",
+    false, L"Enemy HP", kTenthsWords,
+    L"Every enemy's max HP but the bosses', times this. From the next fight."};
+inline constexpr Option kBossHp{  // battle/battle_rates
+    L"Battle", L"boss-hp", kTenthsWords, L"1.0",
+    L"the max HP of the enemies the game marks as a fight's leader (bosses, named foes), times this (0.1 to 10.0); from "
+    L"the next fight",
+    false, L"Boss HP", kTenthsWords,
+    L"The max HP of bosses and named foes, times this. From the next fight."};
+inline constexpr Option kEnemyStagger{  // battle/battle_rates
+    L"Battle", L"enemy-stagger", kTenthsWords, L"1.0",
+    L"the size of every enemy's stagger gauge, times this (0.1 to 10.0; higher staggers later); from the next fight",
+    false, L"Enemy Stagger Gauge", kTenthsWords,
+    L"How much it takes to stagger an enemy, times this. Higher: enemies stagger later. From the next fight."};
+inline constexpr Option kExpGain{  // battle/battle_rates
+    L"Battle", L"exp-gain", kTenthsWords, L"1.0",
+    L"the EXP each enemy is worth, times this (0.1 to 10.0), on top of the game's own bonus after the story; the game "
+    L"sets an enemy's EXP when it enters a fight, so a change applies from the next fight",
+    false, L"EXP Gained", kTenthsWords,
+    L"EXP from defeated enemies, times this. Adds to the game's own bonus. From the next fight."};
+inline constexpr Option kApGain{  // battle/battle_rates
+    L"Battle", L"ap-gain", kTenthsWords, L"1.0",
+    L"the AP a won battle gives, times this (0.1 to 10.0), on top of the game's own bonus after the story; through the "
+    L"game's own bonus rate, at the award",
+    false, L"AP Gained", kTenthsWords,
+    L"AP from a won battle, times this. Adds to the game's own bonus."};
+
 inline constexpr std::array<const wchar_t*, 2> kLeadHolderWords{L"guide", L"keeps"};
 inline constexpr std::array<const wchar_t*, 2> kLeadHolderLabels{L"AI Guides", L"Player Keeps"};
 inline constexpr Option kLeadHolder{  // session/lead_gate
@@ -165,7 +232,9 @@ inline constexpr Option kLeadHolder{  // session/lead_gate
 /// Every option, in the order the settings file lists them.
 inline constexpr std::array kOptions{&kMultiMonitor,     &kMonitors,      &kColumnOrder,
                                      &kTwoPlayerSplit,  &kThreePlayerSplit, &kHorizontalFov,
-                                     &kVerticalFov,     &kBattleWarps,      &kLeadHolder};
+                                     &kVerticalFov,     &kBattleWarps,      &kEnemyDamage,
+                                     &kEnemyHp,         &kBossHp,           &kEnemyStagger,
+                                     &kExpGain,         &kApGain,           &kLeadHolder};
 
 /// The option is a row of the table (Of and Why answer by the row).
 consteval bool Listed(const Option& option)
@@ -178,7 +247,8 @@ consteval bool Listed(const Option& option)
 }
 static_assert(Listed(kMultiMonitor) && Listed(kMonitors) && Listed(kColumnOrder) && Listed(kTwoPlayerSplit) &&
                   Listed(kThreePlayerSplit) && Listed(kHorizontalFov) && Listed(kVerticalFov) && Listed(kBattleWarps) &&
-                  Listed(kLeadHolder),
+                  Listed(kEnemyDamage) && Listed(kEnemyHp) && Listed(kBossHp) && Listed(kEnemyStagger) && Listed(kExpGain) &&
+                  Listed(kApGain) && Listed(kLeadHolder),
               "every option is a row of kOptions");
 
 /// Where an option's word came from.

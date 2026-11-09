@@ -56,7 +56,14 @@ void TableConsistent()
             open = option->section;
         }
     }
-    EXPECT(kOptions.size() == 9);
+    EXPECT(kOptions.size() == 15);
+    // The six battle rates: multipliers from 0.1 to 10.0 in tenths, each default the game's own 1.0.
+    for (const Option* rate : {&kEnemyDamage, &kEnemyHp, &kBossHp, &kEnemyStagger, &kExpGain, &kApGain})
+    {
+        EXPECT(rate->words.size() == 100 && std::wcscmp(rate->fallback, L"1.0") == 0);
+        EXPECT(std::wcscmp(rate->words[0], L"0.1") == 0 && std::wcscmp(rate->words[99], L"10.0") == 0);
+        EXPECT(std::wstring_view(rate->section) == L"Battle");
+    }
     EXPECT(kLeadHolder.words.size() == 2 && std::wcscmp(kLeadHolder.fallback, L"guide") == 0 && kLeadHolder.experimental);
     EXPECT(kBattleWarps.words.size() == 3 && std::wcscmp(kBattleWarps.fallback, L"players-stay") == 0);
     EXPECT(kVerticalFov.words.size() == kFovWeightSteps && std::wcscmp(kVerticalFov.fallback, L"1.00") == 0);

@@ -156,6 +156,7 @@ add_library(LocalSplitScreen SHARED
     src/camera/camera_distance.cpp
     src/camera/main_camera_shape.cpp
     src/battle/command_locks.cpp
+    src/battle/battle_rates.cpp
     src/battle/battle_warps.cpp
     src/battle/equal_targeting.cpp
     src/battle/player_hits.cpp
@@ -380,6 +381,7 @@ lss_test(field_hold)
 lss_test(state_path)
 lss_test(lead_keep_rules)
 lss_test(story_box_rules)
+lss_test(battle_rates_rules)
 lss_test(battle_warps_rules)
 lss_test(leave_sequence src/session/leave_sequence.cpp)
 lss_test(leader_answer)

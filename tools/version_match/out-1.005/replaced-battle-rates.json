@@ -1,0 +1,27 @@
+{
+  "build": "1.005",
+  "research_build": "1.004",
+  "date": "2026-11-09",
+  "doc": "Rebirth/Documentation/research/RE-battle-rate-sites.md (section 11, the site table)",
+  "facts": [
+    {"name": "slot: vt_FEndCharCtrlCompBattle_Enemy +0xD8 (battle start)", "old": "0x1457F0D98", "new": "0x1455FE900", "bytes": "", "same_semantics": true, "confidence": "CONFIRMED", "note": "The IDA pass RATESITES on both databases: holds BattleEnemyComp_VtD8_BattleStart_StatsAndExp in both."},
+    {"name": "slot: vt_FEndCharCtrlCompBattle_EnemyEN2228 +0xD8 (battle start)", "old": "0x1466B73D0", "new": "0x145B4DB28", "bytes": "", "same_semantics": true, "confidence": "CONFIRMED", "note": "The IDA pass RATESITES: the same function as the Enemy class's slot."},
+    {"name": "BattleEnemyComp_VtD8_BattleStart_StatsAndExp", "old": "0x14110472C", "new": "0x140B83F5C", "bytes": "", "same_semantics": true, "confidence": "CONFIRMED", "note": "uint64(comp, u8, u8): the stats and EXP at an enemy's battle start; the two slots are its references."},
+    {"name": "EnemyParam_ComputeStats_FromSpecAndLevel", "old": "0x14143C34C", "new": "0x141536F88", "bytes": "", "same_semantics": true, "confidence": "CONFIRMED", "note": "uint64(est, param, i32* hp, i32* bp, i32* pa, i32* ma, i32* pd, i32* md)."},
+    {"name": "BattleEnemyComp_BattleStart_ComputeStats: call EnemyParam_ComputeStats", "old": "0x14143BCC2", "new": "0x1415368F2", "bytes": "e8", "same_semantics": true, "confidence": "CONFIRMED", "note": "Fits both (offset 2 / 2)."},
+    {"name": "BattleUnit_SetOverrideBattleCharaSpec_KeepRatios: call BattleEnemyComp_GetStaggerGaugeShare", "old": "0x14143BFE6", "new": "0x141536C22", "bytes": "e8", "same_semantics": true, "confidence": "CONFIRMED", "note": "Fits both (offset 6 / 2); the phase change's read just before its own computation."},
+    {"name": "BattleEnemyComp_GetStaggerGaugeShare", "old": "0x14143C85C", "new": "0x141537498", "bytes": "", "same_semantics": true, "confidence": "CONFIRMED", "note": "float(comp)."},
+    {"name": "BattleUnit_SetOverrideBattleCharaSpec_KeepRatios: call EnemyParam_ComputeStats", "old": "0x14143C155", "new": "0x141536D91", "bytes": "e8", "same_semantics": true, "confidence": "CONFIRMED", "note": "Fits both (offset 5 / 1)."},
+    {"name": "BattleCtrlComp_HasPlayerTypeOrFlags90A098", "old": "0x140A5C154", "new": "0x140BC75F4", "bytes": "", "same_semantics": true, "confidence": "CONFIRMED", "note": "bool(battleComp): the party-side test; called by the mod."},
+    {"name": "BattleDamage_ApplyHitToVictim: call Difficulty_GetEffective_DynamicAsNormal", "old": "0x140FB42A3", "new": "0x140E20D7B", "bytes": "e8", "same_semantics": true, "confidence": "CONFIRMED", "note": "Fits both (offset 3 / 0xB, ends on the boundary)."},
+    {"name": "Difficulty_GetEffective_DynamicAsNormal", "old": "0x14087F0A8", "new": "0x140C21548", "bytes": "", "same_semantics": true, "confidence": "CONFIRMED", "note": "u8(): 0 Easy, 1 Normal (Dynamic answered as 1), 2 Hard."},
+    {"name": "BattleDamage_ApplyHitToVictim: call EndParam__GetFloatByKey (the difficulty row)", "old": "0x140FB42D1", "new": "0x140E20DA9", "bytes": "e8", "same_semantics": true, "confidence": "CONFIRMED", "note": "Fits both (offset 1 / 9)."},
+    {"name": "EndParam__GetFloatByKey", "old": "0x140A59490", "new": "0x140C28600", "bytes": "", "same_semantics": true, "confidence": "CONFIRMED", "note": "float(const FName*, float fallback)."},
+    {"name": "BattleEnemyComp_ComputeExpReward_LevelDiffAndClearRate: call EnemyEXP_GetValueAtLevel_WithExpUpBonus", "old": "0x14143B9C8", "new": "0x1415365F1", "bytes": "e8", "same_semantics": true, "confidence": "CONFIRMED", "note": "Fits both (offset 8 / 1)."},
+    {"name": "EnemyEXP_GetValueAtLevel_WithExpUpBonus", "old": "0x1417F5780", "new": "0x141534A34", "bytes": "", "same_semantics": true, "confidence": "CONFIRMED", "note": "i32(u64 expRowRef, i32 levelIndex)."},
+    {"name": "BattleResult_AwardExpApGil: call StoryFlag_GetByName (the AP bonus gate)", "old": "0x14143C9FB", "new": "0x14127780B", "bytes": "e8", "same_semantics": true, "confidence": "CONFIRMED", "note": "Fits both (offset 0xB, ends on the boundary / 0xB). 1.005 also calls Rewards_BonusGate2 when it is false; the mod calls it itself."},
+    {"name": "StoryFlag_GetByName", "old": "0x1408BED98", "new": "0x14092B5C8", "bytes": "", "same_semantics": true, "confidence": "CONFIRMED", "note": "bool(const FName*)."},
+    {"name": "BattleResult_AwardExpApGil: call EndParam__GetIntByKey (APRateGameClear)", "old": "0x14143CA10", "new": "0x141277824", "bytes": "e8", "same_semantics": true, "confidence": "CONFIRMED", "note": "Fits both (offset 0 / 4)."},
+    {"name": "EndParam__GetIntByKey", "old": "0x140A59354", "new": "0x140C2854C", "bytes": "", "same_semantics": true, "confidence": "CONFIRMED", "note": "i32(const FName*, i32 fallback)."}
+  ]
+}

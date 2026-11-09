@@ -120,7 +120,8 @@ void CommandValues()
     EXPECT(!WordOfReading(control::Value{}).has_value());
 }
 
-/// The split FOV's two weights (21 values each) are sliders; the short lists stay lists.
+/// The split FOV's two weights (21 values each) and the six battle rates (100 each) are sliders; the short lists stay
+/// lists.
 void SlidersAreTheLongRows()
 {
     std::puts("coop menu: the long rows are sliders");
@@ -130,7 +131,7 @@ void SlidersAreTheLongRows()
         EXPECT(IsSlider(*option) == (option->wordLabels.size() > kListLongest));
         sliders += IsSlider(*option) ? 1 : 0;
     }
-    EXPECT(sliders == 2);
+    EXPECT(sliders == 8);
 }
 
 /// Reset All gives each row its option's default word.
