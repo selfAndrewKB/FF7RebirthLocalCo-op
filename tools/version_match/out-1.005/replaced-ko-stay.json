@@ -1,0 +1,26 @@
+{
+  "build": "1.005",
+  "research_build": "1.004",
+  "date": "2026-11-09",
+  "doc": "Rebirth/Documentation/research/RE-ko-stay.md (section 4)",
+  "facts": [
+    {
+      "name": "the KO tick's call to BattleLeader_CycleSwitch",
+      "old": "0x142A2170F",
+      "new": "0x142623011",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "The IDA pass KOSTAY on both databases (RE-ko-stay.md 4.1): ActionStateDead6_Tick_AutoSwitchLeader's E8 to the cycle (1.004 E8 A4 A2 B6 FE, crosses a block; 1.005 E8 1E 74 96 FE)."
+    },
+    {
+      "name": "the petrify tick's call to BattleLeader_CycleSwitch",
+      "old": "0x142A7EE7D",
+      "new": "0x1426FF86D",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "The IDA pass KOSTAY on both databases (RE-ko-stay.md 4.2): BattlePlayerComp_Vt10_Tick_PetrifyAutoSwitch's E8 to the cycle (crosses a block in both builds)."
+    }
+  ]
+}

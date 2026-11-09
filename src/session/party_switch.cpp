@@ -12,6 +12,7 @@
 #include "players/seats.h"
 
 #include <atomic>
+#include <chrono>
 #include <cstdint>
 #include <iterator>
 
@@ -36,20 +37,33 @@ constexpr platform::FunctionFact kDisabled{L"CommandSwitchHud_IsMemberSwitchDisa
 using facts::kCharacterByPlayerType;
 constexpr std::uintptr_t kDisabledCalls[] = {0x140F318C3, 0x140F31BB5};
 
+// The forced switches (RE-ko-stay.md §2, §4): the KO tick's call to the cycle every frame while player 1's character
+// is down, and the petrify tick's once when its wait runs out. The cycle itself, and those two calls.
+constexpr std::uint8_t kCycleSwitchBytes[] = {0x48, 0x8B, 0xC4, 0x48, 0x89, 0x58, 0x08, 0x44, 0x88, 0x48,
+                                              0x20, 0x44, 0x88, 0x40, 0x18, 0x88, 0x50, 0x10, 0x55, 0x56};
+constexpr platform::FunctionFact kCycleSwitch{L"BattleLeader_CycleSwitch", 0x14158B9B8, kCycleSwitchBytes};
+constexpr std::uintptr_t         kKnockedOutCall = 0x142A2170F;  // in the dead state's tick
+constexpr std::uintptr_t         kPetrifiedCall  = 0x142A7EE7D;  // in the battle component's tick, at the petrify wait's end
+constexpr auto                   kForcedQuietMs  = std::chrono::milliseconds(1000);  // a refusal after this starts a new spell
+
 using ComponentFn = void* (*)(void* character);
 using DisabledFn  = std::uint8_t (*)(std::uint8_t type);
 using ByTypeFn    = void* (*)(void* unused, std::uint8_t type);
+using CycleFn     = std::uint8_t (*)(void* system, std::uint8_t next, std::uint8_t requireCanSwitch, std::uint8_t handoff);
 
 // Set once at install.
 platform::CallRedirect g_cycleCall;
 platform::CallRedirect g_canSwitchCall;
 platform::CallRedirect g_disabledCalls[2];
+platform::CallRedirect g_knockedOutCall;
+platform::CallRedirect g_petrifiedCall;
 ByTypeFn               g_byType = nullptr;
 /// What Install found, for the redirects (placed at once, or on 1.005 from the game thread).
 struct Sites
 {
     std::uintptr_t player = 0, ai = 0, cycle = 0, count = 0;  // 0: not found (logged by the finder)
     std::uintptr_t disabled = 0, byType = 0, disabledSites[2]{};
+    std::uintptr_t cycleSwitch = 0, knockedOut = 0, petrified = 0;
 };
 Sites                   g_sites;
 platform::DeferredSites g_placement;  // 1.005: the sites placed from the game thread (platform/deferred_sites.h)
@@ -68,7 +82,8 @@ int SeatPlaying(const void* character) noexcept
     }
     for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
     {
-        if (players::generation::Active(seat) && players::generation::MemberOf(seat) == character)
+        // The member the player drives, or rides along with while a script has it on its AI: theirs either way.
+        if (players::generation::Active(seat) && players::generation::CameraMemberOf(seat) == character)
         {
             return seat;
         }
@@ -130,10 +145,75 @@ std::uint8_t SwitchDisabled(std::uint8_t type) noexcept
     return reinterpret_cast<DisabledFn>(g_disabledCalls[0].Original())(type);
 }
 
+/// Another player is in with a character: co-op, where no human is moved off their own character.
+bool AnotherPlayerPlays() noexcept
+{
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
+    {
+        if (players::generation::Active(seat) && players::generation::CameraMemberOf(seat) != nullptr)
+        {
+            return true;  // a member driven, or ridden along with
+        }
+    }
+    return false;
+}
+
+/// One forced switch's refusals: a spell starts at the first refusal after a quiet second (logged), and its count goes
+/// on (Trace per call).
+struct ForcedSpell
+{
+    std::chrono::steady_clock::time_point last{};
+    std::uint32_t                         calls = 0;
+};
+ForcedSpell g_knockedOut, g_petrified;
+
+/// The game's forced switch for player 1's character, answered "nobody can take over" (its own answer when no member
+/// can) while another player plays: player 1 stays on their downed or petrified character until it is revived or cured,
+/// as every other player does (no retry is queued, and game over still waits for every member).
+std::uint8_t RefuseForced(ForcedSpell& spell, const platform::CallRedirect& call, const wchar_t* why, void* system,
+                          std::uint8_t next, std::uint8_t requireCanSwitch, std::uint8_t handoff) noexcept
+{
+    if (!players::generation::OnGameThread() || !AnotherPlayerPlays())
+    {
+        return reinterpret_cast<CycleFn>(call.Original())(system, next, requireCanSwitch, handoff);
+    }
+    const auto now = std::chrono::steady_clock::now();
+    if (spell.calls == 0 || now - spell.last > kForcedQuietMs)
+    {
+        spell.calls = 0;
+        platform::Log(L"party switch: player 1's character is {}; player 1 stays on it until {} (co-op: no forced switch)", why,
+                      &spell == &g_petrified ? L"it is cured" : L"a revive");
+    }
+    ++spell.calls;
+    spell.last = now;
+    platform::LogTrace(L"party switch: the game's forced switch refused ({} call(s) this time)", spell.calls);
+    return 0;
+}
+
+std::uint8_t KnockedOutCycle(void* system, std::uint8_t next, std::uint8_t requireCanSwitch, std::uint8_t handoff) noexcept
+{
+    return RefuseForced(g_knockedOut, g_knockedOutCall, L"down", system, next, requireCanSwitch, handoff);
+}
+
+std::uint8_t PetrifiedCycle(void* system, std::uint8_t next, std::uint8_t requireCanSwitch, std::uint8_t handoff) noexcept
+{
+    return RefuseForced(g_petrified, g_petrifiedCall, L"petrified", system, next, requireCanSwitch, handoff);
+}
+
 /// The redirects, from what Install found.
 bool PlaceSites(const platform::GameImage&) noexcept
 {
     const Sites& s = g_sites;
+    // The forced switches stand on their own: each answered while another player plays, or the game's as before.
+    const bool knockedOut = s.cycleSwitch != 0 && s.knockedOut != 0 &&
+                            g_placement.Place(g_knockedOutCall, s.knockedOut, s.cycleSwitch,
+                                              reinterpret_cast<std::uintptr_t>(&KnockedOutCycle));
+    const bool petrified = s.cycleSwitch != 0 && s.petrified != 0 &&
+                           g_placement.Place(g_petrifiedCall, s.petrified, s.cycleSwitch,
+                                             reinterpret_cast<std::uintptr_t>(&PetrifiedCycle));
+    platform::Log(L"party switch: in co-op player 1 stays on a downed character {} and on a petrified one {}",
+                  knockedOut ? L"(the game's forced switch refused)" : L"UNAVAILABLE (a check failed: the game switches)",
+                  petrified ? L"(refused too)" : L"UNAVAILABLE (a check failed: the game switches)");
     // The cycle and its count together, or neither: a count that disagrees with the cycle would let
     // the switch be offered with no one to switch to.
     bool switching = s.player != 0 && s.ai != 0 && s.cycle != 0 && s.count != 0 &&
@@ -174,7 +254,7 @@ bool PlaceSites(const platform::GameImage&) noexcept
                             : L"UNAVAILABLE (a check failed): player 1 can switch onto player 2's or 3's member",
                   widget ? L"greys player 2's or 3's member"
                          : L"shows player 2's or 3's member as switchable (a check failed)");
-    return switching;
+    return switching || knockedOut || petrified;
 }
 
 }  // namespace
@@ -185,7 +265,8 @@ bool Install(const platform::GameImage& image) noexcept
     const auto site = [&image](std::uintptr_t address) { return image.Rebase(address, 5).value_or(0); };
     g_sites = {find(kPlayerComponent), find(kAiControllerComponent), site(kCycleCall), site(kCanSwitchCall),
                find(kDisabled),        find(kCharacterByPlayerType),
-               {site(kDisabledCalls[0]), site(kDisabledCalls[1])}};
+               {site(kDisabledCalls[0]), site(kDisabledCalls[1])},
+               find(kCycleSwitch),     site(kKnockedOutCall), site(kPetrifiedCall)};
     // The cycle's call crosses a 16-byte block in 1.005: the sites are placed from the game thread, between its
     // ticks (platform/deferred_sites.h). The placement reads only the addresses found here.
     const bool placed = g_placement.Install(image, &PlaceSites);
@@ -201,7 +282,8 @@ bool Install(const platform::GameImage& image) noexcept
 void Remove() noexcept
 {
     g_placement.Cancel();  // a placement still queued does nothing
-    for (auto* call : {&g_disabledCalls[1], &g_disabledCalls[0], &g_canSwitchCall, &g_cycleCall})
+    for (auto* call : {&g_petrifiedCall, &g_knockedOutCall, &g_disabledCalls[1], &g_disabledCalls[0], &g_canSwitchCall,
+                       &g_cycleCall})
     {
         if (call->IsInstalled() && !call->Restore())
         {
