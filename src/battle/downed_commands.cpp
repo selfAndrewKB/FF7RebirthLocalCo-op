@@ -28,18 +28,16 @@ constexpr std::uint8_t kHasStatusBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 
                                             0x24, 0x10, 0x57, 0xB8, 0x80, 0x00, 0x00, 0x00};
 constexpr platform::FunctionFact kHasStatus{L"PartyType_HasStateId", 0x140A40050, kHasStatusBytes};
 constexpr std::uint8_t           kPetrify = 22;
+constexpr std::uint8_t           kNoType  = 0x10;  // command_rules::TypeAt's "none"
 // The menu's two gates on its own member: the open (CmdState0_Vt20_NextStateForOpenMode) and the per-tick sweep
 // (FieldCommandCtrl_OnLeaderChanged_Battle), each a dead test then a petrify test.
 constexpr std::uintptr_t kOpenDeadCall       = 0x140C8933D;
 constexpr std::uintptr_t kOpenPetrifiedCall  = 0x140C8934F;
 constexpr std::uintptr_t kSweepDeadCall      = 0x1408053E4;
 constexpr std::uintptr_t kSweepPetrifiedCall = 0x1408053F6;
-// The controller's member records: their array, their count, 200 bytes each; a record's member type (its current
-// command's, as the open gate reads it).
-constexpr std::uint32_t kCmdRecords     = 0x10;
+// The controller's member record count: the open gate's bound on an ordinal. (A record's own bytes never name its
+// member: the type at +0x66 is its queued command's, 0 while none was ever queued.)
 constexpr std::uint32_t kCmdRecordCount = 0x18;
-constexpr std::uint32_t kRecordStride   = 200;
-constexpr std::uint32_t kRecordType     = 0x66;
 
 using DeadFn      = bool (*)(void* unused, std::uint8_t type);
 using HasStatusFn = bool (*)(std::uint8_t type, std::uint8_t status);
@@ -67,7 +65,8 @@ bool CannotAct(void* unused, std::uint8_t type) noexcept
 
 /// The ordinal the gate should ask about instead of the menu's own member, whose type is `type`, and that member's
 /// type; -1 to keep the game's question. The running controller is the UI system's (a player's own in that player's
-/// menu pass); it must be the one whose menu member the game is asking about.
+/// menu pass); the gate's type must be its menu member's, or the question is another controller's (or the game's
+/// cached type lags a leader change) and the game's own answer stands.
 int AskInstead(std::uint8_t type, std::uint8_t& askedType) noexcept
 {
     if (!g_on.load(std::memory_order_acquire) || !players::generation::OnGameThread() ||
@@ -76,17 +75,17 @@ int AskInstead(std::uint8_t type, std::uint8_t& askedType) noexcept
         return -1;
     }
     const auto ctrl = platform::ReadAt<std::uintptr_t>(g_uiSystem + facts::kUICommandController);
-    std::int32_t   menu = -1, ally = -1, shortcut = -1, count = 0;
-    std::uintptr_t records = 0;
+    std::int32_t menu = -1, ally = -1, shortcut = -1, count = 0;
     if (ctrl == 0 || !platform::Read(ctrl + facts::kCmdMembers, menu) ||
         !platform::Read(ctrl + facts::kCmdMembers + 4, ally) || !platform::Read(ctrl + facts::kCmdMembers + 8, shortcut) ||
-        !platform::Read(ctrl + kCmdRecords, records) || !platform::Read(ctrl + kCmdRecordCount, count) || records == 0)
+        !platform::Read(ctrl + kCmdRecordCount, count))
     {
         return -1;
     }
-    const auto typeAt = [records, count](std::int32_t ordinal, std::uint8_t& out) {
-        return ordinal >= 0 && ordinal < count &&
-               platform::Read(records + static_cast<std::uintptr_t>(ordinal) * kRecordStride + kRecordType, out);
+    // The game's own list, as the gates and the chooser read it (a record's own bytes do not name its member).
+    const auto typeAt = [count](std::int32_t ordinal, std::uint8_t& out) {
+        out = ordinal >= 0 && ordinal < count ? command_rules::TypeAt(ordinal) : kNoType;
+        return out < kNoType;
     };
     std::uint8_t menuType = 0;
     if (!typeAt(menu, menuType) || menuType != type)
@@ -143,7 +142,8 @@ bool Install(const platform::GameImage& image) noexcept
     const auto sweepDead = site(kSweepDeadCall), sweepPetrified = site(kSweepPetrifiedCall);
     if (!command_rules::Installed())
     {
-        // Without the rules' refusals a downed player could be offered another player's character.
+        // Without the rules' refusals a downed player could be offered another player's character; their member list
+        // (command_rules::TypeAt) names the member the gate asks about.
         platform::Log(L"downed commands: UNAVAILABLE (the command rules are not in); a downed player cannot command the "
                       L"AI allies");
         return false;

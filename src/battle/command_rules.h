@@ -42,6 +42,10 @@ void Update() noexcept;
 /// player 1's leader). Any thread: it reads the gate's own mask.
 bool Refuses(int ordinal) noexcept;
 
+/// The member type at a command-menu ordinal, through the game's own list (the battle list in party order without the
+/// away members, then the reserves); 0x10 for none, not installed, or a read that faulted. Game thread.
+std::uint8_t TypeAt(std::int32_t ordinal) noexcept;
+
 /// While alive (`seat`'s command controller ticks): the rules turned around for that seat, so the members that may not
 /// be commanded are player 1's leader (type `leaderType`) and every other seat's member.
 class SeatRules
