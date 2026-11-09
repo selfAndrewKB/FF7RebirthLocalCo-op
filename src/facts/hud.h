@@ -168,6 +168,19 @@ inline constexpr std::uint32_t kUserWidgetViewportOffsets   = 0x220;  // FMargin
 inline constexpr std::uint32_t kUserWidgetViewportAlignment = 0x230;  // FVector2D, 8 bytes
 inline constexpr std::uint32_t kUserWidgetViewportLayoutEnd = 0x238;
 
+// ---------------------------------------------------------------------------------------------
+// The summon gauge (UEndBattleSummonGaugeIcon, the SummonTimeGauge_C root; RE-summon-gauge.md §2.1, §2.3)
+// ---------------------------------------------------------------------------------------------
+
+/// The design points (FVector2D each, 1920x1080 layout units) its tick places the three glow effects at: the head
+/// along the bar, the aura behind it, and the head's starting point (written at construct). The bar itself is a root
+/// hud/layout/hud_placement moves; these points are absolute, so the glow stays at the design place unless they move
+/// with the bar. Read at the tick's instructions in the research build; the UObject classes keep their member offsets
+/// between the builds (RE-1005-offsets-A.md), and the values read are checked plausible before any write.
+inline constexpr std::uint32_t kSummonGaugeEffectHead = 0x3D0;
+inline constexpr std::uint32_t kSummonGaugeEffectBack = 0x3D8;
+inline constexpr std::uint32_t kSummonGaugeHeadStart  = 0x458;
+
 /// UUserWidget::SetPositionInViewport(widget, FVector2D, bRemoveDPIScale): the stock setter the game's Blueprints
 /// place widgets with (hud/position_probe) and the enemy gauges' placement calls.
 inline constexpr std::uint8_t kSetPositionInViewportPrologue[] = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00};

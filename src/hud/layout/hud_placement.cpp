@@ -11,6 +11,7 @@
 
 #include "facts/hud.h"
 #include "hud/hud_rules.h"
+#include "hud/layout/overlay_layout.h"
 #include "hud/layout/viewport_placement.h"
 #include "hud/user_widgets.h"
 #include "platform/frame_watch.h"
@@ -20,6 +21,7 @@
 #include "players/unreal_access.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <cstring>
 #include <format>
@@ -46,6 +48,7 @@ struct Placement
     const wchar_t* className;
     float          anchorX;  // the corner or edge of the half its 1920x1080 area goes to
     float          anchorY;
+    bool           glow = false;  // the summon time gauge: its glow's design points move with it (facts/hud.h)
 };
 // The field-action icons ("Call Chocobo") are not here: the game places them at points it computes
 // from each icon's own base, so they keep their corner through that base (hud/field/action_icon_base.h).
@@ -59,9 +62,18 @@ constexpr Placement kPlacements[] = {
     // Bottom right, above the Members panel: the summon gauges (their own offset puts them at 1508,620 of the area;
     // research/RE-summon-gauge.md).
     {L"SummonChantGauge_C", 1.0f, 1.0f},  // the "SUMMON" bar that fills during a fight
-    {L"SummonTimeGauge_C", 1.0f, 1.0f},   // the summon's name and its time left
+    {L"SummonTimeGauge_C", 1.0f, 1.0f, true},  // the summon's name and its time left; its tick places the glow
 };
 constexpr std::uint32_t kScanTicks = 30;
+
+/// The summon gauge's three glow design points (facts/hud.h), as the game had them.
+struct GlowPoints
+{
+    LayoutPoint head;
+    LayoutPoint back;
+    LayoutPoint start;
+    bool        operator==(const GlowPoints&) const = default;
+};
 
 struct Placed
 {
@@ -75,6 +87,10 @@ struct Placed
     std::uint32_t     lastPlacedTick = 0;
     std::uint32_t     streak         = 0;  // re-placements on (nearly) consecutive ticks
     std::uint32_t     followed       = 0;  // game re-sets placed again (reported when the split ends)
+    std::optional<GlowPoints> glow;        // a glow placement's own design points (set back when the split ends)
+    GlowPoints        glowMoved;           // the points as last written (a read of anything else is the game's own write)
+    LayoutSize        glowLayout;          // the layout the glow was last moved for (zero: not yet)
+    bool              glowRefusedLogged = false;  // the "not design points" line, once per widget
 };
 
 // A root whose layout the game sets again on this many ticks in a row is left to the game: the two
@@ -238,6 +254,134 @@ void LeaveAlone(Placed& placed, const std::optional<ViewportLayout>& now) noexce
     placed.applied = now.value_or(placed.applied);
 }
 
+// ---- the summon gauge's glow: three design points its tick converts with the layout's size ----
+
+using platform::WriteGuarded;
+
+/// A design point of the 1920x1080 frame, with some slack (finite, near the frame, and set: a zero point is an unbuilt
+/// widget or other data).
+bool PlausibleDesignPoint(const LayoutPoint& point) noexcept
+{
+    return std::isfinite(point.x) && std::isfinite(point.y) && point.x > -400.0f && point.x < 2400.0f && point.y > -400.0f &&
+           point.y < 1500.0f && (point.x != 0.0f || point.y != 0.0f);
+}
+
+bool PlausibleGlow(const GlowPoints& points) noexcept
+{
+    return PlausibleDesignPoint(points.head) && PlausibleDesignPoint(points.back) && PlausibleDesignPoint(points.start);
+}
+
+/// The widget's class holds the three points (the research build's layout; a class of another size is not written).
+bool ClassHoldsGlow(UObject* widget) noexcept
+{
+    const auto* cls = widget->GetClassPrivate();
+    return cls != nullptr && cls->GetPropertiesSize() >= static_cast<std::int32_t>(facts::kSummonGaugeHeadStart + sizeof(LayoutPoint));
+}
+
+bool ReadGlow(const UObject* widget, GlowPoints& out) noexcept
+{
+    const auto* bytes = reinterpret_cast<const std::uint8_t*>(widget);
+    return CopyGuarded(&out.head, bytes + facts::kSummonGaugeEffectHead, sizeof(LayoutPoint)) &&
+           CopyGuarded(&out.back, bytes + facts::kSummonGaugeEffectBack, sizeof(LayoutPoint)) &&
+           CopyGuarded(&out.start, bytes + facts::kSummonGaugeHeadStart, sizeof(LayoutPoint));
+}
+
+bool WriteGlow(UObject* widget, const GlowPoints& points) noexcept
+{
+    auto* bytes = reinterpret_cast<std::uint8_t*>(widget);
+    return WriteGuarded(bytes + facts::kSummonGaugeEffectHead, &points.head, sizeof(LayoutPoint)) &&
+           WriteGuarded(bytes + facts::kSummonGaugeEffectBack, &points.back, sizeof(LayoutPoint)) &&
+           WriteGuarded(bytes + facts::kSummonGaugeHeadStart, &points.start, sizeof(LayoutPoint));
+}
+
+/// The gauge's glow design points moved as its bar was: each keeps its distance from the bar's corner in the current
+/// layout (the tick converts them with the layout's size, so the glow lands on the bar; one particle per effect, so a
+/// layout of another shape in another view is off there, the known limit). The game's own values are kept the first
+/// time, and again whenever the points read are not the ones last written (the game set them again: a construct run
+/// once more, a widget made anew in the same slot), and set back when the split ends. Quiet while the layout and the
+/// points stand as last written.
+void PlaceGlow(Placed& placed) noexcept
+{
+    const LayoutSize layout = LastLayoutSize();
+    if (layout.width <= 0.0f || layout.height <= 0.0f)
+    {
+        return;
+    }
+    GlowPoints now;
+    if (!ReadGlow(placed.widget, now))
+    {
+        return;
+    }
+    if (placed.glow && layout == placed.glowLayout && now == placed.glowMoved)
+    {
+        return;  // in place
+    }
+    if (!placed.glow || now != placed.glowMoved)
+    {
+        // The game's own values (the first read, or its own write since): kept, and the shift starts from them.
+        if (!ClassHoldsGlow(placed.widget) || !PlausibleGlow(now))
+        {
+            if (!placed.glowRefusedLogged)
+            {
+                placed.glowRefusedLogged = true;
+                platform::Log(L"HUD placement: {}'s glow points read ({:.0f},{:.0f}) ({:.0f},{:.0f}) ({:.0f},{:.0f}), not design "
+                              L"points of its class; the glow is left where the game puts it",
+                              placed.placement->className, now.head.x, now.head.y, now.back.x, now.back.y, now.start.x, now.start.y);
+            }
+            return;  // tried again at the next tick: the widget may not be built yet
+        }
+        placed.glow = now;
+    }
+    const LayoutPoint anchor{placed.placement->anchorX, placed.placement->anchorY};
+    const GlowPoints  moved{KeepDistanceFromAnchor(placed.glow->head, anchor, layout.width, layout.height),
+                           KeepDistanceFromAnchor(placed.glow->back, anchor, layout.width, layout.height),
+                           KeepDistanceFromAnchor(placed.glow->start, anchor, layout.width, layout.height)};
+    if (!WriteGlow(placed.widget, moved))
+    {
+        if (!placed.glowRefusedLogged)
+        {
+            placed.glowRefusedLogged = true;
+            platform::Log(L"HUD placement: {}'s glow points could not be written; the glow stays where the game puts it",
+                          placed.placement->className);
+        }
+        WriteGlow(placed.widget, *placed.glow);  // a torn write put back as far as it goes; read afresh next time
+        placed.glow.reset();
+        return;
+    }
+    placed.glowLayout = layout;
+    placed.glowMoved  = moved;
+    platform::LogDebug(L"HUD placement: {}'s glow points moved for the {:.0f}x{:.0f} layout: head ({:.0f},{:.0f}) -> "
+                       L"({:.0f},{:.0f}), aura ({:.0f},{:.0f}) -> ({:.0f},{:.0f}), head start ({:.0f},{:.0f}) -> ({:.0f},{:.0f})",
+                       placed.placement->className, layout.width, layout.height, placed.glow->head.x, placed.glow->head.y,
+                       moved.head.x, moved.head.y, placed.glow->back.x, placed.glow->back.y, moved.back.x, moved.back.y,
+                       placed.glow->start.x, placed.glow->start.y, moved.start.x, moved.start.y);
+}
+
+/// The glow's own design points back (the split ended, or the widget's layout is left to the game).
+void RestoreGlow(Placed& placed) noexcept
+{
+    if (placed.glow && Alive(placed) && !WriteGlow(placed.widget, *placed.glow))
+    {
+        platform::Log(L"HUD placement: {}'s glow points could not be set back", placed.placement->className);
+    }
+    placed.glow.reset();
+    placed.glowLayout = {};
+    placed.glowMoved  = {};
+}
+
+/// Every placed glow kept with its bar: moved again when the layout's size changed (another view count, the band on or
+/// off) or the game wrote the points again. Three guarded 8-byte reads per gauge a tick, a write only on a change.
+void FollowGlowLayout() noexcept
+{
+    for (auto& placed : g_placed)
+    {
+        if (placed.placement->glow && placed.managed && Alive(placed))
+        {
+            PlaceGlow(placed);
+        }
+    }
+}
+
 /// Places `placed.widget` from its current layout, which is the game's own: this runs for a new
 /// widget, and for one the game has set again since the last placement. Records what was set, and
 /// logs it if `log`.
@@ -275,6 +419,10 @@ void Place(Placed& placed, const Setters& set, bool log = true)
     {
         LogPlaced(placed);
     }
+    if (placement.glow)
+    {
+        PlaceGlow(placed);
+    }
 }
 
 /// Every tick: a placed widget whose layout the game has set again is placed from that layout.
@@ -296,6 +444,10 @@ void FollowGameChanges(const Setters& set)
         if (placed.streak >= kMaxStreak)
         {
             placed.managed = false;  // its layout is the game's now; nothing to set back
+            if (placed.placement->glow)
+            {
+                RestoreGlow(placed);  // the bar is where the game puts it: the glow too
+            }
             platform::Log(L"HUD placement: the game sets {}'s layout every frame; left to the game",
                           placed.placement->className);
             continue;
@@ -330,8 +482,9 @@ void ScanForNew(const Setters& set)
 void RestoreAll(const Setters& set)
 {
     int restored = 0;
-    for (const auto& placed : g_placed)
+    for (auto& placed : g_placed)
     {
+        RestoreGlow(placed);
         if (placed.followed > 0)
         {
             platform::Log(L"HUD placement: {} was set by the game {} time(s) during the split; each placed again",
@@ -399,6 +552,7 @@ void UpdateHudPlacement(bool splitLayout) noexcept
             const platform::frame_watch::Job job(L"HUD placement scan");
             ScanForNew(*g_setters);
         }
+        FollowGlowLayout();
         if (!g_renderFollows)
         {
             FollowGameChanges(*g_setters);  // no render hook: a moved widget is placed a frame late
