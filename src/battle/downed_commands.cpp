@@ -4,7 +4,9 @@
 #include "battle/downed_commands_rules.h"
 #include "facts/command_controller.h"
 #include "facts/hud.h"
+#include "facts/party.h"
 #include "platform/call_redirect.h"
+#include "platform/guarded.h"
 #include "platform/guarded_read.h"
 #include "platform/image.h"
 #include "platform/log.h"
@@ -39,23 +41,21 @@ constexpr std::uintptr_t kSweepPetrifiedCall = 0x1408053F6;
 // member: the type at +0x66 is its queued command's, 0 while none was ever queued.)
 constexpr std::uint32_t kCmdRecordCount = 0x18;
 
-using DeadFn      = bool (*)(void* unused, std::uint8_t type);
-using HasStatusFn = bool (*)(std::uint8_t type, std::uint8_t status);
+using DeadFn       = bool (*)(void* unused, std::uint8_t type);
+using HasStatusFn  = bool (*)(std::uint8_t type, std::uint8_t status);
+using LeaderTypeFn = std::uint8_t (*)();  // al only
 
 // Set at install.
-DeadFn                 g_dead      = nullptr;
-HasStatusFn            g_hasStatus = nullptr;
-std::uintptr_t         g_uiSystem  = 0;
+DeadFn                 g_dead       = nullptr;
+HasStatusFn            g_hasStatus  = nullptr;
+LeaderTypeFn           g_leaderType = nullptr;
+std::uintptr_t         g_uiSystem   = 0;
 platform::CallRedirect g_openDead, g_openPetrified, g_sweepDead, g_sweepPetrified;
 std::atomic<bool>      g_on{false};
 
-// Game thread. Per menu member type: the ordinal an open last answered for while that member was down (-1: none), so
-// each player's change of ally is logged once whichever pass runs.
-std::array<int, 32> g_openFor = [] {
-    std::array<int, 32> none{};
-    none.fill(-1);
-    return none;
-}();
+// Game thread. Per menu member type: what the open's gate last decided while that member was down, so each change
+// (the ally picked, a refusal and its reason) is logged once whichever pass runs.
+std::array<std::uint64_t, 32> g_openDecided{};
 
 /// A member that cannot act: down or petrified (the gates' two tests together).
 bool CannotAct(void* unused, std::uint8_t type) noexcept
@@ -63,11 +63,28 @@ bool CannotAct(void* unused, std::uint8_t type) noexcept
     return g_dead(unused, type) || g_hasStatus(type, kPetrify);
 }
 
+/// The party's leader type as the game answers it here (a player's own member in that player's pass); kNoType unread.
+std::uint8_t LeaderType() noexcept
+{
+    std::uint8_t type = kNoType;
+    return platform::CallGuarded(g_leaderType, type) ? type : kNoType;
+}
+
+/// What the gate decided, for the log.
+struct Decision
+{
+    std::int32_t menu = -1, ally = -1, shortcut = -1, current = -1, asked = -1;
+    std::uint8_t menuType = kNoType, leaderType = kNoType, askedType = kNoType;
+    bool         read = false;  // the controller's ordinals were read (else an early exit: off, no co-op, no controller)
+    bool         ours = false;  // the question is this controller's menu member's
+};
+
 /// The ordinal the gate should ask about instead of the menu's own member, whose type is `type`, and that member's
 /// type; -1 to keep the game's question. The running controller is the UI system's (a player's own in that player's
-/// menu pass); the gate's type must be its menu member's, or the question is another controller's (or the game's
-/// cached type lags a leader change) and the game's own answer stands.
-int AskInstead(std::uint8_t type, std::uint8_t& askedType) noexcept
+/// menu pass); the question is its own when the gate's type is its menu member's by the game's list, or the leader's
+/// type as the game answers it in this pass (the open's cached type is that answer); otherwise the game's own answer
+/// stands.
+int AskInstead(std::uint8_t type, Decision& d) noexcept
 {
     if (!g_on.load(std::memory_order_acquire) || !players::generation::OnGameThread() ||
         !players::generation::AnyActive())
@@ -75,9 +92,9 @@ int AskInstead(std::uint8_t type, std::uint8_t& askedType) noexcept
         return -1;
     }
     const auto ctrl = platform::ReadAt<std::uintptr_t>(g_uiSystem + facts::kUICommandController);
-    std::int32_t menu = -1, ally = -1, shortcut = -1, count = 0;
-    if (ctrl == 0 || !platform::Read(ctrl + facts::kCmdMembers, menu) ||
-        !platform::Read(ctrl + facts::kCmdMembers + 4, ally) || !platform::Read(ctrl + facts::kCmdMembers + 8, shortcut) ||
+    std::int32_t count = 0;
+    if (ctrl == 0 || !platform::Read(ctrl + facts::kCmdMembers, d.menu) ||
+        !platform::Read(ctrl + facts::kCmdMembers + 4, d.ally) || !platform::Read(ctrl + facts::kCmdMembers + 8, d.shortcut) ||
         !platform::Read(ctrl + kCmdRecordCount, count))
     {
         return -1;
@@ -87,14 +104,53 @@ int AskInstead(std::uint8_t type, std::uint8_t& askedType) noexcept
         out = ordinal >= 0 && ordinal < count ? command_rules::TypeAt(ordinal) : kNoType;
         return out < kNoType;
     };
-    std::uint8_t menuType = 0;
-    if (!typeAt(menu, menuType) || menuType != type)
+    d.read = true;
+    typeAt(d.menu, d.menuType);
+    d.leaderType = LeaderType();
+    d.ours       = type < kNoType && (d.menuType == type || d.leaderType == type);
+    if (!d.ours)
     {
         return -1;  // another controller's question: the game's
     }
-    const int current = downed_commands_rules::CurrentMember(menu, ally, shortcut);
-    const int asked   = downed_commands_rules::AskAbout(true, menu, current, count, command_rules::Refuses(current));
-    return asked >= 0 && typeAt(asked, askedType) ? asked : -1;
+    d.current = downed_commands_rules::CurrentMember(d.menu, d.ally, d.shortcut);
+    d.asked   = downed_commands_rules::AskAbout(true, d.menu, d.current, count, command_rules::Refuses(d.current));
+    return d.asked >= 0 && typeAt(d.asked, d.askedType) ? d.asked : -1;
+}
+
+/// The open's decision for a downed member, logged once per change (Debug).
+void LogDecision(std::uint8_t type, const Decision& d, int asked) noexcept
+{
+    if (type >= g_openDecided.size() || !players::generation::OnGameThread())
+    {
+        return;
+    }
+    const std::uint64_t key = (static_cast<std::uint64_t>(static_cast<std::uint8_t>(d.menu)) << 0) |
+                              (static_cast<std::uint64_t>(static_cast<std::uint8_t>(d.ally)) << 8) |
+                              (static_cast<std::uint64_t>(static_cast<std::uint8_t>(d.shortcut)) << 16) |
+                              (static_cast<std::uint64_t>(static_cast<std::uint8_t>(d.current)) << 24) |
+                              (static_cast<std::uint64_t>(static_cast<std::uint8_t>(asked)) << 32) |
+                              (static_cast<std::uint64_t>(d.menuType) << 40) | (static_cast<std::uint64_t>(d.leaderType) << 48) |
+                              (static_cast<std::uint64_t>(d.ours) << 56) | (1ull << 63);
+    if (key == g_openDecided[type])
+    {
+        return;
+    }
+    g_openDecided[type] = key;
+    if (asked >= 0)
+    {
+        platform::LogDebug(L"downed commands: the downed member type {}'s menu opens for member type {} (ordinal {}; menu {}, "
+                           L"ally {}, shortcut {})",
+                           static_cast<int>(type), static_cast<int>(d.askedType), asked, d.menu, d.ally, d.shortcut);
+    }
+    else
+    {
+        platform::LogDebug(L"downed commands: the downed member type {}'s open stays the game's: {} (menu ordinal {} type {}, "
+                           L"leader type {}, ally {}, shortcut {}, current {})",
+                           static_cast<int>(type),
+                           !d.ours ? L"not this controller's question" : L"no ally to open for (the current member is its own, "
+                                                                        L"refused, or out of the list)",
+                           d.menu, static_cast<int>(d.menuType), static_cast<int>(d.leaderType), d.ally, d.shortcut, d.current);
+    }
 }
 
 /// The two dead tests: the game's answer for the menu's own member; when it is down, the member the menu opens for.
@@ -102,19 +158,17 @@ template <platform::CallRedirect& Call, bool IsOpen>
 bool DeadTest(void* unused, std::uint8_t type) noexcept
 {
     const bool down = reinterpret_cast<DeadFn>(Call.Original())(unused, type);
-    std::uint8_t askedType = 0;
-    const int    asked     = down ? AskInstead(type, askedType) : -1;
-    if (IsOpen && type < g_openFor.size() && players::generation::OnGameThread())
+    Decision  d;
+    const int asked = down ? AskInstead(type, d) : -1;
+    if (IsOpen && down && d.read)
     {
-        int& last = g_openFor[type];
-        if (asked >= 0 && asked != last)
-        {
-            platform::LogDebug(L"downed commands: the downed member type {}'s menu opens for member type {} (ordinal {})",
-                               static_cast<int>(type), static_cast<int>(askedType), asked);
-        }
-        last = asked;
+        LogDecision(type, d, asked);
     }
-    return asked >= 0 ? CannotAct(unused, askedType) : down;
+    else if (IsOpen && !down && type < g_openDecided.size() && players::generation::OnGameThread())
+    {
+        g_openDecided[type] = 0;  // up again: the next knock-out logs its decision anew
+    }
+    return asked >= 0 ? CannotAct(unused, d.askedType) : down;
 }
 
 /// The two petrify tests, the same way.
@@ -126,17 +180,18 @@ bool PetrifyTest(std::uint8_t type, std::uint8_t status) noexcept
     {
         return held;
     }
-    std::uint8_t askedType = 0;
-    return AskInstead(type, askedType) >= 0 ? CannotAct(nullptr, askedType) : held;
+    Decision d;
+    return AskInstead(type, d) >= 0 ? CannotAct(nullptr, d.askedType) : held;
 }
 
 }  // namespace
 
 bool Install(const platform::GameImage& image) noexcept
 {
-    const auto dead      = platform::FindFunction(image, kDead);
-    const auto hasStatus = platform::FindFunction(image, kHasStatus);
-    const auto system    = image.Rebase(facts::kEndUISystem, facts::kUICommandController + sizeof(void*));
+    const auto dead       = platform::FindFunction(image, kDead);
+    const auto hasStatus  = platform::FindFunction(image, kHasStatus);
+    const auto leaderType = platform::FindFunction(image, facts::kGetPartyLeaderType);
+    const auto system     = image.Rebase(facts::kEndUISystem, facts::kUICommandController + sizeof(void*));
     const auto site      = [&image](std::uintptr_t research) { return image.Rebase(research, 5); };
     const auto openDead = site(kOpenDeadCall), openPetrified = site(kOpenPetrifiedCall);
     const auto sweepDead = site(kSweepDeadCall), sweepPetrified = site(kSweepPetrifiedCall);
@@ -148,15 +203,16 @@ bool Install(const platform::GameImage& image) noexcept
                       L"AI allies");
         return false;
     }
-    if (!dead || !hasStatus || !system || !openDead || !openPetrified || !sweepDead || !sweepPetrified)
+    if (!dead || !hasStatus || !leaderType || !system || !openDead || !openPetrified || !sweepDead || !sweepPetrified)
     {
         platform::Log(L"downed commands: UNAVAILABLE (a function or call site was not found); a downed player cannot "
                       L"command the AI allies");
         return false;
     }
-    g_dead      = reinterpret_cast<DeadFn>(*dead);
-    g_hasStatus = reinterpret_cast<HasStatusFn>(*hasStatus);
-    g_uiSystem  = *system;
+    g_dead       = reinterpret_cast<DeadFn>(*dead);
+    g_hasStatus  = reinterpret_cast<HasStatusFn>(*hasStatus);
+    g_leaderType = reinterpret_cast<LeaderTypeFn>(*leaderType);
+    g_uiSystem   = *system;
     // At start-up no world exists, so no thread can be at a call (InstallFromOwnThread's rule for a call crossing two
     // blocks; one inside a block is placed as by Install). All four or none: the open and the sweep must agree, or an
     // ally menu that opens would be closed the next tick.
