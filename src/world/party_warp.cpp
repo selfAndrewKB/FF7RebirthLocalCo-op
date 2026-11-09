@@ -218,7 +218,7 @@ bool Test(TestFn fn, bool& out) noexcept
 /// G1 on `pawn`: true when it is a party character in a field action or another field controller state, or when its
 /// check faults. A pawn whose slot holds neither checked function is no party character (a mount, a vehicle: the game
 /// asks the character, never its ride) and answers false.
-bool InFieldAction(const void* pawn) noexcept
+bool FieldActionBusy(const void* pawn) noexcept
 {
     std::uintptr_t vtable = 0, slot = 0;
     if (pawn == nullptr || g_fieldStateCheck == 0 || !Read(pawn, 0, vtable) ||
@@ -356,6 +356,11 @@ bool Busy() noexcept
     return g_state != nullptr;
 }
 
+bool InFieldAction(const void* pawn) noexcept
+{
+    return FieldActionBusy(pawn);
+}
+
 int BusySeat() noexcept
 {
     return g_state != nullptr ? g_seat : -1;
@@ -424,8 +429,8 @@ bool Start(int seat, void* pawn, Subject subject, bool attached, bool splitShown
     const wchar_t* refused = !splitShown                                      ? L"the split is not on screen"
                              : !FieldUp()                                     ? L"the field is not up"
                              : FieldHeld()                                    ? L"a scene, a talk or an event holds the field"
-                             : InFieldAction(leader)                          ? L"player 1's character is in a field action"
-                             : subject == Subject::Member && InFieldAction(pawn) ? L"it is in a field action"
+                             : FieldActionBusy(leader)                          ? L"player 1's character is in a field action"
+                             : subject == Subject::Member && FieldActionBusy(pawn) ? L"it is in a field action"
                              : subject == Subject::Member && attached         ? L"she is attached to something (riding?)"
                              : state == nullptr                               ? L"its AI is not in a checked follow state"
                              : ByteAt(state, kFollowStateForced) != 0         ? L"a forced warp is already pending"

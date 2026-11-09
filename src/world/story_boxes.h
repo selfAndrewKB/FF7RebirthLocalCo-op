@@ -25,6 +25,8 @@
 // remembered enter whose box went away first (its level unloaded): the only way one is dropped.
 // Game thread only: the enter runs inside the field tick; Tick runs outside it and outside every player's scope.
 
+#include "world/story_box_rules.h"
+
 #include <cstdint>
 
 namespace lss::platform {
@@ -42,6 +44,15 @@ void Remove() noexcept;
 /// leader's, as the game's send tests) and is switched on with a trigger to send. False when not installed or unread.
 /// session/lead_gate asks it of a level walk's way out (OwnBoxAhead). Game thread.
 bool ArmedOwnBox(std::uint64_t object, const void* member) noexcept;
+
+/// The placed shape of the box of layout object `object` that `member` walked into and whose enter waits. False when
+/// none waits for it (the character never entered that box) or its shape was not read.
+bool HeldShape(const void* member, std::uint64_t object, story_box_rules::Box& out) noexcept;
+
+/// `member` was brought back for the level's walk from `from` to `to` (world/run_catch_up): each of its waiting enters
+/// whose box that straight walk passes through waits for the character's own body instead of firing at its AI's hand
+/// (story_box_rules Next). Returns how many. Game thread.
+int AwaitRun(const void* member, const float from[3], const float to[3]) noexcept;
 
 /// Game thread, each engine tick outside the field tick and every player's scope: places the redirect on the first
 /// call, then replays or drops the remembered enters. `splitShown`: the split is on screen (no cutscene, menu or map).

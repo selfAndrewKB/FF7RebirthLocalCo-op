@@ -115,6 +115,8 @@ add_library(LocalSplitScreen SHARED
     src/traversal/traversal_watch.cpp
     src/world/data_rows.cpp
     src/world/story_boxes.cpp
+    src/world/catch_up_move.cpp
+    src/world/run_catch_up.cpp
     src/world/shop_talk.cpp
     src/world/seat_switch_volumes.cpp
     src/world/seat_triggers.cpp

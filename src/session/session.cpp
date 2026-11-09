@@ -33,6 +33,7 @@
 #include "session/field_exit.h"
 #include "session/handover_watch.h"
 #include "session/lead_gate.h"
+#include "world/run_catch_up.h"
 #include "session/lead_keep_rules.h"
 #include "session/leave_watch.h"
 #include "session/leftover_actors.h"
@@ -680,6 +681,12 @@ void Seat::CheckHeldAi() noexcept
     const AiSnapshot       ai   = party_member::ReadAi(member_);
     const field_hold::Hold hold = HoldOf(ai);
     if (!ScriptNeedsMember(ai))
+    {
+        return;
+    }
+    // A character taken past its own story box is brought back for the level's walk through it first; its AI takes it at
+    // the next check, once its tracker has swept the move while it is still the player's (world/run_catch_up.h).
+    if (hold == field_hold::Hold::Arrival && world::run_catch_up::BeforeGuide(seat_, member_))
     {
         return;
     }

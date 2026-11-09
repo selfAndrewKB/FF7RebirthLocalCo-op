@@ -79,6 +79,8 @@ struct Move
     std::uint64_t object  = 0;  // the setting's level object
     std::uint64_t row     = 0;  // its state row
     std::uint64_t trigger = 0;  // its arrival trigger (0: the row's string argument 2)
+    float         point[3] = {};  // where it goes (world cm)
+    bool          pointRead = false;
 };
 
 /// A walk or lead judged, and the verdict that holds for it. The default verdict is the AI's: a judgment interrupted
@@ -89,7 +91,7 @@ struct Judgment
     Verdict       verdict    = Verdict::Guide;
     bool          waiter     = false;  // another waiter, a direct set on another object, or a further move in the chain
     bool          marker     = false;  // the story's marker rides on the member
-    bool          ownBox     = false;  // the step moves on at the member's own armed story box (OwnBoxAhead)
+    std::uint64_t ownBox     = 0;      // the member's own armed story box the step moves on at (OwnBoxAhead), its object
     std::uint32_t censusCall = 0;
     std::uint32_t calls      = 0;
     std::uint32_t touched    = 0;      // the clock at the last call (the least recently used slot is reused)
@@ -138,14 +140,16 @@ bool MoveOf(const void* member, Move& out) noexcept
     {
         out.object  = ReadField<std::uint64_t>(state, facts::kMoveToObject);
         out.row     = ReadField<std::uint64_t>(state, facts::kMoveToRow);
-        out.trigger = ReadField<std::uint64_t>(state, facts::kMoveToTrigger);
+        out.trigger   = ReadField<std::uint64_t>(state, facts::kMoveToTrigger);
+        out.pointRead = platform::CopyGuarded(out.point, static_cast<const std::uint8_t*>(state) + facts::kMoveToPoint, sizeof(out.point));
         return true;
     }
     if (out.state == facts::kAiStateLead)
     {
-        out.object  = ReadField<std::uint64_t>(state, facts::kLeadObject);
-        out.row     = ReadField<std::uint64_t>(state, facts::kLeadRow);
-        out.trigger = ReadField<std::uint64_t>(state, facts::kLeadTrigger);
+        out.object    = ReadField<std::uint64_t>(state, facts::kLeadObject);
+        out.row       = ReadField<std::uint64_t>(state, facts::kLeadRow);
+        out.trigger   = ReadField<std::uint64_t>(state, facts::kLeadTrigger);
+        out.pointRead = platform::CopyGuarded(out.point, static_cast<const std::uint8_t*>(state) + facts::kLeadPoint, sizeof(out.point));
         return true;
     }
     return false;
@@ -352,6 +356,39 @@ struct Census
     std::wstring  text;
 };
 
+/// The walk row's exits: its triggers other than the arrival (the steps it moves on at besides arriving).
+std::vector<std::uint64_t> ExitsOf(const std::byte* self, std::uint64_t arrival)
+{
+    std::vector<std::uint64_t> exits = MappedNames(self + facts::kStateRowTriggers, facts::kStateRowTriggersRead);
+    std::erase_if(exits, [arrival](std::uint64_t t) { return t == 0 || t == arrival; });
+    return exits;
+}
+
+/// `row` is a box's sending state for one of `exits`: it lists the trigger and its Status names it.
+bool SendsOneOf(const std::byte* row, const std::vector<std::uint64_t>& exits)
+{
+    if (row == nullptr)
+    {
+        return false;
+    }
+    const std::vector<std::uint64_t> listens = MappedNames(row + facts::kStateRowTriggers, facts::kStateRowTriggersRead);
+    const std::wstring               status  = MappedText(row + facts::kStateRowStatus);
+    for (const std::uint64_t exit : exits)
+    {
+        if (std::find(listens.begin(), listens.end(), exit) != listens.end() && _wcsicmp(status.c_str(), Name(exit).c_str()) == 0)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+/// The arrival trigger of `move` (its own, else its row's string argument 2).
+std::uint64_t ArrivalOf(const Move& move, const std::byte* self) noexcept
+{
+    return move.trigger != 0 ? move.trigger : MappedNameAt(self + facts::kStateRowStringArgs, facts::kStateRowTriggerArg);
+}
+
 /// The member's walk step moves on at a trigger (other than its arrival) that a member-only story box of the member's
 /// own sends, and the box is armed: the level expects the walk to carry the member into that box, on the clock of
 /// whatever else runs meanwhile; held by its player, it may come too late and the step stalls. A box's sending state
@@ -360,35 +397,17 @@ struct Census
 std::uint64_t OwnBoxAhead(const std::vector<Slot>& slots, const std::byte* self, std::uint64_t selfObject,
                           std::uint64_t arrival, const void* member)
 {
-    std::vector<std::uint64_t> exits = MappedNames(self + facts::kStateRowTriggers, facts::kStateRowTriggersRead);
-    std::erase_if(exits, [arrival](std::uint64_t t) { return t == 0 || t == arrival; });
+    const std::vector<std::uint64_t> exits = ExitsOf(self, arrival);
     if (exits.empty())
     {
         return 0;
     }
     for (const Slot& s : slots)
     {
-        if (s.object == selfObject)
+        if (s.object != selfObject && SendsOneOf(Row(g_stateRow, s.state), exits) &&
+            world::story_boxes::ArmedOwnBox(s.object, member))
         {
-            continue;
-        }
-        const std::byte* row = Row(g_stateRow, s.state);
-        if (row == nullptr)
-        {
-            continue;
-        }
-        const std::vector<std::uint64_t> listens = MappedNames(row + facts::kStateRowTriggers, facts::kStateRowTriggersRead);
-        for (const std::uint64_t exit : exits)
-        {
-            if (std::find(listens.begin(), listens.end(), exit) == listens.end() ||
-                _wcsicmp(MappedText(row + facts::kStateRowStatus).c_str(), Name(exit).c_str()) != 0)
-            {
-                continue;  // not the box's sending state for this trigger
-            }
-            if (world::story_boxes::ArmedOwnBox(s.object, member))
-            {
-                return s.object;
-            }
+            return s.object;
         }
     }
     return 0;
@@ -407,9 +426,8 @@ Census Waiters(const Move& move, const void* member)
         census.text = std::format(L"its state row {} not found", Name(move.row));
         return census;
     }
-    const std::uint64_t trigger =
-        move.trigger != 0 ? move.trigger : MappedNameAt(self + facts::kStateRowStringArgs, facts::kStateRowTriggerArg);
-    void* stateManager = StateManager();
+    const std::uint64_t trigger      = ArrivalOf(move, self);
+    void*               stateManager = StateManager();
     const std::optional<std::vector<Slot>> slots = stateManager != nullptr ? ActiveSlots(stateManager) : std::nullopt;
     if (slots)
     {
@@ -681,14 +699,14 @@ try
                                     std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - start).count());
         last.censusCall = last.calls;
         last.waiter     = !waiters.read || waiters.others > 0 || waiters.chain;
-        last.ownBox     = waiters.ownBox != 0;
+        last.ownBox     = waiters.ownBox;
     }
     const bool    wasMarker = last.marker;
     const Verdict was       = last.verdict;
     Marker        marker    = Markers(move.object, false);
     last.marker             = marker.onMember;
     // No marker of the mod's is shown for a kept move: every needed move is the AI's.
-    last.verdict = lead_keep_rules::Decide(last.waiter || last.marker, false, false, false, false, last.ownBox);
+    last.verdict = lead_keep_rules::Decide(last.waiter || last.marker, false, false, false, false, last.ownBox != 0);
     if (!same || census || last.marker != wasMarker || last.verdict != was)
     {
         marker    = Markers(move.object, true);
@@ -715,6 +733,48 @@ try
 {
     Move move;
     return g_installed && member != nullptr && MoveOf(member, move) && move.object != 0;
+}
+catch (...)
+{
+    return false;
+}
+
+bool WalksIntoBox(const void* member, std::uint64_t boxStateRow) noexcept
+try
+{
+    Move move;
+    if (!g_installed || member == nullptr || boxStateRow == 0 || !MoveOf(member, move) || move.object == 0)
+    {
+        return false;
+    }
+    const std::byte* self = Row(g_stateRow, move.row);
+    return self != nullptr && SendsOneOf(Row(g_stateRow, boxStateRow), ExitsOf(self, ArrivalOf(move, self)));
+}
+catch (...)
+{
+    return false;
+}
+
+bool OwnBoxRun(const void* member, float point[3], std::uint64_t& box) noexcept
+try
+{
+    Move move;
+    if (!g_installed || member == nullptr || !MoveOf(member, move) || move.object == 0 || !move.pointRead)
+    {
+        return false;
+    }
+    for (const Judgment& j : g_judged)
+    {
+        if (j.object == move.object && j.row == move.row && j.trigger == move.trigger && j.ownBox != 0)
+        {
+            point[0] = move.point[0];
+            point[1] = move.point[1];
+            point[2] = move.point[2];
+            box      = j.ownBox;
+            return true;
+        }
+    }
+    return false;
 }
 catch (...)
 {

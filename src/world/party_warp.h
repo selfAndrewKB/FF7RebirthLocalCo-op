@@ -63,6 +63,11 @@ bool Busy() noexcept;
 /// The seat whose warp is being driven, or -1.
 int BusySeat() noexcept;
 
+/// `pawn` is a party character in a field action (a ladder, a climb, a crawl, the grappling hook) or another field
+/// controller state, by the game's own test (the follow update's gate); true when the test faults. False for a pawn that
+/// is no party character, and when the test was not found at install. Game thread.
+bool InFieldAction(const void* pawn) noexcept;
+
 /// The pawn's retained AI's current state, if it is a checked follow state for `subject` (null otherwise).
 const void* FollowStateOf(const void* pawn, Subject subject) noexcept;
 

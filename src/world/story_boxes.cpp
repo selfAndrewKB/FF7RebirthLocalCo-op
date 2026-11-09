@@ -29,6 +29,8 @@
 #endif
 
 #include <atomic>
+#include <chrono>
+#include <cmath>
 #include <cstdint>
 #include <format>
 #include <string>
@@ -85,12 +87,57 @@ struct Waiting
     std::uint64_t object    = 0;  // its layout object (the state manager's name)
     std::uint64_t memberTag = 0;
     rules::Box    shape{};
-    bool          shaped = false;
+    bool          shaped    = false;
+    bool          awaitsRun = false;  // brought back for the level's walk through it (AwaitRun)
+    bool          ranIn     = false;  // since then the game's own enter ran for the character and the box
+    bool          handSeen  = false;  // since then its AI was seen holding it (the game's hand completes asynchronously)
+    float         runTo[3]  = {};     // the walk's point
+    std::int64_t  awaitedAt = 0;      // when AwaitRun marked it (NowMs)
+    float         lastAt[3] = {};     // where the character last stood kRunStillCm away from before
+    std::int64_t  movedAt   = 0;      // when it got there (NowMs)
 };
 std::vector<Waiting> g_waiting;
 
 // Counts for the reading.
-std::uint32_t g_heldBack = 0, g_replayed = 0, g_replayedOff = 0, g_lost = 0, g_overflow = 0;
+std::uint32_t g_heldBack = 0, g_replayed = 0, g_replayedOff = 0, g_lost = 0, g_overflow = 0, g_taken = 0;
+
+std::int64_t NowMs() noexcept
+{
+    return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
+}
+
+/// Whether the walk `w` waits on is over (story_box_rules RunOver), keeping the character's last moving place in `w`. The
+/// cap holds even when the character's place cannot be read.
+bool RunOverNow(Waiting& w, const void* member) noexcept
+{
+    const std::int64_t now   = NowMs();
+    float              at[3] = {};
+    if (!players::unreal::ActorLocation(member, at))
+    {
+        return now - w.awaitedAt >= rules::kAwaitRunLimitMs;
+    }
+    if (std::hypot(at[0] - w.lastAt[0], at[1] - w.lastAt[1]) >= rules::kRunStillCm)
+    {
+        w.lastAt[0] = at[0];
+        w.lastAt[1] = at[1];
+        w.lastAt[2] = at[2];
+        w.movedAt   = now;
+    }
+    return rules::RunOver(at[0] - w.runTo[0], at[1] - w.runTo[1], now - w.awaitedAt, now - w.movedAt);
+}
+
+/// The game's own enter is about to run for `collider` and `box`: a record awaiting the character's walk through it is
+/// taken by that walk (story_box_rules Step::Taken). Seen at the redirect, so only an enter the game really makes counts.
+void NoteRanIn(const void* collider, std::uint64_t box) noexcept
+{
+    for (Waiting& w : g_waiting)
+    {
+        if (w.awaitsRun && w.box == box && players::weak_object::StillNames(w.member, collider))
+        {
+            w.ranIn = true;
+        }
+    }
+}
 
 std::wstring Name(std::uint64_t name)
 {
@@ -176,6 +223,16 @@ Sends WouldSend(std::uint64_t object) noexcept
         return Sends::NoTrigger;
     }
     return CallGuarded(g_offCode, off, slot) && off == facts::kSlotOff ? Sends::Off : Sends::Trigger;
+}
+
+/// The box object's sending state's current row (its slot 1's; 0 when none).
+std::uint64_t BoxStateRow(std::uint64_t object) noexcept
+{
+    void* manager = ReadPointer(Root(), facts::kRootGameState);
+    void* slot    = nullptr;
+    return manager != nullptr && CallGuarded(g_findSlot, slot, manager, object, facts::kBoxSlotAttribute) && slot != nullptr
+               ? ReadField<std::uint64_t>(slot, facts::kSlotState)
+               : 0;
 }
 
 const wchar_t* SendsText(Sends sends, bool inside) noexcept
@@ -308,26 +365,29 @@ void Begin(void* manager, std::uint64_t box, void* collider)
     const int seat = players::generation::SeatOfMember(collider);
     if (seat < 1 || seat > players::kSeatsBuilt)
     {
+        NoteRanIn(collider, box);  // a character riding along walks into the box on its AI
         return original(manager, box, collider);
     }
     try
     {
+        const std::uint64_t tag = FirstTag(collider);
+        if (Remembered(collider, box))
+        {
+            // Walked out and in again, or swept again by a move, while its first enter waits: one enter is remembered.
+            platform::LogDebug(L"story boxes: {}'s {} walked into {} again; its first enter still waits", players::SeatName(seat),
+                               Name(tag), Name(box));
+            return;
+        }
         const std::uint64_t object = LayoutObjectOf(box);
         const std::uint64_t group  = GroupOf(object);
-        const std::uint64_t tag    = FirstTag(collider);
         const rules::Entry  entry{.heldByPlayer     = HeldByPlayer(collider, seat),
                                   .levelSentIt      = session::lead_gate::OnLevelMove(collider),
                                   .groupSet         = group != 0,
                                   .groupNamesLeader = group != 0 && GroupNamesLeader(group)};
         if (!rules::HoldBack(entry) || !GroupLists(group, tag) || WouldSend(object) != Sends::Trigger)
         {
+            NoteRanIn(collider, box);
             return original(manager, box, collider);  // the game's: a party box, on its AI or sent, not its box, off
-        }
-        if (Remembered(collider, box))
-        {
-            platform::LogDebug(L"story boxes: {}'s {} walked into {} again; its first enter still waits", players::SeatName(seat),
-                               Name(tag), Name(box));
-            return;  // walked out and in again while waiting: one enter is remembered
         }
         if (g_waiting.size() >= kMaxWaiting)
         {
@@ -387,15 +447,23 @@ void Replay(const Waiting& w, void* member, const wchar_t* why)
 
 const wchar_t* WhyReplay(const rules::Waiting& w) noexcept
 {
+    if (w.awaitsRun)
+    {
+        return !w.seated            ? L"its player left"
+               : w.playerOneReached ? L"player 1 came to the box"
+               : !w.handedToAi      ? L"back with its player before its walk took the box"
+                                    : L"its walk is over without taking the box (at the walk's point, stopped for 2 s, or 20 s gone)";
+    }
     return !w.seated ? L"its player left" : w.handedToAi ? L"handed to its AI" : w.levelMoves ? L"the level sent it on a move"
                                                                                            : L"player 1 came to the box";
 }
 
 std::wstring Reading()
 {
-    std::wstring text = std::format(L"redirect {}{}; held back {}, replayed {} ({} with the box off), lost {}, overflow {}; waiting {}",
+    std::wstring text = std::format(L"redirect {}{}; held back {}, replayed {} ({} with the box off), taken by the character's own "
+                                    L"walk {}, lost {}, overflow {}; waiting {}",
                                     g_placed.load() ? L"placed" : L"not placed", g_on.load() ? L"" : L" (switched off)", g_heldBack,
-                                    g_replayed, g_replayedOff, g_lost, g_overflow, g_waiting.size());
+                                    g_replayed, g_replayedOff, g_taken, g_lost, g_overflow, g_waiting.size());
     for (const Waiting& w : g_waiting)
     {
         text += std::format(L"; {}'s {} in {}{}", players::SeatName(w.seat), Name(w.memberTag), Name(w.box),
@@ -481,6 +549,55 @@ catch (...)
     return false;
 }
 
+bool HeldShape(const void* member, std::uint64_t object, story_box_rules::Box& out) noexcept
+try
+{
+    for (const Waiting& w : g_waiting)
+    {
+        if (w.object == object && w.shaped && players::weak_object::StillNames(w.member, member))
+        {
+            out = w.shape;
+            return true;
+        }
+    }
+    return false;
+}
+catch (...)
+{
+    return false;
+}
+
+int AwaitRun(const void* member, const float from[3], const float to[3]) noexcept
+try
+{
+    int marked = 0;
+    for (Waiting& w : g_waiting)
+    {
+        if (w.shaped && players::weak_object::StillNames(w.member, member) && rules::RunCrosses(w.shape, from, to))
+        {
+            w.awaitsRun = true;
+            w.ranIn     = false;
+            w.handSeen  = false;
+            w.runTo[0]  = to[0];
+            w.runTo[1]  = to[1];
+            w.runTo[2]  = to[2];
+            w.awaitedAt = NowMs();
+            w.movedAt   = w.awaitedAt;
+            w.lastAt[0] = from[0];
+            w.lastAt[1] = from[1];
+            w.lastAt[2] = from[2];
+            ++marked;
+            platform::LogDebug(L"story boxes: {}'s {} enter of {} waits for its own walk through it", players::SeatName(w.seat),
+                               Name(w.memberTag), Name(w.box));
+        }
+    }
+    return marked;
+}
+catch (...)
+{
+    return 0;
+}
+
 bool Install(const platform::GameImage& image) noexcept
 try
 {
@@ -546,8 +663,22 @@ try
             // With the player in, the split leaves the screen only for a cutscene, a menu or the map; once the player
             // has left, nothing holds the character's box any more.
             state.inCinema         = state.seated && !splitShown;
-            state.levelMoves       = session::lead_gate::OnLevelMove(member);
+            // The level's walk into this very box is its moment only once its AI has the character (the guide's hand
+            // marks the entry AwaitRun); before that hand, polled less often than this tick, it is no release.
+            state.levelMoves = session::lead_gate::OnLevelMove(member) && !session::lead_gate::WalksIntoBox(member, BoxStateRow(w.object));
             state.playerOneReached = w.shaped && haveOne && rules::Reaches(w.shape, one);
+            state.awaitsRun        = w.awaitsRun;
+            state.ranIn            = w.ranIn;
+            if (w.awaitsRun)
+            {
+                state.runOver = RunOverNow(g_waiting[i], member);  // its moving place kept in the list's record
+                // Marked just before the hand: "back with its player" counts only once its AI was seen holding it.
+                if (state.handedToAi)
+                {
+                    g_waiting[i].handSeen = true;
+                }
+                state.handedToAi = state.handedToAi || !w.handSeen;
+            }
         }
         if (!g_on.load() && !state.boxGone)
         {
@@ -562,7 +693,13 @@ try
         // Out of the list before the game's calls: an exception after the replay must not replay it again.
         g_waiting.erase(g_waiting.begin() + static_cast<std::ptrdiff_t>(i));
         g_waitingCount.store(g_waiting.size());
-        if (step == rules::Step::Replay)
+        if (step == rules::Step::Taken)
+        {
+            ++g_taken;
+            platform::Log(L"story boxes: {}'s {} walked into {} on its AI: the game's own enter took it", players::SeatName(w.seat),
+                          Name(w.memberTag), Name(w.box));
+        }
+        else if (step == rules::Step::Replay)
         {
             Replay(w, member, g_on.load() ? WhyReplay(state) : L"story-box-hold switched off");
         }

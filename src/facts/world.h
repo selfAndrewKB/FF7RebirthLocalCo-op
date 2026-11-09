@@ -39,4 +39,21 @@ inline constexpr FunctionFact   kLocationVolumeContainsPoint{L"LocationVolume_Co
 /// g_AnimWorldManager (a pointer): the SE world manager the animation budget and CharaPop read (0xE00 bytes).
 inline constexpr std::uintptr_t kAnimWorldManager = 0x14939BC48;
 
+/// The game's catch-up move, as its battle gather calls it (RE-member-story-boxes.md §9):
+/// Nav_FindPointAround_AnglesDistances(unused, querier, const FTransform* origin, const FNavAgentProperties* agent,
+/// const TArray<float, TInlineAllocator<4>>* distances, const TArray<float, TInlineAllocator<4>>* anglesRad, int unused,
+/// FVector* out) -> bool: for each angle, each distance, a point from the origin projected to the navmesh and reached by
+/// a navmesh raycast from it; the first accepted wins.
+inline constexpr std::uint8_t kNavPointAroundBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x55, 0x56, 0x57, 0x41, 0x54, 0x41,
+                                                        0x55, 0x41, 0x56, 0x41, 0x57, 0x48, 0x8D, 0xAC, 0x24, 0x40, 0xF8};
+inline constexpr FunctionFact kNavPointAround{L"Nav_FindPointAround_AnglesDistances", 0x1431EBAB8, kNavPointAroundBytes};
+/// The querier's nav agent: its interface sub-object at +0x228, the agent getter at that vtable's +0x10 (argument 0).
+inline constexpr std::uint32_t kCharacterNavAgentInterface = 0x228;
+inline constexpr std::uint32_t kNavAgentGetterSlot         = 0x10;
+/// EndCharacter_BattleTeleport_FadeIn(character, const FVector* look, const FRotator* rotation, const FVector* dest,
+/// bool snapToGround, bool resetControlHolder): a queued warp to `dest` and a short fade-in; nothing battle-only.
+inline constexpr std::uint8_t kBattleTeleportFadeInBytes[] = {0x48, 0x85, 0xC9, 0x0F, 0x84, 0xF7, 0x01, 0x00, 0x00};
+inline constexpr FunctionFact kBattleTeleportFadeIn{L"EndCharacter_BattleTeleport_FadeIn", 0x1407B5334,
+                                                    kBattleTeleportFadeInBytes};
+
 }  // namespace lss::facts

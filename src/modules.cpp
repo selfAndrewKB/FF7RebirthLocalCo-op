@@ -93,6 +93,8 @@
 #include "world/seat_switch_volumes.h"
 #include "world/seat_triggers.h"
 #include "world/story_boxes.h"
+#include "world/catch_up_move.h"
+#include "world/run_catch_up.h"
 #include "world/shop_talk.h"
 #include "world/vending.h"
 #include "world/world_actor_reach.h"
@@ -229,6 +231,10 @@ constexpr std::array kModules{
     Module{Call<&world::seat_switch_volumes::Install>, nullptr},
     // a seat's member walking into its own story box ahead of the story waits for the story's moment
     Module{Call<&world::story_boxes::Install>, &world::story_boxes::Remove},
+    // the game's own point query and warp, for a character brought beside player 1's
+    Module{Call<&world::catch_up_move::Install>, nullptr},
+    // a character taken past its own story box brought back for the level's walk through it
+    Module{Call<&world::run_catch_up::Install>, nullptr},
     // a seat's chocobo vaults without taking both ride framings
     Module{Call<&camera::vault_camera::Install>, &camera::vault_camera::Remove},
     // a seat's chocobo climbs walls, with its own climb camera

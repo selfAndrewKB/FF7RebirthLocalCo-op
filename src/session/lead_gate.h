@@ -25,6 +25,7 @@
 
 #include "session/lead_keep_rules.h"
 
+#include <cstdint>
 #include <string>
 
 namespace lss::platform {
@@ -45,6 +46,15 @@ lead_keep_rules::Verdict Judge(int seat, const void* member) noexcept;
 /// whatever the verdict and whoever walks it: world/story_boxes takes it as the story's moment for the member's own
 /// story boxes. False when not installed or unread. Game thread.
 bool OnLevelMove(const void* member) noexcept;
+
+/// `member`'s current walk on the level's brains moves on at a trigger (not its arrival) the box state row `boxStateRow`
+/// sends (that state lists it and its Status names it): the walk is the one into that box. No census: two row reads.
+/// False when not installed or unread. Game thread.
+bool WalksIntoBox(const void* member, std::uint64_t boxStateRow) noexcept;
+
+/// `member`'s current walk was judged a guide for its own story box (OwnBoxAhead): the walk's point (world cm) and the
+/// box's layout object. False otherwise. world/run_catch_up asks it just before the guide's hand. Game thread.
+bool OwnBoxRun(const void* member, float point[3], std::uint64_t& box) noexcept;
 
 /// Seat `seat`'s member is free of any script again: its last judgment is dropped, so the same setting written again
 /// is judged afresh.

@@ -2,7 +2,7 @@
   "build": "1.005",
   "research_build": "1.004",
   "date": "2026-11-08",
-  "doc": "Rebirth/Documentation/research/RE-member-story-boxes.md (sections 3, 5)",
+  "doc": "Rebirth/Documentation/research/RE-member-story-boxes.md (sections 3, 5, 9)",
   "facts": [
     {
       "name": "FieldStateTrigger_OnColliderBeginOverlap",
@@ -57,6 +57,24 @@
       "same_semantics": true,
       "confidence": "CONFIRMED",
       "note": "The IDA pass STORYBOX (RE-member-story-boxes.md 5 step 5): (slot) -> u8, the byte +0xA0 of the slot's linked base entry or of the slot; 1 = off, the send skipped in both builds."
+    },
+    {
+      "name": "Nav_FindPointAround_AnglesDistances",
+      "old": "0x1431EBAB8",
+      "new": "0x141284B14",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "The IDA pass STORYBOX on both databases (RE-member-story-boxes.md 9.2): the battle gather PartyBattleAIMgr_PickBattleInPoint calls it with the querier, a 48-byte transform, the agent from querier+0x228 vt+0x10, two float arrays and the out point; the first 24 bytes identical."
+    },
+    {
+      "name": "EndCharacter_BattleTeleport_FadeIn",
+      "old": "0x1407B5334",
+      "new": "0x141328EB4",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "The IDA pass STORYBOX on both databases (RE-member-story-boxes.md 9.1): a queued warp request and a fade-in, no battle-only state; the first 24 bytes identical."
     }
   ]
 }
