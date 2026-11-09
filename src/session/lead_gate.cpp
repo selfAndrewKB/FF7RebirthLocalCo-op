@@ -15,6 +15,7 @@
 #include "session/field_hold.h"
 #include "session/state_path.h"
 #include "world/data_rows.h"
+#include "world/story_boxes.h"
 
 #if LSS_DEV
 #include "platform/command_registry.h"
@@ -88,6 +89,7 @@ struct Judgment
     Verdict       verdict    = Verdict::Guide;
     bool          waiter     = false;  // another waiter, a direct set on another object, or a further move in the chain
     bool          marker     = false;  // the story's marker rides on the member
+    bool          ownBox     = false;  // the step moves on at the member's own armed story box (OwnBoxAhead)
     std::uint32_t censusCall = 0;
     std::uint32_t calls      = 0;
     std::uint32_t touched    = 0;      // the clock at the last call (the least recently used slot is reused)
@@ -343,17 +345,60 @@ Path PathAhead(const std::wstring& first)
 
 struct Census
 {
-    bool         read    = false;  // the census ran whole (unread: the walk is the AI's)
-    bool         chain   = false;  // a further move ahead in the member's own chain
-    int          others  = 0;      // other waiters (in scope) plus direct sets on other objects
-    std::wstring text;
+    bool          read    = false;  // the census ran whole (unread: the walk is the AI's)
+    bool          chain   = false;  // a further move ahead in the member's own chain
+    int           others  = 0;      // other waiters (in scope) plus direct sets on other objects
+    std::uint64_t ownBox  = 0;      // the step moves on at a trigger the member's own armed story box sends (OwnBoxAhead)
+    std::wstring  text;
 };
+
+/// The member's walk step moves on at a trigger (other than its arrival) that a member-only story box of the member's
+/// own sends, and the box is armed: the level expects the walk to carry the member into that box, on the clock of
+/// whatever else runs meanwhile; held by its player, it may come too late and the step stalls. A box's sending state
+/// lists the trigger it sends and its Status names it (RE-member-story-boxes.md §5); world/story_boxes checks the box's
+/// group and that it is switched on. 0 when none.
+std::uint64_t OwnBoxAhead(const std::vector<Slot>& slots, const std::byte* self, std::uint64_t selfObject,
+                          std::uint64_t arrival, const void* member)
+{
+    std::vector<std::uint64_t> exits = MappedNames(self + facts::kStateRowTriggers, facts::kStateRowTriggersRead);
+    std::erase_if(exits, [arrival](std::uint64_t t) { return t == 0 || t == arrival; });
+    if (exits.empty())
+    {
+        return 0;
+    }
+    for (const Slot& s : slots)
+    {
+        if (s.object == selfObject)
+        {
+            continue;
+        }
+        const std::byte* row = Row(g_stateRow, s.state);
+        if (row == nullptr)
+        {
+            continue;
+        }
+        const std::vector<std::uint64_t> listens = MappedNames(row + facts::kStateRowTriggers, facts::kStateRowTriggersRead);
+        for (const std::uint64_t exit : exits)
+        {
+            if (std::find(listens.begin(), listens.end(), exit) == listens.end() ||
+                _wcsicmp(MappedText(row + facts::kStateRowStatus).c_str(), Name(exit).c_str()) != 0)
+            {
+                continue;  // not the box's sending state for this trigger
+            }
+            if (world::story_boxes::ArmedOwnBox(s.object, member))
+            {
+                return s.object;
+            }
+        }
+    }
+    return 0;
+}
 
 /// The waiters on the move's arrival trigger: the slots whose current state lists it, in the trigger's scope (Self:
 /// the member's own object's slots; SpecificObject: the trigger's SendObject list and the member's own; else every
 /// active slot), the trigger row's direct sets on other objects, and the member's own path from the state its arrival
-/// leads to.
-Census Waiters(const Move& move)
+/// leads to; and whether the step moves on at the member's own armed story box (OwnBoxAhead).
+Census Waiters(const Move& move, const void* member)
 {
     Census           census;
     const std::byte* self = Row(g_stateRow, move.row);
@@ -364,10 +409,19 @@ Census Waiters(const Move& move)
     }
     const std::uint64_t trigger =
         move.trigger != 0 ? move.trigger : MappedNameAt(self + facts::kStateRowStringArgs, facts::kStateRowTriggerArg);
+    void* stateManager = StateManager();
+    const std::optional<std::vector<Slot>> slots = stateManager != nullptr ? ActiveSlots(stateManager) : std::nullopt;
+    if (slots)
+    {
+        census.ownBox = OwnBoxAhead(*slots, self, move.object, trigger, member);
+    }
+    const std::wstring ownBox =
+        census.ownBox != 0 ? std::format(L"; moves on at its own story box {} (the walk carries it in)", Name(census.ownBox))
+                           : std::wstring();
     if (trigger == 0)
     {
         census.read = true;
-        census.text = L"no arrival trigger (nothing can wait)";
+        census.text = L"no arrival trigger (nothing can wait)" + ownBox;
         return census;
     }
     // The member's own step: its row's trigger list pairs the arrival with the next state.
@@ -405,13 +459,11 @@ Census Waiters(const Move& move)
             }
         }
     }
-    void* stateManager = StateManager();
     if (stateManager == nullptr)
     {
         census.text = L"the level's state manager is not up";
         return census;
     }
-    const std::optional<std::vector<Slot>> slots = ActiveSlots(stateManager);
     if (!slots)
     {
         census.text = L"the level's active slots could not be read";
@@ -449,10 +501,10 @@ Census Waiters(const Move& move)
         }
     }
     census.read = true;
-    census.text = std::format(L"trigger {} (row {}, scope {}), {} waiting of {} active{}{}; self -> {}", Name(trigger),
+    census.text = std::format(L"trigger {} (row {}, scope {}), {} waiting of {} active{}{}; self -> {}{}", Name(trigger),
                               triggerRow != nullptr ? L"found" : L"NOT found",
                               scope == 0xFF ? std::wstring(L"?") : std::to_wstring(scope), listed, slots->size(), sets, waiting,
-                              path.text);
+                              path.text, ownBox);
     return census;
 }
 
@@ -624,18 +676,19 @@ try
     if (census)
     {
         const auto start = std::chrono::steady_clock::now();
-        waiters          = Waiters(move);
+        waiters          = Waiters(move, member);
         waiters.text += std::format(L" [read in {} us]",
                                     std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - start).count());
         last.censusCall = last.calls;
         last.waiter     = !waiters.read || waiters.others > 0 || waiters.chain;
+        last.ownBox     = waiters.ownBox != 0;
     }
     const bool    wasMarker = last.marker;
     const Verdict was       = last.verdict;
     Marker        marker    = Markers(move.object, false);
     last.marker             = marker.onMember;
     // No marker of the mod's is shown for a kept move: every needed move is the AI's.
-    last.verdict = lead_keep_rules::Decide(last.waiter || last.marker, false, false, false, false);
+    last.verdict = lead_keep_rules::Decide(last.waiter || last.marker, false, false, false, false, last.ownBox);
     if (!same || census || last.marker != wasMarker || last.verdict != was)
     {
         marker    = Markers(move.object, true);
@@ -655,6 +708,17 @@ catch (...)
 {
     platform::Log(L"lead gate: the judgment raised an exception; the walk goes to the character's AI");
     return Verdict::Guide;
+}
+
+bool OnLevelMove(const void* member) noexcept
+try
+{
+    Move move;
+    return g_installed && member != nullptr && MoveOf(member, move) && move.object != 0;
+}
+catch (...)
+{
+    return false;
 }
 
 void Forget(int seat) noexcept

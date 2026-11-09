@@ -71,10 +71,20 @@ void TestReachedIsTwoDimensionalAndInclusive()
     EXPECT(!Reached(0.0f, -201.0f));
 }
 
+void TestAWalkIntoTheMembersOwnBoxIsAGuide()
+{
+    std::puts("a walk whose step moves on at the member's own story box: a guide whatever else holds");
+    EXPECT(Decide(false, false, false, false, false, true) == Verdict::Guide);
+    EXPECT(Decide(true, true, true, true, false, true) == Verdict::Guide);
+    EXPECT(Decide(true, true, true, true, true, true) == Verdict::Guide);
+    EXPECT(Decide(false, true, true, true, false, false) == Verdict::Staging);
+}
+
 }  // namespace
 
 int main()
 {
+    TestAWalkIntoTheMembersOwnBoxIsAGuide();
     TestNeededMovesAreKeptThenHandedAtTheirPoint();
     TestAMoveThatSignalsNothingIsKeptThroughout();
     TestAMoveWithNoPointIsAGuide();

@@ -37,6 +37,16 @@ inline constexpr std::int32_t   kMaxActiveSlots   = 0x40000;  // the collector's
 // A slot: its owner object's FName and its current state row's FName.
 inline constexpr std::uint32_t kSlotOwner = 0x08;
 inline constexpr std::uint32_t kSlotState = 0x10;
+/// GS_FindObjectByKeyAndAttribute(SM, FName object, attribute): the object's slot for that attribute, or null.
+inline constexpr std::uint8_t kFindObjectByKeyAndAttributeBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x54,
+                                                                     0x24, 0x10, 0x57, 0xB8, 0x20, 0x00, 0x00, 0x00};
+inline constexpr FunctionFact kFindObjectByKeyAndAttribute{L"GS_FindObjectByKeyAndAttribute", 0x14087AD50,
+                                                           kFindObjectByKeyAndAttributeBytes};
+/// GSObjectSlot_GetOffCode(slot): the slot's on/off code (its linked base entry's, else its own); 1 = switched off.
+inline constexpr std::uint8_t kSlotOffCodeBytes[] = {0x48, 0x8B, 0x05, 0x69, 0xEA, 0x61, 0x08, 0x4C,
+                                                     0x8B, 0xD9, 0x44, 0x8B, 0x41, 0x38};
+inline constexpr FunctionFact kSlotOffCode{L"GSObjectSlot_GetOffCode", 0x140AE0378, kSlotOffCodeBytes};
+inline constexpr std::uint8_t kSlotOff = 1;
 
 // ---- A StateChange row (mapped; data_rows) ----
 inline constexpr std::uint32_t kStateRowNext       = 0;    // NextStateChange: 16-byte strings, one per trigger
@@ -57,6 +67,49 @@ inline constexpr std::int32_t  kTriggerRowDirectSetsMax  = 32;
 inline constexpr std::int32_t  kTriggerRowSendObjectsMax = 256;
 inline constexpr std::uint8_t  kTriggerScopeSelf     = 0;
 inline constexpr std::uint8_t  kTriggerScopeSpecific = 3;
+
+// ---- The field's trigger boxes ([g_EndGameRoot]+0x178 the trigger manager; RE-member-story-boxes.md) ----
+inline constexpr std::uint32_t kRootTriggerManager = 0x178;
+/// FieldStateTrigger_OnColliderBeginOverlap(triggerMgr, FName volumeTag, AActor* collider) and its end twin: a
+/// character's own tracker walking into (out of) a box. The enter's first instruction, `mov [rsp+8], rbx`, is
+/// position-independent and starts its 16-byte block in neither build at a crossing.
+inline constexpr std::uint8_t kBoxBeginFirst[] = {0x48, 0x89, 0x5C, 0x24, 0x08};
+inline constexpr std::uint8_t kBoxBeginBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x54, 0x24,
+                                                  0x10, 0x55, 0x56, 0x57, 0x41, 0x56, 0x41, 0x57};
+inline constexpr FunctionFact kBoxBegin{L"FieldStateTrigger_OnColliderBeginOverlap", 0x1409DF6F0, kBoxBeginBytes};
+inline constexpr std::uint8_t kBoxEndBytes[] = {0x48, 0x89, 0x54, 0x24, 0x10, 0x55, 0x53, 0x57, 0x41,
+                                                0x55, 0x41, 0x56, 0x48, 0x8B, 0xEC, 0xB8, 0x30};
+inline constexpr FunctionFact kBoxEnd{L"FieldStateTrigger_OnColliderEndOverlap", 0x1409DE02C, kBoxEndBytes};
+/// LayoutVolumeTag_FindObjectName(FName* out, const FName* volumeTag): the box's layout object (0: none).
+inline constexpr std::uint8_t kBoxLayoutObjectBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x74, 0x24, 0x10};
+inline constexpr FunctionFact kBoxLayoutObject{L"LayoutVolumeTag_FindObjectName", 0x1409DEBD8, kBoxLayoutObjectBytes};
+/// DataObjRegistry_FindRowByName(registry, FName, 16-byte scratch, u8* flag): a row or null; the ObjectLayout registry.
+inline constexpr std::uint8_t kFindRowByNameBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x4C, 0x89, 0x4C, 0x24, 0x20,
+                                                       0x4C, 0x89, 0x44, 0x24, 0x18};
+inline constexpr FunctionFact   kFindRowByName{L"DataObjRegistry_FindRowByName", 0x1408BD0C0, kFindRowByNameBytes};
+inline constexpr std::uintptr_t kObjectLayoutRegistry = 0x1488DF470;
+inline constexpr std::uint32_t  kLayoutRowActorGroup  = 0x40;  // ObjectLayout: OverlapActorGroup (FName)
+/// DataAcc_ActorGroup_Ctor: the ActorGroup row (data_rows accessor); its ActorList (FNames) at +0, the first 32 read.
+inline constexpr FunctionFact kActorGroupRow{L"DataAcc_ActorGroup_Ctor", 0x140F6C0EC, kRowAccessorBytes};
+inline constexpr std::int32_t kActorGroupActorsRead = 32;
+inline constexpr std::int32_t kBoxSlotAttribute     = 1;  // the box object's state slot whose Status is the trigger sent
+/// A character's own trigger tracker (both builds): the boxes it stood in at the last pass (FNames, inline 32, sorted),
+/// and the box actors this pass overlaps (FWeakObjectPtrs, inline 32).
+inline constexpr std::uint32_t kCharacterTracker   = 0x9F0;
+inline constexpr std::uint32_t kTrackerKeys        = 0x10;
+inline constexpr std::uint32_t kTrackerKeysHeap    = 0x110;
+inline constexpr std::uint32_t kTrackerKeysNum     = 0x118;
+inline constexpr std::uint32_t kTrackerOverlaps     = 0x230;
+inline constexpr std::uint32_t kTrackerOverlapsHeap = 0x330;
+inline constexpr std::uint32_t kTrackerOverlapsNum  = 0x338;
+inline constexpr std::int32_t  kTrackerInline       = 32;
+/// A trigger box actor's collision component (ATriggerBase::CollisionComponent, a UBoxComponent for an AEndTriggerBox)
+/// and the box component's unscaled half-size; a scene component's world transform (rotation, location, scale).
+inline constexpr std::uint32_t kTriggerCollisionComponent = 0x228;
+inline constexpr std::uint32_t kBoxComponentExtent        = 0x4A8;
+inline constexpr std::uint32_t kComponentWorldRotation    = 0x1C0;
+inline constexpr std::uint32_t kComponentWorldLocation    = 0x1D0;
+inline constexpr std::uint32_t kComponentWorldScale       = 0x1E0;
 
 // ---- The AI system's setting groups (EndAISystem_GetFromGameModeWorld()+0x540, a TMap<FName, TArray<entry>>) ----
 inline constexpr std::uint8_t kAiSystemBytes[] = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00};

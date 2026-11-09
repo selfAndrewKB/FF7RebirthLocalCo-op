@@ -53,9 +53,6 @@ constexpr platform::FunctionFact kAiEvent{L"ShopMenu_SendLeaderTargetAIEvent5", 
 constexpr std::uint8_t kLeaderNameBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x18, 0x48, 0x89, 0x74, 0x24, 0x20,
                                              0x57, 0x41, 0x54, 0x41, 0x55, 0x41, 0x56, 0x41, 0x57};
 constexpr platform::FunctionFact kLeaderName{L"ResolveNamedPoint_LEADER_BATTLELEADER", 0x1408A95B8, kLeaderNameBytes};
-constexpr std::uint8_t kFindObjectBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x54,
-                                             0x24, 0x10, 0x57, 0xB8, 0x20, 0x00, 0x00, 0x00};
-constexpr platform::FunctionFact kFindObject{L"GS_FindObjectByKeyAndAttribute", 0x14087AD50, kFindObjectBytes};
 constexpr std::uint8_t kAccessorBytes[] = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00};  // push rbx; mov eax, 20h
 constexpr platform::FunctionFact kActionRow{L"DataAcc_Action_Ctor", 0x1407BEB9C, kAccessorBytes};
 constexpr platform::FunctionFact kGroupRow{L"DataAcc_ActionGroup_Ctor", 0x1411CB32C, kAccessorBytes};
@@ -388,7 +385,7 @@ bool Place(const platform::GameImage& image, platform::EntryRedirect& redirect, 
 void Install(const platform::GameImage& image) noexcept
 {
     g_image          = image;
-    const auto find  = platform::FindFunction(image, kFindObject);
+    const auto find  = platform::FindFunction(image, facts::kFindObjectByKeyAndAttribute);
     const auto state = platform::FindFunction(image, facts::kStateChangeRow);
     const auto act   = platform::FindFunction(image, kActionRow);
     const auto group = platform::FindFunction(image, kGroupRow);

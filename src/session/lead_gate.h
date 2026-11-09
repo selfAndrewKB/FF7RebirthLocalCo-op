@@ -14,6 +14,8 @@
 //   3. a further move follows in the member's own chain of states before it stands or follows again
 //      (session/state_path.h, from the state its arrival leads to; a chain past the limit counts as one).
 // A leash on player 1 (an AutoWalk act aimed at the member) would be a fourth signal, but no level writes one.
+// Whatever else holds, a move whose step moves on at the member's own armed story box (a trigger that box sends, not
+// its arrival) goes to its AI: the walk carries the member into the box on the level's clock (world/story_boxes).
 // A move is judged at its first sight and the judgment is logged (one Info line: the trigger, every waiter, the marker,
 // the chain, the verdict; again at each verdict change). A needed verdict holds until the setting ends (the member's
 // state changes) or the member is free again; a staging verdict is re-read while it lasts (the waiters about every
@@ -38,6 +40,11 @@ bool Install(const platform::GameImage& image) noexcept;
 /// `member` (seat `seat`'s) runs a walk or lead on the level's brains: the verdict from the game's data. Guide when the
 /// move cannot be read or the gate is not installed (the AI walks it).
 lead_keep_rules::Verdict Judge(int seat, const void* member) noexcept;
+
+/// The level has `member` on a walk or lead of its own (a MOVE_TO or LEAD on the level's brains naming a level object),
+/// whatever the verdict and whoever walks it: world/story_boxes takes it as the story's moment for the member's own
+/// story boxes. False when not installed or unread. Game thread.
+bool OnLevelMove(const void* member) noexcept;
 
 /// Seat `seat`'s member is free of any script again: its last judgment is dropped, so the same setting written again
 /// is judged afresh.

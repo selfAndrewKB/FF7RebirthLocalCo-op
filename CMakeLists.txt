@@ -114,6 +114,7 @@ add_library(LocalSplitScreen SHARED
     src/traversal/traversal_holders.cpp
     src/traversal/traversal_watch.cpp
     src/world/data_rows.cpp
+    src/world/story_boxes.cpp
     src/world/shop_talk.cpp
     src/world/seat_switch_volumes.cpp
     src/world/seat_triggers.cpp
@@ -373,6 +374,7 @@ lss_test(party_lease src/session/party_lease.cpp)
 lss_test(field_hold)
 lss_test(state_path)
 lss_test(lead_keep_rules)
+lss_test(story_box_rules)
 lss_test(battle_warps_rules)
 lss_test(leave_sequence src/session/leave_sequence.cpp)
 lss_test(leader_answer)

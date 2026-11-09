@@ -40,8 +40,15 @@ constexpr bool Reached(float dx, float dy) noexcept
 /// The verdict for a move. `needed`: the gate's reasons (a waiter, the marker, a further move). `keeps`: the
 /// `lead-holder keeps` switch with a marker to show. `pointKnown`: the move's point was read. `signals`: the move names
 /// an arrival trigger. `reached`: the member is (or was, this setting) within kHandRadius of the point.
-constexpr Verdict Decide(bool needed, bool keeps, bool pointKnown, bool signals, bool reached) noexcept
+/// `intoOwnBox`: the step moves on at the member's own armed story box, which the walk carries it into on the level's
+/// clock (session/lead_gate OwnBoxAhead): a guide whatever the switch and whether or not anything else needs it, since
+/// a player walking it there may come too late.
+constexpr Verdict Decide(bool needed, bool keeps, bool pointKnown, bool signals, bool reached, bool intoOwnBox = false) noexcept
 {
+    if (intoOwnBox)
+    {
+        return Verdict::Guide;
+    }
     if (!needed)
     {
         return Verdict::Staging;

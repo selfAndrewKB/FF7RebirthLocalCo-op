@@ -1,0 +1,62 @@
+{
+  "build": "1.005",
+  "research_build": "1.004",
+  "date": "2026-11-08",
+  "doc": "Rebirth/Documentation/research/RE-member-story-boxes.md (sections 3, 5)",
+  "facts": [
+    {
+      "name": "FieldStateTrigger_OnColliderBeginOverlap",
+      "old": "0x1409DF6F0",
+      "new": "0x141173484",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "The IDA pass STORYBOX on both databases (RE-member-story-boxes.md 3): the router's last branch, (triggerMgr, FName volumeTag, AActor* collider); the first 25 bytes identical in both builds, none RIP-relative."
+    },
+    {
+      "name": "LayoutVolumeTag_FindObjectName",
+      "old": "0x1409DEBD8",
+      "new": "0x141174CB4",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "The IDA pass STORYBOX (RE-member-story-boxes.md 5 step 1): (FName* out, const FName* volumeTag), the volume tag's layout object from g_Map_VolumeTag_ToLayoutObject; out 0 when none. Called first by SendIfGroupAllows in both builds."
+    },
+    {
+      "name": "DataObjRegistry_FindRowByName",
+      "old": "0x1408BD0C0",
+      "new": "0x14076A330",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "The IDA pass STORYBOX (RE-member-story-boxes.md 5 step 2): (registry, FName, 16-byte scratch, u8* flag) -> the row or null; the call SendIfGroupAllows makes on g_DataReg_ObjectLayout in both builds."
+    },
+    {
+      "name": "g_DataReg_ObjectLayout",
+      "old": "0x1488DF470",
+      "new": "0x148712D00",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "The IDA pass STORYBOX (RE-member-story-boxes.md 5 step 2): the registry SendIfGroupAllows passes by address to DataObjRegistry_FindRowByName in both builds."
+    },
+    {
+      "name": "DataAcc_ActorGroup_Ctor",
+      "old": "0x140F6C0EC",
+      "new": "0x141217A24",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "The IDA passes WALKGATE / STORYBOX (RE-walk-gate.md 6, RE-member-story-boxes.md 5 step 6): the row accessor SendIfGroupAllows builds on the box's OverlapActorGroup in both builds; ActorList FNames at row +0."
+    },
+    {
+      "name": "GSObjectSlot_GetOffCode",
+      "old": "0x140AE0378",
+      "new": "0x1409A6A2C",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "The IDA pass STORYBOX (RE-member-story-boxes.md 5 step 5): (slot) -> u8, the byte +0xA0 of the slot's linked base entry or of the slot; 1 = off, the send skipped in both builds."
+    }
+  ]
+}

@@ -92,6 +92,7 @@
 #include "world/party_warp.h"
 #include "world/seat_switch_volumes.h"
 #include "world/seat_triggers.h"
+#include "world/story_boxes.h"
 #include "world/shop_talk.h"
 #include "world/vending.h"
 #include "world/world_actor_reach.h"
@@ -226,6 +227,8 @@ constexpr std::array kModules{
     // a seat's player inside CharaPop switch volumes (the shopkeepers near them); its events come from seat_triggers'
     // filter
     Module{Call<&world::seat_switch_volumes::Install>, nullptr},
+    // a seat's member walking into its own story box ahead of the story waits for the story's moment
+    Module{Call<&world::story_boxes::Install>, &world::story_boxes::Remove},
     // a seat's chocobo vaults without taking both ride framings
     Module{Call<&camera::vault_camera::Install>, &camera::vault_camera::Remove},
     // a seat's chocobo climbs walls, with its own climb camera
@@ -475,6 +478,7 @@ void TickAfterSession(const Frame& frame) noexcept
     traversal::traversal_watch::Tick();
     world::seat_triggers::Tick();
     world::seat_switch_volumes::Tick();  // each seat's volumes left once it is gone; the summary
+    world::story_boxes::Tick(frame.splitShown);  // the held-back story-box enters: replayed at the story's moment
     traversal::traversal_camera::Tick();  // each seat's idle camera holders; the collision watch (dev)
     camera::near_fade::Tick();         // each seat's character's fade state (Debug, on change)
     input::approach_own_camera::Tick();      // the crossing walk-up calls, swapped once from here
