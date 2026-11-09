@@ -505,7 +505,7 @@ src/
     catch_up_move           The game's own way to put a character beside another on the field, as its battle gather
                             calls it (research/RE-member-story-boxes.md §9):
     charapop_centre         The game's NPC population follows every player: each NPC is scored from the nearest player
-    charapop_facts          The CharaPop manager, its entries and a camera manager's pose, as the game's character LOD
+    charapop_facts.h        The CharaPop manager, its entries and a camera manager's pose, as the game's character LOD
                             reads them
     charapop_near           The characters a seat's player is near keep the detail the game would give them from that
                             player's own camera

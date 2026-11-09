@@ -26,6 +26,7 @@
 #include "players/generation.h"
 #include "players/object_fields.h"
 #include "players/seats.h"
+#include "players/unreal_access.h"
 #include "rides/own_ride.h"
 #include "scopes/leader_scope.h"
 #include "session/party_member.h"
@@ -157,7 +158,6 @@ struct SeatRide
     platform::Every summary{kSummaryEvery};
 };
 SeatRide       g_seats[players::kMaxPlayers];  // by seat (players/seats.h); index 0, player 1's, unused
-std::int32_t   g_rootOffset = -1;
 CharacterArray g_released{};  // reused for every EndRide, every seat's in turn: the game keeps one allocation in it
 
 /// The seat's ride record, or null for a number without one.
@@ -168,35 +168,9 @@ SeatRide* RideOf(int seat) noexcept
 
 using players::BySeat;  // a text kept by pointer (an end's reason, a log prefix) naming the seat's player
 
-const void* RootOf(void* actor) noexcept
-{
-    if (actor == nullptr)
-    {
-        return nullptr;
-    }
-    // The one-time reflection lookup dereferences the actor unguarded: only on an actor the game still names.
-    if (g_rootOffset < 0 && scopes::leader_scope::StillNames(scopes::leader_scope::WeakOf(actor), actor))
-    {
-        try
-        {
-            auto* property = static_cast<UObject*>(actor)->GetPropertyByNameInChain(STR("RootComponent"));
-            if (property == nullptr || property->GetSize() != sizeof(void*))
-            {
-                return nullptr;
-            }
-            g_rootOffset = property->GetOffset_Internal();
-        }
-        catch (...)
-        {
-            return nullptr;
-        }
-    }
-    return g_rootOffset < 0 ? nullptr : ReadPointer(actor, static_cast<std::uint32_t>(g_rootOffset));
-}
-
 bool Attached(void* member) noexcept
 {
-    return ReadPointer(RootOf(member), kSceneComponentAttachParent) != nullptr;
+    return ReadPointer(players::unreal::RootOf(member), kSceneComponentAttachParent) != nullptr;
 }
 
 const std::byte* RideManager() noexcept
@@ -565,8 +539,8 @@ void LogSummary(SeatRide& s) noexcept
     const Ride& ride = s.ride;
     float seatAt[3]{}, oneAt[3]{};
     const void* oneBody = ReadPointer(players::generation::PlayerOneController(), facts::kControllerPawn);
-    const bool  read    = world::charapop::ActorLocation(ride.vehicle, seatAt) &&
-                          world::charapop::ActorLocation(const_cast<void*>(oneBody), oneAt);
+    const bool  read    = players::unreal::ActorLocation(ride.vehicle, seatAt) &&
+                          players::unreal::ActorLocation(oneBody, oneAt);
     try
     {
         platform::LogDebug(L"chocobo ride: driving, {} ticks ({} refused); its own slot 1 in {}'s scope {} times ({} refused); "

@@ -20,6 +20,7 @@
 #include "players/generation.h"
 #include "players/object_fields.h"
 #include "players/seats.h"
+#include "players/unreal_access.h"
 #include "rides/own_ride.h"
 #include "rides/ride_rules.h"
 #include "scopes/leader_scope.h"
@@ -359,7 +360,7 @@ bool Free(const void* scooter) noexcept
 float Between(void* a, void* b) noexcept
 {
     float at[3]{}, to[3]{};
-    return a != nullptr && b != nullptr && world::charapop::ActorLocation(a, at) && world::charapop::ActorLocation(b, to)
+    return a != nullptr && b != nullptr && players::unreal::ActorLocation(a, at) && players::unreal::ActorLocation(b, to)
                ? world::charapop::Distance(at, to)
                : -1.0f;
 }

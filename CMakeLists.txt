@@ -133,7 +133,6 @@ add_library(LocalSplitScreen SHARED
     src/feedback/pad_rumble.cpp
     src/feedback/combat_rumble.cpp
     src/world/vending.cpp
-    src/world/charapop_facts.cpp
     src/world/charapop_near.cpp
     src/world/charapop_centre.cpp
     src/world/world_actor_reach.cpp

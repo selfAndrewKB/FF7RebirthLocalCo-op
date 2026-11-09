@@ -25,6 +25,7 @@
 #include "players/generation.h"
 #include "players/object_fields.h"
 #include "players/seats.h"
+#include "players/unreal_access.h"
 #include "rides/chocobo_ride.h"
 #include "world/party_warp.h"
 #include "world/party_warp_rules.h"
@@ -228,7 +229,6 @@ const void* RiddenChocoboOf(int seat) noexcept
 // For the whole session (logged as they grow):
 std::atomic<std::uint32_t> g_readyNoNavmesh{0};  // moves that found no navmesh where the world was ready (not refused)
 std::atomic<std::uint32_t> g_offThread{0};       // answers that came off the game thread
-std::int32_t                          g_rootOffset      = -1;
 std::chrono::steady_clock::time_point g_lastTick[players::kMaxPlayers]{};  // by seat: its last tick with a member
 bool                                  g_ticked[players::kMaxPlayers]  = {};
 bool                                  g_loggedOffThread = false;
@@ -381,45 +381,12 @@ bool Parked(const void* pawn) noexcept
     return Read(At(ReadPointer(pawn, kCharacterMoveOwner), kOwnerStopMask), mask) && (mask & kStopReasonParked) != 0;
 }
 
-/// An actor's root component, through the reflected RootComponent offset (found once).
-const std::byte* RootOf(const void* actor) noexcept
-{
-    if (actor == nullptr)
-    {
-        return nullptr;
-    }
-    if (g_rootOffset < 0)
-    {
-        try
-        {
-            auto* object   = static_cast<UObject*>(const_cast<void*>(actor));
-            auto* property = object->GetPropertyByNameInChain(STR("RootComponent"));
-            if (property == nullptr || property->GetSize() != sizeof(void*))
-            {
-                return nullptr;
-            }
-            g_rootOffset = property->GetOffset_Internal();
-        }
-        catch (...)
-        {
-            return nullptr;
-        }
-    }
-    return static_cast<const std::byte*>(ReadPointer(actor, static_cast<std::uint32_t>(g_rootOffset)));
-}
-
-bool LocationOf(const void* pawn, float (&out)[3]) noexcept
-{
-    const std::byte* root = RootOf(pawn);
-    return root != nullptr && platform::CopyGuarded(out, root + kComponentWorldLocation, sizeof(out));
-}
-
 std::wstring AtText(const void* pawn) noexcept
 {
     float at[3]{};
     try
     {
-        return LocationOf(pawn, at) ? std::format(L"({:.0f}, {:.0f}, {:.0f})", at[0], at[1], at[2]) : L"?";
+        return players::unreal::ActorLocation(pawn, at) ? std::format(L"({:.0f}, {:.0f}, {:.0f})", at[0], at[1], at[2]) : L"?";
     }
     catch (...)
     {
@@ -431,8 +398,8 @@ std::wstring PlacesText(int seat)
 {
     float one[3]{}, member[3]{}, cell[3]{};
     const void* leader    = ReadPointer(players::generation::PlayerOneController(), facts::kControllerPawn);
-    const bool  hasOne    = LocationOf(leader, one);
-    const bool  hasMember = LocationOf(g_members[seat].pawn, member);
+    const bool  hasOne    = players::unreal::ActorLocation(leader, one);
+    const bool  hasMember = players::unreal::ActorLocation(g_members[seat].pawn, member);
     const void* manager = nullptr;
     const bool  hasCell = Read(reinterpret_cast<const void*>(g_navStreamManager), manager) &&
                          Read(At(manager, kNavStreamLeaderCell), cell);
@@ -466,7 +433,7 @@ std::wstring Places(int seat) noexcept
 float MovedSinceStart(const Subject& subject) noexcept
 {
     float now[3]{};
-    return subject.strand.started && LocationOf(subject.pawn, now)
+    return subject.strand.started && players::unreal::ActorLocation(subject.pawn, now)
                ? std::hypot(now[0] - subject.strand.start[0], now[1] - subject.strand.start[1])
                : -1.0f;
 }
@@ -575,7 +542,7 @@ void Close(Subject& subject, const wchar_t* why) noexcept
 /// closes its strand with `why`.
 void Aim(Subject& subject, const void* counted, const void* watched, const wchar_t* why) noexcept
 {
-    subject.root.store(RootOf(counted), std::memory_order_release);
+    subject.root.store(players::unreal::RootOf(counted), std::memory_order_release);
     if (watched != subject.pawn)
     {
         Close(subject, why);
@@ -605,7 +572,7 @@ bool RequestWarp(Subject& subject, bool splitShown) noexcept
     }
     subject.warpWaiting = false;
     return party_warp::Start(subject.seat, const_cast<void*>(subject.pawn), subject.kind,
-                             ReadPointer(RootOf(subject.pawn), kSceneComponentAttachParent) != nullptr, splitShown);
+                             ReadPointer(players::unreal::RootOf(subject.pawn), kSceneComponentAttachParent) != nullptr, splitShown);
 }
 
 /// The seat's player asked to be brought back (`how`: L3 twice, the console): the follow warp of the chocobo they ride,
@@ -628,7 +595,7 @@ void Ask(int seat, const wchar_t* how, bool splitShown) noexcept
     }
     float       one[3]{}, at[3]{};
     const void* leader = ReadPointer(players::generation::PlayerOneController(), facts::kControllerPawn);
-    if (LocationOf(leader, one) && LocationOf(subject.pawn, at) &&
+    if (players::unreal::ActorLocation(leader, one) && players::unreal::ActorLocation(subject.pawn, at) &&
         party_warp_rules::Beside(std::hypot(at[0] - one[0], at[1] - one[1]), at[2] - one[2]))
     {
         platform::Log(L"party warp: {} asked to be brought back ({}); not done: it already stands beside player 1's "
@@ -664,7 +631,7 @@ void Step(Subject& subject, bool splitShown, float seconds) noexcept
     {
         case StrandEvent::Began:
             subject.strand         = {};
-            subject.strand.started = LocationOf(subject.pawn, subject.strand.start);
+            subject.strand.started = players::unreal::ActorLocation(subject.pawn, subject.strand.start);
             platform::Log(L"nav strand: {} stranded: the game {} at {} (the world under it is not loaded); {}",
                           subject.who,
                           counts.refusals == 0 ? L"parked it (MOVE_None, stop reason 5)"

@@ -6,8 +6,10 @@
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/verified_code.h"
+#include "players/describe.h"
 #include "players/generation.h"
 #include "players/seats.h"
+#include "players/unreal_access.h"
 #include "scopes/leader_scope.h"
 #include "world/charapop_facts.h"
 #include "world/charapop_rule.h"
@@ -338,7 +340,7 @@ void HandleRaised(int index, const Sighting& s, float reach, PassCounts& counts)
     const bool covered = hold == Hold::PlayerOneCovers;
     if (platform::Enabled(platform::Level::Debug))
     {
-        Line(L"cleared {} ({}; {}, player 1: {})", NameOf(s.actor),
+        Line(L"cleared {} ({}; {}, player 1: {})", players::NameOf(s.actor),
              covered ? L"player 1's camera keeps it"
                      : (players::kSeatsBuilt == 1 ? L"out of player 2's reach" : L"out of every other player's reach"),
              SeatsWhere(s), Where(s.fromOne));
@@ -377,7 +379,7 @@ void HandleCandidate(const Sighting& s, float reach, Detail detail, PassCounts& 
         {
             ++g_skipSamples;
             g_leftLogged[g_leftNext++ % g_leftLogged.size()] = s.entry;
-            Line(L"left to player 1's camera: {} (level {}; {}, player 1: {})", NameOf(s.actor), s.level, SeatsWhere(s),
+            Line(L"left to player 1's camera: {} (level {}; {}, player 1: {})", players::NameOf(s.actor), s.level, SeatsWhere(s),
                  Where(s.fromOne));
         }
         return;
@@ -406,7 +408,7 @@ void HandleCandidate(const Sighting& s, float reach, Detail detail, PassCounts& 
     ++g_raisedTotal;
     if (platform::Enabled(platform::Level::Debug))
     {
-        Line(L"raised {} ({}, level {}; {}, player 1: {}, which does not keep it)", NameOf(s.actor), DetailName(detail),
+        Line(L"raised {} ({}, level {}; {}, player 1: {}, which does not keep it)", players::NameOf(s.actor), DetailName(detail),
              s.level, SeatsWhere(s), Where(s.fromOne));
     }
 }
@@ -474,7 +476,7 @@ void Pass(Detail detail, const std::array<bool, players::kMaxPlayers>& playing)
         }
         s.actor = scopes::leader_scope::ObjectAt(s.entry + kEntryActor);
         float at[3]{};
-        if (s.actor == nullptr || !ActorLocation(s.actor, at))
+        if (s.actor == nullptr || !players::unreal::ActorLocation(s.actor, at))
         {
             continue;
         }

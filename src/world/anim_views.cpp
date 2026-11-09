@@ -17,6 +17,7 @@
 #include "players/generation.h"
 #include "players/object_fields.h"
 #include "players/seats.h"
+#include "players/unreal_access.h"
 #include "scopes/leader_scope.h"
 #include "world/charapop_facts.h"
 
@@ -378,7 +379,7 @@ void AppendSeatPairs() noexcept
         }
         ++g_counts.elements;
         float at[3]{};
-        if (!charapop::ActorLocation(actor, at))
+        if (!players::unreal::ActorLocation(actor, at))
         {
             return true;
         }

@@ -12,6 +12,7 @@
 #include "players/describe.h"
 #include "players/generation.h"
 #include "players/object_fields.h"
+#include "players/unreal_access.h"
 #include "rides/chocobo_ride.h"
 #include "scopes/leader_scope.h"
 #include "scopes/primary_controller.h"
@@ -337,7 +338,7 @@ TriggerState ReadTrigger(const void* controller) noexcept
     state.parentOwner = ReadPointer(ReadPointer(ReadPointer(state.trigger, kActorRoot), kComponentParent), kComponentOwner);
     float at[3]{}, pawnAt[3]{};
     auto* pawn = const_cast<void*>(ReadPointer(controller, facts::kControllerPawn));
-    if (world::charapop::ActorLocation(const_cast<void*>(state.trigger), at) && world::charapop::ActorLocation(pawn, pawnAt))
+    if (players::unreal::ActorLocation(state.trigger, at) && players::unreal::ActorLocation(pawn, pawnAt))
     {
         const float metres = world::charapop::Distance(at, pawnAt) / 100.0f;
         state.reach        = metres < 1.0f ? 0 : metres < 3.0f ? 1 : metres < 10.0f ? 2 : 3;

@@ -317,7 +317,7 @@ std::uint64_t Camera(std::uint64_t target, std::uint64_t preset, std::uint64_t r
     const wchar_t* const who = players::SeatName(owner);
     void*      member        = players::generation::MemberOf(owner);
     const auto type          = session::party_member::PlayerTypeOf(member);
-    g_memberKnown            = member != nullptr && charapop::ActorLocation(member, g_memberAt);
+    g_memberKnown            = member != nullptr && players::unreal::ActorLocation(member, g_memberAt);
     input::pad_buttons::SetMenuPlayer(owner);
     const bool chadley = g_chadleyReturn != 0 && reinterpret_cast<std::uintptr_t>(_ReturnAddress()) == g_chadleyReturn;
     if (!chadley)
@@ -359,7 +359,7 @@ std::uint64_t CameraOff(std::uint64_t a, std::uint64_t b, std::uint64_t c, std::
         input::pad_buttons::SetMenuPlayer(0);
         float      now[3]{};
         void*      member = players::generation::MemberOf(g_shop);
-        const bool known  = g_memberKnown && member != nullptr && charapop::ActorLocation(member, now);
+        const bool known  = g_memberKnown && member != nullptr && players::unreal::ActorLocation(member, now);
         platform::Log(L"vending: {}'s shop closed; pad 1 drives the menus again; {}'s member moved {:.1f} m while it was "
                       L"up",
                       players::SeatName(g_shop), players::SeatName(g_shop),

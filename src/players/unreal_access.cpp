@@ -12,6 +12,7 @@
 #include <Unreal/NameTypes.hpp>
 
 #include <algorithm>
+#include <atomic>
 #include <cmath>
 #include <iterator>
 
@@ -120,30 +121,29 @@ std::int32_t RootComponentOffset(UObject* actor) noexcept
 
 }  // namespace
 
-namespace {
-
-/// An actor's RootComponent (the reflected AActor offset, looked up once); null if it cannot be read.
 const std::byte* RootOf(const void* actor) noexcept
 {
-    static std::int32_t rootOffset = -1;  // AActor::RootComponent, the same for every actor
+    // AActor::RootComponent, the same for every actor: every thread that finds it stores the same value.
+    static std::atomic<std::int32_t> rootOffset{-1};
     if (actor == nullptr)
     {
         return nullptr;
     }
     // Looked up once; guarded against a structured exception too (a stale actor's class read faults, not throws).
-    std::int32_t found = -1;
-    if (rootOffset < 0 &&
-        (!platform::CallGuarded(&RootComponentOffset, found, static_cast<UObject*>(const_cast<void*>(actor))) || found < 0))
+    std::int32_t offset = rootOffset.load(std::memory_order_relaxed);
+    if (offset < 0)
     {
-        return nullptr;
-    }
-    if (rootOffset < 0)
-    {
-        rootOffset = found;
+        if (!platform::CallGuarded(&RootComponentOffset, offset, static_cast<UObject*>(const_cast<void*>(actor))) || offset < 0)
+        {
+            return nullptr;
+        }
+        rootOffset.store(offset, std::memory_order_relaxed);
     }
     const std::byte* root = nullptr;
-    return platform::CopyGuarded(&root, static_cast<const std::byte*>(actor) + rootOffset, sizeof(root)) ? root : nullptr;
+    return platform::CopyGuarded(&root, static_cast<const std::byte*>(actor) + offset, sizeof(root)) ? root : nullptr;
 }
+
+namespace {
 
 // USceneComponent's world transform: its rotation (a quaternion x y z w) and translation.
 constexpr std::uint32_t kComponentWorldRotation = 0x1C0;

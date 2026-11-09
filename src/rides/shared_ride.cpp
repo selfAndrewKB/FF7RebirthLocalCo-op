@@ -12,6 +12,7 @@
 #include "players/generation.h"
 #include "players/object_fields.h"
 #include "players/seats.h"
+#include "players/unreal_access.h"
 #include "rides/ride_rules.h"
 #include "scopes/leader_scope.h"
 #include "world/charapop_facts.h"
@@ -118,7 +119,7 @@ void LogState(const void* coordinator, std::int32_t state)
             continue;
         }
         float      at[3]{}, vehicle[3]{};
-        const bool both = world::charapop::ActorLocation(given, at) && body != nullptr && world::charapop::ActorLocation(body, vehicle);
+        const bool both = players::unreal::ActorLocation(given, at) && body != nullptr && players::unreal::ActorLocation(body, vehicle);
         member += std::format(L"{}the member {} gave back, {}, is {}, hidden {}; driven by {}, AI state {}",
                               member.empty() ? L"" : L"; ", players::SeatName(seat), players::NameOf(given),
                               both ? std::format(L"{:.1f} m from the {}", world::charapop::Distance(at, vehicle) / 100.0f,

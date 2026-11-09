@@ -14,8 +14,10 @@
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/verified_code.h"
+#include "players/describe.h"
 #include "players/generation.h"
 #include "players/object_fields.h"
+#include "players/unreal_access.h"
 #include "scopes/leader_scope.h"
 #include "world/charapop_facts.h"
 
@@ -379,7 +381,7 @@ void LogSample(const Sample& sample, bool first)
     }
     Line(L"{} {:#x}{}: {} | level {} (min {}) state {} (requested {}, lock {}) pause flag {} want {} paused {} | {} | {}",
          first ? L"watching" : L"changed", reinterpret_cast<std::uintptr_t>(sample.entry),
-         first ? std::format(L" ({}, id {}, category {}, key {:#x})", NameOf(sample.actor),
+         first ? std::format(L" ({}, id {}, category {}, key {:#x})", players::NameOf(sample.actor),
                              ReadField<std::int32_t>(sample.entry, kEntryId),
                              ReadField<std::uint8_t>(sample.entry, kEntryCategory),
                              ReadField<std::uint64_t>(sample.entry, kEntryKey))
@@ -548,7 +550,7 @@ void SampleNow()
         const void* entry = ReadPointer(list, static_cast<std::uint32_t>(i) * sizeof(void*));
         void*       actor = entry != nullptr ? scopes::leader_scope::ObjectAt(static_cast<const std::byte*>(entry) + kEntryActor) : nullptr;
         float       at[3]{};
-        if (actor == nullptr || !ActorLocation(actor, at))
+        if (actor == nullptr || !players::unreal::ActorLocation(actor, at))
         {
             continue;
         }

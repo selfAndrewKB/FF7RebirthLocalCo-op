@@ -21,6 +21,7 @@
 #include "players/describe.h"
 #include "players/generation.h"
 #include "players/object_fields.h"
+#include "players/unreal_access.h"
 #include "scopes/leader_scope.h"
 #include "session/party_member.h"
 #include "world/charapop_facts.h"
@@ -187,7 +188,6 @@ bool           g_installed = false;
 
 // Game thread.
 std::uint32_t     g_ticks  = 0;
-std::int32_t      g_rootOffset = -1;
 // The start trace: a seat's chocobo for the first seconds after it is ridden (the homing seen at a ride's start).
 constexpr auto    kTraceFor   = std::chrono::seconds(8);
 constexpr auto    kTraceEvery = std::chrono::milliseconds(250);
@@ -284,32 +284,6 @@ std::int32_t AiStateOf(const void* character) noexcept
     return state != nullptr ? ReadField<std::uint8_t>(state, facts::kAiStateType) : -1;
 }
 
-const void* RootOf(void* actor) noexcept
-{
-    if (actor == nullptr)
-    {
-        return nullptr;
-    }
-    // The one-time reflection lookup dereferences the actor unguarded: only on an actor the game still names.
-    if (g_rootOffset < 0 && scopes::leader_scope::StillNames(scopes::leader_scope::WeakOf(actor), actor))
-    {
-        try
-        {
-            auto* property = static_cast<UObject*>(actor)->GetPropertyByNameInChain(STR("RootComponent"));
-            if (property == nullptr || property->GetSize() != sizeof(void*))
-            {
-                return nullptr;
-            }
-            g_rootOffset = property->GetOffset_Internal();
-        }
-        catch (...)
-        {
-            return nullptr;
-        }
-    }
-    return g_rootOffset < 0 ? nullptr : ReadPointer(actor, static_cast<std::uint32_t>(g_rootOffset));
-}
-
 /// Player 1's ride, and `seatController`'s and its `member`'s side of it.
 Sample Read(void* playerOne, void* seatController, void* member) noexcept
 {
@@ -386,7 +360,7 @@ Sample Read(void* playerOne, void* seatController, void* member) noexcept
     }
     if (member != nullptr)
     {
-        s.attachedTo       = ReadPointer(RootOf(member), kSceneComponentAttachParent);
+        s.attachedTo       = ReadPointer(players::unreal::RootOf(member), kSceneComponentAttachParent);
         s.memberController = ReadPointer(member, facts::kPawnController);
         s.memberEffective  = ReadPointer(member, facts::kCharacterEffectiveController);
     }
@@ -460,7 +434,7 @@ void LogSnapshot(int seat, SeatWatch& w, const Sample& s, const void* member, co
         platform::CopyGuarded(sticks, static_cast<const std::byte*>(input) + facts::kInputMergedSticks, sizeof(sticks));
     }
     float at[3]{};
-    const bool  moved = s.body != nullptr && world::charapop::ActorLocation(const_cast<void*>(s.body), at);
+    const bool  moved = s.body != nullptr && players::unreal::ActorLocation(s.body, at);
     const float speed = moved && w.oneAtValid && seconds > 0.0f ? world::charapop::Distance(at, w.oneAt) / 100.0f / seconds : -1.0f;
     w.oneAtValid      = moved;
     for (int i = 0; i < 3; ++i)
@@ -469,7 +443,7 @@ void LogSnapshot(int seat, SeatWatch& w, const Sample& s, const void* member, co
     }
     // The seat's chocobo the same way (the gait reached: walk, jog or sprint), and how far it is from player 1's.
     float chocoboAt[3]{};
-    const bool  chocoboMoved = s.chocobo != nullptr && world::charapop::ActorLocation(const_cast<void*>(s.chocobo), chocoboAt);
+    const bool  chocoboMoved = s.chocobo != nullptr && players::unreal::ActorLocation(s.chocobo, chocoboAt);
     const float chocoboSpeed = chocoboMoved && w.seatAtValid && seconds > 0.0f
                                    ? world::charapop::Distance(chocoboAt, w.seatAt) / 100.0f / seconds
                                    : -1.0f;
@@ -534,8 +508,8 @@ void LogStartTrace(int seat, SeatWatch& w, const Sample& s)
     const float seconds = w.lastTrace == Clock::time_point{} ? 0.0f : std::chrono::duration<float>(now - w.lastTrace).count();
     w.lastTrace         = now;
     float at[3]{}, one[3]{};
-    const bool read    = world::charapop::ActorLocation(const_cast<void*>(s.chocobo), at);
-    const bool oneRead = s.body != nullptr && world::charapop::ActorLocation(const_cast<void*>(s.body), one);
+    const bool read    = players::unreal::ActorLocation(s.chocobo, at);
+    const bool oneRead = s.body != nullptr && players::unreal::ActorLocation(s.body, one);
     const float gap    = read && oneRead ? world::charapop::Distance(at, one) / 100.0f : -1.0f;
     const float speed  = read && seconds > 0.0f ? world::charapop::Distance(at, w.traceAt) / 100.0f / seconds : -1.0f;
     const float closing = gap >= 0.0f && w.traceGap >= 0.0f && seconds > 0.0f ? (w.traceGap - gap) / seconds : 0.0f;

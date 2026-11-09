@@ -14,6 +14,7 @@
 #include "players/describe.h"
 #include "players/generation.h"
 #include "players/object_fields.h"
+#include "players/unreal_access.h"
 #include "players/weak_object.h"
 #include "session/party_member.h"
 #include "world/charapop_facts.h"
@@ -156,7 +157,7 @@ const void* ScooterCoordinatorOf(const void* controller)
 float DistanceMetres(void* a, void* b) noexcept
 {
     float at[3]{}, to[3]{};
-    return a != nullptr && b != nullptr && world::charapop::ActorLocation(a, at) && world::charapop::ActorLocation(b, to)
+    return a != nullptr && b != nullptr && players::unreal::ActorLocation(a, at) && players::unreal::ActorLocation(b, to)
                ? world::charapop::Distance(at, to) / 100.0f
                : -1.0f;
 }

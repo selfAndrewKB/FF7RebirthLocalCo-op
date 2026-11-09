@@ -10,6 +10,7 @@
 #include "platform/verified_code.h"
 #include "players/generation.h"
 #include "players/seats.h"
+#include "players/unreal_access.h"
 #include "world/charapop_facts.h"
 
 #if LSS_DEV
@@ -194,7 +195,7 @@ std::int32_t ScoreEveryCentre(void* entry) noexcept
 
 bool CharacterAt(const void* character, float (&out)[3]) noexcept
 {
-    return character != nullptr && charapop::ActorLocation(const_cast<void*>(character), out);
+    return character != nullptr && players::unreal::ActorLocation(character, out);
 }
 
 /// Logs an event's centre appearing or clearing (Info: rare).

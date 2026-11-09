@@ -384,7 +384,7 @@ std::size_t Apply(const std::byte* manager, const float (&one)[3], const Seats& 
 
 bool CharacterAt(const void* character, float (&out)[3]) noexcept
 {
-    return character != nullptr && charapop::ActorLocation(const_cast<void*>(character), out);
+    return character != nullptr && players::unreal::ActorLocation(character, out);
 }
 
 void Stop(const wchar_t* why) noexcept

@@ -17,6 +17,7 @@
 #include <Unreal/UFunction.hpp>
 #include <Unreal/UObject.hpp>
 
+#include <cstddef>
 #include <cstdint>
 #include <new>
 #include <optional>
@@ -68,6 +69,10 @@ bool CallWithString(UObject* target, RC::Unreal::UFunction* function, std::int32
 
 /// The running game instance (FF7R's UEndGameInstance), or null before the game has one.
 UObject* GameInstance() noexcept;
+
+/// An actor's RootComponent: the reflected AActor offset (looked up once, guarded against a stale actor's fault), the
+/// pointer read guarded. Null if the actor, the offset or the field cannot be read. Game thread.
+const std::byte* RootOf(const void* actor) noexcept;
 
 /// An actor's world location: its RootComponent's world translation (the reflected AActor offset,
 /// found once). False if the actor, its root or the field cannot be read. Game thread.

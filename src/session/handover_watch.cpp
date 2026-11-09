@@ -17,6 +17,7 @@
 #include "platform/verified_code.h"
 #include "players/generation.h"
 #include "players/object_fields.h"
+#include "players/unreal_access.h"
 #include "scopes/leader_scope.h"
 #include "session/party_lease.h"
 #include "session/party_member.h"
@@ -85,9 +86,6 @@ constexpr std::uint8_t kStateStay      = 4;
 constexpr std::uint8_t kStateLead      = 6;
 constexpr std::uint8_t kStateFollow    = 7;
 constexpr std::uint8_t kUnread         = 0xFF;
-
-// USceneComponent's world location (as nav_strand reads it).
-constexpr std::uint32_t kComponentWorldLocation = 0x1D0;
 
 constexpr int   kMaxMembers        = 8;
 constexpr int   kPending           = 4;
@@ -178,7 +176,6 @@ std::array<Watched, facts::kNoPlayerType>  g_members{};
 std::array<Pending, kPending>              g_pending{};
 std::array<Held, players::kMaxPlayers>     g_held{};  // by seat (index 0 unused)
 platform::Every g_watch{kWatchEvery};
-std::int32_t                               g_rootOffset = -1;
 
 template <class... A>
 void Line(std::wformat_string<A...> format, A&&... args) noexcept
@@ -485,38 +482,6 @@ int Percent(float value) noexcept
     return static_cast<int>(std::lround(value * 100.0f));
 }
 
-const std::byte* RootOf(const void* character) noexcept
-{
-    if (character == nullptr)
-    {
-        return nullptr;
-    }
-    if (g_rootOffset < 0)
-    {
-        try
-        {
-            auto* property =
-                static_cast<UObject*>(const_cast<void*>(character))->GetPropertyByNameInChain(STR("RootComponent"));
-            if (property == nullptr || property->GetSize() != sizeof(void*))
-            {
-                return nullptr;
-            }
-            g_rootOffset = property->GetOffset_Internal();
-        }
-        catch (...)
-        {
-            return nullptr;
-        }
-    }
-    return static_cast<const std::byte*>(ReadPointer(character, static_cast<std::uint32_t>(g_rootOffset)));
-}
-
-bool LocationOf(const void* character, float (&out)[3]) noexcept
-{
-    const std::byte* root = RootOf(character);
-    return root != nullptr && platform::CopyGuarded(out, root + kComponentWorldLocation, sizeof(out));
-}
-
 float Apart(const float (&a)[3], const float (&b)[3]) noexcept
 {
     return std::hypot(a[0] - b[0], a[1] - b[1]);
@@ -564,7 +529,7 @@ void WatchMember(std::uint8_t type, const Clock::time_point now)
     Watched& seen = g_members[type];
     const Ai ai   = ReadAi(character);
     float    at[3]{};
-    const bool placed = LocationOf(character, at);
+    const bool placed = players::unreal::ActorLocation(character, at);
     if (character != seen.character || ai.state != seen.state || ai.brain != seen.brain)
     {
         if (seen.character == character && seen.state != kUnread)
@@ -644,8 +609,8 @@ void WatchHeld(int seat, const Clock::time_point now)
         return;
     }
     float at[3]{}, one[3]{};
-    const bool placed = LocationOf(character, at) &&
-                        LocationOf(ReadPointer(players::generation::PlayerOneController(), facts::kControllerPawn), one);
+    const bool placed = players::unreal::ActorLocation(character, at) &&
+                        players::unreal::ActorLocation(ReadPointer(players::generation::PlayerOneController(), facts::kControllerPawn), one);
     if (placed && held.placed)
     {
         const float seconds   = std::chrono::duration<float>(now - held.lastSpeed).count();

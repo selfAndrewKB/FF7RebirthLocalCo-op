@@ -11,7 +11,6 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
-#include <string>
 
 namespace lss::platform {
 bool CopyGuarded(void* out, const void* from, std::size_t length) noexcept;  // platform/guarded.h
@@ -122,13 +121,6 @@ inline float Distance(const float (&a)[3], const float (&b)[3]) noexcept
     const float x = a[0] - b[0], y = a[1] - b[1], z = a[2] - b[2];
     return std::sqrt(x * x + y * y + z * z);
 }
-
-/// The actor's location (its reflected RootComponent's world location, the offset found once). False if
-/// unreadable. Game thread.
-bool ActorLocation(void* actor, float (&out)[3]) noexcept;
-
-/// The actor's object name, or "?" (for the log).
-std::wstring NameOf(void* actor);
 
 /// Degrees between the camera's forward and the direction to `at` (the FOV test's angle).
 inline float AngleOff(const Camera& camera, const float (&at)[3]) noexcept
