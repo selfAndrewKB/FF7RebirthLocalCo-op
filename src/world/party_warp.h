@@ -68,9 +68,6 @@ int BusySeat() noexcept;
 /// is no party character, and when the test was not found at install. Game thread.
 bool InFieldAction(const void* pawn) noexcept;
 
-/// The pawn's retained AI's current state, if it is a checked follow state for `subject` (null otherwise).
-const void* FollowStateOf(const void* pawn, Subject subject) noexcept;
-
 /// The pawn's retained AI for a log line: the controller and its pause mask, its state object and type, and whether
 /// that state is a checked follow variant (then its teleport range and whether a forced warp is pending).
 std::wstring AiText(const void* pawn, Subject subject) noexcept;

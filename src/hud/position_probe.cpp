@@ -133,11 +133,6 @@ void RemovePositionProbe() noexcept
     }
 }
 
-bool PositionProbeInstalled() noexcept
-{
-    return g_installed;
-}
-
 void SetPositionProbe(bool on) noexcept
 {
     g_on.store(on, std::memory_order_relaxed);

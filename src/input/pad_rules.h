@@ -17,8 +17,6 @@ namespace lss::input::pad_rules {
 inline constexpr int kSlots   = 4;  // the game's pad slots and the physical XInput users: 0..3
 
 // XInput's button bits (XINPUT_GAMEPAD_*), kept here so the rules build without Windows headers.
-inline constexpr std::uint16_t kDpadLeft  = 0x0004;
-inline constexpr std::uint16_t kDpadRight = 0x0008;
 inline constexpr std::uint16_t kStart     = 0x0010;  // START (Menu)
 inline constexpr std::uint16_t kView      = 0x0020;  // BACK
 inline constexpr std::uint16_t kA         = 0x1000;

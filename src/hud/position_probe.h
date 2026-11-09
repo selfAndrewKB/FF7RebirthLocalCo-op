@@ -17,7 +17,6 @@ namespace lss::hud {
 
 bool InstallPositionProbe(const platform::GameImage& image) noexcept;
 void RemovePositionProbe() noexcept;
-bool PositionProbeInstalled() noexcept;
 
 /// The `hud-probe` switch (off at start). Each widget's new position is logged once.
 void SetPositionProbe(bool on) noexcept;

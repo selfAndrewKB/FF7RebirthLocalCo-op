@@ -110,7 +110,6 @@ inline constexpr std::uint32_t kStartMenuListWidth   = 0x478;  // float: the lis
 inline constexpr std::uint32_t kStartMenuListBase    = 0x47C;  // float: its height at the base row count
 inline constexpr std::int32_t  kStartMenuBaseRows    = 4;
 inline constexpr float         kStartMenuRowHeight   = 62.0f;
-inline constexpr std::int32_t  kTitleOptionsZ        = 1990;
 inline constexpr std::uintptr_t kStartMenuRowTextSlot = 0x146757F28;  // g_StartMenu_RowTextIds[9]
 inline constexpr std::uintptr_t kStartMenuRowTextWas  = 0x146756D48;  // $demo_titlemenu_BuyNow
 /// Kind 9's handler, void(start), and its one call, in the row press's switch: the call redirected for good (1.005's

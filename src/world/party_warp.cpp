@@ -366,11 +366,6 @@ int BusySeat() noexcept
     return g_state != nullptr ? g_seat : -1;
 }
 
-const void* FollowStateOf(const void* pawn, Subject subject) noexcept
-{
-    return FollowOf(pawn, subject);
-}
-
 std::wstring AiText(const void* pawn, Subject subject) noexcept
 {
     const void*    ai      = nullptr;
