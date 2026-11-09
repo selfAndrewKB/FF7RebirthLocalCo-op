@@ -1,5 +1,6 @@
 #include "world/shop_talk.h"
 
+#include "facts/level_state.h"
 #include "facts/world.h"
 #include "platform/dev_switch.h"
 #include "platform/entry_redirect.h"
@@ -13,6 +14,7 @@
 #include "players/unreal_access.h"
 #include "scopes/leader_scope.h"
 #include "world/charapop_facts.h"
+#include "world/data_rows.h"
 #include "world/field_pickup.h"
 #include "world/field_rules.h"
 #include "world/vending.h"
@@ -55,7 +57,6 @@ constexpr std::uint8_t kFindObjectBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48,
                                              0x24, 0x10, 0x57, 0xB8, 0x20, 0x00, 0x00, 0x00};
 constexpr platform::FunctionFact kFindObject{L"GS_FindObjectByKeyAndAttribute", 0x14087AD50, kFindObjectBytes};
 constexpr std::uint8_t kAccessorBytes[] = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00};  // push rbx; mov eax, 20h
-constexpr platform::FunctionFact kStateRow{L"DataAcc_StateChange_Ctor", 0x14087B56C, kAccessorBytes};
 constexpr platform::FunctionFact kActionRow{L"DataAcc_Action_Ctor", 0x1407BEB9C, kAccessorBytes};
 constexpr platform::FunctionFact kGroupRow{L"DataAcc_ActionGroup_Ctor", 0x1411CB32C, kAccessorBytes};
 constexpr std::size_t kFirstInstruction = 5;  // each redirected entry starts with a 5-byte mov [rsp+n], reg
@@ -66,15 +67,18 @@ constexpr std::uintptr_t kDispatchReturn = 0x1414A8FB3;
 using RequestFn  = std::uint64_t (*)(std::uint64_t trigger, std::uint64_t sender, float delay, std::uint8_t flags);
 using Fn4        = std::uint64_t (*)(std::uint64_t, std::uint64_t, std::uint64_t, std::uint64_t);
 using FindFn     = void* (*)(void* gs, std::uint64_t key, std::int32_t attribute);
-using AccessorFn = void* (*)(void* accessor, std::uint64_t rowName);  // fills {vtable, row, ...}; 32 bytes
+using data_rows::AccessorFn;
+using data_rows::MappedCount;
+using data_rows::MappedData;
+using data_rows::MappedNames;
+using data_rows::MappedText;
+using data_rows::Row;
 
 // The GS (root+0x170), the talk attribute DispatchKey asks for, and the object's current StateChange name (§2.1).
 constexpr std::uint32_t kRootGs        = 0x170;
 constexpr std::int32_t  kTalkAttribute = 5;
 constexpr std::uint32_t kObjectState   = 0x10;
-// Memory-mapped data rows (RE-statechange-row-layout.md, the game's own field-type tables): an array or string field is
-// {u64 pointer, or (signed offset << 1) | 1 from the field; i32 count}; a string's count includes its terminator.
-constexpr std::uint32_t kAccessorRow   = 0x08;
+// Memory-mapped data rows (world/data_rows.h).
 constexpr std::uint32_t kStateNext     = 0;    // StateChange NextStateChange_Array (16-byte strings; empty: no change)
 constexpr std::uint32_t kStateSwaps    = 32;   // StateChange SwapStateChange (FNames: states entered instead, by rule)
 constexpr std::uint32_t kStateActions  = 48;   // StateChange EnterActionList_Array (FNames: Action or ActionGroup rows)
@@ -88,7 +92,6 @@ constexpr std::int32_t  kMaxNext       = 16;
 constexpr std::int32_t  kMaxSwaps      = 8;
 constexpr std::int32_t  kMaxActions    = 8;   // GSObject_PostStateEnterActions reads at most 8
 constexpr std::int32_t  kMaxGroup      = 32;  // GSObject_PostActionRequest queues at most 32 of a group
-constexpr std::int32_t  kMaxText       = 127;
 
 using Clock = std::chrono::steady_clock;
 constexpr auto        kRecheck      = std::chrono::seconds(5);   // a key that is not a shop is read again after this
@@ -151,90 +154,6 @@ const wchar_t* Text(Verdict verdict) noexcept
     case Verdict::Unreadable: return L"unreadable rows, not a shop by its name";
     }
     return L"?";
-}
-
-/// A mapped field's data (pointer, or a signed offset from the field when the low bit is set: shared strings point back).
-const std::byte* MappedData(const std::byte* field) noexcept
-{
-    return field_rules::MappedPointer(field, ReadField<std::uint64_t>(field, 0));
-}
-
-/// A mapped array's element count, at most `max` (0 if unreadable).
-std::int32_t MappedCount(const std::byte* field, std::int32_t max) noexcept
-{
-    const auto count = ReadField<std::int32_t>(field, 8);
-    return count > 0 ? std::min(count, max) : 0;
-}
-
-/// A mapped string (a 16-byte element): its text, or empty if it does not read as one.
-std::wstring MappedText(const std::byte* element)
-{
-    const auto  count = ReadField<std::int32_t>(element, 8);
-    const auto* data  = MappedData(element);
-    if (data == nullptr || count < 2 || count > kMaxText + 1)
-    {
-        return {};
-    }
-    std::wstring text(static_cast<std::size_t>(count - 1), L'\0');
-    if (!platform::CopyGuarded(text.data(), data, text.size() * sizeof(wchar_t)))
-    {
-        return {};
-    }
-    if (!field_rules::IsRowName(text))
-    {
-        return {};  // row names are ASCII: anything else means the offset is wrong
-    }
-    return text;
-}
-
-/// A mapped array of FNames (8-byte elements): at most `max`, up to the first None (as the game reads them).
-std::vector<std::uint64_t> MappedNames(const std::byte* field, std::int32_t max)
-{
-    std::vector<std::uint64_t> names;
-    const auto* data  = MappedData(field);
-    const auto  count = MappedCount(field, max);
-    for (std::int32_t i = 0; i < count && data != nullptr; ++i)
-    {
-        const auto name = ReadField<std::uint64_t>(data, 8 * static_cast<std::uint32_t>(i));
-        if (name == 0)
-        {
-            break;
-        }
-        names.push_back(name);
-    }
-    return names;
-}
-
-/// A row by FName through the game's accessor (its row pointer, or null).
-const std::byte* Row(AccessorFn accessor, std::uint64_t name)
-{
-    if (accessor == nullptr || name == 0)
-    {
-        return nullptr;
-    }
-    alignas(16) std::array<std::byte, 64> buffer{};
-    void* filled = nullptr;
-    if (!platform::CallGuarded(accessor, filled, static_cast<void*>(buffer.data()), name))
-    {
-        return nullptr;
-    }
-    return static_cast<const std::byte*>(ReadPointer(buffer.data(), kAccessorRow));
-}
-
-/// A row by its name's text (next states are named by strings): the FName is looked up, never added.
-const std::byte* Row(AccessorFn accessor, const std::wstring& name)
-{
-    std::uint64_t value = 0;
-    try
-    {
-        const RC::Unreal::FName fname(name.c_str(), RC::Unreal::FNAME_Find);
-        value = fname.GetComparisonIndex() | (static_cast<std::uint64_t>(static_cast<std::uint32_t>(fname.GetNumber())) << 32);
-    }
-    catch (...)
-    {
-        return nullptr;
-    }
-    return Row(accessor, value);
 }
 
 void* Gs() noexcept
@@ -470,7 +389,7 @@ void Install(const platform::GameImage& image) noexcept
 {
     g_image          = image;
     const auto find  = platform::FindFunction(image, kFindObject);
-    const auto state = platform::FindFunction(image, kStateRow);
+    const auto state = platform::FindFunction(image, facts::kStateChangeRow);
     const auto act   = platform::FindFunction(image, kActionRow);
     const auto group = platform::FindFunction(image, kGroupRow);
     const auto root  = image.Rebase(facts::kEndGameRoot, sizeof(std::uintptr_t));

@@ -18,6 +18,7 @@
 #include "rides/shared_ride.h"
 #include "scopes/primary_controller.h"
 #include "scopes/scope_leaks.h"
+#include "session/lead_gate.h"
 #include "session/own_controller.h"
 #include "session/party_events.h"
 
@@ -148,6 +149,7 @@ void Session::InstallStages(const platform::GameImage& image) noexcept
     LogStage(L"scope leaks put back", scopeLeaks);
     LogStage(L"per-pad buttons (the split views; pads 2 and 3 kept from the menus)", padButtons);
     LogStage(L"party events (the game's leader and status changes)", installed_.partyEvents);
+    LogStage(L"lead gate (a level's walk nothing needs stays the player's)", lead_gate::Install(image));
 }
 
 void Session::RemoveStages() noexcept

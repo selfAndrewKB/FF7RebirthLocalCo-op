@@ -220,6 +220,7 @@ private:
     void CheckAfterPartyChange(bool followSlot) noexcept;
     void FollowSlot(const wchar_t* when, bool log) noexcept;  // log: the slot's verdict as an Info line
     void WaitForSlot(const party_member::SlotChoice& choice) noexcept;
+    bool ScriptNeedsMember(const AiSnapshot& ai) noexcept;
     void CheckHeldAi() noexcept;
     void RideAlongTick() noexcept;  // the view on the member while riding along, and the lines the checks read
     void EndRideAlong(const wchar_t* why) noexcept;

@@ -4,9 +4,7 @@
 
 #include "expect.h"
 
-#include <array>
 #include <cstdio>
-#include <string_view>
 
 namespace {
 
@@ -36,81 +34,46 @@ void TestHoldOf()
 
 void TestMoveSettingAndPathEnd()
 {
-    std::puts("settings: the moving Status words without case, a group by its first state; the path's end");
-    EXPECT(MoveSetting(L"Lead", 0));
-    EXPECT(MoveSetting(L"movetotarget", 0));
-    EXPECT(MoveSetting(L"FollowActor", 0));
-    EXPECT(MoveSetting(L"RouteMove", 0));
-    EXPECT(!MoveSetting(L"Stay", 0));
-    EXPECT(!MoveSetting(L"Animation", 0));
-    EXPECT(MoveSetting(L"AIStateGroup", kAiStateMoveTo));
-    EXPECT(MoveSetting(L"aistategroup", kAiStateLead));
-    EXPECT(!MoveSetting(L"AIStateGroup", kAiStateStay));
-    EXPECT(!MoveSetting(L"Lea", 0));
-    EXPECT(!MoveSetting(L"Stable", 0));
-    EXPECT(!MoveSetting(L"AIStateGroup", kAiStateFollow));
-    EXPECT(PathEnd(L"", 0));
-    EXPECT(PathEnd(L"stable", 0));
-    EXPECT(PathEnd(L"AIStateGroup", kAiStateFollow));  // a Follow group: the member follows again
-    EXPECT(!PathEnd(L"AIStateGroup", kAiStateStay));
-    EXPECT(!PathEnd(L"Stay", 0));
+    std::puts("settings: the moving Status words without case, a group when it moves; the path's end");
+    EXPECT(MoveSetting(L"Lead", false));
+    EXPECT(MoveSetting(L"movetotarget", false));
+    EXPECT(MoveSetting(L"FollowActor", false));
+    EXPECT(MoveSetting(L"RouteMove", false));
+    EXPECT(!MoveSetting(L"Stay", true));  // the group answer counts only for a group row
+    EXPECT(!MoveSetting(L"Animation", false));
+    EXPECT(MoveSetting(L"AIStateGroup", true));
+    EXPECT(MoveSetting(L"aistategroup", true));
+    EXPECT(!MoveSetting(L"AIStateGroup", false));
+    EXPECT(!MoveSetting(L"Lea", false));
+    EXPECT(!MoveSetting(L"Stable", false));
+    EXPECT(PathEnd(L"", false));
+    EXPECT(PathEnd(L"stable", false));
+    EXPECT(PathEnd(L"AIStateGroup", true));  // a Follow group: the member follows again
+    EXPECT(!PathEnd(L"AIStateGroup", false));
+    EXPECT(!PathEnd(L"Stay", true));
 }
 
-void TestVerdict()
+void TestGroups()
 {
-    std::puts("verdict: any waiter, direct set or further move makes a guide; none is staging");
-    EXPECT(VerdictOf({}) == Verdict::Staging);
-    EXPECT(VerdictOf({.waiter = true}) == Verdict::Guide);
-    EXPECT(VerdictOf({.directSets = true}) == Verdict::Guide);
-    EXPECT(VerdictOf({.furtherMove = true}) == Verdict::Guide);
-    EXPECT(VerdictOf({.waiter = true, .furtherMove = true}) == Verdict::Guide);
-}
-
-struct Row
-{
-    std::wstring_view status;
-    std::uint8_t      groupState = 0;
-    int               next       = -1;
-};
-
-bool Further(const Row* rows, int first, int maxLinks = 8)
-{
-    return FurtherMoveInChain(
-        first, -1, [rows](int row) { return rows[row].next; }, [rows](int row) { return rows[row].status; },
-        [rows](int row) { return rows[row].groupState; }, maxLinks);
-}
-
-void TestFurtherMoveInChain()
-{
-    std::puts("chain: a further move before the path's end is a path; a stand or the release ends it");
-    // run, stay, run (Aerith's guide shape): from the stay, a further run.
-    const std::array<Row, 3> path{{{L"MoveToTarget", 0, 1}, {L"Stay", 0, 2}, {L"MoveToTarget", 0, -1}}};
-    EXPECT(Further(path.data(), 1));
-    // run, then a stand: a placement.
-    const std::array<Row, 2> placed{{{L"MoveToTarget", 0, 1}, {L"Stable", 0, -1}}};
-    EXPECT(!Further(placed.data(), 1));
-    // a stay, the release, then a later beat's run: not this path's.
-    const std::array<Row, 3> later{{{L"Stay", 0, 1}, {L"", 0, 2}, {L"Lead", 0, -1}}};
-    EXPECT(!Further(later.data(), 0));
-    // a group row whose group runs.
-    const std::array<Row, 2> group{{{L"Stay", 0, 1}, {L"AIStateGroup", kAiStateMoveTo, -1}}};
-    EXPECT(Further(group.data(), 0));
-    // a Follow group ends the path: the run after it is a later beat's.
-    const std::array<Row, 3> follows{{{L"Stay", 0, 1}, {L"AIStateGroup", kAiStateFollow, 2}, {L"Lead", 0, -1}}};
-    EXPECT(!Further(follows.data(), 0));
-    // the first row itself a move; the first row a path end; no next row.
-    EXPECT(Further(path.data(), 0));
-    EXPECT(!Further(placed.data(), 1));
-    EXPECT(!Further(path.data(), -1));
-    // the bound: a move on the last link walked is found; a chain still going past the bound reads as a path (the
-    // safe side: a guide), a loop of stays included; no links walked reads the same.
-    const std::array<Row, 4> four{{{L"Stay", 0, 1}, {L"Stay", 0, 2}, {L"Stay", 0, 3}, {L"MoveToTarget", 0, -1}}};
-    EXPECT(Further(four.data(), 0, 4));
-    EXPECT(Further(four.data(), 0, 3));
-    const std::array<Row, 3> loop{{{L"Stay", 0, 1}, {L"Stay", 0, 2}, {L"Stay", 0, 0}}};
-    EXPECT(Further(loop.data(), 0, 8));
-    EXPECT(Further(loop.data(), 0, 0));
-    EXPECT(!Further(loop.data(), -1, 0));
+    std::puts("groups: one run or lead naming a trigger moves the member, whatever comes first; FOLLOW alone follows");
+    // The resident groups (RE-walk-gate.md section 2.3): LeadDefault opens with a stay; a Stay group's walk back to its
+    // anchor names no trigger; StayLookRelay's walk does (the setting row's argument 8); MoveToAnimation animates first.
+    const GroupState leadDefault[] = {{kAiStateStay, -1}, {kAiStateLead, 2}, {kAiStateStay, -1}};
+    const GroupState stayDefault[] = {{kAiStateStay, -1}, {kAiStateMoveTo, -1}};
+    const GroupState stayRelay[]   = {{kAiStateStay, -1}, {kAiStateMoveTo, 8}};
+    const GroupState moveAnim[]    = {{kAiStateAnimation, -1}, {kAiStateMoveTo, 2}};
+    const GroupState follow[]      = {{kAiStateFollow, -1}};
+    const GroupState mixed[]       = {{kAiStateFollow, -1}, {kAiStateStay, -1}};
+    EXPECT(GroupMoves(leadDefault, 3));
+    EXPECT(!GroupMoves(stayDefault, 2));
+    EXPECT(GroupMoves(stayRelay, 2));
+    EXPECT(GroupMoves(moveAnim, 2));
+    EXPECT(!GroupMoves(follow, 1));
+    EXPECT(!GroupMoves(nullptr, 0));
+    EXPECT(GroupFollows(follow, 1));
+    EXPECT(!GroupFollows(mixed, 2));
+    EXPECT(!GroupFollows(leadDefault, 3));
+    EXPECT(!GroupFollows(nullptr, 0));  // an unknown group follows nothing
 }
 
 void TestSameIgnoringCase()
@@ -127,8 +90,7 @@ int main()
 {
     TestHoldOf();
     TestMoveSettingAndPathEnd();
-    TestVerdict();
-    TestFurtherMoveInChain();
+    TestGroups();
     TestSameIgnoringCase();
 
     return lss::test::Report();

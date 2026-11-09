@@ -1,0 +1,62 @@
+{
+  "build": "1.005",
+  "research_build": "1.004",
+  "date": "2026-11-08",
+  "doc": "Rebirth/Documentation/research/RE-walk-gate.md (sections 2, 3, 5b, 5c)",
+  "facts": [
+    {
+      "name": "DataAcc_StateTrigger_Ctor",
+      "old": "0x140F7A0C8",
+      "new": "0x14196FF7C",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "The IDA passes WALKGATE / WALKMARK on both databases (RE-walk-gate.md 3, 5c): the first accessor ctor GS_ApplyStateTrigger_ToObjects calls, filling acc+8 from g_DataReg_StateTrigger."
+    },
+    {
+      "name": "GS_CollectActiveSlotKeys",
+      "old": "0x140973D74",
+      "new": "0x1409AC184",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "The IDA passes HELDSCRIPTS2 / WALKMARK on both databases (RE-held-member-scripts.md 9 D, RE-walk-gate.md 5c): out = fresh 24 bytes, a TArray<int32> reserved to 0x40000, freed by the caller."
+    },
+    {
+      "name": "GS_GetObjectSlot_ByIndex",
+      "old": "0x140973AD8",
+      "new": "0x1409AC0B4",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "The IDA passes HELDSCRIPTS2 / WALKMARK on both databases (RE-walk-gate.md 5c): a leaf, the slot or 0; first 16 bytes identical in both exes."
+    },
+    {
+      "name": "EndAISystem_GetFromGameModeWorld",
+      "old": "0x140C92B2C",
+      "new": "0x140897BE4",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "The IDA pass WALKGATE on both databases (RE-walk-gate.md 2.3, 5c): world+0x158 IsA UAISystem, else 0."
+    },
+    {
+      "name": "g_StateTriggerLock",
+      "old": "0x1491B33B0",
+      "new": "0x14864FC80",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "The IDA passes WALKGATE / WALKMARK on both databases (RE-walk-gate.md 3, 5c): a CRITICAL_SECTION by its Initialize / Enter / Leave users."
+    },
+    {
+      "name": "g_FieldIconSystem",
+      "old": "0x14939BC78",
+      "new": "0x1491D8488",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "The IDA pass WALKMARK on both databases (RE-walk-gate.md 5b): its +0x500 the icon manager, the same offsets in both builds."
+    }
+  ]
+}

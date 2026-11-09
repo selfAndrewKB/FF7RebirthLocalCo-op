@@ -32,6 +32,8 @@
 #include "scopes/scope_leaks.h"
 #include "session/field_exit.h"
 #include "session/handover_watch.h"
+#include "session/lead_gate.h"
+#include "session/lead_keep_rules.h"
 #include "session/leave_watch.h"
 #include "session/leftover_actors.h"
 #include "session/own_controller.h"
@@ -645,11 +647,28 @@ void Seat::WaitForSlot(const party_member::SlotChoice& choice) noexcept
         choice.ai.brainIndex, choice.ai.state);
 }
 
-/// A script that needs the seat's member (a level's walk or lead, an event's walk, an animation: session/field_hold.h)
-/// gets it: the game's own hand to its AI (party_member::HandToAi), the member kept as the seat's and the controller's
-/// leader, so the player rides along with their own camera following it and their stick turning it. The member returns
-/// to the player's controller when the hold ends (RideAlongTick). Without the hand (its call unavailable, the AI not
-/// valid) the member is given back and the seat waits for it.
+/// Whether a script needs the seat's member on its AI now: a hold (session/field_hold.h) that is not free, and for a
+/// level's walk or lead, one the lead gate finds needed (session/lead_gate.h: a waiter, the story's marker, a further
+/// move); a walk nothing needs stays the player's.
+bool Seat::ScriptNeedsMember(const AiSnapshot& ai) noexcept
+{
+    const field_hold::Hold hold = HoldOf(ai);
+    if (hold == field_hold::Hold::Free)
+    {
+        if (ai.read)
+        {
+            lead_gate::Forget(seat_);
+        }
+        return false;
+    }
+    return hold != field_hold::Hold::Arrival || lead_keep_rules::ToAi(lead_gate::Judge(seat_, member_));
+}
+
+/// A script that needs the seat's member (a level's walk or lead the lead gate finds needed, an event's walk, an
+/// animation) gets it: the game's own hand to its AI (party_member::HandToAi), the member kept as the seat's and the
+/// controller's leader, so the player rides along with their own camera following it and their stick turning it. The
+/// member returns to the player's controller as soon as nothing needs it (RideAlongTick). Without the hand (its call
+/// unavailable, the AI not valid) the member is given back and the seat waits for it.
 void Seat::CheckHeldAi() noexcept
 {
     // While the seat's player rides their chocobo or a Wheelie the member is her AI's for the ride
@@ -660,7 +679,7 @@ void Seat::CheckHeldAi() noexcept
     }
     const AiSnapshot       ai   = party_member::ReadAi(member_);
     const field_hold::Hold hold = HoldOf(ai);
-    if (hold == field_hold::Hold::Free)
+    if (!ScriptNeedsMember(ai))
     {
         return;
     }
@@ -708,10 +727,10 @@ void Seat::EndRideAlong(const wchar_t* why) noexcept
     players::generation::SetRideMember(seat_, nullptr);
 }
 
-/// While riding along: the member back to the player's controller once its hold has ended (its AI in the base brain's
-/// FOLLOW again, the state the game hands players), the seat's view kept on its camera actor (the hand's unpossess
-/// points the view at the controller), and a line once a second (the first at Info) with the camera's distance from
-/// the member.
+/// While riding along: the member back to the player's controller as soon as no script needs it (a stay after the
+/// walk, a stand, the follow: nothing waits on those, so the player keeps the member through them), the seat's view
+/// kept on its camera actor (the hand's unpossess points the view at the controller), and a line once a second (the
+/// first at Info) with the camera's distance from the member.
 void Seat::RideAlongTick() noexcept
 {
     if (!rideAlong_ || phase_ != Phase::Playing)
@@ -727,7 +746,7 @@ void Seat::RideAlongTick() noexcept
     if (rideTicks_ % kHeldAiTicks == 0)
     {
         const AiSnapshot ai = party_member::ReadAi(member_);
-        if (HoldOf(ai) == field_hold::Hold::Free && AssessAi(ai) == AiReadiness::Ready)
+        if (ai.read && !ScriptNeedsMember(ai))
         {
             // The game's possession runs at once on the game thread: the lease shows it now, as after a take.
             const bool returned = party_member::ReturnTo(seat_, member_, controller_) &&

@@ -113,6 +113,7 @@ add_library(LocalSplitScreen SHARED
     src/traversal/traversal_exec.cpp
     src/traversal/traversal_holders.cpp
     src/traversal/traversal_watch.cpp
+    src/world/data_rows.cpp
     src/world/shop_talk.cpp
     src/world/seat_switch_volumes.cpp
     src/world/seat_triggers.cpp
@@ -183,6 +184,7 @@ add_library(LocalSplitScreen SHARED
     src/input/pad_table.cpp
     src/session/outside_join.cpp
     src/rides/own_ride.cpp
+    src/session/lead_gate.cpp
     src/session/session.cpp
     src/session/session_join.cpp
     src/session/seat_out.cpp
@@ -369,6 +371,8 @@ lss_test(strand_watch src/world/strand_watch.cpp)
 lss_test(swap_window src/scopes/swap_window.cpp)
 lss_test(party_lease src/session/party_lease.cpp)
 lss_test(field_hold)
+lss_test(state_path)
+lss_test(lead_keep_rules)
 lss_test(battle_warps_rules)
 lss_test(leave_sequence src/session/leave_sequence.cpp)
 lss_test(leader_answer)

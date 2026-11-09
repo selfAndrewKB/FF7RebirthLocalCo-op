@@ -95,74 +95,55 @@ constexpr bool SameIgnoringCase(std::wstring_view a, std::wstring_view b) noexce
 /// The Status of a setting group row: its group (the row's first string argument) names the states.
 inline constexpr std::wstring_view kGroupStatus = L"AIStateGroup";
 
-/// A level setting that moves the member: a Status the parser turns into a moving state, or a group row whose group's
-/// first state (`groupState`, ignored otherwise) is a run to a mark or a lead.
-constexpr bool MoveSetting(std::wstring_view status, std::uint8_t groupState) noexcept
+/// A setting group's states (the AI system's group map, in table order; RE-walk-gate.md): whether one of
+/// them is a run or a lead whose arrival names a trigger (its string slot 2 is filled: a group's first state is no
+/// guide, LeadDefault opens with a stay), and whether the group follows the party (its states are FOLLOW).
+struct GroupState
 {
-    return SameIgnoringCase(status, L"Lead") || SameIgnoringCase(status, L"MoveToTarget") ||
-           SameIgnoringCase(status, L"FollowActor") || SameIgnoringCase(status, L"RouteMove") ||
-           (SameIgnoringCase(status, kGroupStatus) && SignalsArrival(groupState));
-}
-
-/// The end of a member's scripted path: the Stable setting (the member stands again), a row with no Status (the
-/// release: brains 2 and 8 popped, the follow back), or a group row whose group follows the party again (`groupState`
-/// FOLLOW). A move after it is a later beat's, not this path's.
-constexpr bool PathEnd(std::wstring_view status, std::uint8_t groupState) noexcept
-{
-    return status.empty() || SameIgnoringCase(status, L"Stable") ||
-           (SameIgnoringCase(status, kGroupStatus) && groupState == facts::kAiStateFollow);
-}
-
-/// What the level's data says about a move on the level's brains.
-struct Census
-{
-    bool waiter      = false;  // another level object's current row waits on the move's arrival trigger
-    bool directSets  = false;  // the trigger's own row sets another object's state when it fires
-    bool furtherMove = false;  // the member's own chain moves again before its path ends
+    std::uint8_t state       = 0;   // EEndAIState
+    std::int8_t  triggerSlot = -1;  // the setting row's string argument that fills the state's slot 2, -1: none
 };
 
-enum class Verdict : std::uint8_t
+constexpr bool GroupMoves(const GroupState* states, std::size_t count) noexcept
 {
-    Staging,  // nothing waits: the player keeps the member (it stands where the player leaves it)
-    Guide,    // the level waits on the arrival, or walks the member along a path: its AI walks it
-};
-
-constexpr Verdict VerdictOf(const Census& census) noexcept
-{
-    return census.waiter || census.directSets || census.furtherMove ? Verdict::Guide : Verdict::Staging;
-}
-
-/// The rows a chain is walked before it is read as a path (a guide): missing a guide stalls the level, handing a
-/// placement to the AI only moves the member.
-inline constexpr int kChainLinks = 16;
-
-/// From the member's next row (`first`; `none` when there is none), whether a further move comes before its path
-/// ends. A chain still going after `maxLinks` rows is read as a further move (the safe side). `next(row)` is a row's
-/// next row, `status(row)` its Status and `groupState(row)` its group's first state.
-template <class Row, class Next, class Status, class GroupState>
-constexpr bool FurtherMoveInChain(Row first, Row none, Next next, Status status, GroupState groupState,
-                                  int maxLinks = kChainLinks)
-{
-    Row row = first;
-    for (int link = 0; link < maxLinks; ++link)
+    for (std::size_t i = 0; i < count; ++i)
     {
-        if (row == none)
-        {
-            return false;
-        }
-        const std::wstring_view s = status(row);
-        const std::uint8_t      g = groupState(row);
-        if (MoveSetting(s, g))
+        if (SignalsArrival(states[i].state) && states[i].triggerSlot >= 0)
         {
             return true;
         }
-        if (PathEnd(s, g))
+    }
+    return false;
+}
+
+constexpr bool GroupFollows(const GroupState* states, std::size_t count) noexcept
+{
+    for (std::size_t i = 0; i < count; ++i)
+    {
+        if (states[i].state != facts::kAiStateFollow)
         {
             return false;
         }
-        row = next(row);
     }
-    return row != none;
+    return count > 0;
+}
+
+/// A level setting that moves the member: a Status the parser turns into a moving state, or a group row whose group
+/// moves it (`groupMoves`, GroupMoves; ignored otherwise).
+constexpr bool MoveSetting(std::wstring_view status, bool groupMoves) noexcept
+{
+    return SameIgnoringCase(status, L"Lead") || SameIgnoringCase(status, L"MoveToTarget") ||
+           SameIgnoringCase(status, L"FollowActor") || SameIgnoringCase(status, L"RouteMove") ||
+           (SameIgnoringCase(status, kGroupStatus) && groupMoves);
+}
+
+/// The end of a member's scripted path: the Stable setting (the member stands again), a row with no Status (the
+/// release: brains 2 and 8 popped, the follow back), or a group row whose group follows the party again
+/// (`groupFollows`, GroupFollows). A move after it is a later beat's, not this path's.
+constexpr bool PathEnd(std::wstring_view status, bool groupFollows) noexcept
+{
+    return status.empty() || SameIgnoringCase(status, L"Stable") ||
+           (SameIgnoringCase(status, kGroupStatus) && groupFollows);
 }
 
 }  // namespace lss::session::field_hold
