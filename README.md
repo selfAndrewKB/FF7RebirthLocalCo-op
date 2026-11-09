@@ -446,6 +446,10 @@ src/
                             S-CMD1)
     command_rules_code.h    The machine code that answers "no" for one member in FieldCommandCtrl_IsMemberCommandable
                             (RE-p2-command-menu.md §4.2, §4.4)
+    downed_commands         A downed player still commands the AI allies
+                            (Rebirth/Documentation/research/RE-downed-ally-commands.md)
+    downed_commands_rules.h Whose state the command menu's two gates ask about while a player's own character is down
+                            (battle/downed_commands.h)
     enemy_leader            Enemies turn on a standing member when the game's leader is down in co-op
                             (RE-enemy-leader-reads.md)
     enemy_leader_rules.h    Whom enemies follow while the game's leader is down in co-op (battle/enemy_leader.h), as a
@@ -803,7 +807,7 @@ src/
     dev_tools               The development tools, behind one switch: the console (control/), the HUD trace
                             (hud/hud_trace.h), the position probe (hud/position_probe.h), the dump commands, and the
                             watches that only log: the rumble, ride, Wheelie, framing, …
-tests/                      105 host-side test programs (ctest), one per pure header or code stub; run without the game
+tests/                      106 host-side test programs (ctest), one per pure header or code stub; run without the game
 tools/                      the control scripts, the regression harness, the version match, this file
 ```
 

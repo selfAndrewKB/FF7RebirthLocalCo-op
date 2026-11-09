@@ -7,6 +7,7 @@
 #include "battle/command_menu.h"
 #include "battle/command_menu_tick.h"
 #include "battle/command_rules.h"
+#include "battle/downed_commands.h"
 #include "battle/enemy_leader.h"
 #include "battle/equal_targeting.h"
 #include "battle/leader_reads.h"
@@ -174,6 +175,8 @@ constexpr std::array kModules{
     Module{Call<&session::party_switch::Install>, &session::party_switch::Remove},
     // player 1 cannot command a seat's member
     Module{Call<&battle::command_rules::Install>, &battle::command_rules::Remove},
+    // a downed or petrified player still commands the AI allies (after the command rules it asks)
+    Module{Call<&battle::downed_commands::Install>, &battle::downed_commands::Remove},
     // who a battle warps at its start and end, by the setting
     Module{Call<&battle::battle_warps::Install>, &battle::battle_warps::Remove},
     Module{Call<&battle::battle_rates::Install>, &battle::battle_rates::Remove},

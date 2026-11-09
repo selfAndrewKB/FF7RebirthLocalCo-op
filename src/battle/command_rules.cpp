@@ -201,6 +201,16 @@ void Update() noexcept
     SetMask(refused.ordinals);
 }
 
+bool Installed() noexcept
+{
+    return g_installed;
+}
+
+bool Refuses(int ordinal) noexcept
+{
+    return (Mask() & Bit(ordinal)) != 0;
+}
+
 SeatRules::SeatRules(int seat, std::uint8_t leaderType) noexcept
     : savedOrdinals_(Mask()), savedTypes_(g_forbiddenTypes)
 {

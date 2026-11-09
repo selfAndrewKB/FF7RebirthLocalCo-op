@@ -161,6 +161,7 @@ add_library(LocalSplitScreen SHARED
     src/battle/equal_targeting.cpp
     src/battle/player_hits.cpp
     src/battle/leader_reads.cpp
+    src/battle/downed_commands.cpp
     src/battle/enemy_leader.cpp
     src/battle/lock_group_coin.cpp
     src/battle/target_coin.cpp
@@ -443,6 +444,7 @@ lss_test(coin_table)
 lss_test(lock_group_rules)
 lss_test(synergy_rules src/session/party_lease.cpp)
 lss_test(menu_rules)
+lss_test(downed_commands_rules)
 lss_test(enemy_leader_rules)
 lss_test(seqlock)
 lss_test(listener_rules)

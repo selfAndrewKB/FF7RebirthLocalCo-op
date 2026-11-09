@@ -31,9 +31,16 @@ namespace lss::battle::command_rules {
 bool Install(const platform::GameImage& image) noexcept;
 void Remove() noexcept;
 
+/// Both levers are placed (the refusals hold).
+bool Installed() noexcept;
+
 /// Once per engine tick: every playing seat's member's type and command-menu ordinal read (player 1's refusals), or
 /// cleared when no seat plays one.
 void Update() noexcept;
+
+/// The command-menu ordinal is one the running pass may not command (another player's member; in a seat's pass also
+/// player 1's leader). Any thread: it reads the gate's own mask.
+bool Refuses(int ordinal) noexcept;
 
 /// While alive (`seat`'s command controller ticks): the rules turned around for that seat, so the members that may not
 /// be commanded are player 1's leader (type `leaderType`) and every other seat's member.
