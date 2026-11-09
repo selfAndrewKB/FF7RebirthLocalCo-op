@@ -22,8 +22,10 @@
 //     included; party summons, party AI, UI and level blueprints are not), and passes everything else through.
 // Who may be "the player" is the Condition select's rule (battle/equal_targeting): each player's character must be
 // a candidate for that enemy's target selector; a coin when several are. A coin naming a seat is checked again at each
-// answer, and tossed anew once the seat's character is no longer a candidate. Nothing is written to the party
-// manager. Not covered (native reads of the leader): the opening target, lock groups (Stun Ray), the LEADER_ point.
+// answer, and tossed anew once the seat's character is no longer a candidate. While player 1's character is down in
+// co-op, a coin naming player 1 is tossed anew when another player's character stands, and otherwise answers the
+// standing member battle/enemy_leader publishes (the AI ally the game's switch would have taken). Nothing is written to
+// the party manager. Not covered (native reads of the leader): the opening target, lock groups (Stun Ray), the LEADER_ point.
 //
 // Every seat playing a member takes part: the coin is a uniform pick among the eligible players
 // (player 1 and the seats), and a coin holds the player's number (battle/coin_table.h).
@@ -59,6 +61,10 @@ const void* ControllerOfEnemy(const void* enemy) noexcept;
 
 /// `controller` itself when its enemy character's controller pointer names it back, else null. Any thread.
 const void* CheckedController(const void* controller) noexcept;
+
+/// `controller` (a checked live object, or null) is an enemy AI controller (EndAIControllerEnemyBase or a child: every
+/// enemy's and boss's, not the party's). False until the class is found. Any thread.
+bool IsEnemyController(const void* controller) noexcept;
 
 /// The coin `controller` holds now, for a native read of "the player" made for that enemy (RE-p2-leader-native-reads.md
 /// S-LEADERLEVERS): tossed if it has none, tossed again if it names a seat's player who is no longer a candidate (the

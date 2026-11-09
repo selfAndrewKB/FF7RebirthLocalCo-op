@@ -446,6 +446,10 @@ src/
                             S-CMD1)
     command_rules_code.h    The machine code that answers "no" for one member in FieldCommandCtrl_IsMemberCommandable
                             (RE-p2-command-menu.md §4.2, §4.4)
+    enemy_leader            Enemies turn on a standing member when the game's leader is down in co-op
+                            (RE-enemy-leader-reads.md)
+    enemy_leader_rules.h    Whom enemies follow while the game's leader is down in co-op (battle/enemy_leader.h), as a
+                            pure rule over what the game reports; tested on the host
     equal_targeting         Condition enemies favour every player equally (RE-p2-enemy-target-bias.md §5.1, §9, §10)
     focus_scope             Each seat's own UI focus context (RE-p2-command-menu-input.md §2, §3.3, §11, pass S-CMD2)
     leader_reads            The game's own native reads of "the party leader" made for an enemy follow that enemy's coin
@@ -799,7 +803,7 @@ src/
     dev_tools               The development tools, behind one switch: the console (control/), the HUD trace
                             (hud/hud_trace.h), the position probe (hud/position_probe.h), the dump commands, and the
                             watches that only log: the rumble, ride, Wheelie, framing, …
-tests/                      104 host-side test programs (ctest), one per pure header or code stub; run without the game
+tests/                      105 host-side test programs (ctest), one per pure header or code stub; run without the game
 tools/                      the control scripts, the regression harness, the version match, this file
 ```
 

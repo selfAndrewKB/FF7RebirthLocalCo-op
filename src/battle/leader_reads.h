@@ -18,7 +18,8 @@
 // thread-local around the game's own call (a call redirect, an entry redirect or a vtable slot); a redirect of the leader
 // read inside answers a seat's member (or, for E7, that member's type) while that enemy's coin names the seat, else the
 // game's own answer. E6's read answers the causer itself when it is a seat's member (the read is compared only for
-// equality with the causer). Nothing is written to game state; no player-1 pointer is built by hand. Every seat
+// equality with the causer). While player 1's character is down in co-op, a coin naming player 1 answers the standing
+// member battle/enemy_leader publishes instead, and that member's attacks pass E6 as the player's. Nothing is written to game state; no player-1 pointer is built by hand. Every seat
 // playing a member is treated the same way; the seat comes from the enemy's coin or from the causing character.
 //
 // Any thread (enemy AI runs on workers too): every context is thread-local. Logged: the install per item (Info), each

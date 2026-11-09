@@ -1,5 +1,6 @@
 #include "battle/equal_targeting.h"
 
+#include "battle/enemy_leader.h"
 #include "facts/party.h"
 #include "platform/call_redirect.h"
 #include "platform/guarded.h"
@@ -158,6 +159,14 @@ Answer AnswerFor(void* selector) noexcept
     }
     answer.choice = ucpc_choice::Choose(in, eligible, ucpc_choice::NeedsCoin(in, eligible) ? Coin() : 0);
     answer.type   = answer.choice.player >= 0 ? TypeByte(types, answer.choice.player) : kNoPlayerType;
+    // No player's character a candidate (every one down): the member standing in for player 1's downed character is
+    // the player, as after the game's own switch in single player (battle/enemy_leader).
+    std::uint8_t standIn = kNoPlayerType;
+    if (answer.choice.why == ucpc_choice::Why::NeitherEligible && enemy_leader::Instead(&standIn) != nullptr &&
+        Eligible(selector, standIn, nullptr))
+    {
+        answer.type = standIn;
+    }
     return answer;
 }
 

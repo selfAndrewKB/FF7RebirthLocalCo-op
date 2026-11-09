@@ -1,6 +1,7 @@
 #include "battle/leader_reads.h"
 
 #include "battle/coin_table.h"
+#include "battle/enemy_leader.h"
 #include "battle/equal_targeting.h"
 #include "battle/target_coin.h"
 #include "facts/party.h"
@@ -199,15 +200,22 @@ void NoteFirst(Item item) noexcept
     }
 }
 
-/// The answer to a leader read made for `controller` (a checked enemy controller, or null): a seat's member while the
-/// enemy's coin names that seat, else the game's own.
+/// The character a coin names in place of the game's leader: the seat's member for a seat; for player 1, the standing
+/// member enemies follow while player 1's character is down (battle/enemy_leader); else null (the game's own leader).
+void* CoinCharacter(int coin) noexcept
+{
+    const int seat = SeatOfCoin(coin);
+    return seat != 0 ? players::generation::MemberOf(seat) : coin == 1 ? enemy_leader::Instead() : nullptr;
+}
+
+/// The answer to a leader read made for `controller` (a checked enemy controller, or null): the character its coin
+/// names in place of the game's leader, else the game's own.
 std::uint64_t CoinAnswer(const void* controller, CallFn original, std::uint64_t a, std::uint64_t b, std::uint64_t c,
                          std::uint64_t d, int& coin) noexcept
 {
-    coin                = controller != nullptr ? target_coin::CoinFor(controller) : 0;
-    const int   seat    = SeatOfCoin(coin);
-    void* const seated  = seat != 0 ? players::generation::MemberOf(seat) : nullptr;
-    return seated != nullptr ? reinterpret_cast<std::uint64_t>(seated) : original(a, b, c, d);
+    coin                     = controller != nullptr ? target_coin::CoinFor(controller) : 0;
+    void* const character    = CoinCharacter(coin);
+    return character != nullptr ? reinterpret_cast<std::uint64_t>(character) : original(a, b, c, d);
 }
 
 // ---- E1-E3 enemy combinations ----
@@ -245,9 +253,14 @@ std::uint64_t RegisterPair(std::uint64_t a, std::uint64_t enemyA, std::uint64_t 
         platform::LogDebug(L"leader reads: combination of enemies {:#x} and {:#x} registered: both count {} as the player",
                            enemyA, enemyB, CoinName(coin));
     }
-    const int   seat   = SeatOfCoin(coin);
-    void* const seated = seat != 0 ? players::generation::MemberOf(seat) : nullptr;
-    return scopes::thread_hold::Holding(t_combination, seated, original, a, enemyA, enemyB, request, target);
+    return scopes::thread_hold::Holding(t_combination, CoinCharacter(coin), original, a, enemyA, enemyB, request, target);
+}
+
+/// Who a character a read answers is, for the log: a seat's player's, or the standing AI ally standing in for player 1's.
+const wchar_t* WhoseCharacter(const void* character) noexcept
+{
+    const int seat = players::generation::SeatOfMember(character);
+    return players::SeatBuilt(seat) ? players::SeatName(seat) : L"the standing AI ally";
 }
 
 /// The start's leader read (ForceTargetLeader rows): the registration's answer.
@@ -256,8 +269,7 @@ std::uint64_t StartLeader(std::uint64_t a, std::uint64_t b, std::uint64_t c, std
     if (const void* const seated = t_combination; seated != nullptr)
     {
         NoteFirst(kCombination);
-        platform::LogDebug(L"leader reads: a combination starts on {}'s member",
-                           players::SeatName(players::generation::SeatOfMember(seated)));
+        platform::LogDebug(L"leader reads: a combination starts on {}'s character", WhoseCharacter(seated));
         return reinterpret_cast<std::uint64_t>(seated);
     }
     return reinterpret_cast<CallFn>(g_startLeader.Original())(a, b, c, d);
@@ -370,15 +382,17 @@ std::uint64_t PhaseLeader(std::uint64_t a, std::uint64_t b, std::uint64_t c, std
 
 // ---- E6 the reaction player-type filter ----
 
-/// One call of the filter: when the causer is a seat's member, the leader read answers the causer itself, so it
-/// passes "the player" (UCPC) and fails "an AI member" (AIPC), as player 1's attacks do.
+/// One call of the filter: when the causer is a seat's member, or the member standing in for player 1's downed
+/// character (battle/enemy_leader), the leader read answers the causer itself, so it passes "the player" (UCPC) and
+/// fails "an AI member" (AIPC), as player 1's attacks do.
 template <platform::CallRedirect& Call>
 std::uint64_t Filter(std::uint64_t manager, std::uint64_t causer, std::uint64_t info, std::uint64_t lists) noexcept
 {
     const auto        original = reinterpret_cast<CallFn>(Call.Original());
     const auto* const by       = reinterpret_cast<const void*>(causer);
-    const int         seat     = players::generation::SeatOfMember(by);
-    if (causer == 0 || !players::SeatBuilt(seat) || !Active(kReactionFilter))
+    const bool        player   = by != nullptr && (players::SeatBuilt(players::generation::SeatOfMember(by)) ||
+                                                by == enemy_leader::Instead());
+    if (!player || !Active(kReactionFilter))
     {
         return original(manager, causer, info, lists);
     }
@@ -391,8 +405,8 @@ std::uint64_t FilterLeader(std::uint64_t a, std::uint64_t b, std::uint64_t c, st
     if (const void* const causer = t_causer; causer != nullptr)
     {
         NoteFirst(kReactionFilter);
-        platform::LogDebug(L"leader reads: a reaction filter tests {}'s member; it counts as the player",
-                           players::SeatName(players::generation::SeatOfMember(causer)));
+        platform::LogDebug(L"leader reads: a reaction filter tests {}'s character; it counts as the player",
+                           WhoseCharacter(causer));
         return reinterpret_cast<std::uint64_t>(causer);
     }
     return reinterpret_cast<CallFn>(g_filterLeader.Original())(a, b, c, d);
@@ -424,19 +438,22 @@ std::uint64_t MineLeaderType(std::uint64_t a, std::uint64_t b, std::uint64_t c, 
     const void* const controller = object != nullptr
                                        ? target_coin::CheckedController(scopes::leader_scope::ObjectAt(object + kMineObjectController))
                                        : nullptr;
-    const int  coin  = controller != nullptr ? target_coin::CoinFor(controller) : 0;
-    const int  seat  = SeatOfCoin(coin);
-    const auto types = equal_targeting::Types();
-    void*      found = nullptr;
-    const bool live  = seat != 0 && types && types->Has(seat) && g_characterByType != nullptr &&
-                      platform::CallGuarded(g_characterByType, found, std::uint8_t{0},
-                                            static_cast<std::uint8_t>(types->type[seat])) &&
-                      found != nullptr && found == players::generation::MemberOf(seat);
+    const int    coin  = controller != nullptr ? target_coin::CoinFor(controller) : 0;
+    const int    seat  = SeatOfCoin(coin);
+    const auto   types = equal_targeting::Types();
+    // The character the coin names in place of the game's leader, and its type: a seat's member, or for player 1 the
+    // member standing in while player 1's character is down.
+    std::uint8_t type      = seat != 0 && types && types->Has(seat) ? types->type[seat] : facts::kNoPlayerType;
+    const void*  character = seat != 0 ? players::generation::MemberOf(seat) : coin == 1 ? enemy_leader::Instead(&type) : nullptr;
+    void*        found     = nullptr;
+    const bool   live      = character != nullptr && type < facts::kNoPlayerType && g_characterByType != nullptr &&
+                      platform::CallGuarded(g_characterByType, found, std::uint8_t{0}, type) && found == character;
     NoteFirst(kMine);
     const auto at = reinterpret_cast<std::uintptr_t>(mine);
     if (live)
     {
-        platform::LogDebug(L"leader reads: Reno's mine {:#x} heads for {} (its coin)", at, players::SeatName(seat));
+        platform::LogDebug(L"leader reads: Reno's mine {:#x} heads for {}'s character (its coin)", at,
+                           WhoseCharacter(character));
     }
     else if (seat != 0)
     {
@@ -449,7 +466,7 @@ std::uint64_t MineLeaderType(std::uint64_t a, std::uint64_t b, std::uint64_t c, 
         platform::LogDebug(L"leader reads: Reno's mine {:#x} heads for {}", at,
                            coin == 1 ? L"player 1 (its coin)" : L"the game's own leader (no coin)");
     }
-    return live ? static_cast<std::uint64_t>(types->type[seat]) : original(a, b, c, d);
+    return live ? static_cast<std::uint64_t>(type) : original(a, b, c, d);
 }
 
 // ---- E8 Crimson Mare's arms ----

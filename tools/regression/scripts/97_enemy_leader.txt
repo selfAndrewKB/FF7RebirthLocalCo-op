@@ -1,0 +1,9 @@
+# Whom enemies follow while player 1's character is down (plan/remake-alignment.md step 10f): installed, and outside a
+# battle the game's leader with nothing told. The change itself needs a fight with player 1's character down: live
+# checks EL1-EL5 of RE-enemy-leader-reads.md.
+# needs: control
+# expect: value enemy-leader enemies follow the game's leader; changes told 0
+# expect-not: enemy leader: a game call RAISED
+note regression: enemy leader start
+get enemy-leader
+note regression: enemy leader done

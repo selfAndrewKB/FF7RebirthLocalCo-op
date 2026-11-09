@@ -26,4 +26,8 @@ namespace lss::session::party_switch {
 bool Install(const platform::GameImage& image) noexcept;
 void Remove() noexcept;
 
+/// Another player is in with a character (one they drive or ride along with): co-op, where the game's forced switch
+/// leaves a downed player 1 on their character. Game thread.
+bool AnotherPlayerPlays() noexcept;
+
 }  // namespace lss::session::party_switch

@@ -145,7 +145,8 @@ std::uint8_t SwitchDisabled(std::uint8_t type) noexcept
     return reinterpret_cast<DisabledFn>(g_disabledCalls[0].Original())(type);
 }
 
-/// Another player is in with a character: co-op, where no human is moved off their own character.
+}  // namespace
+
 bool AnotherPlayerPlays() noexcept
 {
     for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
@@ -157,6 +158,8 @@ bool AnotherPlayerPlays() noexcept
     }
     return false;
 }
+
+namespace {
 
 /// One forced switch's refusals: a spell starts at the first refusal after a quiet second (logged), and its count goes
 /// on (Trace per call).

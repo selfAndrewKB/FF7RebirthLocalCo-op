@@ -1,0 +1,11 @@
+{
+  "build": "1.005",
+  "research_build": "1.004",
+  "date": "2026-11-09",
+  "doc": "Rebirth/Documentation/research/RE-enemy-leader-reads.md (section 7, the address table)",
+  "facts": [
+    {"name": "BattleCharMgr_SnapshotFlaggedEntries", "old": "0x140DBC660", "new": "0x140B76CA0", "bytes": "", "same_semantics": true, "confidence": "CONFIRMED", "note": "void(snap): the IDA pass ENEMYLEADER on both databases; fills a 0x1820-byte snapshot of the battle's flagged characters (index +8, 48-byte entries +0x10, heap +0x1810, count +0x1818) and skips to the first live EndCharacter."},
+    {"name": "BattleCharSnapshot_SkipToLiveEndCharacter", "old": "0x140DBCA24", "new": "0x140B76E9C", "bytes": "", "same_semantics": true, "confidence": "CONFIRMED", "note": "void(snap): steps the index past null, pending-kill and non-EndCharacter entries."},
+    {"name": "AIControllerBP_CallOnChangeLeader", "old": "0x141204B50", "new": "0x140F8ACBC", "bytes": "", "same_semantics": true, "confidence": "CONFIRMED", "note": "void(controller, oldLeader): ProcessEvent of the blueprint event OnChangeLeader; its only caller is BattleLeader_ExecuteChange."}
+  ]
+}

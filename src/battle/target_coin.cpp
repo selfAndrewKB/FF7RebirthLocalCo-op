@@ -8,6 +8,7 @@
 #include <Unreal/UObjectGlobals.hpp>
 
 #include "battle/coin_table.h"
+#include "battle/enemy_leader.h"
 #include "battle/equal_targeting.h"
 #include "battle/player_hits.h"
 #include "facts/party.h"
@@ -190,8 +191,8 @@ Player Toss(const void* controller, const wchar_t* when) noexcept
     return player;
 }
 
-/// `controller`'s held coin; tossed now if it has none, or if it names a seat's player whose character is no longer a
-/// candidate for it.
+/// `controller`'s held coin; tossed now if it has none, if it names a seat's player whose character is no longer a
+/// candidate for it, or if it names player 1 while player 1's character is down and another player's stands in.
 Player CoinOf(const void* controller) noexcept
 {
     const auto key  = reinterpret_cast<std::uintptr_t>(controller);
@@ -209,6 +210,13 @@ Player CoinOf(const void* controller) noexcept
         g_counts.retosses.fetch_add(1, std::memory_order_relaxed);
         return Toss(controller, NoLongerCandidate(SeatOf(held)));
     }
+    // A toss then finds that player's character a candidate (none other would change the answer: player 1's again).
+    if (const int standing = players::generation::SeatOfMember(enemy_leader::Instead());
+        players::SeatBuilt(standing) && equal_targeting::SeatEligible(standing, SelectorOf(controller)))
+    {
+        g_counts.retosses.fetch_add(1, std::memory_order_relaxed);
+        return Toss(controller, L"player 1's character is down");
+    }
     return kPlayerOne;
 }
 
@@ -221,9 +229,8 @@ Player AnswerFor(const void* frame, bool& reaction) noexcept
     {
         return kNone;
     }
-    const auto* const caller = static_cast<const RC::Unreal::UObject*>(ReadPointer(frame, kFrameObject));
-    auto* const enemyClass = g_enemyClass.load(std::memory_order_acquire);
-    if (caller == nullptr || enemyClass == nullptr || !caller->IsA(enemyClass))
+    const void* const caller = ReadPointer(frame, kFrameObject);
+    if (!IsEnemyController(caller))
     {
         return kNone;
     }
@@ -291,17 +298,24 @@ void Exec(RC::Unreal::UObject* context, RC::Unreal::FFrame& frame, void* result)
         else
         {
             // The game's IsUCPC / IsAIPC with only the player's type counting as the player on this thread, put
-            // back afterwards.
-            scopes::thread_hold::HoldingExchange(&scopes::leader_answer::ExchangeThreadOnly, types->type[SeatOf(player)], original,
-                                         context, frame, result);
+            // back afterwards: player 1's character's stand-in's while it is down.
+            std::uint8_t type = types->type[SeatOf(player)];
+            if (player == kPlayerOne)
+            {
+                std::uint8_t standIn = facts::kNoPlayerType;
+                type                 = enemy_leader::Instead(&standIn) != nullptr ? standIn : type;
+            }
+            scopes::thread_hold::HoldingExchange(&scopes::leader_answer::ExchangeThreadOnly, type, original, context, frame,
+                                                 result);
         }
     }
     else
     {
         original(context, frame, result);  // steps the frame as the game does; then the answer replaces the result
-        const int   seat   = SeatOf(player);
-        void* const member = seat >= 1 ? players::generation::MemberOf(seat) : nullptr;
-        if (seat >= 1 && member != nullptr && result != nullptr)
+        const int    seat   = SeatOf(player);
+        std::uint8_t type   = seat >= 1 ? types->type[seat] : facts::kNoPlayerType;
+        void*        member = seat >= 1 ? players::generation::MemberOf(seat) : enemy_leader::Instead(&type);
+        if (member != nullptr && result != nullptr)
         {
             if constexpr (kNativeFacts[I].kind == Kind::Leader)
             {
@@ -309,7 +323,7 @@ void Exec(RC::Unreal::UObject* context, RC::Unreal::FFrame& frame, void* result)
             }
             else
             {
-                WriteField<std::uint8_t>(result, 0, types->type[seat]);
+                WriteField<std::uint8_t>(result, 0, type);
             }
         }
     }
@@ -469,11 +483,16 @@ void Remove() noexcept
     // which unloading is not; it passes through once g_on is off.
 }
 
-int TossForLockPick(const void* controller) noexcept
+bool IsEnemyController(const void* controller) noexcept
 {
     const auto* const object     = static_cast<const RC::Unreal::UObject*>(controller);
     auto* const       enemyClass = g_enemyClass.load(std::memory_order_acquire);
-    if (!Tossing() || object == nullptr || enemyClass == nullptr || !object->IsA(enemyClass))
+    return object != nullptr && enemyClass != nullptr && object->IsA(enemyClass);
+}
+
+int TossForLockPick(const void* controller) noexcept
+{
+    if (!Tossing() || !IsEnemyController(controller))
     {
         return 0;
     }
@@ -500,9 +519,7 @@ const void* CheckedController(const void* controller) noexcept
 
 int CoinFor(const void* controller) noexcept
 {
-    const auto* const object     = static_cast<const RC::Unreal::UObject*>(controller);
-    auto* const       enemyClass = g_enemyClass.load(std::memory_order_acquire);
-    if (!Tossing() || object == nullptr || enemyClass == nullptr || !object->IsA(enemyClass))
+    if (!Tossing() || !IsEnemyController(controller))
     {
         return 0;
     }
@@ -511,10 +528,7 @@ int CoinFor(const void* controller) noexcept
 
 void ShareCoin(const void* from, const void* to) noexcept
 {
-    const auto* const object     = static_cast<const RC::Unreal::UObject*>(to);
-    auto* const       enemyClass = g_enemyClass.load(std::memory_order_acquire);
-    if (!Tossing() || from == nullptr || to == nullptr || from == to || enemyClass == nullptr ||
-        !object->IsA(enemyClass))
+    if (!Tossing() || from == nullptr || from == to || !IsEnemyController(to))
     {
         return;
     }

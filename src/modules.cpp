@@ -7,6 +7,7 @@
 #include "battle/command_menu.h"
 #include "battle/command_menu_tick.h"
 #include "battle/command_rules.h"
+#include "battle/enemy_leader.h"
 #include "battle/equal_targeting.h"
 #include "battle/leader_reads.h"
 #include "battle/lock_group_coin.h"
@@ -313,6 +314,8 @@ constexpr std::array kModules{
     Module{Call<&battle::lock_group_coin::Install>, &battle::lock_group_coin::Remove},
     // the game's own leader reads for an enemy follow its coin
     Module{Call<&battle::leader_reads::Install>, &battle::leader_reads::Remove},
+    // enemies turn on a standing member while player 1's character is down (the game's own leader-change event)
+    Module{Call<&battle::enemy_leader::Install>, nullptr},
     // battle camera sequences (grabs, specials) on each camera's own state
     Module{Call<&camera::attack_cameras::Install>, &camera::attack_cameras::Remove},
     // enemy specials: the target's half only; leader shots on the coin player
@@ -450,6 +453,7 @@ void TickBeforeSession() noexcept
     feedback::traversal_rumble::Tick();      // each seat's list made at join (dropped if it left another way)
     battle::equal_targeting::Tick();      // every player's types for the Condition selects (no leader scope held)
     battle::target_coin::Tick();          // the blueprint natives' swaps once reflection is up; the summary
+    battle::enemy_leader::Tick();         // whom enemies follow while player 1's character is down (after the types)
     feedback::seat_ffb_managers::Tick();      // each seat's component on its own manager, after its BeginPlay
     // the controller listener slot; each seat's listener on the column showing its own view (the last
     // tick's sources, Shown::OwnColumn), off while it has none; the summary (Debug)
@@ -858,6 +862,7 @@ void RegisterCommands(session::Session& session, views::column_source::Override&
         menu::coop_menu::RegisterCommands();
         battle::lock_on::RegisterCommands();
         battle::menu_tint::RegisterCommands();
+        battle::enemy_leader::RegisterCommands();
         camera::shoulder_scale::RegisterCommands();
         camera::camera_distance::RegisterCommands();
         world::charapop_centre::RegisterCommands();
