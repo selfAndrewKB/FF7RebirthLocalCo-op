@@ -15,6 +15,7 @@
 #include "hud/passes/menu_buffers.h"
 #include "hud/passes/overlay_pass.h"
 #include "hud/passes/shared_slot.h"
+#include "hud/widget_visibility.h"
 #include "platform/build_value.h"
 #include "platform/call_redirect.h"
 #include "platform/code_redirect.h"
@@ -23,6 +24,7 @@
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/module_pin.h"
+#include "platform/sparse_array.h"
 #include "platform/verified_code.h"
 #include "players/generation.h"
 #include "players/seats.h"
@@ -817,6 +819,38 @@ void RunHolder(int seat) noexcept
         {
         }
     }
+}
+
+bool HidePin(std::uint64_t key) noexcept
+{
+    void* holder = Holder();
+    bool  hidden = false;
+    if (holder == nullptr || key == 0)
+    {
+        return false;
+    }
+    try
+    {
+        platform::ForEachSparseElement(reinterpret_cast<std::uintptr_t>(holder) + facts::kHolderEntries, facts::kHolderEntryElement,
+                                       [&](std::uintptr_t element) {
+                                           std::uint64_t  name = 0;
+                                           std::uintptr_t icon = 0;
+                                           if (!platform::Read(element, name) || name != key)
+                                           {
+                                               return true;
+                                           }
+                                           if (platform::Read(element + facts::kHolderEntryIcon, icon) && icon != 0)
+                                           {
+                                               hidden = widget_visibility::Set(icon, facts::kVisibilityHidden);
+                                           }
+                                           return false;
+                                       });
+    }
+    catch (...)
+    {
+        return false;
+    }
+    return hidden;
 }
 
 bool BeginPaint(int seat) noexcept

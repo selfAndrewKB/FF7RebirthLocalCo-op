@@ -152,10 +152,20 @@ inline constexpr Option kBattleWarps{  // battle/battle_warps
     false, L"Moves at a Battle's Start and End", kBattleWarpsLabels,
     L"Who the game moves into place when a battle starts and ends. Players Stay: every player's character stays where "
     L"it is. Nobody: no one is moved. Whole Party: everyone, as in single player."};
+inline constexpr std::array<const wchar_t*, 2> kLeadHolderWords{L"guide", L"keeps"};
+inline constexpr std::array<const wchar_t*, 2> kLeadHolderLabels{L"AI Guides", L"Player Keeps"};
+inline constexpr Option kLeadHolder{  // session/lead_gate
+    L"Experimental", L"lead-holder", kLeadHolderWords, L"guide",
+    L"a walk the level needs finished, on player 2's or 3's character: guide (the default: to its AI for the whole walk, "
+    L"the player's view on it) or keeps (experimental: the player keeps it, the stop marked in that player's view, its "
+    L"AI finishing the arrival within 2 m of the stop)",
+    true, L"Leading the Way", kLeadHolderLabels,
+    L"When the story has another player's character lead the way. AI Guides: its AI walks there and the player watches. "
+    L"Player Keeps: the player walks it to the marked stop."};
 /// Every option, in the order the settings file lists them.
 inline constexpr std::array kOptions{&kMultiMonitor,     &kMonitors,      &kColumnOrder,
                                      &kTwoPlayerSplit,  &kThreePlayerSplit, &kHorizontalFov,
-                                     &kVerticalFov,     &kBattleWarps};
+                                     &kVerticalFov,     &kBattleWarps,      &kLeadHolder};
 
 /// The option is a row of the table (Of and Why answer by the row).
 consteval bool Listed(const Option& option)
@@ -167,7 +177,8 @@ consteval bool Listed(const Option& option)
     return false;
 }
 static_assert(Listed(kMultiMonitor) && Listed(kMonitors) && Listed(kColumnOrder) && Listed(kTwoPlayerSplit) &&
-                  Listed(kThreePlayerSplit) && Listed(kHorizontalFov) && Listed(kVerticalFov) && Listed(kBattleWarps),
+                  Listed(kThreePlayerSplit) && Listed(kHorizontalFov) && Listed(kVerticalFov) && Listed(kBattleWarps) &&
+                  Listed(kLeadHolder),
               "every option is a row of kOptions");
 
 /// Where an option's word came from.

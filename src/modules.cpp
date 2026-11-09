@@ -96,6 +96,7 @@
 #include "world/catch_up_move.h"
 #include "world/run_catch_up.h"
 #include "battle/arena_warp.h"
+#include "hud/lead_mark.h"
 #include "world/shop_talk.h"
 #include "world/vending.h"
 #include "world/world_actor_reach.h"
@@ -238,6 +239,8 @@ constexpr std::array kModules{
     Module{Call<&world::run_catch_up::Install>, nullptr},
     // L3 twice in a fight brings a character shut outside the fight's area in (the game's gather, one member)
     Module{Call<&battle::arena_warp::Install>, nullptr},
+    // the stop of a walk player 2 or 3 keeps (lead-holder keeps), marked in that player's view only
+    Module{Call<&hud::lead_mark::Install>, &hud::lead_mark::Remove},
     // a seat's chocobo vaults without taking both ride framings
     Module{Call<&camera::vault_camera::Install>, &camera::vault_camera::Remove},
     // a seat's chocobo climbs walls, with its own climb camera
@@ -484,6 +487,7 @@ void TickAfterSession(const Frame& frame) noexcept
     input::walk_limits::Tick();  // after the session's tick: a take's copy is overwritten this frame
     world::nav_strand::Tick(frame.splitShown);  // a stranded player is warped back to the party
     battle::arena_warp::Tick();  // an ask made in a fight: the character brought into the fight's area
+    hud::lead_mark::Tick();  // each kept walk's marker added, moved or removed
     camera::camera_repair::Tick();
     traversal::traversal_watch::Tick();
     world::seat_triggers::Tick();

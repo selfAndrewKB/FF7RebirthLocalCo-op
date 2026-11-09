@@ -56,7 +56,8 @@ void TableConsistent()
             open = option->section;
         }
     }
-    EXPECT(kOptions.size() == 8);
+    EXPECT(kOptions.size() == 9);
+    EXPECT(kLeadHolder.words.size() == 2 && std::wcscmp(kLeadHolder.fallback, L"guide") == 0 && kLeadHolder.experimental);
     EXPECT(kBattleWarps.words.size() == 3 && std::wcscmp(kBattleWarps.fallback, L"players-stay") == 0);
     EXPECT(kVerticalFov.words.size() == kFovWeightSteps && std::wcscmp(kVerticalFov.fallback, L"1.00") == 0);
     // The screen order's six words, by player number, the default 123; the three-player layouts in one window (no

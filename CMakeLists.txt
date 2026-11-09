@@ -118,6 +118,8 @@ add_library(LocalSplitScreen SHARED
     src/world/catch_up_move.cpp
     src/world/run_catch_up.cpp
     src/battle/arena_warp.cpp
+    src/hud/widget_visibility.cpp
+    src/hud/lead_mark.cpp
     src/world/shop_talk.cpp
     src/world/seat_switch_volumes.cpp
     src/world/seat_triggers.cpp

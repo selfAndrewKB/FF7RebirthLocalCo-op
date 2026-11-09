@@ -47,6 +47,14 @@ lead_keep_rules::Verdict Judge(int seat, const void* member) noexcept;
 /// story boxes. False when not installed or unread. Game thread.
 bool OnLevelMove(const void* member) noexcept;
 
+/// `member`'s current walk is judged KEEP (`lead-holder keeps`): its point (world cm), for hud/lead_mark. False otherwise
+/// (another verdict, no walk, not judged yet). Game thread.
+bool KeptMark(const void* member, float point[3]) noexcept;
+
+/// hud/lead_mark installed (true) or removed: without a marker the player cannot be shown the point, so every needed
+/// walk is a guide.
+void SetMarking(bool on) noexcept;
+
 /// `member`'s current walk on the level's brains moves on at a trigger (not its arrival) the box state row `boxStateRow`
 /// sends (that state lists it and its Status names it): the walk is the one into that box. No census: two row reads.
 /// False when not installed or unread. Game thread.

@@ -190,4 +190,42 @@ inline constexpr FunctionFact kSortAndLayout{L"FieldActionIconList::SortAndLayou
 /// layout is the same in both builds).
 inline constexpr std::uint32_t kMessageWindowRemoveAfterOut = 0x3D1;
 
+// ---------------------------------------------------------------------------------------------
+// A Slate widget's visibility, as the game sets it (RE-p2-hud-icon-manager.md §8.3, RE-lead-mark.md §3.3)
+// ---------------------------------------------------------------------------------------------
+
+/// SWidget::SetVisibility(widget, TAttribute<EVisibility>*): a widget's vtable slot 59; the game also calls it directly.
+inline constexpr std::uint8_t kSetVisibilityBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x57, 0xB8, 0x40, 0x00, 0x00, 0x00};
+inline constexpr FunctionFact kSetVisibility{L"SWidget::SetVisibility", 0x140C27B38, kSetVisibilityBytes};
+inline constexpr std::size_t   kSetVisibilitySlot  = 59;
+inline constexpr std::uint32_t kWidgetVisibility   = 0x1B0;  // the Visibility attribute: +0 value, +1 set
+inline constexpr std::uint32_t kWidgetVisibilityDelegate = 0x1B8;  // its getter delegate (0: unbound)
+inline constexpr std::uint8_t  kVisibilityHidden               = 0x02;
+inline constexpr std::uint8_t  kVisibilitySelfHitTestInvisible = 0x11;
+
+// ---------------------------------------------------------------------------------------------
+// The map icons' shared store (RE-lead-mark.md §2, RE-walk-keep.md §4)
+// ---------------------------------------------------------------------------------------------
+
+/// EndUI_AddMapIcon(FName key, u8 kind, const FVector* position, const FString* text, const MapIconParams* params):
+/// adds the key to the store every map view reads, or updates it in place; the views make their widgets on their next
+/// tick. EndUI_RemoveMapIcon(FName key). Game thread.
+inline constexpr std::uint8_t kAddMapIconBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x6C, 0x24, 0x10,
+                                                    0x48, 0x89, 0x74, 0x24, 0x18, 0x57, 0xB8, 0x40, 0x00, 0x00};
+inline constexpr FunctionFact kAddMapIcon{L"EndUI_AddMapIcon", 0x14080571C, kAddMapIconBytes};
+inline constexpr std::uint8_t kRemoveMapIconBytes[] = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0x2C, 0xE5,
+                                                       0x49, 0x01, 0x48, 0x2B, 0xE0, 0x48, 0x8B, 0xD9};
+inline constexpr FunctionFact kRemoveMapIcon{L"EndUI_RemoveMapIcon", 0x140C109F8, kRemoveMapIconBytes};
+inline constexpr std::uint8_t kMapIconKindMainStory = 2;  // the main objective's diamond (with its line) and pin
+/// An area-map icon manager instance's icon map (a TMap's sparse array: 24-byte elements, the key at +0, the element
+/// pointer at +8); an element's widget TSharedPtr at +0 (its reference controller at +8).
+inline constexpr std::uint32_t kAreaIconMap        = 0x20;
+inline constexpr std::uint32_t kAreaIconMapElement = 24;
+inline constexpr std::uint32_t kAreaIconMapValue   = 8;
+/// The minimap holder's entries (a TSet's sparse array: 160-byte elements, the key at +0, the SEndMapIcon at +0x10).
+inline constexpr std::uint32_t kHolderEntries      = 0xE8;
+inline constexpr std::uint32_t kHolderEntryElement = 160;
+inline constexpr std::uint32_t kHolderEntryIcon    = 0x10;
+inline constexpr std::uint32_t kSharedCount        = 0x8;  // a reference controller's shared count (int32)
+
 }  // namespace lss::facts

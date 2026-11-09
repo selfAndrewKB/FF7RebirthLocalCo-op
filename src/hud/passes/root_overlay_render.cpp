@@ -10,6 +10,7 @@
 #include "hud/hud_trace.h"
 #include "hud/layout/hud_placement.h"
 #include "hud/layout/overlay_layout.h"
+#include "hud/lead_mark.h"
 #include "hud/minimap/minimap.h"
 #include "hud/minimap/minimap_once.h"
 #include "hud/minimap/column_area_icons.h"
@@ -192,6 +193,7 @@ void ColumnPass(int column, int seat, bool another, SeatPassKind kind) noexcept
                                 static_cast<float>(deltaTime));
     }
     column_area_icons::ShowOnly(content ? column : 0);  // the levers refused: player 1's content, their icons too
+    lead_mark::BeforeColumnPaint(column, content ? shown : 0);  // another player's kept-walk marker withheld from it
     const double start = Now();
     // The seat's minimap (hud/minimap/minimap.h); without it (and for player 1's HUD), player 1's pass alone renders
     // the minimap's map (hud/minimap/minimap_once.h).
@@ -308,6 +310,10 @@ void RenderRootOverlay(void* application) noexcept
             column_area_icons::ShowOnly(0);
             pass_opacity::ShowOnly(0);  // the rows, markers, pins and the command menu (hud/passes/pass_opacity.h)
         }
+    }
+    if (gameThread)
+    {
+        lead_mark::BeforePlayerOnePaint();  // the other players' kept-walk markers withheld from player 1's view
     }
     // The entry redirect's trampoline is set before its first call can arrive; only one of the two is ever installed.
     reinterpret_cast<RenderFn>(g_entry.Original() != 0 ? g_entry.Original() : g_call.Original())(application);

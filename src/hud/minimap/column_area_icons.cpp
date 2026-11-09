@@ -1,10 +1,13 @@
 #include "hud/minimap/column_area_icons.h"
 
 #include "facts/engine.h"
+#include "facts/hud.h"
+#include "hud/widget_visibility.h"
 #include "platform/call_redirect.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
+#include "platform/sparse_array.h"
 #include "platform/verified_code.h"
 #include "players/generation.h"
 
@@ -91,24 +94,16 @@ constexpr EventSite kEventSites[] = {
     {0x1435680F4, Event::SetFlagD1, false},     // a stop/cleanup (cl = 1)
 };
 
-// SWidget::SetVisibility(widget, TAttribute<EVisibility>*), canvas vtable slot 59 (§8.3).
-constexpr std::uint8_t   kSetVisibilityPrologue[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x57, 0xB8, 0x40, 0x00, 0x00, 0x00};
-constexpr platform::FunctionFact kSetVisibility{L"SWidget::SetVisibility", 0x140C27B38, kSetVisibilityPrologue};
-constexpr std::size_t    kSetVisibilitySlot       = 59;
-
 // The instance (§1, §2): the canvases as TWeakPtr {object, reference controller} (#1 icons, #2 quest
 // and party markers), the icon and marker maps, and the fields game events write.
 constexpr std::array<std::uint32_t, 2> kCanvases{0x10, 0x70};
 constexpr std::array<std::uint32_t, 2> kMaps{0x20, 0x80};
 constexpr std::uint32_t kEnabled   = 0xD0;  // u8
 constexpr std::uint32_t kFlagD1    = 0xD1;  // u8
-constexpr std::uint32_t kSharedCount = 0x8;  // the weak pointer's reference controller: its shared count (int32)
 
-// The canvas's Visibility attribute (§8.3): +0 value, +1 set, +8 getter delegate, +0x10 its size.
-constexpr std::uint32_t kVisibility         = 0x1B0;
-constexpr std::uint32_t kVisibilityDelegate = 0x1B8;
-constexpr std::uint8_t  kHidden               = 0x02;
-constexpr std::uint8_t  kSelfHitTestInvisible = 0x11;  // what the canvases are constructed with
+// The canvases' visibility values (hud/widget_visibility.h sets them as the game does).
+constexpr std::uint8_t kHidden               = facts::kVisibilityHidden;
+constexpr std::uint8_t kSelfHitTestInvisible = facts::kVisibilitySelfHitTestInvisible;  // what the canvases are made with
 
 
 enum Part : unsigned
@@ -118,17 +113,6 @@ enum Part : unsigned
     kPartCanvases   = 4,
     kPartLeader     = 8,  // a column's icons ranged from the shown player's member
 };
-
-struct VisibilityAttribute  // TAttribute<EVisibility> as the game passes it: unbound
-{
-    std::uint8_t  value = 0;
-    std::uint8_t  isSet = 1;
-    std::uint8_t  pad[6]{};
-    std::uint64_t delegate = 0;
-    std::int32_t  delegateSize = 0;
-    std::int32_t  pad2 = 0;
-};
-static_assert(sizeof(VisibilityAttribute) == 24);
 
 struct ShownCanvas  // a canvas of player 1's hidden for a further column's pass, and its own visibility
 {
@@ -142,7 +126,6 @@ using FrameUpdateFn   = void (*)(void* instance, float deltaTime);
 using ClearAllFn      = void (*)(void* instance);
 using FirstControllerFn = void* (*)(void* world);
 using LeaderFn          = void* (*)();
-using SetVisibilityFn = void (*)(void* widget, VisibilityAttribute* attribute);
 using EventFn         = void (*)();
 using SetFlagFn       = void (*)(char flag);
 
@@ -155,7 +138,6 @@ MallocFn               g_malloc         = nullptr;
 CtorFn                 g_ctor           = nullptr;
 FrameUpdateFn          g_frameUpdate    = nullptr;
 ClearAllFn             g_clearAll       = nullptr;
-SetVisibilityFn        g_setVisibility  = nullptr;
 EventFn                g_enable         = nullptr;
 EventFn                g_hideAndClear   = nullptr;
 SetFlagFn              g_setFlagD1      = nullptr;
@@ -255,21 +237,6 @@ bool ClearAllGuarded(std::uintptr_t instance) noexcept
     }
 }
 
-bool SetVisibilityGuarded(std::uintptr_t canvas, std::uint8_t value) noexcept
-{
-    __try
-    {
-        VisibilityAttribute attribute;
-        attribute.value = value;
-        g_setVisibility(reinterpret_cast<void*>(canvas), &attribute);
-        return true;
-    }
-    __except (platform::GuardFilter(GetExceptionCode()))
-    {
-        return false;
-    }
-}
-
 std::uintptr_t InstanceOne() noexcept
 {
     std::uintptr_t instance = 0;
@@ -280,30 +247,23 @@ std::uintptr_t InstanceOne() noexcept
 /// The canvas a weak pointer at `instance + offset` holds, or 0 if it does not pin.
 std::uintptr_t Canvas(std::uintptr_t instance, std::uint32_t offset) noexcept
 {
-    std::uintptr_t object     = 0;
-    std::uintptr_t reference  = 0;  // the weak pointer's reference controller
-    std::int32_t   shared     = 0;
-    if (instance == 0 || !Read(instance + offset, object) || !Read(instance + offset + 8, reference) || object == 0 ||
-        reference == 0 || !Read(reference + kSharedCount, shared) || shared <= 0)
-    {
-        return 0;
-    }
-    return object;
+    return instance != 0 ? widget_visibility::PinnedWidget(instance + offset) : 0;
 }
 
-/// Whether the canvas's visibility can be set as the game sets it: unbound, and its vtable's slot is
-/// SWidget::SetVisibility.
-bool Settable(std::uintptr_t canvas) noexcept
+std::uint8_t VisibilityOf(std::uintptr_t canvas) noexcept
 {
-    std::uintptr_t vtable   = 0;
-    std::uintptr_t setter   = 0;
-    std::uint64_t  delegate = 0;
-    if (!Read(canvas, vtable) || !Read(vtable + kSetVisibilitySlot * sizeof(void*), setter) ||
-        !Read(canvas + kVisibilityDelegate, delegate))
+    return widget_visibility::ValueOf(canvas, kSelfHitTestInvisible);
+}
+
+/// The canvas's visibility set as the game sets it; a canvas of another kind (bound visibility, another setter) is left
+/// shown in every view (logged once).
+void SetCanvas(std::uintptr_t canvas, std::uint8_t value) noexcept
+{
+    if (canvas == 0 || VisibilityOf(canvas) == value)
     {
-        return false;
+        return;
     }
-    if (setter != reinterpret_cast<std::uintptr_t>(g_setVisibility) || delegate != 0)
+    if (!widget_visibility::Settable(canvas))
     {
         if (!g_boundLogged)
         {
@@ -311,24 +271,9 @@ bool Settable(std::uintptr_t canvas) noexcept
             platform::Log(L"area icons: a canvas is not the kind the research read (bound visibility or another "
                           L"setter); it is left shown in every view");
         }
-        return false;
+        return;
     }
-    return true;
-}
-
-std::uint8_t VisibilityOf(std::uintptr_t canvas) noexcept
-{
-    std::uint8_t value = kSelfHitTestInvisible;
-    Read(canvas + kVisibility, value);
-    return value;
-}
-
-void SetCanvas(std::uintptr_t canvas, std::uint8_t value) noexcept
-{
-    if (canvas != 0 && VisibilityOf(canvas) != value && Settable(canvas))
-    {
-        SetVisibilityGuarded(canvas, value);
-    }
+    widget_visibility::Set(canvas, value);
 }
 
 bool EnsureInstance(int column) noexcept
@@ -553,7 +498,7 @@ bool Install(const platform::GameImage& image) noexcept
     const auto ctor       = platform::FindFunction(image, kCtor);
     const auto update     = platform::FindFunction(image, kFrameUpdate);
     const auto clear      = platform::FindFunction(image, kClearAll);
-    const auto visibility = platform::FindFunction(image, kSetVisibility);
+    const bool visibility = widget_visibility::Installed() || widget_visibility::Install(image);
     const auto site       = image.Rebase(kFirstControllerCall, 5);
     const auto first      = platform::FindFunction(image, facts::kGetFirstPlayerController);
     if (!instance || !allocate || !ctor || !update || !clear || !visibility || !site || !first ||
@@ -576,7 +521,6 @@ bool Install(const platform::GameImage& image) noexcept
     g_ctor          = reinterpret_cast<CtorFn>(*ctor);
     g_frameUpdate   = reinterpret_cast<FrameUpdateFn>(*update);
     g_clearAll      = reinterpret_cast<ClearAllFn>(*clear);
-    g_setVisibility = reinterpret_cast<SetVisibilityFn>(*visibility);
     g_installed     = true;
     g_eventsFollowed = FollowEvents(image);
     platform::Log(L"area icons: ready (each further column's icon manager is made at its first pass); the game's "
@@ -648,6 +592,38 @@ void Tick(int column, void* controller, void* member, float deltaTime) noexcept
         return;
     }
     LogIfChanged(column, one);
+}
+
+bool HideIcon(int column, std::uint64_t key) noexcept
+{
+    if (!g_installed || key == 0 || column < 0 || column >= kColumns)
+    {
+        return false;
+    }
+    const std::uintptr_t instance = column == 0 ? InstanceOne() : g_instance[column];
+    bool                 hidden   = false;
+    try
+    {
+        platform::ForEachSparseElement(instance != 0 ? instance + facts::kAreaIconMap : 0, facts::kAreaIconMapElement,
+                                       [&](std::uintptr_t element) {
+                                           std::uint64_t  name  = 0;
+                                           std::uintptr_t value = 0;
+                                           if (!Read(element, name) || name != key)
+                                           {
+                                               return true;
+                                           }
+                                           if (Read(element + facts::kAreaIconMapValue, value) && value != 0)
+                                           {
+                                               hidden = widget_visibility::Set(widget_visibility::PinnedWidget(value), kHidden);
+                                           }
+                                           return false;
+                                       });
+    }
+    catch (...)
+    {
+        return false;
+    }
+    return hidden;
 }
 
 void ShowOnly(int column) noexcept

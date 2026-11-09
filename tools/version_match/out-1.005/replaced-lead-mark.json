@@ -1,0 +1,26 @@
+{
+  "build": "1.005",
+  "research_build": "1.004",
+  "date": "2026-11-09",
+  "doc": "Rebirth/Documentation/research/RE-lead-mark.md (section 2), RE-walk-keep.md (section 4)",
+  "facts": [
+    {
+      "name": "EndUI_AddMapIcon",
+      "old": "0x14080571C",
+      "new": "0x14197D8E8",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "The IDA passes WALKKEEP / LEADMARK on both databases: (FName key, u8 kind, const FVector*, const FString*, const MapIconParams*), the side destination's own call; the first 20 bytes identical."
+    },
+    {
+      "name": "EndUI_RemoveMapIcon",
+      "old": "0x140C109F8",
+      "new": "0x14152D20C",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "The IDA passes WALKKEEP / LEADMARK on both databases: (FName key), the side destination's remove."
+    }
+  ]
+}

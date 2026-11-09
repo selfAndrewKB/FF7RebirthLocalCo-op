@@ -7,6 +7,7 @@
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
+#include "platform/settings.h"
 #include "platform/sparse_array.h"
 #include "platform/verified_code.h"
 #include "players/object_fields.h"
@@ -26,6 +27,7 @@
 #include <algorithm>
 #include <array>
 #include <chrono>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <format>
@@ -71,6 +73,8 @@ CRITICAL_SECTION*     g_lock       = nullptr;
 const std::uintptr_t* g_root       = nullptr;
 const std::uintptr_t* g_icons      = nullptr;
 bool                  g_installed  = false;
+bool                  g_keeps      = false;  // `lead-holder keeps` (experimental); guide: every needed move to its AI
+bool                  g_marking    = false;  // hud/lead_mark installed: a kept move's point can be shown
 
 /// A level's walk or lead on a member, as its AI state holds it.
 struct Move
@@ -92,6 +96,9 @@ struct Judgment
     bool          waiter     = false;  // another waiter, a direct set on another object, or a further move in the chain
     bool          marker     = false;  // the story's marker rides on the member
     std::uint64_t ownBox     = 0;      // the member's own armed story box the step moves on at (OwnBoxAhead), its object
+    bool          read       = false;  // the last census ran whole
+    bool          signals    = false;  // the move names an arrival trigger
+    bool          reached    = false;  // a kept move's member came within the hand radius of its point (this setting)
     std::uint32_t censusCall = 0;
     std::uint32_t calls      = 0;
     std::uint32_t touched    = 0;      // the clock at the last call (the least recently used slot is reused)
@@ -153,6 +160,13 @@ bool MoveOf(const void* member, Move& out) noexcept
         return true;
     }
     return false;
+}
+
+/// The move's point was read and is a place (finite, not the origin a state that names none leaves).
+bool PointKnown(const Move& move) noexcept
+{
+    return move.pointRead && std::isfinite(move.point[0]) && std::isfinite(move.point[1]) && std::isfinite(move.point[2]) &&
+           (move.point[0] != 0.0f || move.point[1] != 0.0f || move.point[2] != 0.0f);
 }
 
 void* StateManager() noexcept
@@ -353,6 +367,7 @@ struct Census
     bool          chain   = false;  // a further move ahead in the member's own chain
     int           others  = 0;      // other waiters (in scope) plus direct sets on other objects
     std::uint64_t ownBox  = 0;      // the step moves on at a trigger the member's own armed story box sends (OwnBoxAhead)
+    std::uint64_t trigger = 0;      // the move's arrival trigger (0: none)
     std::wstring  text;
 };
 
@@ -427,6 +442,7 @@ Census Waiters(const Move& move, const void* member)
         return census;
     }
     const std::uint64_t trigger      = ArrivalOf(move, self);
+    census.trigger                   = trigger;
     void*               stateManager = StateManager();
     const std::optional<std::vector<Slot>> slots = stateManager != nullptr ? ActiveSlots(stateManager) : std::nullopt;
     if (slots)
@@ -618,7 +634,16 @@ bool InstallChecked(const platform::GameImage& image)
     g_lock       = reinterpret_cast<CRITICAL_SECTION*>(*lock);
     g_root       = reinterpret_cast<const std::uintptr_t*>(*root);
     g_icons      = reinterpret_cast<const std::uintptr_t*>(*icons);
+    g_keeps = platform::settings::Of(platform::settings::kLeadHolder).word == L"keeps";
 #if LSS_DEV
+    control::RegisterOption(
+        platform::settings::kLeadHolder,
+        [](const std::wstring& word) {
+            g_keeps = word == L"keeps";
+            platform::Log(L"lead gate: lead-holder {} (the console)", word);
+            return control::Outcome{};
+        },
+        [] { return std::wstring(g_keeps ? L"keeps" : L"guide"); });
     control::Register({.name  = L"lead.gate",
                        .shape = control::Shape::None,
                        .help  = L"(read only) the last walk or lead a level wrote on player 2's or 3's character, judged: its arrival "
@@ -649,7 +674,11 @@ bool InstallChecked(const platform::GameImage& image)
     g_installed = true;
     platform::Log(L"lead gate: installed; a walk or lead a level writes on player 2's or 3's character goes to its AI when a level "
                   L"step waits on its arrival, the story's marker rides on the character, or a further move is ahead in its own "
-                  L"chain of states; otherwise the player keeps the character");
+                  L"chain of states; otherwise the player keeps the character; such a walk {} (lead-holder {}, experimental, "
+                  L"from {})",
+                  g_keeps ? L"stays the player's, its stop marked in that player's view, its AI finishing the arrival at the stop"
+                          : L"goes to the character's AI with the player's view on it",
+                  g_keeps ? L"keeps" : L"guide", platform::settings::Why(platform::settings::kLeadHolder));
     return true;
 }
 
@@ -700,13 +729,37 @@ try
         last.censusCall = last.calls;
         last.waiter     = !waiters.read || waiters.others > 0 || waiters.chain;
         last.ownBox     = waiters.ownBox;
+        last.signals    = waiters.trigger != 0;
+        last.read       = waiters.read;
     }
     const bool    wasMarker = last.marker;
     const Verdict was       = last.verdict;
     Marker        marker    = Markers(move.object, false);
     last.marker             = marker.onMember;
-    // No marker of the mod's is shown for a kept move: every needed move is the AI's.
-    last.verdict = lead_keep_rules::Decide(last.waiter || last.marker, false, false, false, false, last.ownBox != 0);
+    const bool needed       = last.waiter || last.marker;
+    // `lead-holder keeps` with the marker module in: the player keeps a needed move whose point is read and walks it
+    // to the point; within the hand radius (2D, as the game measures an arrival) its AI takes over. Only a move read
+    // whole that signals an arrival can be handed at its point: any other stays its AI's (it would have no way out).
+    const bool keeps      = g_keeps && g_marking && last.read && last.signals;
+    const bool pointKnown = PointKnown(move);
+    float      away       = -1.0f;
+    if (needed && keeps && pointKnown && last.signals && !last.reached)
+    {
+        float at[3] = {};
+        if (players::unreal::ActorLocation(member, at))
+        {
+            const float dx = at[0] - move.point[0], dy = at[1] - move.point[1];
+            away           = std::hypot(dx, dy);
+            last.reached   = lead_keep_rules::Reached(dx, dy);
+        }
+    }
+    last.verdict = lead_keep_rules::Decide(needed, keeps, pointKnown, last.signals, last.reached, last.ownBox != 0);
+    if (last.verdict == Verdict::AtMark && was != Verdict::AtMark)
+    {
+        platform::Log(L"lead gate: {}'s character brought within {:.1f} m of its point (the hand radius {:.0f} m): to its AI, which "
+                      L"walks the last steps and signals the arrival; back to its player at the level's next setting",
+                      players::SeatName(seat), away / 100, lead_keep_rules::kHandRadius / 100);
+    }
     if (!same || census || last.marker != wasMarker || last.verdict != was)
     {
         marker    = Markers(move.object, true);
@@ -737,6 +790,36 @@ try
 catch (...)
 {
     return false;
+}
+
+bool KeptMark(const void* member, float point[3]) noexcept
+try
+{
+    Move move;
+    if (!g_installed || member == nullptr || !MoveOf(member, move) || move.object == 0 || !PointKnown(move))
+    {
+        return false;
+    }
+    for (const Judgment& j : g_judged)
+    {
+        if (j.object == move.object && j.row == move.row && j.trigger == move.trigger && j.verdict == Verdict::Keep)
+        {
+            point[0] = move.point[0];
+            point[1] = move.point[1];
+            point[2] = move.point[2];
+            return true;
+        }
+    }
+    return false;
+}
+catch (...)
+{
+    return false;
+}
+
+void SetMarking(bool on) noexcept
+{
+    g_marking = on;
 }
 
 bool WalksIntoBox(const void* member, std::uint64_t boxStateRow) noexcept

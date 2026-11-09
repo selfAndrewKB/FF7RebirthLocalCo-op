@@ -21,6 +21,8 @@
 // Until every part is ready a seat's view keeps the earlier behaviour (player 1's map, hud/minimap/minimap_once.h).
 // Game thread, except the consume code (render thread).
 
+#include <cstdint>
+
 namespace lss::platform {
 class GameImage;
 }
@@ -37,6 +39,11 @@ void Tick(bool splitShown) noexcept;
 /// From the HUD levers' update runs (hud/passes/seat_hud_content.h): the navimap holder update for that player's view
 /// (`seat` 0 player 1's, run only after a seat's).
 void RunHolder(int seat) noexcept;
+
+/// The pin of `key` on the minimap withheld from this paint: its icon set Hidden as the game sets it. The holder's next
+/// run sets it again, so it is asked after each run, before the paint. False when the holder has no such pin (or it
+/// could not be set).
+bool HidePin(std::uint64_t key) noexcept;
 
 /// Around a seat's overlay render. True if the seat's minimap is painted in it (the minimap-once skip is
 /// then off for that pass).

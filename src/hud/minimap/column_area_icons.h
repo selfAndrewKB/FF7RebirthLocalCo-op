@@ -35,6 +35,8 @@
 #include "platform/dev_switch.h"
 #include "views/columns.h"
 
+#include <cstdint>
+
 namespace lss::platform {
 class GameImage;
 }
@@ -56,6 +58,11 @@ void Tick(int column, void* controller, void* member, float deltaTime) noexcept;
 
 /// Before an overlay pass: only the column's canvases (0 player 1's) are shown.
 void ShowOnly(int column) noexcept;
+
+/// The icon of `key` in the column's instance (0: player 1's, the game's) withheld from this paint: its widget set
+/// Hidden as the game sets it. The instance's next tick sets it again, so it is asked after each tick, before the
+/// paint. False when the key has no widget there yet (or it could not be set).
+bool HideIcon(int column, std::uint64_t key) noexcept;
 
 /// No player in: player 1's canvases shown, every column's hidden (each instance is cleared when its column changes
 /// hands, FollowColumns).
