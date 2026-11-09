@@ -125,9 +125,12 @@ float SplitFovWeight() noexcept;
 /// rule (no word of the option's).
 std::wstring SplitFovWord();
 
+/// The two FOV weight options from their rows (platform/settings.h), for the Co-op page and the console. May throw
+/// (out of memory); modules::RegisterOptions catches.
+void RegisterViewPointOptions();
+
 #if LSS_DEV
-/// The `split-fov.horizontal` command and reading, from the option's row (platform/settings.h), and
-/// `split-fov.native`, the stock MajorAxisFOV rule in its place for a comparison. May throw (out of memory).
+/// `split-fov.native`, the stock MajorAxisFOV rule in the weight's place for a comparison. May throw (out of memory).
 void RegisterViewPointCommands();
 #endif
 

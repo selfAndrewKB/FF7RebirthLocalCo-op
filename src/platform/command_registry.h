@@ -12,16 +12,18 @@
 //
 // Entries are added on the game thread before the console opens, and read on the game thread. The registry has no
 // engine dependency, so the parser and the runner are tested on the host with entries of their own
-// (tests/control_registry_test.cpp). The control route is a development tool: the registrations sit behind the dev
-// switch (platform/dev_switch.h), so a player's build carries no table.
+// (tests/control_registry_test.cpp). The table is in every build: the Co-op page sets each settings row through its
+// option's entry. The console and every other command are development tools, behind the dev switch
+// (platform/dev_switch.h), so a player's build carries the options alone.
 //
 // In platform/ because it is the bottom layer and the table depends on nothing: a module of any layer registers its
 // own commands in its own file without an include pointing up the layers. The namespace stays lss::control (the
 // language, the runner and the console above it are control/'s).
 //
-// Where they register: each owner has a RegisterCommands() under `#if LSS_DEV`, and one list calls them all in order
+// Where they register: an option at its owner's install, or through modules::RegisterOptions, in every build; every
+// other command in its owner's RegisterCommands() under `#if LSS_DEV`, one list calling them all in order
 // (modules::RegisterCommands, the module table's file), before the console opens. An owner's function is not
-// noexcept (building an entry allocates); the list catches, so a failure leaves the table short and logged.
+// noexcept (building an entry allocates); the caller catches, so a failure leaves the table short and logged.
 //
 // Taken from Remake's control/registry. Changed: an Integer argument may be negative (Rebirth's
 // framing offsets go below zero); the numbers are read with std::from_chars on an ASCII copy, so no locale, '+',

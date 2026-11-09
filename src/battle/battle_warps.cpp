@@ -14,9 +14,7 @@
 #include "players/seats.h"
 #include "players/unreal_access.h"
 
-#if LSS_DEV
 #include "platform/command_registry.h"
-#endif
 
 #include <array>
 #include <cmath>
@@ -301,7 +299,6 @@ bool Install(const platform::GameImage& image) noexcept
     {
         SetMode(fromFile, L"the settings file");  // out of memory for the reason's text
     }
-#if LSS_DEV
     try
     {
         control::RegisterOption(
@@ -318,8 +315,8 @@ bool Install(const platform::GameImage& image) noexcept
     }
     catch (...)
     {
+        platform::Log(L"battle warps: the option could not be registered (out of memory?); the page cannot set it");
     }
-#endif
     const auto contains = platform::FindFunction(image, kContains);
     const auto place    = platform::FindFunction(image, kPlace);
     const auto inSite   = image.Rebase(kBattleInCall, 5);

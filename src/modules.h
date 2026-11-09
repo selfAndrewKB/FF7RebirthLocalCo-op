@@ -137,11 +137,15 @@ Result SetMonitorMode(bool on) noexcept;
 /// The game window across its row of monitors or back (views/window_span.h); entering needs a seat in.
 Result SetWindowSpan(const session::Session& session, bool on, const wchar_t* why) noexcept;
 
+/// The settings table's options that are not registered at their owner's install (platform/command_registry.h
+/// RegisterOption): the Co-op page sets every row through them, so in every build. Game thread, once, after the
+/// installs.
+void RegisterOptions(players::SplitLayout& layout) noexcept;
+
 #if LSS_DEV
-/// Every control command (platform/command_registry.h), each owner's in turn, the shared actions' here: the one list,
-/// as the table above is for the installs. Game thread, once, before the console opens (control/remote.h).
-void RegisterCommands(session::Session& session, players::SplitLayout& layout,
-                      views::column_source::Override& choice) noexcept;
+/// Every other control command, each owner's in turn, the shared actions' here: the one list, as the table above is
+/// for the installs. Game thread, once, after RegisterOptions and before the console opens (control/remote.h).
+void RegisterCommands(session::Session& session, views::column_source::Override& choice) noexcept;
 #endif
 
 }  // namespace lss::modules

@@ -18,9 +18,7 @@
 #include "world/data_rows.h"
 #include "world/story_boxes.h"
 
-#if LSS_DEV
 #include "platform/command_registry.h"
-#endif
 
 #include <Windows.h>
 
@@ -635,15 +633,22 @@ bool InstallChecked(const platform::GameImage& image)
     g_root       = reinterpret_cast<const std::uintptr_t*>(*root);
     g_icons      = reinterpret_cast<const std::uintptr_t*>(*icons);
     g_keeps = platform::settings::Of(platform::settings::kLeadHolder).word == L"keeps";
+    try
+    {
+        control::RegisterOption(
+            platform::settings::kLeadHolder,
+            [](const std::wstring& word) {
+                g_keeps = word == L"keeps";
+                platform::Log(L"lead gate: lead-holder {} (the console)", word);
+                return control::Outcome{};
+            },
+            [] { return std::wstring(g_keeps ? L"keeps" : L"guide"); });
+    }
+    catch (...)
+    {
+        platform::Log(L"lead gate: the lead-holder option could not be registered (out of memory?); the page cannot set it");
+    }
 #if LSS_DEV
-    control::RegisterOption(
-        platform::settings::kLeadHolder,
-        [](const std::wstring& word) {
-            g_keeps = word == L"keeps";
-            platform::Log(L"lead gate: lead-holder {} (the console)", word);
-            return control::Outcome{};
-        },
-        [] { return std::wstring(g_keeps ? L"keeps" : L"guide"); });
     control::Register({.name  = L"lead.gate",
                        .shape = control::Shape::None,
                        .help  = L"(read only) the last walk or lead a level wrote on player 2's or 3's character, judged: its arrival "

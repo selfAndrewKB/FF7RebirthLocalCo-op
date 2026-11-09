@@ -65,6 +65,7 @@ add_library(LocalSplitScreen SHARED
     src/platform/byte_scope.cpp
     src/platform/call_redirect.cpp
     src/platform/code_redirect.cpp
+    src/platform/command_registry.cpp
     src/platform/deferred_sites.cpp
     src/platform/entry_redirect.cpp
     src/platform/guarded.cpp
@@ -259,7 +260,6 @@ if(LSS_DEV_TOOLS)
     target_sources(LocalSplitScreen PRIVATE
         src/dev/dev_tools.cpp
         src/control/remote.cpp
-        src/platform/command_registry.cpp
         src/control/runner.cpp
         src/control/script.cpp
         src/control/server.cpp
@@ -360,7 +360,7 @@ lss_test(output_load_action src/platform/code_redirect.cpp src/platform/block_pa
 lss_test(held_setting src/players/held_setting.cpp)
 lss_test(view_shape src/views/view_shape.cpp)
 lss_test(split_layout src/players/split_layout.cpp src/players/held_setting.cpp src/platform/settings.cpp
-         src/platform/module_folder.cpp tests/log_console.cpp)
+         src/platform/module_folder.cpp src/platform/command_registry.cpp tests/log_console.cpp)
 lss_test(split_screen_settings src/players/split_screen_settings.cpp src/players/held_setting.cpp)
 lss_test(monitor_row src/views/monitor_row.cpp)
 lss_test(monitor_picks src/views/monitor_picks.cpp src/views/monitor_row.cpp)
@@ -467,6 +467,8 @@ lss_test(seat_state)
 lss_test(columns)
 # The facts rule (tests/facts_once.py): no engine address declared in two files, no per-build pair with equal halves.
 add_test(NAME facts_once COMMAND python "${CMAKE_CURRENT_SOURCE_DIR}/tests/facts_once.py" "${CMAKE_CURRENT_SOURCE_DIR}/src")
+# The README's Layout is generated from the modules' header comments (tools/layout_doc.py): out of date fails.
+add_test(NAME layout_doc COMMAND python -I "${CMAKE_CURRENT_SOURCE_DIR}/tools/layout_doc.py" --check)
 
 get_property(LSS_TEST_TARGETS GLOBAL PROPERTY LSS_TEST_TARGETS)
 add_custom_target(lss_tests DEPENDS ${LSS_TEST_TARGETS})

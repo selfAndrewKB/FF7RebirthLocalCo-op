@@ -3,9 +3,7 @@
 #include "platform/log.h"
 #include "platform/settings.h"
 
-#if LSS_DEV
 #include "platform/command_registry.h"
-#endif
 
 #include <format>
 
@@ -102,9 +100,7 @@ void ChooseFromSettings(SplitLayout& layout) noexcept
     }
 }
 
-#if LSS_DEV
-
-void RegisterCommands(SplitLayout& layout)
+void RegisterOptions(SplitLayout& layout)
 {
     using control::Outcome;
     control::RegisterOption(
@@ -130,7 +126,5 @@ void RegisterCommands(SplitLayout& layout)
             return current ? std::wstring(WordOfLayout(*current)) : std::wstring();
         });
 }
-
-#endif
 
 }  // namespace lss::players

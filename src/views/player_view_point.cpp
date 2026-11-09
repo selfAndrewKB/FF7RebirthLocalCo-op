@@ -17,9 +17,7 @@
 #include "views/view_shape.h"
 #include "views/window_span.h"
 
-#if LSS_DEV
 #include "platform/command_registry.h"
-#endif
 
 #include <Unreal/CoreUObject/UObject/Class.hpp>
 
@@ -862,9 +860,7 @@ bool UsesEngineViewPoint(const void* localPlayer) noexcept
     return vtable == g_localPlayerVTable;
 }
 
-#if LSS_DEV
-
-void RegisterViewPointCommands()
+void RegisterViewPointOptions()
 {
     using control::Outcome;
     // The option's command from its row (the words 0.00 to 1.00); the resulting FOV is logged when a filled split
@@ -894,6 +890,13 @@ void RegisterViewPointCommands()
             return Outcome{true, L"weight set; applies to full-height views narrower than the game's image"};
         },
         [] { return SplitFovWordOf(g_narrowWeight.load(std::memory_order_relaxed)); });
+}
+
+#if LSS_DEV
+
+void RegisterViewPointCommands()
+{
+    using control::Outcome;
     // The stock rule for a comparison: on puts the weight aside, off brings it back.
     static float aside = split_fov_rules::kDefaultWeight;
     control::Register({.name  = L"split-fov.native",

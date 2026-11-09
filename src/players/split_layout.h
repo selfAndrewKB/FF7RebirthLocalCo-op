@@ -83,11 +83,9 @@ inline std::wstring Describe(const SplitLayout&, const HeldChange& change)
 /// Chooses the layout the settings file reads (after settings::Load, before any join) and logs it with its source.
 void ChooseFromSettings(SplitLayout& layout) noexcept;
 
-#if LSS_DEV
-/// The `two-player-split` command and reading from the option's row (vertical, horizontal: the layout in force, chosen
-/// or the game's; empty if the game's setting cannot be read). May throw (out of memory); modules::RegisterCommands
-/// catches.
-void RegisterCommands(SplitLayout& layout);
-#endif
+/// The `two-player-split` option from its row (vertical, horizontal: the layout in force, chosen or the game's; empty if
+/// the game's setting cannot be read), for the Co-op page and the console. May throw (out of memory);
+/// modules::RegisterOptions catches.
+void RegisterOptions(SplitLayout& layout);
 
 }  // namespace lss::players

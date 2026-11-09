@@ -10,9 +10,7 @@
 #include "platform/verified_code.h"
 #include "platform/vtable_entry.h"
 
-#if LSS_DEV
 #include "platform/command_registry.h"
-#endif
 
 #include <array>
 #include <atomic>
@@ -269,7 +267,11 @@ void ReadSettings()
             platform::Log(L"battle rates: {} x{} ({})", o.option->key, rules::WordOf(tenths), settings::Why(*o.option));
         }
     }
-#if LSS_DEV
+}
+
+/// The six options, for the Co-op page and the console. May throw (out of memory).
+void RegisterOptions()
+{
     for (const OptionRate& o : kOptionRates)
     {
         std::atomic<int>* const rate = o.rate;
@@ -287,7 +289,6 @@ void ReadSettings()
             },
             [rate] { return std::wstring(rules::WordOf(rate->load())); });
     }
-#endif
 }
 
 /// One call: the game's function at `fact` found, its call at `idaSite` redirected to `replacement`. Every site fits
@@ -430,6 +431,14 @@ bool Install(const platform::GameImage& image) noexcept
     catch (...)
     {
         platform::Log(L"battle rates: the settings could not be read; the rates are the game's");
+    }
+    try
+    {
+        RegisterOptions();
+    }
+    catch (...)
+    {
+        platform::LogWarning(L"battle rates: the options could not be registered (out of memory?); the page cannot set them");
     }
     return PlaceSites(image);
 }

@@ -9,9 +9,7 @@
 #include "players/split_settings_access.h"
 #include "views/column_rules.h"
 
-#if LSS_DEV
 #include "platform/command_registry.h"
-#endif
 
 #include <array>
 #include <cstdint>
@@ -603,9 +601,7 @@ std::wstring Reading()
                        TwoReading(g_two[1]));
 }
 
-#if LSS_DEV
-
-void RegisterCommands()
+void RegisterOptions()
 {
     namespace settings = platform::settings;
     control::RegisterOption(
@@ -632,6 +628,12 @@ void RegisterCommands()
             return control::Outcome{};
         },
         [] { return std::wstring(column_rules::ThreeSplitWord(g_threeSplit)); });
+}
+
+#if LSS_DEV
+
+void RegisterCommands()
+{
     control::Register({.name  = L"column-layout.state",
                        .shape = control::Shape::Text,
                        .help  = L"the local players listed, the span's columns, the engine's three-column layout entry (stock, or the "

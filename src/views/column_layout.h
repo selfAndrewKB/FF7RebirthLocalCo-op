@@ -67,8 +67,12 @@ void Remove() noexcept;
 /// The columns' state for the log and the console.
 std::wstring Reading();
 
+/// The `column-order` and `three-player-split` options, for the Co-op page and the console. May throw (out of memory);
+/// modules::RegisterOptions catches.
+void RegisterOptions();
+
 #if LSS_DEV
-/// The `column-layout.state` reading and the `column-order` and `three-player-split` options. May throw (out of memory); modules::RegisterCommands catches.
+/// The `column-layout.state` reading. May throw (out of memory); modules::RegisterCommands catches.
 void RegisterCommands();
 #endif
 

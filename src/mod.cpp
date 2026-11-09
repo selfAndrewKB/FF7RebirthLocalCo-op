@@ -82,7 +82,7 @@ namespace {
 namespace Hook = RC::Unreal::Hook;
 using lss::platform::Log;
 
-constexpr const wchar_t* kVersion = L"0.128.0";  // built against the Nexus UE4SS (c0a8d4c)
+constexpr const wchar_t* kVersion = L"0.129.0";  // built against the Nexus UE4SS (c0a8d4c)
 
 /// How often the seats' status lines are written while a seat is in.
 constexpr ULONGLONG kStatusIntervalMs = 10'000;
@@ -314,11 +314,13 @@ public:
         lss::session::player_window::SetSession(&*session_);  // the windows' joins and leaves go through the session
         lss::players::ChooseFromSettings(layout_);  // the two-player layout the file names, for the first join
 
+        // The options the Co-op page sets, in every build (the rest register at their owner's install).
+        lss::modules::RegisterOptions(layout_);
         // The dev tools (built with LSS_DEV_TOOLS only): the console, the HUD trace and probe, and the watches
         // that only log (dev/dev_tools.h names them); a player's build has none of them. Every control command is
         // registered first, each owner's (modules.cpp lists them), so the console opens on the whole table.
 #if LSS_DEV
-        lss::modules::RegisterCommands(*session_, layout_, singleViewChoice_);
+        lss::modules::RegisterCommands(*session_, singleViewChoice_);
 #endif
         lss::dev::Install(*image, *session_);
 

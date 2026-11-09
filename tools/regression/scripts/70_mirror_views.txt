@@ -1,6 +1,7 @@
 # The mirror views (plan/seats.md step 5): three columns held without the span (`view-columns 3`, the checks on one
 # monitor), player 1's picture in every column no player has. Player 2's join takes them out right before its player
 # is created and one comes back after it; the leave puts the second back; `view-columns 0` takes them out.
+# needs: control
 # expect: view columns: 3 held
 # expect: mirror view: in column 2 \(controller id 4
 # expect: mirror view: in column 3 \(controller id 5

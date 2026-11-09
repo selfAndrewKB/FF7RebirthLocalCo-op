@@ -56,9 +56,12 @@
 #include "session/player_window.h"
 #include "input/seat_walk_cap.h"
 #include "input/walk_limits.h"
+#include "platform/command_registry.h"
 #include "platform/log.h"
+#include "platform/settings.h"
 #include "players/generation.h"
 #include "players/local_players.h"
+#include "players/split_layout.h"
 #include "players/unreal_access.h"
 #include "players/widget_opacity.h"
 #include "renderer/family_boundary.h"
@@ -108,11 +111,8 @@
 #include "hud/widget_dump.h"
 #include "input/pad_buttons.h"
 #include "input/pad_sticks.h"
-#include "platform/command_registry.h"
 #include "platform/frame_watch.h"
-#include "platform/settings.h"
 #include "players/console_access.h"
-#include "players/split_layout.h"
 #include "renderer/submission_census.h"
 #include "renderer/view_family_submission.h"
 #include "scopes/scope_leaks.h"
@@ -717,14 +717,53 @@ Result SetWindowSpan(const session::Session& session, bool on, const wchar_t* wh
     return {true, std::format(L"{} columns", columns)};
 }
 
-#if LSS_DEV
-
 namespace {
 
 control::Outcome From(Result done)
 {
     return {done.ok, std::move(done.text)};
 }
+
+}  // namespace
+
+void RegisterOptions(players::SplitLayout& layout) noexcept
+{
+    // Each owner on its own: one that throws (out of memory) leaves the others' rows working.
+    const auto each = [](const wchar_t* owner, auto&& registerOwn) noexcept {
+        try
+        {
+            registerOwn();
+        }
+        catch (...)
+        {
+            platform::LogWarning(L"control: registering {}'s options failed (out of memory?)", owner);
+        }
+    };
+    // The three-player monitor mode from its option's row (the settings file's multi-monitor): as Ctrl+F3.
+    each(L"the monitor mode", [] {
+        control::RegisterOption(
+            platform::settings::kMultiMonitor, [](const std::wstring& word) { return From(SetMonitorMode(word == L"on")); },
+            [] { return views::window_span::Preset(); });
+    });
+    each(L"the split layout", [&layout] { players::RegisterOptions(layout); });
+    each(L"the column layout", [] { views::column_layout::RegisterOptions(); });
+    each(L"the view point", [] { views::RegisterViewPointOptions(); });
+    // Every page row's option has its entry now (the rest registered at their owners' installs): a missing one is a row
+    // that does nothing, said here in every build.
+    for (const platform::settings::Option* option : platform::settings::kOptions)
+    {
+        if (!option->appOnly && control::Global().Find(option->key) == nullptr)
+        {
+            platform::LogWarning(L"control: the option '{}' has no entry (its owner did not install, or the registry "
+                                 L"refused it): its Co-op page row does nothing",
+                                 option->key);
+        }
+    }
+}
+
+#if LSS_DEV
+
+namespace {
 
 /// The commands of the shared actions above, and the field's readiness.
 void RegisterOwnCommands(session::Session& session)
@@ -759,10 +798,6 @@ void RegisterOwnCommands(session::Session& session)
     Register({.name = L"bars", .shape = Shape::OnOff, .help = L"split views keep 16:9 with bars, or fill their halves",
               .set  = [](const Value& v) { return From(SetFill(!std::get<bool>(v))); },  // bars on: no fill
               .get  = [] { return Value{!views::FillsHalves()}; }});
-    // The three-player monitor mode's command from its option's row (the settings file's multi-monitor): as Ctrl+F3.
-    control::RegisterOption(
-        platform::settings::kMultiMonitor, [](const std::wstring& word) { return From(SetMonitorMode(word == L"on")); },
-        [] { return views::window_span::Preset(); });
     Register({.name = platform::settings::kMonitors.key, .shape = Shape::Text, .help = platform::settings::kMonitors.help,
               .get  = [] { return Value{platform::settings::Of(platform::settings::kMonitors).word}; }});
     Register({.name = L"view-columns", .shape = Shape::Integer, .min = 0, .max = views::columns::kMaxColumns,
@@ -800,8 +835,7 @@ void RegisterOwnCommands(session::Session& session)
 
 }  // namespace
 
-void RegisterCommands(session::Session& session, players::SplitLayout& layout,
-                      views::column_source::Override& choice) noexcept
+void RegisterCommands(session::Session& session, views::column_source::Override& choice) noexcept
 {
     try
     {
@@ -809,7 +843,6 @@ void RegisterCommands(session::Session& session, players::SplitLayout& layout,
         platform::RegisterLogCommands();
         platform::frame_watch::RegisterCommands();
         players::console::RegisterCommands([&session] { return session.AnyIn(); });
-        players::RegisterCommands(layout);
         views::column_source::RegisterCommands(choice);
         session::RegisterCommands(session);
         input::pad_table::RegisterCommands();
