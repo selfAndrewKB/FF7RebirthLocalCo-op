@@ -32,4 +32,12 @@ namespace lss::battle::battle_warps {
 bool Install(const platform::GameImage& image) noexcept;
 void Remove() noexcept;
 
+/// Whether this battle's start reached the game's own gather (its data allows one) with `character` among the members
+/// it would gather (not kept out by the data's own exclusion set), whatever the setting then answered. False before any
+/// gather and after ForgetGather. Game thread.
+bool GatheredFor(const void* character) noexcept;
+
+/// The battle is over: its gather is forgotten. Game thread.
+void ForgetGather() noexcept;
+
 }  // namespace lss::battle::battle_warps

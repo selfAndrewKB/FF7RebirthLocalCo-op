@@ -18,9 +18,11 @@
 #include "platform/command_registry.h"
 #endif
 
+#include <array>
 #include <cmath>
 #include <cstdint>
 #include <optional>
+#include <utility>
 #include <string>
 #include <string_view>
 
@@ -75,6 +77,33 @@ int SeatPlaying(const void* character) noexcept
 {
     const int seat = character != nullptr ? players::generation::SeatOfMember(character) : 0;
     return players::SeatBuilt(seat) && players::generation::Active(seat) ? seat : 0;
+}
+
+/// This battle's gather, as its start's exclusion test saw it (game thread): reached at all (the battle's data allowed
+/// one), and each member asked about with the data's own answer.
+struct Gather
+{
+    bool                                       reached = false;
+    std::array<std::pair<const void*, bool>, 8> members{};  // {character, kept out by the data}
+    std::size_t                                count = 0;
+};
+Gather g_gather;
+
+void NoteGathered(const void* character, bool byData) noexcept
+{
+    g_gather.reached = true;
+    for (std::size_t i = 0; i < g_gather.count; ++i)
+    {
+        if (g_gather.members[i].first == character)
+        {
+            g_gather.members[i].second = byData;
+            return;
+        }
+    }
+    if (g_gather.count < g_gather.members.size())
+    {
+        g_gather.members[g_gather.count++] = {character, byData};
+    }
 }
 
 /// Whether the setting keeps `character` where it is (battle/battle_warps_rules.h); its seat in `seat` (0: none). Only
@@ -146,6 +175,12 @@ void LogLeft(const wchar_t* when, int seat) noexcept
 /// as it skips a vehicle rider (no warp entry, no fade, no AI pause; the next member takes its slot).
 bool BattleInExcluded(void* set, void* const* element) noexcept
 {
+    // The game's own answer first (a pure set test): whether this battle's data keeps the member out of its gather.
+    const bool byData = reinterpret_cast<ContainsFn>(g_battleInCall.Original())(set, element);
+    if (players::generation::OnGameThread() && element != nullptr)
+    {
+        NoteGathered(*element, byData);
+    }
     int seat = 0;
     if (element != nullptr && KeepsInPlace(*element, seat))
     {
@@ -153,7 +188,7 @@ bool BattleInExcluded(void* set, void* const* element) noexcept
         return true;
     }
     LogLeft(L"start", seat);
-    return reinterpret_cast<ContainsFn>(g_battleInCall.Original())(set, element);
+    return byData;
 }
 
 /// Replaces the battle-finish queue's placement call: none for a member the setting keeps (as the placement's own
@@ -231,6 +266,27 @@ bool PlaceSites(const platform::GameImage&) noexcept
 }
 
 }  // namespace
+
+bool GatheredFor(const void* character) noexcept
+{
+    if (!g_gather.reached || character == nullptr)
+    {
+        return false;
+    }
+    for (std::size_t i = 0; i < g_gather.count; ++i)
+    {
+        if (g_gather.members[i].first == character)
+        {
+            return !g_gather.members[i].second;
+        }
+    }
+    return false;
+}
+
+void ForgetGather() noexcept
+{
+    g_gather = Gather{};
+}
 
 bool Install(const platform::GameImage& image) noexcept
 {

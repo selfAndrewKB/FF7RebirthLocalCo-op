@@ -72,6 +72,8 @@ UObject* GameInstance() noexcept;
 /// An actor's world location: its RootComponent's world translation (the reflected AActor offset,
 /// found once). False if the actor, its root or the field cannot be read. Game thread.
 bool ActorLocation(const void* actor, float (&out)[3]) noexcept;
+/// An actor's yaw (radians, about the vertical axis) from the same root's world rotation. False if unreadable.
+bool ActorYaw(const void* actor, float& yawRadians) noexcept;
 
 /// The game instance's `LocalPlayers` array: the engine's own list of local players.
 RC::Unreal::TArray<UObject*>* LocalPlayers(UObject* gameInstance) noexcept;

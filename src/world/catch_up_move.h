@@ -29,9 +29,12 @@ inline constexpr float kFollowerCm = 150.0f;
 /// game finds none or the call raises.
 bool PointAround(void* querier, const float origin[3], float yawRadians, float distanceCm, float out[3]) noexcept;
 
-/// Moves `character` to stand on `point`, facing `yawDegrees`, with the game's fade-in. False when the call raised (the
-/// character may stand where it was).
-bool Move(void* character, const float point[3], float yawDegrees) noexcept;
+/// Moves `character` to stand on `point`, facing `yawDegrees`, with the game's fade-in. `look`: the request's own
+/// location (the battle gather passes its anchor's; null: `point`). `resetControlHolder`: the character's control holder
+/// back to its first state, as the gather does in a fight. False when the call raised (the character may stand where
+/// it was).
+bool Move(void* character, const float point[3], float yawDegrees, const float* look = nullptr,
+          bool resetControlHolder = false) noexcept;
 
 /// Another player's character than `except` stands within 1 m of `at`: not a spot to bring `except` to.
 bool SpotTaken(const float at[3], const void* except) noexcept;

@@ -117,6 +117,7 @@ add_library(LocalSplitScreen SHARED
     src/world/story_boxes.cpp
     src/world/catch_up_move.cpp
     src/world/run_catch_up.cpp
+    src/battle/arena_warp.cpp
     src/world/shop_talk.cpp
     src/world/seat_switch_volumes.cpp
     src/world/seat_triggers.cpp

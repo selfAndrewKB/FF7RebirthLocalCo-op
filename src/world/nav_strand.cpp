@@ -1,4 +1,5 @@
 #include "world/nav_strand.h"
+#include "battle/arena_warp.h"
 
 #include "facts/controller.h"
 #include "facts/engine.h"
@@ -614,6 +615,11 @@ bool RequestWarp(Subject& subject, bool splitShown) noexcept
 void Ask(int seat, const wchar_t* how, bool splitShown) noexcept
 {
     g_askWaiting[seat] = nullptr;
+    if (battle::arena_warp::InBattle())
+    {
+        battle::arena_warp::Ask(seat, how);  // in a fight the same ask brings the character into the fight's area
+        return;
+    }
     Subject& subject   = g_chocobos[seat].pawn != nullptr ? g_chocobos[seat] : g_members[seat];
     if (subject.pawn == nullptr)
     {

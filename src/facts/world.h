@@ -56,4 +56,17 @@ inline constexpr std::uint8_t kBattleTeleportFadeInBytes[] = {0x48, 0x85, 0xC9, 
 inline constexpr FunctionFact kBattleTeleportFadeIn{L"EndCharacter_BattleTeleport_FadeIn", 0x1407B5334,
                                                     kBattleTeleportFadeInBytes};
 
+/// The fight's own state and area (RE-arena-warp.md §2, §3): the encounter's state in the mode holder (3 in battle, 4
+/// while player 1 escapes); the game's "inside any battle area" (spheres around the engaged enemies) for a character;
+/// and the game state's two event counters the leader switch refuses on (an event holding the party).
+inline constexpr std::uint32_t kEncounterState         = 0x3D558;  // [[g_EndGameRoot]+0x1B8]+0x3D558, u8
+inline constexpr std::uint8_t  kEncounterInBattle      = 3;
+inline constexpr std::uint8_t  kEncounterEscaping      = 4;
+inline constexpr std::uint32_t kGameStateEventCounterA = 0x1A123B8;  // [[g_EndGameRoot]+0x170]+..., i32
+inline constexpr std::uint32_t kGameStateEventCounterB = 0x1A12668;
+inline constexpr std::uint8_t  kInsideAnyBattleAreaBytes[] = {0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8, 0xA2, 0xAB, 0x3F,
+                                                              0x01, 0x48, 0x2B, 0xE0, 0x48, 0x8B, 0xD1, 0x48, 0x8B};
+inline constexpr FunctionFact  kInsideAnyBattleArea{L"EndFieldAPI_IsCharacterInsideAnyBattleArea_Body", 0x140CB4384,
+                                                   kInsideAnyBattleAreaBytes};
+
 }  // namespace lss::facts

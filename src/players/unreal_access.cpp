@@ -12,6 +12,7 @@
 #include <Unreal/NameTypes.hpp>
 
 #include <algorithm>
+#include <cmath>
 #include <iterator>
 
 #ifndef WIN32_LEAN_AND_MEAN
@@ -119,28 +120,53 @@ std::int32_t RootComponentOffset(UObject* actor) noexcept
 
 }  // namespace
 
-bool ActorLocation(const void* actor, float (&out)[3]) noexcept
+namespace {
+
+/// An actor's RootComponent (the reflected AActor offset, looked up once); null if it cannot be read.
+const std::byte* RootOf(const void* actor) noexcept
 {
-    constexpr std::uint32_t kComponentWorldLocation = 0x1D0;  // USceneComponent's world transform translation
-    static std::int32_t     rootOffset              = -1;     // AActor::RootComponent, the same for every actor
+    static std::int32_t rootOffset = -1;  // AActor::RootComponent, the same for every actor
     if (actor == nullptr)
     {
-        return false;
+        return nullptr;
     }
     // Looked up once; guarded against a structured exception too (a stale actor's class read faults, not throws).
     std::int32_t found = -1;
     if (rootOffset < 0 &&
         (!platform::CallGuarded(&RootComponentOffset, found, static_cast<UObject*>(const_cast<void*>(actor))) || found < 0))
     {
-        return false;
+        return nullptr;
     }
     if (rootOffset < 0)
     {
         rootOffset = found;
     }
     const std::byte* root = nullptr;
-    return platform::CopyGuarded(&root, static_cast<const std::byte*>(actor) + rootOffset, sizeof(root)) && root != nullptr &&
-           platform::CopyGuarded(out, root + kComponentWorldLocation, sizeof(out));
+    return platform::CopyGuarded(&root, static_cast<const std::byte*>(actor) + rootOffset, sizeof(root)) ? root : nullptr;
+}
+
+// USceneComponent's world transform: its rotation (a quaternion x y z w) and translation.
+constexpr std::uint32_t kComponentWorldRotation = 0x1C0;
+constexpr std::uint32_t kComponentWorldLocation = 0x1D0;
+
+}  // namespace
+
+bool ActorLocation(const void* actor, float (&out)[3]) noexcept
+{
+    const std::byte* root = RootOf(actor);
+    return root != nullptr && platform::CopyGuarded(out, root + kComponentWorldLocation, sizeof(out));
+}
+
+bool ActorYaw(const void* actor, float& yawRadians) noexcept
+{
+    const std::byte* root = RootOf(actor);
+    float            q[4] = {};
+    if (root == nullptr || !platform::CopyGuarded(q, root + kComponentWorldRotation, sizeof(q)))
+    {
+        return false;
+    }
+    yawRadians = std::atan2(2.0f * (q[3] * q[2] + q[0] * q[1]), 1.0f - 2.0f * (q[1] * q[1] + q[2] * q[2]));
+    return std::isfinite(yawRadians);
 }
 
 RC::Unreal::TArray<UObject*>* LocalPlayers(UObject* gameInstance) noexcept

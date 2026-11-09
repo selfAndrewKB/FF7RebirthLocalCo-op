@@ -113,14 +113,15 @@ bool PointAround(void* querier, const float origin[3], const float yawRadians, c
     return true;
 }
 
-bool Move(void* character, const float point[3], const float yawDegrees) noexcept
+bool Move(void* character, const float point[3], const float yawDegrees, const float* look, const bool resetControlHolder) noexcept
 {
     if (!Installed() || character == nullptr)
     {
         return false;
     }
     const float rotation[3] = {0.0f, yawDegrees, 0.0f};  // an FRotator: pitch, yaw, roll in degrees
-    return platform::CallGuarded(g_warp, character, point, static_cast<const float*>(rotation), point, true, false);
+    return platform::CallGuarded(g_warp, character, look != nullptr ? look : point, static_cast<const float*>(rotation), point,
+                                 true, resetControlHolder);
 }
 
 bool SpotTaken(const float at[3], const void* except) noexcept

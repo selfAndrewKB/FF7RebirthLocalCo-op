@@ -95,6 +95,7 @@
 #include "world/story_boxes.h"
 #include "world/catch_up_move.h"
 #include "world/run_catch_up.h"
+#include "battle/arena_warp.h"
 #include "world/shop_talk.h"
 #include "world/vending.h"
 #include "world/world_actor_reach.h"
@@ -235,6 +236,8 @@ constexpr std::array kModules{
     Module{Call<&world::catch_up_move::Install>, nullptr},
     // a character taken past its own story box brought back for the level's walk through it
     Module{Call<&world::run_catch_up::Install>, nullptr},
+    // L3 twice in a fight brings a character shut outside the fight's area in (the game's gather, one member)
+    Module{Call<&battle::arena_warp::Install>, nullptr},
     // a seat's chocobo vaults without taking both ride framings
     Module{Call<&camera::vault_camera::Install>, &camera::vault_camera::Remove},
     // a seat's chocobo climbs walls, with its own climb camera
@@ -480,6 +483,7 @@ void TickAfterSession(const Frame& frame) noexcept
     input::pad_table::SetPlaying(playing);
     input::walk_limits::Tick();  // after the session's tick: a take's copy is overwritten this frame
     world::nav_strand::Tick(frame.splitShown);  // a stranded player is warped back to the party
+    battle::arena_warp::Tick();  // an ask made in a fight: the character brought into the fight's area
     camera::camera_repair::Tick();
     traversal::traversal_watch::Tick();
     world::seat_triggers::Tick();

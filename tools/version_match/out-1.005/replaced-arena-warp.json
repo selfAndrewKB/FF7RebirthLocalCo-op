@@ -1,0 +1,17 @@
+{
+  "build": "1.005",
+  "research_build": "1.004",
+  "date": "2026-11-09",
+  "doc": "Rebirth/Documentation/research/RE-arena-warp.md (sections 1.3, 2)",
+  "facts": [
+    {
+      "name": "EndFieldAPI_IsCharacterInsideAnyBattleArea_Body",
+      "old": "0x140CB4384",
+      "new": "0x1412E2684",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "The IDA pass ARENAWARP on both databases (RE-arena-warp.md 1.3, 2): the body of UEndFieldAPI::IsCharacterInsideAnyBattleArea, (chr) -> bool over the encounter manager's battle-area spheres; found by the jmp into EncountMgr_IsInsideAnyBattleArea and its masked prologue."
+    }
+  ]
+}
