@@ -4,6 +4,7 @@
 
 #include "battle/battle_camera.h"
 #include "battle/command_menu.h"
+#include "battle/command_menu_tick.h"
 #include "battle/command_menu_view.h"
 #include "battle/command_rules.h"
 #include "battle/menu_focus.h"
@@ -11,6 +12,7 @@
 #include "camera/field_camera.h"
 #include "camera/view_target.h"
 #include "facts/controller.h"
+#include "facts/in_battle.h"
 #include "input/member_movement.h"
 #include "input/move_census.h"
 #include "input/pad_buttons.h"
@@ -71,6 +73,10 @@ constexpr std::uint32_t kPlayerOneWatchTicks = 3;
 
 /// Ticks to wait for the switch to hand the member over before giving it back.
 constexpr std::uint32_t kTakeTicks = 120;
+
+/// Ticks in a row the game's in-battle test must say no before a player's own switch ends with the fight: one tick's
+/// dip (a phase change inside a fight) must not send the player back mid-fight.
+constexpr std::uint32_t kOwnSwitchEndTicks = 10;
 
 /// How often, in ticks, the seat's member is checked for its battle controller component: character
 /// state that no party funnel reports (RE-p2-session-levers.md §3.2).
@@ -183,6 +189,13 @@ void Seat::Tick(bool& commandMenusTicked) noexcept
     {
         EndStandIn(L"the game's leader is on the field leader again");
     }
+    // The player's own switch lasts the fight: once the game's own in-battle test has said no for a few ticks in a row,
+    // the slot decides again (the game sends player 1 back to the field leader at the same moment, by its own call).
+    outOfBattleTicks_ = ownSwitch_ && !facts::InBattle() ? outOfBattleTicks_ + 1 : 0;
+    if (outOfBattleTicks_ >= kOwnSwitchEndTicks && phase_ != Phase::Leaving)
+    {
+        EndOwnSwitch(L"the fight is over");
+    }
     switch (phase_)
     {
         case Phase::SettlingPlayerOne: Settle(); break;
@@ -191,6 +204,7 @@ void Seat::Tick(bool& commandMenusTicked) noexcept
         case Phase::Playing:
             // Before the member tick: the tick's scopes answer the party leader with the seat's member
             // (scopes/leader_scope.h), which CheckMemberPlayable's leader test must not see.
+            AwaitOwnSwitch();
             RetakeWhenFree();
             RideAlongTick();
             if (In())
@@ -487,6 +501,9 @@ void Seat::Yield(const wchar_t* why) noexcept
     Log(L"{}'s {} is {}: giving it back to choose again among the deployed party", Name(), players::NameOf(member_), why);
     handover_watch::Snapshot(L"the give-back", member_);
     players::generation::SetMember(seat_, nullptr);  // the seat's member movement and scopes stop at once
+    ownSwitch_        = false;       // the member given back: the slot decides the next
+    ownSwitchTicks_   = 0;
+    outOfBattleTicks_ = 0;
     phase_ = Phase::Swapping;        // before the game's switch runs: a party event inside it sees the swap
     ticks_ = 0;
     if (!party_member::GiveBack(seat_, controller_))
@@ -513,7 +530,8 @@ void Seat::EventLine(const std::wstring& text) noexcept
 /// is the seat's member and player 1's controller, the seat lets go first, so the two controllers never
 /// both claim it; the game's switch then seats player 1 on it, and the seat plays the character player 1 came
 /// from until the game's leader goes home to the field leader (the stand-in, party_lease.h StandInFor). The game's
-/// leader going home ends every stand-in: the seat takes its own slot's member again.
+/// leader going home ends every stand-in: the seat takes its own slot's member again. The seat's own controller's
+/// leader change inside the seat's own command pass is the player's d-pad switch: the seat plays the character.
 void Seat::OnLeaderChanging(void* controller, void* character) noexcept
 {
     using session_rules::LeaderEventAction;
@@ -523,7 +541,8 @@ void Seat::OnLeaderChanging(void* controller, void* character) noexcept
                                            controller == playerOneController_,
                                            character != nullptr && character == member_,
                                            MemberHeld(),
-                                           member_ == nullptr};
+                                           member_ == nullptr,
+                                           battle::command_menu_tick::PassSeat() == seat_};
     const auto action = session_rules::DecideLeaderEvent(event);
     // Player 1's controller's leader is still the one before the change here (the funnel runs before the switch
     // writes it); the party manager's leader fields are the new one's already.
@@ -569,6 +588,7 @@ void Seat::OnLeaderChanging(void* controller, void* character) noexcept
             break;
         }
         case LeaderEventAction::ArmLook: retakeLooks_ = kRetakeLookTicks; break;  // the member the game moved off may be free
+        case LeaderEventAction::Adopt: AdoptOwnSwitch(character); break;
         case LeaderEventAction::Warn:
         case LeaderEventAction::None: break;
     }
@@ -581,6 +601,68 @@ void Seat::EndStandIn(const wchar_t* why) noexcept
 {
     Log(L"{} stood in for player 1's character (type {}): {}; {}'s own slot decides again", Name(), standIn_, why, Name());
     standIn_ = kNoStandIn;
+    FollowSlot(why, true);
+}
+
+/// The seat's own d-pad switch (session/party_switch.h): the game is moving the seat's controller from its member onto
+/// `character` inside the seat's own command pass (the old member to its AI, the new one possessed, the seat's camera
+/// retargeted, all the game's own), so the seat plays `character` from here, as after a take, and keeps it while the
+/// fight lasts (session_rules::OwnSwitchHolds).
+void Seat::AdoptOwnSwitch(void* character) noexcept
+{
+    if (character == nullptr || character == member_)
+    {
+        return;
+    }
+    Log(L"{} switches from {} to {} (their own d-pad switch in the fight, the game's own cycle); back on their slot's "
+        L"member when the fight ends",
+        Name(), players::NameOf(member_), players::NameOf(character));
+    handover_watch::Snapshot(L"the player's own switch", character);
+    member_      = character;
+    memberWeak_  = scopes::leader_scope::WeakOf(character);
+    players::generation::SetMember(seat_, character);
+    ownSwitch_      = true;
+    ownSwitchTicks_ = 1;  // the hand-over awaited from the next tick (AwaitOwnSwitch)
+    retakeLooks_    = 0;
+    if (memberWeak_ == 0)
+    {
+        Log(L"WARNING: {}'s new member has no weak pointer; its destruction would go unseen", Name());
+    }
+}
+
+/// After the player's own switch: the game's switch hands the member over inside its own call, and the lease shows it
+/// over the following ticks, as after a take; one that never lands is given back, and the slot decides again.
+void Seat::AwaitOwnSwitch() noexcept
+{
+    if (ownSwitchTicks_ == 0 || member_ == nullptr)
+    {
+        return;
+    }
+    const auto lease = party_member::ReadLease(member_, controller_);
+    if (Acquired(lease, member_, controller_))
+    {
+        platform::LogDebug(L"{}'s own switch landed: {} is {}'s after {} tick(s)", Name(), players::NameOf(member_), Name(),
+                           ownSwitchTicks_);
+        ownSwitchTicks_ = 0;
+        return;
+    }
+    if (++ownSwitchTicks_ > kTakeTicks)
+    {
+        Log(L"WARNING: {}'s own switch to {} did not land within {} ticks (driven by {}, the player's pawn {}, leader {}); "
+            L"given back, the slot decides again",
+            Name(), players::NameOf(member_), kTakeTicks, players::NameOf(lease.memberEffective),
+            players::NameOf(lease.seatPawn), players::NameOf(lease.seatLeader));
+        ownSwitchTicks_ = 0;
+        Yield(L"not handed over by the player's own switch");
+    }
+}
+
+/// The own switch over: the seat follows its own slot again (FollowSlot gives the member back when the slot names
+/// another).
+void Seat::EndOwnSwitch(const wchar_t* why) noexcept
+{
+    Log(L"{}'s own switch ends: {}; {}'s slot of the party order decides again", Name(), why, Name());
+    ownSwitch_ = false;
     FollowSlot(why, true);
 }
 
@@ -644,6 +726,10 @@ void Seat::FollowSlot(const wchar_t* when, bool log) noexcept
         !party_member::GameReady())
     {
         return;
+    }
+    if (session_rules::OwnSwitchHolds(ownSwitch_, facts::InBattle()))
+    {
+        return;  // the player's own switch holds while the fight lasts; the slot decides again at its end
     }
     // Logged from the party-apply caller only: the party order after the game's apply is the one Info line a field
     // report needs for a hand-over question (the handover watch, which listed the whole order, is a dev tool now).
@@ -1277,6 +1363,9 @@ std::wstring Seat::MemberReading() const
         return standIn_ != kNoStandIn
                    ? std::format(L"{} (player 1's former character, until the game's leader goes home)",
                                  players::NameOf(players::generation::MemberOf(seat_)))
+               : ownSwitch_
+                   ? std::format(L"{} (the player's own switch, until the fight ends)",
+                                 players::NameOf(players::generation::MemberOf(seat_)))
                    : std::format(L"{} (slot {} of the party order)", players::NameOf(players::generation::MemberOf(seat_)), slot);
     }
     if (!In())
@@ -1354,6 +1443,9 @@ void Seat::Forget() noexcept
     slotWaitSince_.reset();
     slotWaitReason_      = party_member::SlotWait::None;
     standIn_             = kNoStandIn;  // out: its own slot again when it joins (a new world, a rebuilt party, a wait)
+    ownSwitch_           = false;
+    ownSwitchTicks_      = 0;
+    outOfBattleTicks_    = 0;
     viewTargetResets_    = 0;
     viewOnOwnCamera_     = true;
     EndRideAlong(L"the player is out");

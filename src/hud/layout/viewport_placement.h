@@ -4,6 +4,9 @@
 // and hud/field/action_icon_base.h: every HUD root is designed for a 1920x1080 frame, and in a split half
 // keeps its single-player distance from the corner or edge it belongs to.
 
+#include "hud/layout/overlay_band.h"
+
+#include <cstdint>
 #include <optional>
 
 namespace lss::hud {
@@ -53,6 +56,15 @@ LayoutPoint AnchorOf(const LayoutPoint& point) noexcept;
 /// 1920x1080 layout, and for a zero layout (unknown).
 LayoutPoint KeepDistanceFromAnchor(const LayoutPoint& original, const LayoutPoint& anchor, float width,
                                    float height) noexcept;
+
+/// The point the game must be given, in layout units, for a UI effect to land on `point` of the layout. The UI
+/// effects (the summon gauge's glow) are placed from a layout point through the overlay's layout size, centred and in
+/// half-heights, and drawn against the whole `imageWidth` x `imageHeight` UI image, while the layout itself is drawn
+/// into `band` of that image. So `point` is mapped as the band's drawing maps it, and that image position is given
+/// back in the layout's own units. `point` itself in a layout filling the image (a 1920x1080 view), and for an unknown
+/// layout, band or image.
+LayoutPoint EffectPointFor(const LayoutPoint& point, const LayoutSize& layout, const IntRect& band,
+                           std::int32_t imageWidth, std::int32_t imageHeight) noexcept;
 
 /// Whether a widget placed at `position` (its top-left, in layout units) starts outside a layout of
 /// `width` x `height` units, where it is not painted (and so not ticked). False for an unknown

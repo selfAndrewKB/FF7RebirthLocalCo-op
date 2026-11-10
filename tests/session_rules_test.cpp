@@ -58,7 +58,20 @@ void TestLeaderEvents()
     twos.controllerIsSeat = true;
     twos.memberIsSeat     = true;
     twos.memberHeld       = true;
-    EXPECT(DecideLeaderEvent(twos) == LeaderEventAction::Warn);  // never acted on
+    EXPECT(DecideLeaderEvent(twos) == LeaderEventAction::Warn);  // outside the seat's own pass: never acted on
+    auto own      = twos;
+    own.inOwnPass = true;  // the seat's own d-pad switch, inside its command pass
+    EXPECT(DecideLeaderEvent(own) == LeaderEventAction::Adopt);
+    own.memberIsSeat = false;  // the character is the one switched to, never the seat's own
+    EXPECT(DecideLeaderEvent(own) == LeaderEventAction::Adopt);
+    own.memberHeld = false;  // nothing held (a swap in flight): not adopted
+    EXPECT(DecideLeaderEvent(own) == LeaderEventAction::Warn);
+
+    std::puts("own switch: holds while the fight lasts, ends with it");
+    EXPECT(OwnSwitchHolds(true, true));
+    EXPECT(!OwnSwitchHolds(true, false));
+    EXPECT(!OwnSwitchHolds(false, true));
+    EXPECT(!OwnSwitchHolds(false, false));
 
     auto yield                  = in;
     yield.controllerIsPlayerOne = true;

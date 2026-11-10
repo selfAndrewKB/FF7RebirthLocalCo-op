@@ -70,6 +70,24 @@ LayoutPoint KeepDistanceFromAnchor(const LayoutPoint& original, const LayoutPoin
     return {original.x + anchor.x * (width - kHudFrameWidth), original.y + anchor.y * (height - kHudFrameHeight)};
 }
 
+LayoutPoint EffectPointFor(const LayoutPoint& point, const LayoutSize& layout, const IntRect& band,
+                           std::int32_t imageWidth, std::int32_t imageHeight) noexcept
+{
+    if (!(layout.width > 0.0f) || !(layout.height > 0.0f) || band.Width() <= 0 || band.Height() <= 0 || imageWidth <= 0 ||
+        imageHeight <= 0 || !std::isfinite(point.x) || !std::isfinite(point.y))
+    {
+        return point;
+    }
+    // The band's drawing: layout units onto the band's pixels of the image.
+    const float imageX = static_cast<float>(band.minX) + point.x * (static_cast<float>(band.Width()) / layout.width);
+    const float imageY = static_cast<float>(band.minY) + point.y * (static_cast<float>(band.Height()) / layout.height);
+    // The effects' own placement, inverted: from the layout's centre, in its half-heights, against the image's centre
+    // and half-height.
+    const float unit = layout.height / static_cast<float>(imageHeight);
+    return {layout.width / 2.0f + (imageX - static_cast<float>(imageWidth) / 2.0f) * unit,
+            layout.height / 2.0f + (imageY - static_cast<float>(imageHeight) / 2.0f) * unit};
+}
+
 bool OutsideLayout(const LayoutPoint& position, float width, float height) noexcept
 {
     if (!(width > 0.0f) || !(height > 0.0f))

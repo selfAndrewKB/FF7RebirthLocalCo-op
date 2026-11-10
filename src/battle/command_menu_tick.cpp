@@ -257,19 +257,6 @@ std::uintptr_t PartyManager() noexcept
 
 namespace {
 
-/// Before a seat's tick. Its pad's actions reach the seat's controller through the game's own input
-/// handler (the pad's presses and releases dispatched in the seat's UI): the press sets the request and
-/// the release clears it, as for player 1; a suspend clears them through the tick's own
-/// ClearOneShotRequests (the mirrored SuspendHudInput turns +0x25C off first). Here only the
-/// leader-switch requests are cleared: a written exception (a seat's d-pad never switches the party
-/// leader; the game's only switch path, BattleLeader_CycleSwitch, changes player 1's leader and no
-/// per-player switch exists; RE-p2-command-menu-levers.md §15).
-void WriteRequests(std::uintptr_t ctrl) noexcept
-{
-    SetRequest(ctrl, kPrevMember, 0);
-    SetRequest(ctrl, kNextMember, 0);
-}
-
 /// Battle input live (+0x25C = the member selecter's input flag, ctrl+0xF0+0x16C): the game turns it on and
 /// off with EndUI23_ResumeHudInput(0) / SuspendHudInput(0, 0), on its own controller only; the same calls are
 /// made for a seat's (the suspend inside the seat's UI, where the UI system's controller slot names the seat's).
@@ -621,7 +608,9 @@ void SeatPass(int seat, float deltaTime) noexcept
         CatchUpHudMode(seat, ctrl, ctrl1, args.memberType);
         CopyPartyListInput(seat, ctrl, ctrl1);
         CopyMenuLayer(seat, ctrl, ctrl1);
-        WriteRequests(ctrl);
+        // The seat's requests are the game's own handler's (the pad's presses and releases dispatched in the seat's UI
+        // set and clear them, as for player 1), the leader-switch requests included: the tick's switch step runs the
+        // game's cycle for the seat inside this pass (session/party_switch.h).
         // A written exception (RE-p2-command-menu-levers.md §4.1, §15): the battle-HUD sound is one global
         // cue per edge, played by the first controller whose +0x774 differs from its HUD mode; a seat's
         // is pre-seeded with the value its own tick writes one line after the sound, so the cue plays once.

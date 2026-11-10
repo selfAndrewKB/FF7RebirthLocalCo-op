@@ -1,0 +1,17 @@
+{
+  "build": "1.005",
+  "research_build": "1.004",
+  "date": "2026-11-10",
+  "doc": "Rebirth/Documentation/research/RE-p2-own-battle-switch.md (section 1.1; the jump read in both databases 2026-11-10)",
+  "facts": [
+    {
+      "name": "the request's tail jump into BattleLeader_CycleSwitch",
+      "old": "0x14158B95B",
+      "new": "0x1408398E3",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "FieldCommandCtrl_RequestLeaderCycleSwitch's E9 to the cycle, right after mov r8b,1 (require CanSwitch) and add rsp,28h: 1.004 E9 58 00 00 00 at %16=11, 1.005 E9 4C 0B 75 00 at %16=3; both inside one block. The function is the same four steps in both builds (the event counters' refusal, then the jump)."
+    }
+  ]
+}

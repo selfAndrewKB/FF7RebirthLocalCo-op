@@ -15,8 +15,9 @@
 # expect-not: command menu tick: UNAVAILABLE
 # expect: enemy leader: installed; in co-op, while player 1's character is down
 # expect-not: enemy leader: UNAVAILABLE
-# expect: downed commands: in co-op a downed or petrified player still commands the AI allies
-# expect-not: downed commands: UNAVAILABLE
+# expect: party switch: every player's switch takes a free AI member only
+# expect: a downed or petrified player's own switch runs
+# expect-not: party switch: UNAVAILABLE
 # expect-not: standing aside: nothing installed
 # expect-not: not what the research read(?!\): none)
 #   "(the code is not what the research read): none" is the interact watch's all-clear; a site named after the colon is

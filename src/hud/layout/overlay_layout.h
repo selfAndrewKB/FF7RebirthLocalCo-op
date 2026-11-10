@@ -34,6 +34,17 @@ namespace lss::hud {
 /// band applies, 1920x1080 otherwise.
 LayoutSize LastLayoutSize() noexcept;
 
+/// The overlay's last render as the band laid it out: the band of the UI image the layout is drawn into and the
+/// image's size. Empty (zero) while the band does not apply. Game thread.
+struct OverlayBand
+{
+    IntRect      band;
+    std::int32_t imageWidth  = 0;
+    std::int32_t imageHeight = 0;
+    bool         operator==(const OverlayBand&) const = default;
+};
+OverlayBand LastOverlayBand() noexcept;
+
 /// Checks every fact it needs (facts/hud.h) and installs the three redirects and the code patches
 /// (hud/layout/centered_frame_code.h, hud/layout/arrow_edge_code.h), or none.
 bool InstallOverlayLayout(const platform::GameImage& image) noexcept;

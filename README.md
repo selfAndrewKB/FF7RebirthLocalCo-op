@@ -290,8 +290,10 @@ src/
     party_lease             The rules for lending a party member to a seat's controller, as pure functions over values
                             read from the game (tested on the host: tests/party_lease_test.cpp)
     party_member            A seat takes a party member, and gives it back
-    party_switch            Player 1 never switches onto a party member a seat's player plays (RE-p2-party-switch.md,
-                            pass S-SW1; every seat's member since plan/seats.md step 6)
+    party_switch            No player switches onto a party member another player plays; a player's own switch takes any
+                            member no human holds
+    party_switch_rules.h    The battle switch's rules in co-op (session/party_switch.h), as pure functions over what the
+                            game reports; tested on the host
     player_window           Each player's own window: joining, and leaving, by pad (the rules:
                             session/player_window_rules.h; the text: session/player_window_text.h)
     player_window_rules.h   The pure rules of the player windows (session/player_window)
@@ -446,10 +448,6 @@ src/
                             S-CMD1)
     command_rules_code.h    The machine code that answers "no" for one member in FieldCommandCtrl_IsMemberCommandable
                             (RE-p2-command-menu.md §4.2, §4.4)
-    downed_commands         A downed player still commands the AI allies
-                            (Rebirth/Documentation/research/RE-downed-ally-commands.md)
-    downed_commands_rules.h Whose state the command menu's two gates ask about while a player's own character is down
-                            (battle/downed_commands.h)
     enemy_leader            Enemies turn on a standing member when the game's leader is down in co-op
                             (RE-enemy-leader-reads.md)
     enemy_leader_rules.h    Whom enemies follow while the game's leader is down in co-op (battle/enemy_leader.h), as a

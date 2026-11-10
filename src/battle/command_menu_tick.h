@@ -20,8 +20,9 @@
 //     muffle are skipped (battle/menu_tint);
 //   - the per-type command snapshot: a seat's pass does not write it (its one reader cancels a
 //     pending command on the game's controller); the key guide is the seat's own inside the scope;
-//   - the leader-switch requests: cleared before each tick (a written exception: a seat's d-pad
-//     never switches player 1's leader);
+//   - the leader-switch requests: the seat's own, as its pad's d-pad sets them; the tick's switch step then runs the
+//     game's cycle for the seat, every leader read answering the seat (session/party_switch.h keeps it off player
+//     1's and the other players' characters, and the session plays the member it moves to);
 //   - the battle HUD mode: the game's own call on its controller (its setter's entry redirected, as Remake)
 //     is made again on each seat's controller at once, inside that seat's focus and leader scopes; a seat
 //     that could not take it (its player out) is caught up at its next pass;

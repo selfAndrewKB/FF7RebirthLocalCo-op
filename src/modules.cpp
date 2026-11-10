@@ -7,7 +7,6 @@
 #include "battle/command_menu.h"
 #include "battle/command_menu_tick.h"
 #include "battle/command_rules.h"
-#include "battle/downed_commands.h"
 #include "battle/enemy_leader.h"
 #include "battle/equal_targeting.h"
 #include "battle/leader_reads.h"
@@ -40,6 +39,7 @@
 #include "hud/field/prompt_rows.h"
 #include "hud/field/search_pins.h"
 #include "hud/field/wrangle_targets.h"
+#include "hud/layout/hud_placement.h"
 #include "hud/layout/layout_scale.h"
 #include "hud/layout/overlay_layout.h"
 #include "hud/minimap/minimap.h"
@@ -171,12 +171,10 @@ constexpr std::array kModules{
     Module{Call<&camera::camera_distance::Install>, &camera::camera_distance::Remove},
     // each seat's targeting: the game's tick run again for the seat
     Module{Call<&battle::lock_on::Install>, &battle::lock_on::Remove},
-    // player 1's switch skips every seat's member
+    // every player's switch takes only a free AI member; a downed player's own switch runs
     Module{Call<&session::party_switch::Install>, &session::party_switch::Remove},
     // player 1 cannot command a seat's member
     Module{Call<&battle::command_rules::Install>, &battle::command_rules::Remove},
-    // a downed or petrified player still commands the AI allies (after the command rules it asks)
-    Module{Call<&battle::downed_commands::Install>, &battle::downed_commands::Remove},
     // who a battle warps at its start and end, by the setting
     Module{Call<&battle::battle_warps::Install>, &battle::battle_warps::Remove},
     Module{Call<&battle::battle_rates::Install>, &battle::battle_rates::Remove},
@@ -874,6 +872,7 @@ void RegisterCommands(session::Session& session, views::column_source::Override&
         views::RegisterStreamCommands();
         views::column_layout::RegisterCommands();
         hud::RegisterOverlayLayoutCommands();
+        hud::RegisterHudPlacementCommands();
         hud::RegisterColumnHudImagesCommands();
         hud::RegisterSeatHudContentCommands();
         hud::column_area_icons::RegisterCommands();

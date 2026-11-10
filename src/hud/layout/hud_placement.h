@@ -37,4 +37,10 @@ void UpdateHudPlacement(bool splitLayout) noexcept;
 /// this has run, UpdateHudPlacement leaves following the game's re-sets to it.
 void FollowHudPlacementBeforeRender() noexcept;
 
+#if LSS_DEV
+/// The summon gauge glow's probes: `glow-map` (the map its points go through) and `glow-points` (raw points to try).
+/// May throw (out of memory).
+void RegisterHudPlacementCommands();
+#endif
+
 }  // namespace lss::hud

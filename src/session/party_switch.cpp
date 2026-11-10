@@ -1,5 +1,7 @@
 #include "session/party_switch.h"
 
+#include "battle/command_menu_tick.h"
+#include "facts/controller.h"
 #include "facts/party.h"
 #include "platform/build_value.h"
 #include "platform/call_redirect.h"
@@ -9,12 +11,16 @@
 #include "platform/log.h"
 #include "platform/verified_code.h"
 #include "players/generation.h"
+#include "players/object_fields.h"
 #include "players/seats.h"
+#include "session/party_switch_rules.h"
 
 #include <atomic>
 #include <chrono>
 #include <cstdint>
+#include <format>
 #include <iterator>
+#include <string>
 
 namespace lss::session::party_switch {
 
@@ -46,10 +52,18 @@ constexpr std::uintptr_t         kKnockedOutCall = 0x142A2170F;  // in the dead 
 constexpr std::uintptr_t         kPetrifiedCall  = 0x142A7EE7D;  // in the battle component's tick, at the petrify wait's end
 constexpr auto                   kForcedQuietMs  = std::chrono::milliseconds(1000);  // a refusal after this starts a new spell
 
-using ComponentFn = void* (*)(void* character);
-using DisabledFn  = std::uint8_t (*)(std::uint8_t type);
-using ByTypeFn    = void* (*)(void* unused, std::uint8_t type);
-using CycleFn     = std::uint8_t (*)(void* system, std::uint8_t next, std::uint8_t requireCanSwitch, std::uint8_t handoff);
+// The player's request (RE-p2-own-battle-switch.md §1.1): FieldCommandCtrl_RequestLeaderCycleSwitch, the d-pad's
+// path, refuses while the game's two event counters hold, then jumps into the cycle with "require CanSwitch" set.
+// That tail jump (its five bytes inside one block in both builds) is redirected.
+constexpr std::uintptr_t kRequestJump = 0x14158B95B;
+
+using ComponentFn  = void* (*)(void* character);
+using DisabledFn   = std::uint8_t (*)(std::uint8_t type);
+using ByTypeFn     = void* (*)(void* unused, std::uint8_t type);
+using CycleFn      = std::uint8_t (*)(void* system, std::uint8_t next, std::uint8_t requireCanSwitch, std::uint8_t handoff);
+using LeaderTypeFn = std::uint8_t (*)();  // al only
+using DeadFn       = bool (*)(void* unused, std::uint8_t type);
+using HasStateFn   = bool (*)(std::uint8_t type, std::uint8_t state);
 
 // Set once at install.
 platform::CallRedirect g_cycleCall;
@@ -57,13 +71,18 @@ platform::CallRedirect g_canSwitchCall;
 platform::CallRedirect g_disabledCalls[2];
 platform::CallRedirect g_knockedOutCall;
 platform::CallRedirect g_petrifiedCall;
-ByTypeFn               g_byType = nullptr;
+platform::CallRedirect g_requestJump;
+ByTypeFn               g_byType     = nullptr;
+LeaderTypeFn           g_leaderType = nullptr;
+DeadFn                 g_dead       = nullptr;
+HasStateFn             g_hasState   = nullptr;
 /// What Install found, for the redirects (placed at once, or on 1.005 from the game thread).
 struct Sites
 {
     std::uintptr_t player = 0, ai = 0, cycle = 0, count = 0;  // 0: not found (logged by the finder)
     std::uintptr_t disabled = 0, byType = 0, disabledSites[2]{};
     std::uintptr_t cycleSwitch = 0, knockedOut = 0, petrified = 0;
+    std::uintptr_t request = 0, leaderType = 0, dead = 0, hasState = 0;
 };
 Sites                   g_sites;
 platform::DeferredSites g_placement;  // 1.005: the sites placed from the game thread (platform/deferred_sites.h)
@@ -73,7 +92,7 @@ std::uint32_t g_refusals       = 0;  // candidates the switch was told to skip
 std::uint32_t g_loggedRefusals = 0;
 bool          g_greyLogged     = false;
 
-/// The seat whose player plays `character` (1..), or 0 for none: player 1 never switches onto a seat's member.
+/// The seat whose player plays `character` (1..), or 0 for none.
 int SeatPlaying(const void* character) noexcept
 {
     if (character == nullptr || !players::generation::OnGameThread())
@@ -91,54 +110,97 @@ int SeatPlaying(const void* character) noexcept
     return 0;
 }
 
+/// `character` is player 1's: the leader player 1's controller names, not who possesses it (a synergy hands player
+/// 1's character to its AI for the approach, and it stays player 1's).
+bool PlayerOnes(const void* character) noexcept
+{
+    const void* one = players::generation::PlayerOneController();
+    return character != nullptr && one != nullptr && ReadPointer(one, facts::kControllerLeader) == character;
+}
+
+/// Whether the switch in flight must pass over `character` (session/party_switch_rules.h), and whose it is.
+struct Refusal
+{
+    bool refused    = false;
+    int  seat       = 0;      // the seat that plays it, 0 for none
+    bool playerOnes = false;  // player 1's character, refused in a seat's pass
+};
+
+Refusal RefusalOf(const void* character) noexcept
+{
+    if (character == nullptr || !players::generation::OnGameThread())
+    {
+        return {};
+    }
+    const int  pass = battle::command_menu_tick::PassSeat();  // 0: player 1's own switch (or a forced one)
+    const int  seat = SeatPlaying(character);
+    const bool one  = pass != 0 && PlayerOnes(character);
+    return {party_switch_rules::SwitchRefuses(pass, seat, one), seat, one};
+}
+
+std::wstring Whose(const Refusal& refusal)
+{
+    return refusal.playerOnes ? L"player 1's character" : std::format(L"{}'s member", players::SeatName(refusal.seat));
+}
+
 /// Logs the first refusals, then every 600th (a downed leader retries the switch every frame).
-void NoteRefusal(const wchar_t* where, int seat) noexcept
+void NoteRefusal(const wchar_t* where, const Refusal& refusal) noexcept
 {
     ++g_refusals;
     if (g_refusals <= 10 || g_refusals - g_loggedRefusals >= 600)
     {
         g_loggedRefusals = g_refusals;
-        platform::Log(L"party switch: {} skipped {}'s member ({} time(s) so far)", where, players::SeatName(seat),
-                      g_refusals);
+        try
+        {
+            platform::Log(L"party switch: {} passed over {} ({} time(s) so far)", where, Whose(refusal), g_refusals);
+        }
+        catch (...)
+        {
+        }
     }
 }
 
-/// Replaces the cycle's component call: none for a seat's member (the game skips it).
+/// Replaces the cycle's component call: none for a member the pass may not take (the game skips it).
 void* CycleComponent(void* character) noexcept
 {
-    if (const int seat = SeatPlaying(character); seat != 0)
+    if (const Refusal refusal = RefusalOf(character); refusal.refused)
     {
-        NoteRefusal(L"the switch", seat);
+        NoteRefusal(L"the switch", refusal);
         return nullptr;
     }
     return reinterpret_cast<ComponentFn>(g_cycleCall.Original())(character);
 }
 
-/// Replaces CanSwitch's component call: a seat's member is not counted.
+/// Replaces CanSwitch's component call: a member the pass may not take is not counted.
 void* CountedComponent(void* character) noexcept
 {
-    if (SeatPlaying(character) != 0)
+    if (RefusalOf(character).refused)
     {
         return nullptr;
     }
     return reinterpret_cast<ComponentFn>(g_canSwitchCall.Original())(character);
 }
 
-/// Replaces the widget's test: a seat's member's portrait reads as not switchable.
+/// Replaces the widget's test: the portrait of a member the pass may not take reads as not switchable.
 std::uint8_t SwitchDisabled(std::uint8_t type) noexcept
 {
     void* character = nullptr;
-    const int seat  = players::generation::OnGameThread() && players::generation::AnyActive() &&
-                             platform::CallGuarded(g_byType, character, static_cast<void*>(nullptr), type)
-                          ? SeatPlaying(character)
-                          : 0;
-    if (seat != 0)
+    const Refusal refusal = players::generation::OnGameThread() && players::generation::AnyActive() &&
+                                    platform::CallGuarded(g_byType, character, static_cast<void*>(nullptr), type)
+                                ? RefusalOf(character)
+                                : Refusal{};
+    if (refusal.refused)
     {
         if (!g_greyLogged)
         {
             g_greyLogged = true;
-            platform::Log(L"party switch: the switch widget greys {}'s member (type {})", players::SeatName(seat),
-                          type);
+            try
+            {
+                platform::Log(L"party switch: the switch widget greys {} (type {})", Whose(refusal), type);
+            }
+            catch (...)
+            {
+            }
         }
         return 1;
     }
@@ -172,7 +234,8 @@ ForcedSpell g_knockedOut, g_petrified;
 
 /// The game's forced switch for player 1's character, answered "nobody can take over" (its own answer when no member
 /// can) while another player plays: player 1 stays on their downed or petrified character until it is revived or cured,
-/// as every other player does (no retry is queued, and game over still waits for every member).
+/// as every other player does (no retry is queued, and game over still waits for every member). The player's own
+/// press switches them meanwhile (RequestedCycle).
 std::uint8_t RefuseForced(ForcedSpell& spell, const platform::CallRedirect& call, const wchar_t* why, void* system,
                           std::uint8_t next, std::uint8_t requireCanSwitch, std::uint8_t handoff) noexcept
 {
@@ -184,8 +247,9 @@ std::uint8_t RefuseForced(ForcedSpell& spell, const platform::CallRedirect& call
     if (spell.calls == 0 || now - spell.last > kForcedQuietMs)
     {
         spell.calls = 0;
-        platform::Log(L"party switch: player 1's character is {}; player 1 stays on it until {} (co-op: no forced switch)", why,
-                      &spell == &g_petrified ? L"it is cured" : L"a revive");
+        platform::Log(L"party switch: player 1's character is {}; player 1 stays on it until {} or their own switch "
+                      L"(co-op: no forced switch)",
+                      why, &spell == &g_petrified ? L"it is cured" : L"a revive");
     }
     ++spell.calls;
     spell.last = now;
@@ -201,6 +265,63 @@ std::uint8_t KnockedOutCycle(void* system, std::uint8_t next, std::uint8_t requi
 std::uint8_t PetrifiedCycle(void* system, std::uint8_t next, std::uint8_t requireCanSwitch, std::uint8_t handoff) noexcept
 {
     return RefuseForced(g_petrified, g_petrifiedCall, L"petrified", system, next, requireCanSwitch, handoff);
+}
+
+/// The leader as the game answers it here (a seat's member in that seat's pass): down, petrified, or able to act.
+/// Null when it cannot be read.
+const wchar_t* LeaderCannotAct() noexcept
+{
+    std::uint8_t leader = facts::kNoPlayerType;
+    if (!platform::CallGuarded(g_leaderType, leader) || leader >= facts::kNoPlayerType)
+    {
+        return nullptr;
+    }
+    bool dead = false, petrified = false;
+    if (platform::CallGuarded(g_dead, dead, static_cast<void*>(nullptr), leader) && dead)
+    {
+        return L"down";
+    }
+    if (platform::CallGuarded(g_hasState, petrified, leader, facts::kPetrifyStateId) && petrified)
+    {
+        return L"petrified";
+    }
+    return nullptr;
+}
+
+/// Replaces the request's jump into the cycle (the d-pad's path, for player 1 and, in its pass, each seat): the game's
+/// cycle, with its two-standing gate dropped in co-op for a leader that cannot act (party_switch_rules.h
+/// RequiresCanSwitch: the game's own switch for a downed leader runs so, and the mod refuses that one), and without the
+/// targeted hand-over in a seat's pass (a written exception: its executor runs outside every pass).
+std::uint8_t RequestedCycle(void* system, std::uint8_t next, std::uint8_t requireCanSwitch, std::uint8_t handoff) noexcept
+{
+    const auto original = reinterpret_cast<CycleFn>(g_requestJump.Original());
+    if (!players::generation::OnGameThread())
+    {
+        return original(system, next, requireCanSwitch, handoff);
+    }
+    const int      pass      = battle::command_menu_tick::PassSeat();
+    const bool     coop      = pass != 0 || AnotherPlayerPlays();
+    const wchar_t* cannotAct = coop ? LeaderCannotAct() : nullptr;
+    const bool     gated     = party_switch_rules::RequiresCanSwitch(requireCanSwitch != 0, coop, cannotAct != nullptr);
+    const std::uint8_t hand  = pass != 0 ? 0 : handoff;
+    const std::uint8_t taken = original(system, next, gated ? 1 : 0, hand);
+    if (coop)
+    {
+        const wchar_t* player = pass != 0 ? players::SeatName(pass) : L"player 1";
+        if (requireCanSwitch != 0 && !gated)
+        {
+            platform::Log(L"party switch: {}'s character is {}; their own switch {} (the game's two-standing gate dropped)",
+                          player, cannotAct, taken != 0 ? L"takes another member" : L"finds nobody to take");
+        }
+        else
+        {
+            platform::LogDebug(L"party switch: {} asked to switch to the {} member: {}{}", player,
+                               next != 0 ? L"next" : L"previous", taken != 0 ? L"taken" : L"refused by the game's cycle",
+                               pass != 0 && handoff != 0 ? L" (the hand-over not asked: a seat's switch never hands its command over)"
+                                                         : L"");
+        }
+    }
+    return taken;
 }
 
 /// The redirects, from what Install found.
@@ -231,7 +352,7 @@ bool PlaceSites(const platform::GameImage&) noexcept
         }
         switching = false;
     }
-    // The widget greys a seat's member only when the switch really skips it.
+    // The widget greys a member only when the switch really skips it.
     bool widget = switching && s.disabled != 0 && s.byType != 0;
     if (widget)
     {
@@ -252,11 +373,25 @@ bool PlaceSites(const platform::GameImage&) noexcept
             }
         }
     }
-    platform::Log(L"party switch: {}; the switch widget {}",
-                  switching ? L"player 1's switch skips every other player's member"
+    // The request's jump: only with the refusals in place (a seat's switch could take player 1's character otherwise).
+    // Its five bytes lie in one block in both builds, so it is placed from any thread.
+    bool request = switching && s.request != 0 && s.leaderType != 0 && s.dead != 0 && s.hasState != 0;
+    if (request)
+    {
+        g_leaderType = reinterpret_cast<LeaderTypeFn>(s.leaderType);
+        g_dead       = reinterpret_cast<DeadFn>(s.dead);
+        g_hasState   = reinterpret_cast<HasStateFn>(s.hasState);
+        request      = g_requestJump.InstallTailJump(s.request, s.cycleSwitch, reinterpret_cast<std::uintptr_t>(&RequestedCycle));
+    }
+    platform::Log(L"party switch: {}; the switch widget {}; {}",
+                  switching ? L"every player's switch takes a free AI member only (never another player's character, "
+                              L"and players 2 and 3 never player 1's)"
                             : L"UNAVAILABLE (a check failed): player 1 can switch onto player 2's or 3's member",
-                  widget ? L"greys player 2's or 3's member"
-                         : L"shows player 2's or 3's member as switchable (a check failed)");
+                  widget ? L"greys the members a player may not take"
+                         : L"shows player 2's or 3's member as switchable (a check failed)",
+                  request ? L"a downed or petrified player's own switch runs (the game's two-standing gate dropped in "
+                            L"co-op); players 2 and 3's switch never hands a command over"
+                          : L"a downed player's own switch stays the game's refusal (a check failed)");
     return switching || knockedOut || petrified;
 }
 
@@ -269,7 +404,8 @@ bool Install(const platform::GameImage& image) noexcept
     g_sites = {find(kPlayerComponent), find(kAiControllerComponent), site(kCycleCall), site(kCanSwitchCall),
                find(kDisabled),        find(kCharacterByPlayerType),
                {site(kDisabledCalls[0]), site(kDisabledCalls[1])},
-               find(kCycleSwitch),     site(kKnockedOutCall), site(kPetrifiedCall)};
+               find(kCycleSwitch),     site(kKnockedOutCall), site(kPetrifiedCall),
+               site(kRequestJump),     find(facts::kGetPartyLeaderType), find(facts::kIsTypeDead), find(facts::kTypeHasStateId)};
     // The cycle's call crosses a 16-byte block in 1.005: the sites are placed from the game thread, between its
     // ticks (platform/deferred_sites.h). The placement reads only the addresses found here.
     const bool placed = g_placement.Install(image, &PlaceSites);
@@ -285,8 +421,8 @@ bool Install(const platform::GameImage& image) noexcept
 void Remove() noexcept
 {
     g_placement.Cancel();  // a placement still queued does nothing
-    for (auto* call : {&g_petrifiedCall, &g_knockedOutCall, &g_disabledCalls[1], &g_disabledCalls[0], &g_canSwitchCall,
-                       &g_cycleCall})
+    for (auto* call : {&g_requestJump, &g_petrifiedCall, &g_knockedOutCall, &g_disabledCalls[1], &g_disabledCalls[0],
+                       &g_canSwitchCall, &g_cycleCall})
     {
         if (call->IsInstalled() && !call->Restore())
         {

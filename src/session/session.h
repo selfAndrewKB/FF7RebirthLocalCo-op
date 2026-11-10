@@ -32,7 +32,10 @@
 //            party is given back and another chosen; after a party apply, a member no longer in the seat's slot is
 //            given back and the slot's taken. A slow check backs both up (story override party data passes
 //            neither funnel), and the battle controller component is checked every few ticks. A downed member
-//            stays the seat's.
+//            stays the seat's. A seat's own d-pad switch in a fight (session/party_switch.h: the game's cycle run in
+//            the seat's command pass, so the leader change it makes is the seat's controller's, heard inside that
+//            pass) moves the seat onto a free AI member: the seat plays it while the fight lasts, the slot not
+//            followed meanwhile, and takes its slot's member again when the fight ends (the own switch).
 //   no member with none free (player 1's character alone in a story party), the seat's player does not exist:
 //            a join creates nothing, and a seat whose member went leaves. The mod is then as
 //            with one player, and the seat joins once the game's party changes free a member (a
@@ -225,6 +228,9 @@ private:
     void CheckAfterPartyChange(bool followSlot) noexcept;
     void FollowSlot(const wchar_t* when, bool log) noexcept;  // log: the slot's verdict as an Info line
     void EndStandIn(const wchar_t* why) noexcept;             // the mark cleared (logged) and the slot followed
+    void AdoptOwnSwitch(void* character) noexcept;            // the seat's own switch: the seat plays `character`
+    void AwaitOwnSwitch() noexcept;                           // the switch's hand-over read from the lease, as a take's
+    void EndOwnSwitch(const wchar_t* why) noexcept;           // the own switch over (logged) and the slot followed
     void WaitForSlot(const party_member::SlotChoice& choice) noexcept;
     bool ScriptNeedsMember(const AiSnapshot& ai) noexcept;
     void CheckHeldAi() noexcept;
@@ -257,6 +263,10 @@ private:
     std::uint8_t          standIn_          = kNoStandIn;  // player 1's former character's type the seat plays since the
                                                            // game's leader change took its member, until the game's
                                                            // leader goes home or the seat is out (party_lease.h StandInFor)
+    bool                  ownSwitch_        = false;    // the seat's member is one the player's own switch took in a fight:
+                                                        // the slot decides again when the fight ends (session_rules::OwnSwitchHolds)
+    std::uint32_t         ownSwitchTicks_   = 0;        // ticks since the own switch, while its hand-over is awaited (0 after)
+    std::uint32_t         outOfBattleTicks_ = 0;        // ticks in a row the game's in-battle test said no, during an own switch
     bool                  rideAlong_        = false;    // a script has the seat's member, the player rides along (RidesAlong)
     bool                  rideToRelease_    = false;    // the ride is for a level's walk the member must finish: it lasts until
                                                         // the level releases the member (field_hold::LevelReleased), not until

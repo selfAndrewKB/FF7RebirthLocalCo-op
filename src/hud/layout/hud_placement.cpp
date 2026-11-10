@@ -20,6 +20,10 @@
 #include "platform/log.h"
 #include "players/unreal_access.h"
 
+#if LSS_DEV
+#include "platform/command_registry.h"
+#endif
+
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -90,6 +94,7 @@ struct Placed
     std::optional<GlowPoints> glow;        // a glow placement's own design points (set back when the split ends)
     GlowPoints        glowMoved;           // the points as last written (a read of anything else is the game's own write)
     LayoutSize        glowLayout;          // the layout the glow was last moved for (zero: not yet)
+    OverlayBand       glowBand;            // the band it was last moved for
     bool              glowRefusedLogged = false;  // the "not design points" line, once per widget
 };
 
@@ -278,10 +283,29 @@ bool PlausibleGlow(const GlowPoints& points) noexcept
            NearFrame(points.start);
 }
 
-/// `point` moved as the bar was; a zero point (not written yet) stays zero.
-LayoutPoint Shifted(const LayoutPoint& point, const LayoutPoint& anchor, const LayoutSize& layout) noexcept
+// The glow's placement in the layout: through the effects' own map (the default: the effects are drawn against the
+// whole UI image, the layout into its band, viewport_placement.h EffectPointFor), or the bare layout point (the
+// band rule, for comparison in the game); and a raw set of points instead (`glow-points`), to try a placement live.
+enum class GlowMap
 {
-    return Zero(point) ? point : KeepDistanceFromAnchor(point, anchor, layout.width, layout.height);
+    Image,
+    Band,
+};
+GlowMap                   g_glowMap = GlowMap::Image;  // game thread
+std::optional<GlowPoints> g_glowRaw;                   // game thread
+
+/// Where the game must be told to put `point` of the frame: moved as the bar was (its distance from the anchor kept in
+/// the layout), then expressed as the effects' placement needs it. A zero point (not written yet) stays zero.
+LayoutPoint GlowTarget(const LayoutPoint& point, const LayoutPoint& anchor, const LayoutSize& layout,
+                       const OverlayBand& band) noexcept
+{
+    if (Zero(point))
+    {
+        return point;
+    }
+    const LayoutPoint moved = KeepDistanceFromAnchor(point, anchor, layout.width, layout.height);
+    return g_glowMap == GlowMap::Band ? moved
+                                      : EffectPointFor(moved, layout, band.band, band.imageWidth, band.imageHeight);
 }
 
 /// The widget's class holds the three points (the research build's layout; a class of another size is not written).
@@ -353,9 +377,12 @@ void PlaceGlow(Placed& placed) noexcept
         original.start       = now.start != placed.glowMoved.start && NearFrame(now.start) ? now.start : original.start;
     }
     const LayoutPoint anchor{placed.placement->anchorX, placed.placement->anchorY};
-    const GlowPoints  moved{Shifted(placed.glow->head, anchor, layout), Shifted(placed.glow->back, anchor, layout),
-                           Shifted(placed.glow->start, anchor, layout)};
-    if (moved == now && layout == placed.glowLayout)
+    const OverlayBand band = LastOverlayBand();
+    const GlowPoints  moved = g_glowRaw ? *g_glowRaw
+                                        : GlowPoints{GlowTarget(placed.glow->head, anchor, layout, band),
+                                                     GlowTarget(placed.glow->back, anchor, layout, band),
+                                                     GlowTarget(placed.glow->start, anchor, layout, band)};
+    if (moved == now && layout == placed.glowLayout && band == placed.glowBand)
     {
         placed.glowMoved = moved;  // in place (an adopted point under a zero shift: as written)
         return;
@@ -373,12 +400,17 @@ void PlaceGlow(Placed& placed) noexcept
         return;
     }
     placed.glowLayout = layout;
+    placed.glowBand   = band;
     placed.glowMoved  = moved;
-    platform::LogDebug(L"HUD placement: {}'s glow points moved for the {:.0f}x{:.0f} layout: head ({:.0f},{:.0f}) -> "
-                       L"({:.0f},{:.0f}), aura ({:.0f},{:.0f}) -> ({:.0f},{:.0f}), head start ({:.0f},{:.0f}) -> ({:.0f},{:.0f})",
-                       placed.placement->className, layout.width, layout.height, placed.glow->head.x, placed.glow->head.y,
-                       moved.head.x, moved.head.y, placed.glow->back.x, placed.glow->back.y, moved.back.x, moved.back.y,
-                       placed.glow->start.x, placed.glow->start.y, moved.start.x, moved.start.y);
+    platform::LogDebug(L"HUD placement: {}'s glow points moved for the {:.0f}x{:.0f} layout (band ({},{})-({},{}) of the "
+                       L"{}x{} image; {}): head ({:.0f},{:.0f}) -> ({:.0f},{:.0f}), aura ({:.0f},{:.0f}) -> ({:.0f},{:.0f}), "
+                       L"head start ({:.0f},{:.0f}) -> ({:.0f},{:.0f})",
+                       placed.placement->className, layout.width, layout.height, band.band.minX, band.band.minY,
+                       band.band.maxX, band.band.maxY, band.imageWidth, band.imageHeight,
+                       g_glowRaw ? L"raw points" : g_glowMap == GlowMap::Band ? L"the band rule" : L"the image rule",
+                       placed.glow->head.x, placed.glow->head.y, moved.head.x, moved.head.y, placed.glow->back.x,
+                       placed.glow->back.y, moved.back.x, moved.back.y, placed.glow->start.x, placed.glow->start.y,
+                       moved.start.x, moved.start.y);
 }
 
 /// The glow's own design points back (the split ended, or the widget's layout is left to the game).
@@ -390,6 +422,7 @@ void RestoreGlow(Placed& placed) noexcept
     }
     placed.glow.reset();
     placed.glowLayout = {};
+    placed.glowBand   = {};
     placed.glowMoved  = {};
 }
 
@@ -603,5 +636,75 @@ void FollowHudPlacementBeforeRender() noexcept
         platform::Log(L"HUD placement: failed before the render (an exception); left as it is");
     }
 }
+
+#if LSS_DEV
+
+void RegisterHudPlacementCommands()
+{
+    using control::Outcome;
+    using control::Value;
+    control::Register({.name  = L"glow-map",
+                       .shape = control::Shape::Word,
+                       .words = {L"image", L"band"},
+                       .help  = L"how the summon gauge's glow points are moved with the bar: through the effects' own map "
+                                L"against the UI image (the default), or the bare layout point (the band rule)",
+                       .set   = [](const Value& v) {
+                           g_glowMap = std::get<std::wstring>(v) == L"band" ? GlowMap::Band : GlowMap::Image;
+                           return Outcome{true, L"moved at the next tick while split"};
+                       },
+                       .get = [] { return Value{std::wstring(g_glowMap == GlowMap::Band ? L"band" : L"image")}; }});
+    control::Register({.name  = L"glow-points",
+                       .shape = control::Shape::Text,
+                       .help  = L"the summon gauge's glow points set as given, `head.x head.y aura.x aura.y` (the head's "
+                                L"start keeps the map's), or `off` for the map's",
+                       .set   = [](const Value& v) {
+                           const std::wstring text = std::get<std::wstring>(v);
+                           if (text == L"off")
+                           {
+                               g_glowRaw.reset();
+                               return Outcome{true, L"the map's points again at the next tick"};
+                           }
+                           float  values[4]{};
+                           size_t count = 0, at = 0;
+                           while (count < 4 && at < text.size())
+                           {
+                               const size_t end  = text.find(L' ', at);
+                               const auto   word = text.substr(at, end == std::wstring::npos ? std::wstring::npos : end - at);
+                               at                = end == std::wstring::npos ? text.size() : end + 1;
+                               if (word.empty())
+                               {
+                                   continue;
+                               }
+                               const auto real = control::ReadReal(word);
+                               if (!real || !NearFrame({static_cast<float>(*real), 0.0f}) || std::fabs(*real) > 100000.0)
+                               {
+                                   return Outcome{false, L"four numbers wanted, each within the frame's reach: head.x head.y "
+                                                         L"aura.x aura.y"};
+                               }
+                               values[count++] = static_cast<float>(*real);
+                           }
+                           if (count != 4)
+                           {
+                               return Outcome{false, L"four numbers wanted: head.x head.y aura.x aura.y"};
+                           }
+                           GlowPoints raw{{values[0], values[1]}, {values[2], values[3]}, {}};
+                           for (const auto& placed : g_placed)
+                           {
+                               if (placed.placement->glow && placed.glow)
+                               {
+                                   raw.start = placed.glowMoved.start;  // as the map last put it
+                               }
+                           }
+                           g_glowRaw = raw;
+                           return Outcome{true, L"set at the next tick while split"};
+                       },
+                       .get = [] {
+                           return Value{g_glowRaw ? std::format(L"{:.0f} {:.0f} {:.0f} {:.0f}", g_glowRaw->head.x, g_glowRaw->head.y,
+                                                                g_glowRaw->back.x, g_glowRaw->back.y)
+                                                  : std::wstring(L"off")};
+                       }});
+}
+
+#endif
 
 }  // namespace lss::hud

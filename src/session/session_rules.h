@@ -78,14 +78,16 @@ struct LeaderEvent
     bool memberIsSeat          = false;  // the character is the seat's member (not null)
     bool memberHeld            = false;  // taking or playing a member
     bool noMember              = false;  // the seat is in without a member
+    bool inOwnPass             = false;  // the change runs inside the seat's own command pass (its d-pad switch)
 };
 
 enum class LeaderEventAction
 {
     None,
     ArmLook,  // the member the game moved off may be free: look for one every tick for a while
-    Warn,     // the game changes the seat's controller's leader: a game leader change ran inside a seat's scope
+    Warn,     // the game changes the seat's controller's leader outside the seat's own pass: not acted on
     Yield,    // the seat's member is about to become player 1's leader: given back first
+    Adopt,    // the seat's own switch: the game moves the seat's controller onto the character; the seat plays it
 };
 
 constexpr LeaderEventAction DecideLeaderEvent(const LeaderEvent& event) noexcept
@@ -96,13 +98,21 @@ constexpr LeaderEventAction DecideLeaderEvent(const LeaderEvent& event) noexcept
     }
     if (event.controllerIsSeat)
     {
-        return LeaderEventAction::Warn;
+        return event.inOwnPass && event.memberHeld ? LeaderEventAction::Adopt : LeaderEventAction::Warn;
     }
     if (event.controllerIsPlayerOne && event.memberIsSeat && event.memberHeld)
     {
         return LeaderEventAction::Yield;
     }
     return event.noMember ? LeaderEventAction::ArmLook : LeaderEventAction::None;
+}
+
+/// A player's own switch holds while the fight lasts: the slot is not followed meanwhile (a party apply or the slow
+/// check would send the player back), and the switch ends with the fight, when the seat takes its slot's member again
+/// as the game sends player 1 back to the field leader.
+constexpr bool OwnSwitchHolds(bool ownSwitch, bool inBattle) noexcept
+{
+    return ownSwitch && inBattle;
 }
 
 }  // namespace lss::session::session_rules

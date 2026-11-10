@@ -37,6 +37,16 @@ inline constexpr std::uint8_t kGetPartyLeaderTypeBytes[] = {0x48, 0x8B, 0x05, 0x
                                                             0x10, 0xC3};
 inline constexpr FunctionFact kGetPartyLeaderType{L"UEndPartyAPI_GetPartyLeaderType", 0x1408070C4,
                                                   kGetPartyLeaderTypeBytes};
+/// Party_IsTypeDead_AIHolder6(unused, u8 type): the member of `type`'s control state is Dead (6); the type in dl
+/// (RE-downed-ally-commands.md §2.1).
+inline constexpr std::uint8_t kIsTypeDeadBytes[] = {0x40, 0x53, 0xB8, 0x80, 0x00, 0x00, 0x00};
+inline constexpr FunctionFact kIsTypeDead{L"Party_IsTypeDead_AIHolder6", 0x140805200, kIsTypeDeadBytes};
+/// PartyType_HasStateId(u8 type, u8 status): the member of `type` has the status; the battle switch's own member test
+/// and the command menu's gates ask it for Petrify (RE-downed-ally-commands.md §5.2, RE-p2-party-switch.md).
+inline constexpr std::uint8_t kTypeHasStateIdBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x74,
+                                                        0x24, 0x10, 0x57, 0xB8, 0x80, 0x00, 0x00, 0x00};
+inline constexpr FunctionFact kTypeHasStateId{L"PartyType_HasStateId", 0x140A40050, kTypeHasStateIdBytes};
+inline constexpr std::uint8_t kPetrifyStateId = 22;
 /// Party roster: lane 0 is the field lane; a type of 0x10 or more is "none".
 inline constexpr std::uint8_t kFieldLane       = 0;
 inline constexpr std::uint8_t kNoPlayerType    = 0x10;

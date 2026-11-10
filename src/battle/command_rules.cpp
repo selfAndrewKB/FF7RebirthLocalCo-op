@@ -206,16 +206,6 @@ bool Installed() noexcept
     return g_installed;
 }
 
-std::uint8_t TypeAt(std::int32_t ordinal) noexcept
-{
-    std::uint8_t type = 0x10;
-    if (!g_installed || ordinal < 0 || !platform::CallGuarded(g_ordinalType, type, static_cast<void*>(nullptr), ordinal))
-    {
-        return 0x10;
-    }
-    return type;
-}
-
 bool Refuses(int ordinal) noexcept
 {
     return (Mask() & Bit(ordinal)) != 0;

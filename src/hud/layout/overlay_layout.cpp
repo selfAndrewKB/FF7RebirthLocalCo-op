@@ -71,6 +71,7 @@ platform::CodeRedirect   g_frameCode;
 platform::CodeRedirect   g_arrowEdgeCode;
 alignas(8) std::uint8_t  g_bandApplies = 0;
 LayoutSize               g_lastLayout  = kSoloLayout;  // game thread
+OverlayBand              g_lastBand;                   // game thread; empty while the band does not apply
 
 /// What the rect call decided for this frame's render, for the entry call a few instructions later
 /// in the same function. Both run on the game thread; the entry call acts only on the thread that
@@ -182,6 +183,7 @@ IntRect* OverlayLayoutRect(IntRect* out)
     g_pending.active   = false;
     g_bandApplies = 0;
     g_lastLayout  = kSoloLayout;
+    g_lastBand    = {};
     if (!views::ViewsSplit() || out == nullptr || out->minX != 0 || out->minY != 0)
     {
         return result;  // one view (or an unexpected rect): exactly the engine's result
@@ -208,6 +210,7 @@ IntRect* OverlayLayoutRect(IntRect* out)
         g_pending          = {true, GetCurrentThreadId(), overlay, place, host, BandClipMap(band, image.Width(), image.Height())};
         g_bandApplies = 1;
         g_lastLayout  = LayoutSizeOf(band);
+        g_lastBand    = {band, image.Width(), image.Height()};
     }
     return result;
 }
@@ -408,6 +411,11 @@ void RemoveOverlayLayout() noexcept
 LayoutSize LastLayoutSize() noexcept
 {
     return g_lastLayout;
+}
+
+OverlayBand LastOverlayBand() noexcept
+{
+    return g_lastBand;
 }
 
 bool OverlayLayoutInstalled() noexcept

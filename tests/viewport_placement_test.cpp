@@ -112,6 +112,29 @@ void TestIconBaseKeepsCornerDistance()
     EXPECT(KeepDistanceFromAnchor(base, anchor, 0.0f, 0.0f) == base);
     EXPECT(KeepDistanceFromAnchor(base, anchor, std::numeric_limits<float>::quiet_NaN(), 1080.0f) == base);
 }
+void TestEffectPoint()
+{
+    std::puts("effect point: a UI effect's point maps through the band it is drawn beside; a full view leaves it");
+    using lss::hud::EffectPointFor;
+    using lss::hud::IntRect;
+    using lss::hud::LayoutSize;
+    const LayoutPoint head{1546.0f, 657.0f};  // the summon gauge's head glow (facts/hud.h)
+    // A 1920x1080 view: the layout fills the image.
+    EXPECT(EffectPointFor(head, LayoutSize{1920.0f, 1080.0f}, IntRect{0, 0, 1920, 1080}, 1920, 1080) == head);
+    // A top/bottom half (a 3840x1080 layout drawn into the middle band): the bar's corner shift puts the head at
+    // (3466, 657); the effect must be told the image position of that, in layout units: (2693, 598.5).
+    const LayoutPoint moved{3466.0f, 657.0f};
+    const auto        top = EffectPointFor(moved, LayoutSize{3840.0f, 1080.0f}, IntRect{0, 270, 1920, 810}, 1920, 1080);
+    EXPECT(std::fabs(top.x - 2693.0f) < 0.01f && std::fabs(top.y - 598.5f) < 0.01f);
+    // A side-by-side half (a 1920x2160 layout drawn into the centre band): the two maps cancel, the moved point stands.
+    const LayoutPoint side{1546.0f, 1737.0f};
+    EXPECT(EffectPointFor(side, LayoutSize{1920.0f, 2160.0f}, IntRect{480, 0, 1440, 1080}, 1920, 1080) == side);
+    // Unknown sizes leave the point.
+    EXPECT(EffectPointFor(moved, LayoutSize{}, IntRect{0, 270, 1920, 810}, 1920, 1080) == moved);
+    EXPECT(EffectPointFor(moved, LayoutSize{3840.0f, 1080.0f}, IntRect{}, 1920, 1080) == moved);
+    EXPECT(EffectPointFor(moved, LayoutSize{3840.0f, 1080.0f}, IntRect{0, 270, 1920, 810}, 0, 0) == moved);
+}
+
 void TestRejected()
 {
     std::puts("placement: an implausible layout is left alone");
@@ -132,6 +155,7 @@ int main()
     TestAreaCorners();
     TestSoloUnchanged();
     TestIconBaseKeepsCornerDistance();
+    TestEffectPoint();
     TestRejected();
 
     return lss::test::Report();
