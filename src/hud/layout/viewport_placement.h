@@ -66,6 +66,12 @@ LayoutPoint KeepDistanceFromAnchor(const LayoutPoint& original, const LayoutPoin
 LayoutPoint EffectPointFor(const LayoutPoint& point, const LayoutSize& layout, const IntRect& band,
                            std::int32_t imageWidth, std::int32_t imageHeight) noexcept;
 
+/// The factor a UI effect's size needs to stand to its bar as in single player: the band's drawing scale (layout units
+/// onto the band's pixels) over single player's (a 1920x1080 layout onto the whole image). The effects' sizes are in
+/// the image's own units whatever the layout, while the bar is drawn at the band's scale. 1 for a layout filling a
+/// 16:9 image, and for an unknown layout, band or image.
+float EffectSizeFactor(const LayoutSize& layout, const IntRect& band, std::int32_t imageHeight) noexcept;
+
 /// Whether a widget placed at `position` (its top-left, in layout units) starts outside a layout of
 /// `width` x `height` units, where it is not painted (and so not ticked). False for an unknown
 /// (zero) layout.

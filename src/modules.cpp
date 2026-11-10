@@ -39,6 +39,7 @@
 #include "hud/field/prompt_rows.h"
 #include "hud/field/search_pins.h"
 #include "hud/field/wrangle_targets.h"
+#include "hud/layout/glow_size.h"
 #include "hud/layout/hud_placement.h"
 #include "hud/layout/layout_scale.h"
 #include "hud/layout/overlay_layout.h"
@@ -428,6 +429,7 @@ void Install(const platform::GameImage& image) noexcept
 
 void Remove() noexcept
 {
+    hud::ResetGlowSize();  // the summon glow's size constants are the asset's again before anything is taken down
     for (auto row = kModules.rbegin(); row != kModules.rend(); ++row)
     {
         if (row->remove != nullptr)
@@ -873,6 +875,7 @@ void RegisterCommands(session::Session& session, views::column_source::Override&
         views::column_layout::RegisterCommands();
         hud::RegisterOverlayLayoutCommands();
         hud::RegisterHudPlacementCommands();
+        hud::RegisterGlowSizeCommands();
         hud::RegisterColumnHudImagesCommands();
         hud::RegisterSeatHudContentCommands();
         hud::column_area_icons::RegisterCommands();

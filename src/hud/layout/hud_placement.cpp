@@ -11,6 +11,7 @@
 
 #include "facts/hud.h"
 #include "hud/hud_rules.h"
+#include "hud/layout/glow_size.h"
 #include "hud/layout/overlay_layout.h"
 #include "hud/layout/viewport_placement.h"
 #include "hud/user_widgets.h"
@@ -579,6 +580,10 @@ void UpdateHudPlacement(bool splitLayout) noexcept
 {
     try
     {
+        if (!splitLayout)
+        {
+            FollowGlowSize(1.0f);  // every tick: the glow's sizes set back as soon as the split ends, and retried
+        }
         if (!splitLayout && !g_active)
         {
             return;
@@ -610,6 +615,10 @@ void UpdateHudPlacement(bool splitLayout) noexcept
             ScanForNew(*g_setters);
         }
         FollowGlowLayout();
+        {
+            const OverlayBand band = LastOverlayBand();
+            FollowGlowSize(EffectSizeFactor(LastLayoutSize(), band.band, band.imageHeight));
+        }
         if (!g_renderFollows)
         {
             FollowGameChanges(*g_setters);  // no render hook: a moved widget is placed a frame late

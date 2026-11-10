@@ -88,6 +88,17 @@ LayoutPoint EffectPointFor(const LayoutPoint& point, const LayoutSize& layout, c
             layout.height / 2.0f + (imageY - static_cast<float>(imageHeight) / 2.0f) * unit};
 }
 
+float EffectSizeFactor(const LayoutSize& layout, const IntRect& band, std::int32_t imageHeight) noexcept
+{
+    if (!(layout.height > 0.0f) || band.Height() <= 0 || imageHeight <= 0)
+    {
+        return 1.0f;
+    }
+    const float bandScale = static_cast<float>(band.Height()) / layout.height;
+    const float soloScale = static_cast<float>(imageHeight) / kHudFrameHeight;
+    return bandScale / soloScale;
+}
+
 bool OutsideLayout(const LayoutPoint& position, float width, float height) noexcept
 {
     if (!(width > 0.0f) || !(height > 0.0f))

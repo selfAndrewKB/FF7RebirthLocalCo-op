@@ -135,6 +135,27 @@ void TestEffectPoint()
     EXPECT(EffectPointFor(moved, LayoutSize{3840.0f, 1080.0f}, IntRect{0, 270, 1920, 810}, 0, 0) == moved);
 }
 
+void TestEffectSize()
+{
+    std::puts("placement: a UI effect's size factor is the band's drawing scale over single player's");
+    using lss::hud::EffectSizeFactor;
+    using lss::hud::IntRect;
+    using lss::hud::LayoutSize;
+    // A 1920x1080 view fills a 1920x1080 image: as single player.
+    EXPECT(std::fabs(EffectSizeFactor(LayoutSize{1920.0f, 1080.0f}, IntRect{0, 0, 1920, 1080}, 1080) - 1.0f) < 1e-6f);
+    // A 3840x2160 image under a single view: the band is twice the layout, and so is single player's: 1.
+    EXPECT(std::fabs(EffectSizeFactor(LayoutSize{1920.0f, 1080.0f}, IntRect{0, 0, 3840, 2160}, 2160) - 1.0f) < 1e-6f);
+    // A side-by-side half (a 1920x2160 layout into the centre band of a 1920x1080 image): the bar is drawn at half
+    // its single-player scale, so the effect needs half its size.
+    EXPECT(std::fabs(EffectSizeFactor(LayoutSize{1920.0f, 2160.0f}, IntRect{480, 0, 1440, 1080}, 1080) - 0.5f) < 1e-6f);
+    // A top/bottom half (a 3840x1080 layout into the middle band): half as well.
+    EXPECT(std::fabs(EffectSizeFactor(LayoutSize{3840.0f, 1080.0f}, IntRect{0, 270, 1920, 810}, 1080) - 0.5f) < 1e-6f);
+    // Unknown sizes: 1.
+    EXPECT(EffectSizeFactor(LayoutSize{}, IntRect{0, 270, 1920, 810}, 1080) == 1.0f);
+    EXPECT(EffectSizeFactor(LayoutSize{3840.0f, 1080.0f}, IntRect{}, 1080) == 1.0f);
+    EXPECT(EffectSizeFactor(LayoutSize{3840.0f, 1080.0f}, IntRect{0, 270, 1920, 810}, 0) == 1.0f);
+}
+
 void TestRejected()
 {
     std::puts("placement: an implausible layout is left alone");
@@ -156,6 +177,7 @@ int main()
     TestSoloUnchanged();
     TestIconBaseKeepsCornerDistance();
     TestEffectPoint();
+    TestEffectSize();
     TestRejected();
 
     return lss::test::Report();
