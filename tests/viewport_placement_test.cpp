@@ -156,6 +156,34 @@ void TestEffectSize()
     EXPECT(EffectSizeFactor(LayoutSize{3840.0f, 1080.0f}, IntRect{0, 270, 1920, 810}, 0) == 1.0f);
 }
 
+void TestReferenceColumn()
+{
+    std::puts("placement: a once-per-screen thing follows the layout shape most columns share, player 1's on a tie");
+    using lss::hud::LayoutSize;
+    using lss::hud::ReferenceColumn;
+    // The user's row: an ultrawide column 0 (a 2581x1080 band layout) beside two 16:9 columns: the 16:9 shape wins.
+    const LayoutSize row[3] = {{2581.0f, 1080.0f}, {1920.0f, 1080.0f}, {1920.0f, 1080.0f}};
+    EXPECT(ReferenceColumn(row, 3) == 1);
+    // Three players in one window: a wide top view (3840x1080) over two 16:9 quarters: the quarters win.
+    const LayoutSize window[3] = {{3840.0f, 1080.0f}, {1920.0f, 1080.0f}, {1920.0f, 1080.0f}};
+    EXPECT(ReferenceColumn(window, 3) == 1);
+    // Two stacked halves: one shape, column 0.
+    const LayoutSize stacked[2] = {{3840.0f, 1080.0f}, {3840.0f, 1080.0f}};
+    EXPECT(ReferenceColumn(stacked, 2) == 0);
+    // Two quarters whose bands differ by a pixel of rounding (two layout units) are still one shape.
+    const LayoutSize jitter[3] = {{3840.0f, 1080.0f}, {1920.0f, 1080.0f}, {1922.0f, 1080.0f}};
+    EXPECT(ReferenceColumn(jitter, 3) == 1);
+    // Three different shapes: a tie at one each, player 1's.
+    const LayoutSize mixed[3] = {{2581.0f, 1080.0f}, {3840.0f, 1080.0f}, {1920.0f, 1080.0f}};
+    EXPECT(ReferenceColumn(mixed, 3) == 0);
+    // Unknown columns count for nothing; none known: 0.
+    const LayoutSize sparse[3] = {{}, {1920.0f, 1080.0f}, {1920.0f, 1080.0f}};
+    EXPECT(ReferenceColumn(sparse, 3) == 1);
+    const LayoutSize none[2] = {{}, {}};
+    EXPECT(ReferenceColumn(none, 2) == 0);
+    EXPECT(ReferenceColumn(nullptr, 0) == 0);
+}
+
 void TestRejected()
 {
     std::puts("placement: an implausible layout is left alone");
@@ -178,6 +206,7 @@ int main()
     TestIconBaseKeepsCornerDistance();
     TestEffectPoint();
     TestEffectSize();
+    TestReferenceColumn();
     TestRejected();
 
     return lss::test::Report();

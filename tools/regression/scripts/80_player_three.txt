@@ -16,7 +16,7 @@
 # The view is the top or bottom half of the game window, full width and half height: 3440x720 on a 3440x1440 window,
 # 1920x540 on a 1920x1080 one (the size depends on the monitor the game opens on), or 3840x1080 where the pass reports
 # the pixels of a 3840x2160 UI image instead of the screen's.
-# expect: HUD layout \(column 2's pass\): UI image \d+x\d+, view (3840x1080|3440x720|1920x540)
+# expect: HUD layout \(column 2's pass\): UI image \d+x\d+, view (3840x1080|3440x720|2560x720|1920x540)
 # expect: leave: player 3 left; \d+ leftover actor
 # expect-not: JOIN FAILED
 # expect-not: could not be given back

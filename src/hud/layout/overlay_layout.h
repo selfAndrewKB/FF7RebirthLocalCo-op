@@ -45,6 +45,19 @@ struct OverlayBand
 };
 OverlayBand LastOverlayBand() noexcept;
 
+/// A column's layout and band as its pass of the last frame laid the overlay out: the band's size while the band
+/// applied, 1920x1080 and an empty band otherwise.
+struct ColumnOverlay
+{
+    LayoutSize  layout = kSoloLayout;
+    OverlayBand band;
+};
+
+/// The layout a thing that exists once for every column (the summon gauge's one glow particle) is placed and sized
+/// for: the column whose layout shape most columns of the last frame shared, player 1's on a tie
+/// (hud/layout/viewport_placement.h ReferenceColumn). Player 1's own while one view shows. Game thread.
+ColumnOverlay GlowOverlay() noexcept;
+
 /// Checks every fact it needs (facts/hud.h) and installs the three redirects and the code patches
 /// (hud/layout/centered_frame_code.h, hud/layout/arrow_edge_code.h), or none.
 bool InstallOverlayLayout(const platform::GameImage& image) noexcept;

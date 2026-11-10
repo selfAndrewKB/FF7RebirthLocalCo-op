@@ -340,7 +340,8 @@ bool WriteGlow(UObject* widget, const GlowPoints& points) noexcept
 /// the points stand as last written.
 void PlaceGlow(Placed& placed) noexcept
 {
-    const LayoutSize layout = LastLayoutSize();
+    const ColumnOverlay glow   = GlowOverlay();  // the layout shape most columns share: one particle for every column
+    const LayoutSize    layout = glow.layout;
     if (layout.width <= 0.0f || layout.height <= 0.0f)
     {
         return;
@@ -378,7 +379,7 @@ void PlaceGlow(Placed& placed) noexcept
         original.start       = now.start != placed.glowMoved.start && NearFrame(now.start) ? now.start : original.start;
     }
     const LayoutPoint anchor{placed.placement->anchorX, placed.placement->anchorY};
-    const OverlayBand band = LastOverlayBand();
+    const OverlayBand band  = glow.band;
     const GlowPoints  moved = g_glowRaw ? *g_glowRaw
                                         : GlowPoints{GlowTarget(placed.glow->head, anchor, layout, band),
                                                      GlowTarget(placed.glow->back, anchor, layout, band),
@@ -616,8 +617,8 @@ void UpdateHudPlacement(bool splitLayout) noexcept
         }
         FollowGlowLayout();
         {
-            const OverlayBand band = LastOverlayBand();
-            FollowGlowSize(EffectSizeFactor(LastLayoutSize(), band.band, band.imageHeight));
+            const ColumnOverlay glow = GlowOverlay();
+            FollowGlowSize(EffectSizeFactor(glow.layout, glow.band.band, glow.band.imageHeight));
         }
         if (!g_renderFollows)
         {

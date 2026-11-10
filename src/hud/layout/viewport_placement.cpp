@@ -99,6 +99,39 @@ float EffectSizeFactor(const LayoutSize& layout, const IntRect& band, std::int32
     return bandScale / soloScale;
 }
 
+int ReferenceColumn(const LayoutSize* layouts, int count) noexcept
+{
+    if (layouts == nullptr || count <= 0)
+    {
+        return 0;
+    }
+    const auto known = [](const LayoutSize& l) { return l.width > 0.0f && l.height > 0.0f; };
+    // The same shape within 1 % on each side: a band a pixel wider (rounding, a DPI step) is still that shape.
+    const auto same = [](const LayoutSize& a, const LayoutSize& b) {
+        return std::fabs(a.width - b.width) <= 0.01f * b.width && std::fabs(a.height - b.height) <= 0.01f * b.height;
+    };
+    int best      = 0;
+    int bestCount = 0;
+    for (int i = 0; i < count; ++i)
+    {
+        if (!known(layouts[i]))
+        {
+            continue;
+        }
+        int n = 0;
+        for (int j = 0; j < count; ++j)
+        {
+            n += known(layouts[j]) && same(layouts[i], layouts[j]) ? 1 : 0;
+        }
+        if (n > bestCount)  // a tie keeps the earlier column: player 1's wins a tie with the shapes after it
+        {
+            best      = i;
+            bestCount = n;
+        }
+    }
+    return best;
+}
+
 bool OutsideLayout(const LayoutPoint& position, float width, float height) noexcept
 {
     if (!(width > 0.0f) || !(height > 0.0f))

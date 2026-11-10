@@ -1,5 +1,7 @@
 #include "hud/layout/overlay_layout.h"
 
+#include "hud/layout/viewport_placement.h"
+
 #include "facts/hud.h"
 #include "hud/layout/arrow_edge_code.h"
 #include "hud/layout/centered_frame_code.h"
@@ -72,6 +74,40 @@ platform::CodeRedirect   g_arrowEdgeCode;
 alignas(8) std::uint8_t  g_bandApplies = 0;
 LayoutSize               g_lastLayout  = kSoloLayout;  // game thread
 OverlayBand              g_lastBand;                   // game thread; empty while the band does not apply
+
+// Each column's layout as its pass laid the overlay out, for what exists once for every column: filled pass by pass
+// (further columns first, column 0 last), picked when column 0's pass, the frame's last, records. Game thread.
+ColumnOverlay g_columnOverlay[overlay_pass::kMaxColumns];
+bool          g_columnSeen[overlay_pass::kMaxColumns] = {};
+ColumnOverlay g_glowOverlay;
+int           g_glowColumn = 0;
+
+void RecordColumn(const LayoutSize& layout, const OverlayBand& band) noexcept
+{
+    const int column = overlay_pass::IsFurtherPass() ? overlay_pass::Column() : 0;
+    g_columnOverlay[column] = {layout, band};
+    g_columnSeen[column]    = true;
+    if (column != 0)
+    {
+        return;
+    }
+    // A column votes with its band's layout; one whose band did not apply this frame (the band off, an unusable view
+    // size) is unknown and votes for nothing, so it cannot outvote the real bands with the solo default.
+    LayoutSize layouts[overlay_pass::kMaxColumns];
+    for (int i = 0; i < overlay_pass::kMaxColumns; ++i)
+    {
+        layouts[i] = g_columnSeen[i] && g_columnOverlay[i].band.imageHeight > 0 ? g_columnOverlay[i].layout : LayoutSize{};
+        g_columnSeen[i] = false;
+    }
+    const int pick = ReferenceColumn(layouts, overlay_pass::kMaxColumns);
+    if (pick != g_glowColumn)
+    {
+        platform::Log(L"HUD layout: the glow follows column {}'s layout ({:.0f}x{:.0f}), the shape most columns share",
+                      pick, layouts[pick].width, layouts[pick].height);
+    }
+    g_glowColumn  = pick;
+    g_glowOverlay = g_columnOverlay[pick];
+}
 
 /// What the rect call decided for this frame's render, for the entry call a few instructions later
 /// in the same function. Both run on the game thread; the entry call acts only on the thread that
@@ -186,12 +222,14 @@ IntRect* OverlayLayoutRect(IntRect* out)
     g_lastBand    = {};
     if (!views::ViewsSplit() || out == nullptr || out->minX != 0 || out->minY != 0)
     {
+        RecordColumn(g_lastLayout, g_lastBand);
         return result;  // one view (or an unexpected rect): exactly the engine's result
     }
     std::uintptr_t overlay = 0;
     std::memcpy(&overlay, reinterpret_cast<const void*>(g_overlaySingleton), sizeof(overlay));
     if (overlay == 0)
     {
+        RecordColumn(g_lastLayout, g_lastBand);
         return result;
     }
     const float   viewW   = ReadFloat(overlay + facts::kOverlayViewWidth);
@@ -212,6 +250,7 @@ IntRect* OverlayLayoutRect(IntRect* out)
         g_lastLayout  = LayoutSizeOf(band);
         g_lastBand    = {band, image.Width(), image.Height()};
     }
+    RecordColumn(g_lastLayout, g_lastBand);
     return result;
 }
 
@@ -416,6 +455,11 @@ LayoutSize LastLayoutSize() noexcept
 OverlayBand LastOverlayBand() noexcept
 {
     return g_lastBand;
+}
+
+ColumnOverlay GlowOverlay() noexcept
+{
+    return views::ViewsSplit() ? g_glowOverlay : ColumnOverlay{};
 }
 
 bool OverlayLayoutInstalled() noexcept

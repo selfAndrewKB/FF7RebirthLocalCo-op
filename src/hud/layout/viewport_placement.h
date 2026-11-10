@@ -72,6 +72,12 @@ LayoutPoint EffectPointFor(const LayoutPoint& point, const LayoutSize& layout, c
 /// 16:9 image, and for an unknown layout, band or image.
 float EffectSizeFactor(const LayoutSize& layout, const IntRect& band, std::int32_t imageHeight) noexcept;
 
+/// The column whose layout a thing that exists once for every column (the summon gauge's one glow particle) is placed
+/// and sized for: the layout shape shared by most of the `count` columns' layouts, player 1's (index 0) when shapes tie
+/// or none is known. A zero (unknown) layout counts for nothing. So two 16:9 columns beside an ultrawide one, or two
+/// quarters under a wide top view, get the glow right and the odd column shows it as it falls.
+int ReferenceColumn(const LayoutSize* layouts, int count) noexcept;
+
 /// Whether a widget placed at `position` (its top-left, in layout units) starts outside a layout of
 /// `width` x `height` units, where it is not painted (and so not ticked). False for an unknown
 /// (zero) layout.
