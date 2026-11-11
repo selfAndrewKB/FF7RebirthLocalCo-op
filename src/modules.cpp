@@ -50,6 +50,7 @@
 #include "hud/passes/overlay_pass.h"
 #include "hud/passes/root_overlay_render.h"
 #include "hud/passes/seat_hud_content.h"
+#include "hud/passes/ui_effect_pass.h"
 #include "hud/user_widgets.h"
 #include "input/approach_own_camera.h"
 #include "input/climb_context.h"
@@ -260,6 +261,10 @@ constexpr std::array kModules{
     Module{Call<&hud::user_widgets::Install>, &hud::user_widgets::Remove},
     // each seat's HUD image, on (the hud-image command switches it)
     Module{Call<&hud::InstallColumnHudImages>, &hud::RemoveColumnHudImages},
+    // The UI particles (the summon gauge's glow) drawn through each column's band map (hud/passes/ui_effect_pass.h):
+    // the maps come from the layout above, the column from the HUD images' composite redirect, which must still run
+    // while this one is taken down (removal runs in reverse: this row goes first).
+    Module{Call<&hud::ui_effect_pass::Install>, &hud::ui_effect_pass::Remove},
     // the minimap's map rendered by player 1's pass only
     Module{Call<&hud::InstallMinimapOnce>, &hud::RemoveMinimapOnce},
     // each seat's minimap in the seat's view
@@ -876,6 +881,7 @@ void RegisterCommands(session::Session& session, views::column_source::Override&
         hud::RegisterOverlayLayoutCommands();
         hud::RegisterHudPlacementCommands();
         hud::RegisterGlowSizeCommands();
+        hud::ui_effect_pass::RegisterCommands();
         hud::RegisterColumnHudImagesCommands();
         hud::RegisterSeatHudContentCommands();
         hud::column_area_icons::RegisterCommands();

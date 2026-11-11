@@ -1,13 +1,14 @@
 #include "hud/layout/overlay_layout.h"
 
-#include "hud/layout/viewport_placement.h"
-
 #include "facts/hud.h"
 #include "hud/layout/arrow_edge_code.h"
 #include "hud/layout/centered_frame_code.h"
+#include "hud/layout/hud_placement.h"
 #include "hud/layout/overlay_band.h"
+#include "hud/layout/viewport_placement.h"
 #include "hud/passes/column_hud_images.h"
 #include "hud/passes/overlay_pass.h"
+#include "hud/passes/ui_effect_pass.h"
 #include "platform/build_value.h"
 #include "platform/call_redirect.h"
 #include "platform/code_redirect.h"
@@ -90,6 +91,22 @@ void RecordColumn(const LayoutSize& layout, const OverlayBand& band) noexcept
     if (column != 0)
     {
         return;
+    }
+    // Column 0's pass is the frame's last, so the overlay holds its layout at the widget tick that places the UI
+    // particles: each column recorded this frame gets its box for them against it (hud/passes/ui_effect_pass.h); a
+    // column whose band did not apply gets none; one not recorded keeps its last.
+    const LayoutPoint anchor = GlowAnchor();
+    for (int i = 0; i < overlay_pass::kMaxColumns; ++i)
+    {
+        if (!g_columnSeen[i])
+        {
+            continue;
+        }
+        const ColumnOverlay& seen = g_columnOverlay[i];
+        const auto           box  = seen.band.imageHeight > 0 ? EffectViewport(layout, seen.layout, seen.band.band, seen.band.imageWidth,
+                                                                              seen.band.imageHeight, anchor)
+                                                               : std::nullopt;
+        ui_effect_pass::PublishColumnViewport(i, box.value_or(EffectBox{}), box.has_value());
     }
     // A column votes with its band's layout; one whose band did not apply this frame (the band off, an unusable view
     // size) is unknown and votes for nothing, so it cannot outvote the real bands with the solo default.

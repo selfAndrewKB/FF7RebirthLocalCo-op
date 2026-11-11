@@ -1,0 +1,26 @@
+{
+  "build": "1.005",
+  "research_build": "1.004",
+  "date": "2026-11-10",
+  "doc": "Rebirth/Documentation/research/RE-ui-particle-pass.md (section 12; both databases read 2026-11-10)",
+  "facts": [
+    {
+      "name": "CompositeSDRForeground_UpdateViewUB_SetViewport_ForTarget",
+      "old": "0x14164AC98",
+      "new": "0x140C0BC94",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "The composite-foreground pass's per-draw setup: the view's uniform buffer rewritten for the target's extent, then an FRHICommandSetViewport (0,0)-(W,H) appended to the command list (its link then points at the command's Next field). Same prologue (push rbp; push rbx; push rsi; push rdi; push r14; push r15; lea rbp,[rsp-14A8h]) and body in both builds."
+    },
+    {
+      "name": "CompositeSDRForeground_PassExecute_pass50's call to the setup",
+      "old": "0x14252B8BF",
+      "new": "0x140C0BC69",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "The first of the execute's two calls (the second is FParallelMeshDrawCommandPass_DispatchDraw): 1.004 E8 D4 F3 11 FF at %16=15 (crosses a block: installed from the render thread), 1.005 E8 26 00 00 00 at %16=9 (one block)."
+    }
+  ]
+}

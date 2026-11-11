@@ -14,6 +14,7 @@
 #include "hud/layout/glow_size.h"
 #include "hud/layout/overlay_layout.h"
 #include "hud/layout/viewport_placement.h"
+#include "hud/passes/ui_effect_pass.h"
 #include "hud/user_widgets.h"
 #include "platform/frame_watch.h"
 #include "platform/guarded.h"
@@ -304,9 +305,16 @@ LayoutPoint GlowTarget(const LayoutPoint& point, const LayoutPoint& anchor, cons
     {
         return point;
     }
+    // While the UI particle pass places each column's particles (hud/passes/ui_effect_pass.h), the game's own design
+    // point is the one to give: the pass's viewport moves and scales the result per column, the bar's move included.
+    if (ui_effect_pass::Active())
+    {
+        return point;
+    }
     const LayoutPoint moved = KeepDistanceFromAnchor(point, anchor, layout.width, layout.height);
-    return g_glowMap == GlowMap::Band ? moved
-                                      : EffectPointFor(moved, layout, band.band, band.imageWidth, band.imageHeight);
+    // The bare layout point (the band rule, for comparison), else the point mapped as the band's drawing maps it,
+    // against the whole image the effect is drawn over.
+    return g_glowMap == GlowMap::Band ? moved : EffectPointFor(moved, layout, band.band, band.imageWidth, band.imageHeight);
 }
 
 /// The widget's class holds the three points (the research build's layout; a class of another size is not written).
@@ -378,8 +386,8 @@ void PlaceGlow(Placed& placed) noexcept
         original.back        = now.back != placed.glowMoved.back && NearFrame(now.back) ? now.back : original.back;
         original.start       = now.start != placed.glowMoved.start && NearFrame(now.start) ? now.start : original.start;
     }
-    const LayoutPoint anchor{placed.placement->anchorX, placed.placement->anchorY};
-    const OverlayBand band  = glow.band;
+    const LayoutPoint anchor = GlowAnchor();
+    const OverlayBand band   = glow.band;
     const GlowPoints  moved = g_glowRaw ? *g_glowRaw
                                         : GlowPoints{GlowTarget(placed.glow->head, anchor, layout, band),
                                                      GlowTarget(placed.glow->back, anchor, layout, band),
@@ -577,6 +585,18 @@ void RestoreAll(const Setters& set)
 
 }  // namespace
 
+LayoutPoint GlowAnchor() noexcept
+{
+    for (const Placement& placement : kPlacements)
+    {
+        if (placement.glow)
+        {
+            return {placement.anchorX, placement.anchorY};
+        }
+    }
+    return {1.0f, 1.0f};
+}
+
 void UpdateHudPlacement(bool splitLayout) noexcept
 {
     try
@@ -617,8 +637,11 @@ void UpdateHudPlacement(bool splitLayout) noexcept
         }
         FollowGlowLayout();
         {
+            // The glow's size: the band's projection scales it per column while the UI particle pass maps; else the
+            // scripts' size constants at the reference column's factor.
             const ColumnOverlay glow = GlowOverlay();
-            FollowGlowSize(EffectSizeFactor(glow.layout, glow.band.band, glow.band.imageHeight));
+            FollowGlowSize(ui_effect_pass::Active() ? 1.0f
+                                                    : EffectSizeFactor(glow.layout, glow.band.band, glow.band.imageHeight));
         }
         if (!g_renderFollows)
         {

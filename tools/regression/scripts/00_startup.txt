@@ -20,6 +20,8 @@
 # expect-not: party switch: UNAVAILABLE
 # expect: glow size: the aura's sprite scales follow the band
 # expect-not: glow size: UNAVAILABLE
+# expect: UI effect pass: (the UI particles|the render thread installs it)
+# expect-not: UI effect pass: UNAVAILABLE
 # expect-not: standing aside: nothing installed
 # expect-not: not what the research read(?!\): none)
 #   "(the code is not what the research read): none" is the interact watch's all-clear; a site named after the colon is

@@ -735,6 +735,8 @@ src/
     passes/shared_slot      Each further column's layer entry beside the game's own in one menu-renderer slot: the root
                             overlay's pool 2 (hud/passes/column_hud_images.h) and the navimap circle's pool 0
                             (hud/minimap/minimap.h), one instance each
+    passes/ui_effect_pass   The UI particles (the summon gauge's glow, every Niagara effect whose render target is the
+                            composite foreground) placed and sized per column
     position_probe          A logging probe on how HUD widgets place themselves from Blueprints: the field command menu
                             and its party switcher are children of the HUD overlay, but no native code sets their
                             position, so their Blueprints do

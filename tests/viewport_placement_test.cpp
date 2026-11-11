@@ -156,6 +156,63 @@ void TestEffectSize()
     EXPECT(EffectSizeFactor(LayoutSize{3840.0f, 1080.0f}, IntRect{0, 270, 1920, 810}, 0) == 1.0f);
 }
 
+void TestEffectViewport()
+{
+    using lss::hud::EffectBox;
+    using lss::hud::EffectViewport;
+    using lss::hud::IntRect;
+    using lss::hud::LayoutSize;
+    const LayoutPoint corner{1.0f, 1.0f};
+    const auto        near = [](const std::optional<EffectBox>& b, float x, float y, float h) {
+        return b && std::fabs(b->centreX - x) < 1e-4f && std::fabs(b->centreY - y) < 1e-4f && std::fabs(b->height - h) < 1e-4f;
+    };
+    // A 16:9 column while the tick's layout is 16:9 too: the whole image (the engine's own viewport).
+    EXPECT(near(EffectViewport(LayoutSize{1920.0f, 1080.0f}, LayoutSize{1920.0f, 1080.0f}, IntRect{0, 0, 3840, 2160}, 3840,
+                               2160, corner),
+                0.5f, 0.5f, 1.0f));
+    // The row's ultrawide (player 1's, the tick's own layout): its band's height; the centre moved right by the 661
+    // units the corner-anchored gauge stands further right than in the frame, at the band's 1607/1080 px per unit.
+    EXPECT(near(EffectViewport(LayoutSize{2581.0f, 1080.0f}, LayoutSize{2581.0f, 1080.0f}, IntRect{0, 276, 3840, 1883}, 3840,
+                               2160, corner),
+                (2581.0f / 2.0f + 661.0f) * (1607.0f / 1080.0f) / 3840.0f, (276.0f + 1883.0f) / 2.0f / 2160.0f,
+                1607.0f / 2160.0f));
+    // A 16:9 column beside it: the gauge at its design place, the tick's centre at 1290.5 units = 2581 px of 3840.
+    EXPECT(near(EffectViewport(LayoutSize{2581.0f, 1080.0f}, LayoutSize{1920.0f, 1080.0f}, IntRect{0, 0, 3840, 2160}, 3840,
+                               2160, corner),
+                2581.0f / 3840.0f, 0.5f, 1.0f));
+    // Two stacked halves of one shape (3840x1080 units each, one px per unit): the gauge 1920 units right of its design
+    // place, so the centre at the image's right edge; the lower band's middle height, the band's height.
+    EXPECT(near(EffectViewport(LayoutSize{3840.0f, 1080.0f}, LayoutSize{3840.0f, 1080.0f}, IntRect{0, 1080, 3840, 2160}, 3840,
+                               2160, corner),
+                1.0f, 0.75f, 0.5f));
+    // Two side-by-side halves (1920x2160 units each, the tick's too): the gauge 1080 units below its design place, so
+    // the right half's centre at its band's middle width and the image's bottom; the box as tall as the band.
+    EXPECT(near(EffectViewport(LayoutSize{1920.0f, 2160.0f}, LayoutSize{1920.0f, 2160.0f}, IntRect{1920, 0, 3840, 2160}, 3840,
+                               2160, corner),
+                0.75f, 1.0f, 1.0f));
+    // A tall column (1920x2160 units in the image's left half) while the tick's layout is 16:9: the game's half-height
+    // is 540 units, the band's unit one px, so the box is 1080 px tall, centred 960 px in and 540 + 1080 px down.
+    EXPECT(near(EffectViewport(LayoutSize{1920.0f, 1080.0f}, LayoutSize{1920.0f, 2160.0f}, IntRect{0, 0, 1920, 2160}, 3840,
+                               2160, corner),
+                0.25f, 0.75f, 0.5f));
+    // A centre anchor and a left anchor move the centre by half the extra width and by none of it.
+    EXPECT(near(EffectViewport(LayoutSize{1920.0f, 1080.0f}, LayoutSize{2581.0f, 1080.0f}, IntRect{0, 276, 3840, 1883}, 3840,
+                               2160, LayoutPoint{0.5f, 0.0f}),
+                (960.0f + 330.5f) * (1607.0f / 1080.0f) / 3840.0f, (276.0f + 540.0f * (1607.0f / 1080.0f)) / 2160.0f,
+                1607.0f / 2160.0f));
+    EXPECT(near(EffectViewport(LayoutSize{1920.0f, 1080.0f}, LayoutSize{2581.0f, 1080.0f}, IntRect{0, 276, 3840, 1883}, 3840,
+                               2160, LayoutPoint{}),
+                960.0f * (1607.0f / 1080.0f) / 3840.0f, (276.0f + 540.0f * (1607.0f / 1080.0f)) / 2160.0f, 1607.0f / 2160.0f));
+    // Unknowns.
+    EXPECT(!EffectViewport(LayoutSize{}, LayoutSize{1920.0f, 1080.0f}, IntRect{0, 0, 3840, 2160}, 3840, 2160, corner));
+    EXPECT(!EffectViewport(LayoutSize{1920.0f, 1080.0f}, LayoutSize{}, IntRect{0, 0, 3840, 2160}, 3840, 2160, corner));
+    EXPECT(!EffectViewport(LayoutSize{1920.0f, 1080.0f}, LayoutSize{1920.0f, 1080.0f}, IntRect{}, 3840, 2160, corner));
+    EXPECT(!EffectViewport(LayoutSize{1920.0f, 1080.0f}, LayoutSize{1920.0f, 1080.0f}, IntRect{0, 0, 3840, 2160}, 0, 2160,
+                           corner));
+    EXPECT(!EffectViewport(LayoutSize{1920.0f, 1080.0f}, LayoutSize{1920.0f, 1080.0f}, IntRect{0, 0, 3840, 2160}, 3840, 2160,
+                           LayoutPoint{std::numeric_limits<float>::quiet_NaN(), 1.0f}));
+}
+
 void TestReferenceColumn()
 {
     std::puts("placement: a once-per-screen thing follows the layout shape most columns share, player 1's on a tie");
@@ -206,6 +263,7 @@ int main()
     TestIconBaseKeepsCornerDistance();
     TestEffectPoint();
     TestEffectSize();
+    TestEffectViewport();
     TestReferenceColumn();
     TestRejected();
 

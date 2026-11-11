@@ -26,6 +26,8 @@
 // ("Call Chocobo"), which the game places itself at points of the frame, keep their corner through
 // their own base instead (hud/field/action_icon_base.h).
 
+#include "hud/layout/viewport_placement.h"
+
 namespace lss::hud {
 
 /// Game thread, every tick: whether the HUD is laid out in split halves (more than one view shown and the
@@ -36,6 +38,10 @@ void UpdateHudPlacement(bool splitLayout) noexcept;
 /// again any widget the game set during this frame's world tick, so the frame draws it placed. Once
 /// this has run, UpdateHudPlacement leaves following the game's re-sets to it.
 void FollowHudPlacementBeforeRender() noexcept;
+
+/// The corner of the frame the summon gauge (the widget whose tick places the glow) is placed at in a split half: where
+/// its design points move with the layout (hud/layout/viewport_placement.h EffectViewport).
+LayoutPoint GlowAnchor() noexcept;
 
 #if LSS_DEV
 /// The summon gauge glow's probes: `glow-map` (the map its points go through) and `glow-points` (raw points to try).

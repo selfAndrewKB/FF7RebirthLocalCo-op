@@ -5,6 +5,7 @@
 #include "hud/passes/entry_filter_code.h"
 #include "hud/passes/overlay_pass.h"
 #include "hud/passes/shared_slot.h"
+#include "hud/passes/ui_effect_pass.h"
 #include "platform/build_value.h"
 #include "platform/call_redirect.h"
 #include "platform/code_redirect.h"
@@ -188,6 +189,7 @@ void* AddCompositePasses(void* module, void* builder, const void* views, void* t
     const std::uint64_t stockName = g_stockName.load(std::memory_order_acquire);
     const std::uint64_t read      = g_frameRead.load(std::memory_order_relaxed);  // every part of one frame
     const unsigned      columns   = EntryColumns(read);
+    ui_effect_pass::NoteFamilyColumn(-1);  // no column until this family's is known below: no map meanwhile
     if (columns == 0)
     {
         g_viewDraws = {};  // the next image's views are logged afresh
@@ -209,6 +211,9 @@ void* AddCompositePasses(void* module, void* builder, const void* views, void* t
             const bool playerOnes = own && ((read >> (kOnesShift + column)) & 1) != 0;
             const int  shows      = own ? static_cast<int>((read >> (kShowsShift + 4 * column)) & 0xF) - 1 : 0;
             family                = own ? fields.Column(column).name : stockName;
+            // The UI particle pass that follows in this family maps through the band of the column whose entry it
+            // draws: its own, or column 0's when it draws column 0's HUD (hud/passes/ui_effect_pass.h).
+            ui_effect_pass::NoteFamilyColumn(own ? column : 0);
             if (player >= 0 && player < kViewIds)
             {
                 const int draws = playerOnes ? kDrawsPlayerOnes : (shows >= 0 ? shows : 0) + 1;

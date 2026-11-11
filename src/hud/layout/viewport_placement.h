@@ -72,6 +72,29 @@ LayoutPoint EffectPointFor(const LayoutPoint& point, const LayoutSize& layout, c
 /// 16:9 image, and for an unknown layout, band or image.
 float EffectSizeFactor(const LayoutSize& layout, const IntRect& band, std::int32_t imageHeight) noexcept;
 
+/// The UI particle pass's viewport in one column's image, as fractions of the image: a box's centre and height (its
+/// width follows from the target's shape at the draw).
+struct EffectBox
+{
+    float centreX = 0.0f;
+    float centreY = 0.0f;
+    float height  = 0.0f;
+
+    bool operator==(const EffectBox&) const = default;
+};
+
+/// Where the UI particle pass's viewport goes in one column's image so that column's UI particles land where its HUD
+/// is (hud/passes/ui_effect_pass.h). The game converts each effect's layout point once a frame, centred in `tickLayout`
+/// (the layout the overlay holds at the widget tick: player 1's column's) and in its half-heights, and every column's
+/// pass draws that one result over its whole image. The box makes `tickLayout`'s half-height the band's drawing of
+/// this column's `layout` units (its height = the band's times tickLayout's height over the layout's) and puts the
+/// centre where `tickLayout`'s centre falls in this column's band, moved by the distance the widget the points belong
+/// to (anchored at `anchor` of the 1920x1080 frame) stands from its design place in `layout`. The image's centre and
+/// height for a 16:9 column while `tickLayout` is 16:9 too; past an edge of the image for a wide or tall column, or
+/// for a 16:9 one beside a wide `tickLayout`. Nullopt for an unknown layout, band or image.
+std::optional<EffectBox> EffectViewport(const LayoutSize& tickLayout, const LayoutSize& layout, const IntRect& band,
+                                        std::int32_t imageWidth, std::int32_t imageHeight, const LayoutPoint& anchor) noexcept;
+
 /// The column whose layout a thing that exists once for every column (the summon gauge's one glow particle) is placed
 /// and sized for: the layout shape shared by most of the `count` columns' layouts, player 1's (index 0) when shapes tie
 /// or none is known. A zero (unknown) layout counts for nothing. So two 16:9 columns beside an ultrawide one, or two

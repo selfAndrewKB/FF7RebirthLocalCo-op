@@ -623,8 +623,12 @@ void Dump()
     }
     RawArray handles;
     ReadAt(system, o->emitterHandles, handles);
-    platform::Log(L"glow size dump: system 0x{:X}, {} emitter handle(s) of {} bytes, kept: {}",
-                  reinterpret_cast<std::uintptr_t>(system), handles.num, o->handleSize, g_aura ? L"yes" : L"no");
+    // The system's native kind byte (+0x68, before its reflected properties): the render pass its particles go to
+    // (research/RE-ui-particle-pass.md §5, §10: 2 the composite-layer pass, 1 or 9..16 the pre-base-pass targets).
+    std::uint8_t kind = 0xFF;
+    ReadAt(system, 0x68, kind);
+    platform::Log(L"glow size dump: system 0x{:X}, kind byte {}, {} emitter handle(s) of {} bytes, kept: {}",
+                  reinterpret_cast<std::uintptr_t>(system), kind, handles.num, o->handleSize, g_aura ? L"yes" : L"no");
     for (std::int32_t i = 0; i < handles.num && i < static_cast<std::int32_t>(kMaxEmitters); ++i)
     {
         const auto* handle = static_cast<const std::uint8_t*>(handles.data) + static_cast<std::ptrdiff_t>(i) * o->handleSize;
