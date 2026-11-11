@@ -11,10 +11,7 @@
 
 #include "facts/hud.h"
 #include "hud/hud_rules.h"
-#include "hud/layout/glow_size.h"
-#include "hud/layout/overlay_layout.h"
 #include "hud/layout/viewport_placement.h"
-#include "hud/passes/ui_effect_pass.h"
 #include "hud/user_widgets.h"
 #include "platform/frame_watch.h"
 #include "platform/guarded.h"
@@ -22,12 +19,7 @@
 #include "platform/log.h"
 #include "players/unreal_access.h"
 
-#if LSS_DEV
-#include "platform/command_registry.h"
-#endif
-
 #include <algorithm>
-#include <cmath>
 #include <cstdint>
 #include <cstring>
 #include <format>
@@ -54,7 +46,7 @@ struct Placement
     const wchar_t* className;
     float          anchorX;  // the corner or edge of the half its 1920x1080 area goes to
     float          anchorY;
-    bool           glow = false;  // the summon time gauge: its glow's design points move with it (facts/hud.h)
+    bool           glow = false;  // the summon time gauge, whose tick places the glow: the UI particles' boxes follow its corner
 };
 // The field-action icons ("Call Chocobo") are not here: the game places them at points it computes
 // from each icon's own base, so they keep their corner through that base (hud/field/action_icon_base.h).
@@ -72,15 +64,6 @@ constexpr Placement kPlacements[] = {
 };
 constexpr std::uint32_t kScanTicks = 30;
 
-/// The summon gauge's three glow design points (facts/hud.h), as the game had them.
-struct GlowPoints
-{
-    LayoutPoint head;
-    LayoutPoint back;
-    LayoutPoint start;
-    bool        operator==(const GlowPoints&) const = default;
-};
-
 struct Placed
 {
     UObject*          widget = nullptr;  // followed only after Alive() confirms it
@@ -93,11 +76,6 @@ struct Placed
     std::uint32_t     lastPlacedTick = 0;
     std::uint32_t     streak         = 0;  // re-placements on (nearly) consecutive ticks
     std::uint32_t     followed       = 0;  // game re-sets placed again (reported when the split ends)
-    std::optional<GlowPoints> glow;        // a glow placement's own design points (set back when the split ends)
-    GlowPoints        glowMoved;           // the points as last written (a read of anything else is the game's own write)
-    LayoutSize        glowLayout;          // the layout the glow was last moved for (zero: not yet)
-    OverlayBand       glowBand;            // the band it was last moved for
-    bool              glowRefusedLogged = false;  // the "not design points" line, once per widget
 };
 
 // A root whose layout the game sets again on this many ticks in a row is left to the game: the two
@@ -261,194 +239,6 @@ void LeaveAlone(Placed& placed, const std::optional<ViewportLayout>& now) noexce
     placed.applied = now.value_or(placed.applied);
 }
 
-// ---- the summon gauge's glow: three design points its tick converts with the layout's size ----
-
-using platform::WriteGuarded;
-
-/// A design point of the 1920x1080 frame, with some slack (finite and near the frame).
-bool NearFrame(const LayoutPoint& point) noexcept
-{
-    return std::isfinite(point.x) && std::isfinite(point.y) && point.x > -400.0f && point.x < 2400.0f && point.y > -400.0f &&
-           point.y < 1500.0f;
-}
-
-bool Zero(const LayoutPoint& point) noexcept
-{
-    return point.x == 0.0f && point.y == 0.0f;
-}
-
-/// The head's and the aura's points are set by the class (a zero one is an unbuilt widget or other data); the head's
-/// starting point is zero until the game writes it (seen live: (1546,657) (1680,650) (0,0) at the first placement).
-bool PlausibleGlow(const GlowPoints& points) noexcept
-{
-    return NearFrame(points.head) && !Zero(points.head) && NearFrame(points.back) && !Zero(points.back) &&
-           NearFrame(points.start);
-}
-
-// The glow's placement in the layout: through the effects' own map (the default: the effects are drawn against the
-// whole UI image, the layout into its band, viewport_placement.h EffectPointFor), or the bare layout point (the
-// band rule, for comparison in the game); and a raw set of points instead (`glow-points`), to try a placement live.
-enum class GlowMap
-{
-    Image,
-    Band,
-};
-GlowMap                   g_glowMap = GlowMap::Image;  // game thread
-std::optional<GlowPoints> g_glowRaw;                   // game thread
-
-/// Where the game must be told to put `point` of the frame: moved as the bar was (its distance from the anchor kept in
-/// the layout), then expressed as the effects' placement needs it. A zero point (not written yet) stays zero.
-LayoutPoint GlowTarget(const LayoutPoint& point, const LayoutPoint& anchor, const LayoutSize& layout,
-                       const OverlayBand& band) noexcept
-{
-    if (Zero(point))
-    {
-        return point;
-    }
-    // While the UI particle pass places each column's particles (hud/passes/ui_effect_pass.h), the game's own design
-    // point is the one to give: the pass's viewport moves and scales the result per column, the bar's move included.
-    if (ui_effect_pass::Active())
-    {
-        return point;
-    }
-    const LayoutPoint moved = KeepDistanceFromAnchor(point, anchor, layout.width, layout.height);
-    // The bare layout point (the band rule, for comparison), else the point mapped as the band's drawing maps it,
-    // against the whole image the effect is drawn over.
-    return g_glowMap == GlowMap::Band ? moved : EffectPointFor(moved, layout, band.band, band.imageWidth, band.imageHeight);
-}
-
-/// The widget's class holds the three points (the research build's layout; a class of another size is not written).
-bool ClassHoldsGlow(UObject* widget) noexcept
-{
-    const auto* cls = widget->GetClassPrivate();
-    return cls != nullptr && cls->GetPropertiesSize() >= static_cast<std::int32_t>(facts::kSummonGaugeHeadStart + sizeof(LayoutPoint));
-}
-
-bool ReadGlow(const UObject* widget, GlowPoints& out) noexcept
-{
-    const auto* bytes = reinterpret_cast<const std::uint8_t*>(widget);
-    return CopyGuarded(&out.head, bytes + facts::kSummonGaugeEffectHead, sizeof(LayoutPoint)) &&
-           CopyGuarded(&out.back, bytes + facts::kSummonGaugeEffectBack, sizeof(LayoutPoint)) &&
-           CopyGuarded(&out.start, bytes + facts::kSummonGaugeHeadStart, sizeof(LayoutPoint));
-}
-
-bool WriteGlow(UObject* widget, const GlowPoints& points) noexcept
-{
-    auto* bytes = reinterpret_cast<std::uint8_t*>(widget);
-    return WriteGuarded(bytes + facts::kSummonGaugeEffectHead, &points.head, sizeof(LayoutPoint)) &&
-           WriteGuarded(bytes + facts::kSummonGaugeEffectBack, &points.back, sizeof(LayoutPoint)) &&
-           WriteGuarded(bytes + facts::kSummonGaugeHeadStart, &points.start, sizeof(LayoutPoint));
-}
-
-/// The gauge's glow design points moved as its bar was: each keeps its distance from the bar's corner in the current
-/// layout (the tick converts them with the layout's size, so the glow lands on the bar; one particle per effect, so a
-/// layout of another shape in another view is off there, the known limit). The game's own values are kept the first
-/// time, each point again whenever it is not as last written (the game set it since: a construct run once more, the
-/// head's starting point written at the gauges' link), and set back when the split ends. Quiet while the layout and
-/// the points stand as last written.
-void PlaceGlow(Placed& placed) noexcept
-{
-    const ColumnOverlay glow   = GlowOverlay();  // the layout shape most columns share: one particle for every column
-    const LayoutSize    layout = glow.layout;
-    if (layout.width <= 0.0f || layout.height <= 0.0f)
-    {
-        return;
-    }
-    GlowPoints now;
-    if (!ReadGlow(placed.widget, now))
-    {
-        return;
-    }
-    if (!placed.glow)
-    {
-        // The game's own values, kept: the shift starts from them.
-        if (!ClassHoldsGlow(placed.widget) || !PlausibleGlow(now))
-        {
-            if (!placed.glowRefusedLogged)
-            {
-                placed.glowRefusedLogged = true;
-                platform::Log(L"HUD placement: {}'s glow points read ({:.0f},{:.0f}) ({:.0f},{:.0f}) ({:.0f},{:.0f}), not design "
-                              L"points of its class; the glow is left where the game puts it",
-                              placed.placement->className, now.head.x, now.head.y, now.back.x, now.back.y, now.start.x, now.start.y);
-            }
-            return;  // tried again at the next tick: the widget may not be built yet
-        }
-        placed.glow      = now;
-        placed.glowMoved = now;
-    }
-    else
-    {
-        // A point not as it was last written is the game's own write since (a construct run again, the head's starting
-        // point copied from the other gauge at their link): that point's new original; the others stay as moved.
-        // A wild value (not near the frame) is not adopted: the point keeps its original.
-        GlowPoints& original = *placed.glow;
-        original.head        = now.head != placed.glowMoved.head && NearFrame(now.head) ? now.head : original.head;
-        original.back        = now.back != placed.glowMoved.back && NearFrame(now.back) ? now.back : original.back;
-        original.start       = now.start != placed.glowMoved.start && NearFrame(now.start) ? now.start : original.start;
-    }
-    const LayoutPoint anchor = GlowAnchor();
-    const OverlayBand band   = glow.band;
-    const GlowPoints  moved = g_glowRaw ? *g_glowRaw
-                                        : GlowPoints{GlowTarget(placed.glow->head, anchor, layout, band),
-                                                     GlowTarget(placed.glow->back, anchor, layout, band),
-                                                     GlowTarget(placed.glow->start, anchor, layout, band)};
-    if (moved == now && layout == placed.glowLayout && band == placed.glowBand)
-    {
-        placed.glowMoved = moved;  // in place (an adopted point under a zero shift: as written)
-        return;
-    }
-    if (!WriteGlow(placed.widget, moved))
-    {
-        if (!placed.glowRefusedLogged)
-        {
-            placed.glowRefusedLogged = true;
-            platform::Log(L"HUD placement: {}'s glow points could not be written; the glow stays where the game puts it",
-                          placed.placement->className);
-        }
-        WriteGlow(placed.widget, *placed.glow);  // a torn write put back as far as it goes; read afresh next time
-        placed.glow.reset();
-        return;
-    }
-    placed.glowLayout = layout;
-    placed.glowBand   = band;
-    placed.glowMoved  = moved;
-    platform::LogDebug(L"HUD placement: {}'s glow points moved for the {:.0f}x{:.0f} layout (band ({},{})-({},{}) of the "
-                       L"{}x{} image; {}): head ({:.0f},{:.0f}) -> ({:.0f},{:.0f}), aura ({:.0f},{:.0f}) -> ({:.0f},{:.0f}), "
-                       L"head start ({:.0f},{:.0f}) -> ({:.0f},{:.0f})",
-                       placed.placement->className, layout.width, layout.height, band.band.minX, band.band.minY,
-                       band.band.maxX, band.band.maxY, band.imageWidth, band.imageHeight,
-                       g_glowRaw ? L"raw points" : g_glowMap == GlowMap::Band ? L"the band rule" : L"the image rule",
-                       placed.glow->head.x, placed.glow->head.y, moved.head.x, moved.head.y, placed.glow->back.x,
-                       placed.glow->back.y, moved.back.x, moved.back.y, placed.glow->start.x, placed.glow->start.y,
-                       moved.start.x, moved.start.y);
-}
-
-/// The glow's own design points back (the split ended, or the widget's layout is left to the game).
-void RestoreGlow(Placed& placed) noexcept
-{
-    if (placed.glow && Alive(placed) && !WriteGlow(placed.widget, *placed.glow))
-    {
-        platform::Log(L"HUD placement: {}'s glow points could not be set back", placed.placement->className);
-    }
-    placed.glow.reset();
-    placed.glowLayout = {};
-    placed.glowBand   = {};
-    placed.glowMoved  = {};
-}
-
-/// Every placed glow kept with its bar: moved again when the layout's size changed (another view count, the band on or
-/// off) or the game wrote the points again. Three guarded 8-byte reads per gauge a tick, a write only on a change.
-void FollowGlowLayout() noexcept
-{
-    for (auto& placed : g_placed)
-    {
-        if (placed.placement->glow && placed.managed && Alive(placed))
-        {
-            PlaceGlow(placed);
-        }
-    }
-}
-
 /// Places `placed.widget` from its current layout, which is the game's own: this runs for a new
 /// widget, and for one the game has set again since the last placement. Records what was set, and
 /// logs it if `log`.
@@ -486,10 +276,6 @@ void Place(Placed& placed, const Setters& set, bool log = true)
     {
         LogPlaced(placed);
     }
-    if (placement.glow)
-    {
-        PlaceGlow(placed);
-    }
 }
 
 /// Every tick: a placed widget whose layout the game has set again is placed from that layout.
@@ -511,10 +297,6 @@ void FollowGameChanges(const Setters& set)
         if (placed.streak >= kMaxStreak)
         {
             placed.managed = false;  // its layout is the game's now; nothing to set back
-            if (placed.placement->glow)
-            {
-                RestoreGlow(placed);  // the bar is where the game puts it: the glow too
-            }
             platform::Log(L"HUD placement: the game sets {}'s layout every frame; left to the game",
                           placed.placement->className);
             continue;
@@ -551,7 +333,6 @@ void RestoreAll(const Setters& set)
     int restored = 0;
     for (auto& placed : g_placed)
     {
-        RestoreGlow(placed);
         if (placed.followed > 0)
         {
             platform::Log(L"HUD placement: {} was set by the game {} time(s) during the split; each placed again",
@@ -601,10 +382,6 @@ void UpdateHudPlacement(bool splitLayout) noexcept
 {
     try
     {
-        if (!splitLayout)
-        {
-            FollowGlowSize(1.0f);  // every tick: the glow's sizes set back as soon as the split ends, and retried
-        }
         if (!splitLayout && !g_active)
         {
             return;
@@ -635,14 +412,6 @@ void UpdateHudPlacement(bool splitLayout) noexcept
             const platform::frame_watch::Job job(L"HUD placement scan");
             ScanForNew(*g_setters);
         }
-        FollowGlowLayout();
-        {
-            // The glow's size: the band's projection scales it per column while the UI particle pass maps; else the
-            // scripts' size constants at the reference column's factor.
-            const ColumnOverlay glow = GlowOverlay();
-            FollowGlowSize(ui_effect_pass::Active() ? 1.0f
-                                                    : EffectSizeFactor(glow.layout, glow.band.band, glow.band.imageHeight));
-        }
         if (!g_renderFollows)
         {
             FollowGameChanges(*g_setters);  // no render hook: a moved widget is placed a frame late
@@ -669,75 +438,5 @@ void FollowHudPlacementBeforeRender() noexcept
         platform::Log(L"HUD placement: failed before the render (an exception); left as it is");
     }
 }
-
-#if LSS_DEV
-
-void RegisterHudPlacementCommands()
-{
-    using control::Outcome;
-    using control::Value;
-    control::Register({.name  = L"glow-map",
-                       .shape = control::Shape::Word,
-                       .words = {L"image", L"band"},
-                       .help  = L"how the summon gauge's glow points are moved with the bar: through the effects' own map "
-                                L"against the UI image (the default), or the bare layout point (the band rule)",
-                       .set   = [](const Value& v) {
-                           g_glowMap = std::get<std::wstring>(v) == L"band" ? GlowMap::Band : GlowMap::Image;
-                           return Outcome{true, L"moved at the next tick while split"};
-                       },
-                       .get = [] { return Value{std::wstring(g_glowMap == GlowMap::Band ? L"band" : L"image")}; }});
-    control::Register({.name  = L"glow-points",
-                       .shape = control::Shape::Text,
-                       .help  = L"the summon gauge's glow points set as given, `head.x head.y aura.x aura.y` (the head's "
-                                L"start keeps the map's), or `off` for the map's",
-                       .set   = [](const Value& v) {
-                           const std::wstring text = std::get<std::wstring>(v);
-                           if (text == L"off")
-                           {
-                               g_glowRaw.reset();
-                               return Outcome{true, L"the map's points again at the next tick"};
-                           }
-                           float  values[4]{};
-                           size_t count = 0, at = 0;
-                           while (count < 4 && at < text.size())
-                           {
-                               const size_t end  = text.find(L' ', at);
-                               const auto   word = text.substr(at, end == std::wstring::npos ? std::wstring::npos : end - at);
-                               at                = end == std::wstring::npos ? text.size() : end + 1;
-                               if (word.empty())
-                               {
-                                   continue;
-                               }
-                               const auto real = control::ReadReal(word);
-                               if (!real || !NearFrame({static_cast<float>(*real), 0.0f}) || std::fabs(*real) > 100000.0)
-                               {
-                                   return Outcome{false, L"four numbers wanted, each within the frame's reach: head.x head.y "
-                                                         L"aura.x aura.y"};
-                               }
-                               values[count++] = static_cast<float>(*real);
-                           }
-                           if (count != 4)
-                           {
-                               return Outcome{false, L"four numbers wanted: head.x head.y aura.x aura.y"};
-                           }
-                           GlowPoints raw{{values[0], values[1]}, {values[2], values[3]}, {}};
-                           for (const auto& placed : g_placed)
-                           {
-                               if (placed.placement->glow && placed.glow)
-                               {
-                                   raw.start = placed.glowMoved.start;  // as the map last put it
-                               }
-                           }
-                           g_glowRaw = raw;
-                           return Outcome{true, L"set at the next tick while split"};
-                       },
-                       .get = [] {
-                           return Value{g_glowRaw ? std::format(L"{:.0f} {:.0f} {:.0f} {:.0f}", g_glowRaw->head.x, g_glowRaw->head.y,
-                                                                g_glowRaw->back.x, g_glowRaw->back.y)
-                                                  : std::wstring(L"off")};
-                       }});
-}
-
-#endif
 
 }  // namespace lss::hud

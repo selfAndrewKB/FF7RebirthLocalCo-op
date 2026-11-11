@@ -57,21 +57,6 @@ LayoutPoint AnchorOf(const LayoutPoint& point) noexcept;
 LayoutPoint KeepDistanceFromAnchor(const LayoutPoint& original, const LayoutPoint& anchor, float width,
                                    float height) noexcept;
 
-/// The point the game must be given, in layout units, for a UI effect to land on `point` of the layout. The UI
-/// effects (the summon gauge's glow) are placed from a layout point through the overlay's layout size, centred and in
-/// half-heights, and drawn against the whole `imageWidth` x `imageHeight` UI image, while the layout itself is drawn
-/// into `band` of that image. So `point` is mapped as the band's drawing maps it, and that image position is given
-/// back in the layout's own units. `point` itself in a layout filling the image (a 1920x1080 view), and for an unknown
-/// layout, band or image.
-LayoutPoint EffectPointFor(const LayoutPoint& point, const LayoutSize& layout, const IntRect& band,
-                           std::int32_t imageWidth, std::int32_t imageHeight) noexcept;
-
-/// The factor a UI effect's size needs to stand to its bar as in single player: the band's drawing scale (layout units
-/// onto the band's pixels) over single player's (a 1920x1080 layout onto the whole image). The effects' sizes are in
-/// the image's own units whatever the layout, while the bar is drawn at the band's scale. 1 for a layout filling a
-/// 16:9 image, and for an unknown layout, band or image.
-float EffectSizeFactor(const LayoutSize& layout, const IntRect& band, std::int32_t imageHeight) noexcept;
-
 /// The UI particle pass's viewport in one column's image, as fractions of the image: a box's centre and height (its
 /// width follows from the target's shape at the draw).
 struct EffectBox
@@ -94,12 +79,6 @@ struct EffectBox
 /// for a 16:9 one beside a wide `tickLayout`. Nullopt for an unknown layout, band or image.
 std::optional<EffectBox> EffectViewport(const LayoutSize& tickLayout, const LayoutSize& layout, const IntRect& band,
                                         std::int32_t imageWidth, std::int32_t imageHeight, const LayoutPoint& anchor) noexcept;
-
-/// The column whose layout a thing that exists once for every column (the summon gauge's one glow particle) is placed
-/// and sized for: the layout shape shared by most of the `count` columns' layouts, player 1's (index 0) when shapes tie
-/// or none is known. A zero (unknown) layout counts for nothing. So two 16:9 columns beside an ultrawide one, or two
-/// quarters under a wide top view, get the glow right and the odd column shows it as it falls.
-int ReferenceColumn(const LayoutSize* layouts, int count) noexcept;
 
 /// Whether a widget placed at `position` (its top-left, in layout units) starts outside a layout of
 /// `width` x `height` units, where it is not painted (and so not ticked). False for an unknown

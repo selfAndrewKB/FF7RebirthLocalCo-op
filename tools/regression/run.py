@@ -333,9 +333,12 @@ def viewport_sizes(lines: list[str]) -> dict[str, str]:
         m = VIEWPORT.search(line)
         if m:
             w, h = int(m[1]), int(m[2])
-            # {half16:9}: the width of a 16:9 view as high as a top/bottom half (the HUD's view with bars on).
+            # {half16:9}: the width of a 16:9 view as high as a top/bottom half (the HUD's view with bars on). The
+            # engine rounds the width its own way (1259 for a 708-high half), so both the floor and the ceiling match.
+            low = h // 2 * 16 // 9
+            high = -(-(h // 2 * 16) // 9)
             return {"{vw}": str(w), "{vh}": str(h), "{vw/2}": str(w // 2), "{vh/2}": str(h // 2),
-                    "{half16:9}": str(h // 2 * 16 // 9)}
+                    "{half16:9}": str(low) if low == high else f"(?:{low}|{high})"}
     return {}
 
 

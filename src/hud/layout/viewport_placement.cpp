@@ -70,35 +70,6 @@ LayoutPoint KeepDistanceFromAnchor(const LayoutPoint& original, const LayoutPoin
     return {original.x + anchor.x * (width - kHudFrameWidth), original.y + anchor.y * (height - kHudFrameHeight)};
 }
 
-LayoutPoint EffectPointFor(const LayoutPoint& point, const LayoutSize& layout, const IntRect& band,
-                           std::int32_t imageWidth, std::int32_t imageHeight) noexcept
-{
-    if (!(layout.width > 0.0f) || !(layout.height > 0.0f) || band.Width() <= 0 || band.Height() <= 0 || imageWidth <= 0 ||
-        imageHeight <= 0 || !std::isfinite(point.x) || !std::isfinite(point.y))
-    {
-        return point;
-    }
-    // The band's drawing: layout units onto the band's pixels of the image.
-    const float imageX = static_cast<float>(band.minX) + point.x * (static_cast<float>(band.Width()) / layout.width);
-    const float imageY = static_cast<float>(band.minY) + point.y * (static_cast<float>(band.Height()) / layout.height);
-    // The effects' own placement, inverted: from the layout's centre, in its half-heights, against the image's centre
-    // and half-height.
-    const float unit = layout.height / static_cast<float>(imageHeight);
-    return {layout.width / 2.0f + (imageX - static_cast<float>(imageWidth) / 2.0f) * unit,
-            layout.height / 2.0f + (imageY - static_cast<float>(imageHeight) / 2.0f) * unit};
-}
-
-float EffectSizeFactor(const LayoutSize& layout, const IntRect& band, std::int32_t imageHeight) noexcept
-{
-    if (!(layout.height > 0.0f) || band.Height() <= 0 || imageHeight <= 0)
-    {
-        return 1.0f;
-    }
-    const float bandScale = static_cast<float>(band.Height()) / layout.height;
-    const float soloScale = static_cast<float>(imageHeight) / kHudFrameHeight;
-    return bandScale / soloScale;
-}
-
 std::optional<EffectBox> EffectViewport(const LayoutSize& tickLayout, const LayoutSize& layout, const IntRect& band,
                                         std::int32_t imageWidth, std::int32_t imageHeight, const LayoutPoint& anchor) noexcept
 {
@@ -121,39 +92,6 @@ std::optional<EffectBox> EffectViewport(const LayoutSize& tickLayout, const Layo
     const float height = tickLayout.height * scale;
     return EffectBox{centreX / static_cast<float>(imageWidth), centreY / static_cast<float>(imageHeight),
                      height / static_cast<float>(imageHeight)};
-}
-
-int ReferenceColumn(const LayoutSize* layouts, int count) noexcept
-{
-    if (layouts == nullptr || count <= 0)
-    {
-        return 0;
-    }
-    const auto known = [](const LayoutSize& l) { return l.width > 0.0f && l.height > 0.0f; };
-    // The same shape within 1 % on each side: a band a pixel wider (rounding, a DPI step) is still that shape.
-    const auto same = [](const LayoutSize& a, const LayoutSize& b) {
-        return std::fabs(a.width - b.width) <= 0.01f * b.width && std::fabs(a.height - b.height) <= 0.01f * b.height;
-    };
-    int best      = 0;
-    int bestCount = 0;
-    for (int i = 0; i < count; ++i)
-    {
-        if (!known(layouts[i]))
-        {
-            continue;
-        }
-        int n = 0;
-        for (int j = 0; j < count; ++j)
-        {
-            n += known(layouts[j]) && same(layouts[i], layouts[j]) ? 1 : 0;
-        }
-        if (n > bestCount)  // a tie keeps the earlier column: player 1's wins a tie with the shapes after it
-        {
-            best      = i;
-            bestCount = n;
-        }
-    }
-    return best;
 }
 
 bool OutsideLayout(const LayoutPoint& position, float width, float height) noexcept

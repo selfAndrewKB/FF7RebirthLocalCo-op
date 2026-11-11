@@ -34,7 +34,6 @@ add_library(LocalSplitScreen SHARED
     src/engine_tick.cpp
 
     src/hud/layout/hud_placement.cpp
-    src/hud/layout/glow_size.cpp
     src/hud/passes/ui_effect_pass.cpp
     src/hud/hud_roots.cpp
     src/hud/hud_updates.cpp

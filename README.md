@@ -674,7 +674,6 @@ src/
     layout/centered_frame_code.h
                             The machine code that makes the HUD's "centred 1920x1080 frame" the whole layout while the
                             HUD is laid out in a split half
-    layout/glow_size        The summon gauge glow's size in a split view
     layout/hud_placement    Where the HUD's main widgets sit in a split half: as in single player, each in its corner or
                             edge of the half (the user's reference): compass top centre, command menu and button prompts
                             bottom left, the Members panel bottom …

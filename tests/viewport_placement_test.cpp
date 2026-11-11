@@ -112,52 +112,10 @@ void TestIconBaseKeepsCornerDistance()
     EXPECT(KeepDistanceFromAnchor(base, anchor, 0.0f, 0.0f) == base);
     EXPECT(KeepDistanceFromAnchor(base, anchor, std::numeric_limits<float>::quiet_NaN(), 1080.0f) == base);
 }
-void TestEffectPoint()
-{
-    std::puts("effect point: a UI effect's point maps through the band it is drawn beside; a full view leaves it");
-    using lss::hud::EffectPointFor;
-    using lss::hud::IntRect;
-    using lss::hud::LayoutSize;
-    const LayoutPoint head{1546.0f, 657.0f};  // the summon gauge's head glow (facts/hud.h)
-    // A 1920x1080 view: the layout fills the image.
-    EXPECT(EffectPointFor(head, LayoutSize{1920.0f, 1080.0f}, IntRect{0, 0, 1920, 1080}, 1920, 1080) == head);
-    // A top/bottom half (a 3840x1080 layout drawn into the middle band): the bar's corner shift puts the head at
-    // (3466, 657); the effect must be told the image position of that, in layout units: (2693, 598.5).
-    const LayoutPoint moved{3466.0f, 657.0f};
-    const auto        top = EffectPointFor(moved, LayoutSize{3840.0f, 1080.0f}, IntRect{0, 270, 1920, 810}, 1920, 1080);
-    EXPECT(std::fabs(top.x - 2693.0f) < 0.01f && std::fabs(top.y - 598.5f) < 0.01f);
-    // A side-by-side half (a 1920x2160 layout drawn into the centre band): the two maps cancel, the moved point stands.
-    const LayoutPoint side{1546.0f, 1737.0f};
-    EXPECT(EffectPointFor(side, LayoutSize{1920.0f, 2160.0f}, IntRect{480, 0, 1440, 1080}, 1920, 1080) == side);
-    // Unknown sizes leave the point.
-    EXPECT(EffectPointFor(moved, LayoutSize{}, IntRect{0, 270, 1920, 810}, 1920, 1080) == moved);
-    EXPECT(EffectPointFor(moved, LayoutSize{3840.0f, 1080.0f}, IntRect{}, 1920, 1080) == moved);
-    EXPECT(EffectPointFor(moved, LayoutSize{3840.0f, 1080.0f}, IntRect{0, 270, 1920, 810}, 0, 0) == moved);
-}
-
-void TestEffectSize()
-{
-    std::puts("placement: a UI effect's size factor is the band's drawing scale over single player's");
-    using lss::hud::EffectSizeFactor;
-    using lss::hud::IntRect;
-    using lss::hud::LayoutSize;
-    // A 1920x1080 view fills a 1920x1080 image: as single player.
-    EXPECT(std::fabs(EffectSizeFactor(LayoutSize{1920.0f, 1080.0f}, IntRect{0, 0, 1920, 1080}, 1080) - 1.0f) < 1e-6f);
-    // A 3840x2160 image under a single view: the band is twice the layout, and so is single player's: 1.
-    EXPECT(std::fabs(EffectSizeFactor(LayoutSize{1920.0f, 1080.0f}, IntRect{0, 0, 3840, 2160}, 2160) - 1.0f) < 1e-6f);
-    // A side-by-side half (a 1920x2160 layout into the centre band of a 1920x1080 image): the bar is drawn at half
-    // its single-player scale, so the effect needs half its size.
-    EXPECT(std::fabs(EffectSizeFactor(LayoutSize{1920.0f, 2160.0f}, IntRect{480, 0, 1440, 1080}, 1080) - 0.5f) < 1e-6f);
-    // A top/bottom half (a 3840x1080 layout into the middle band): half as well.
-    EXPECT(std::fabs(EffectSizeFactor(LayoutSize{3840.0f, 1080.0f}, IntRect{0, 270, 1920, 810}, 1080) - 0.5f) < 1e-6f);
-    // Unknown sizes: 1.
-    EXPECT(EffectSizeFactor(LayoutSize{}, IntRect{0, 270, 1920, 810}, 1080) == 1.0f);
-    EXPECT(EffectSizeFactor(LayoutSize{3840.0f, 1080.0f}, IntRect{}, 1080) == 1.0f);
-    EXPECT(EffectSizeFactor(LayoutSize{3840.0f, 1080.0f}, IntRect{0, 270, 1920, 810}, 0) == 1.0f);
-}
 
 void TestEffectViewport()
 {
+    std::puts("effect viewport: a column's UI particles get a box of the tick layout's height at its band's scale");
     using lss::hud::EffectBox;
     using lss::hud::EffectViewport;
     using lss::hud::IntRect;
@@ -213,34 +171,6 @@ void TestEffectViewport()
                            LayoutPoint{std::numeric_limits<float>::quiet_NaN(), 1.0f}));
 }
 
-void TestReferenceColumn()
-{
-    std::puts("placement: a once-per-screen thing follows the layout shape most columns share, player 1's on a tie");
-    using lss::hud::LayoutSize;
-    using lss::hud::ReferenceColumn;
-    // The user's row: an ultrawide column 0 (a 2581x1080 band layout) beside two 16:9 columns: the 16:9 shape wins.
-    const LayoutSize row[3] = {{2581.0f, 1080.0f}, {1920.0f, 1080.0f}, {1920.0f, 1080.0f}};
-    EXPECT(ReferenceColumn(row, 3) == 1);
-    // Three players in one window: a wide top view (3840x1080) over two 16:9 quarters: the quarters win.
-    const LayoutSize window[3] = {{3840.0f, 1080.0f}, {1920.0f, 1080.0f}, {1920.0f, 1080.0f}};
-    EXPECT(ReferenceColumn(window, 3) == 1);
-    // Two stacked halves: one shape, column 0.
-    const LayoutSize stacked[2] = {{3840.0f, 1080.0f}, {3840.0f, 1080.0f}};
-    EXPECT(ReferenceColumn(stacked, 2) == 0);
-    // Two quarters whose bands differ by a pixel of rounding (two layout units) are still one shape.
-    const LayoutSize jitter[3] = {{3840.0f, 1080.0f}, {1920.0f, 1080.0f}, {1922.0f, 1080.0f}};
-    EXPECT(ReferenceColumn(jitter, 3) == 1);
-    // Three different shapes: a tie at one each, player 1's.
-    const LayoutSize mixed[3] = {{2581.0f, 1080.0f}, {3840.0f, 1080.0f}, {1920.0f, 1080.0f}};
-    EXPECT(ReferenceColumn(mixed, 3) == 0);
-    // Unknown columns count for nothing; none known: 0.
-    const LayoutSize sparse[3] = {{}, {1920.0f, 1080.0f}, {1920.0f, 1080.0f}};
-    EXPECT(ReferenceColumn(sparse, 3) == 1);
-    const LayoutSize none[2] = {{}, {}};
-    EXPECT(ReferenceColumn(none, 2) == 0);
-    EXPECT(ReferenceColumn(nullptr, 0) == 0);
-}
-
 void TestRejected()
 {
     std::puts("placement: an implausible layout is left alone");
@@ -261,10 +191,7 @@ int main()
     TestAreaCorners();
     TestSoloUnchanged();
     TestIconBaseKeepsCornerDistance();
-    TestEffectPoint();
-    TestEffectSize();
     TestEffectViewport();
-    TestReferenceColumn();
     TestRejected();
 
     return lss::test::Report();

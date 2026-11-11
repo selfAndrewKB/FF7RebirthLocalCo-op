@@ -196,7 +196,7 @@ bool Install(const platform::GameImage& image) noexcept
     if (!target || !site || !reach || *reach != *target)
     {
         platform::Log(L"UI effect pass: UNAVAILABLE, the composite-foreground pass's setup call is not what the research "
-                      L"read (function {}, site {}, the call reaches {}); the glow keeps the image rule and the literal sizes",
+                      L"read (function {}, site {}, the call reaches {}); the glow is drawn where the game draws it",
                       target ? L"found" : L"not found", site ? L"found" : L"not found", reach ? L"another function" : L"nothing");
         return false;
     }
@@ -244,14 +244,6 @@ void Remove() noexcept
     platform::Log(L"UI effect pass: the engine's call {}", g_installed.load(std::memory_order_acquire)
                                                               ? L"left in place, inert (no frame came to put it back)"
                                                               : L"put back by the render thread");
-}
-
-bool Active() noexcept
-{
-    // Installed, on, not taken down, and seen to work: a redirect whose command check never passed maps nothing, and
-    // the glow then keeps the image rule and the literal sizes.
-    return g_on.load(std::memory_order_relaxed) && !g_removed.load(std::memory_order_relaxed) &&
-           g_installed.load(std::memory_order_acquire) && g_applied.load(std::memory_order_relaxed) > 0;
 }
 
 void PublishColumnViewport(int column, const EffectBox& box, bool applies) noexcept

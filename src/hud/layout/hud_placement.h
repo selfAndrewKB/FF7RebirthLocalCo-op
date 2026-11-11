@@ -39,14 +39,8 @@ void UpdateHudPlacement(bool splitLayout) noexcept;
 /// this has run, UpdateHudPlacement leaves following the game's re-sets to it.
 void FollowHudPlacementBeforeRender() noexcept;
 
-/// The corner of the frame the summon gauge (the widget whose tick places the glow) is placed at in a split half: where
-/// its design points move with the layout (hud/layout/viewport_placement.h EffectViewport).
+/// The corner of the frame the summon gauge (the widget whose tick places the glow) is anchored to in a split half: the
+/// UI particles' boxes follow it (hud/layout/viewport_placement.h EffectViewport).
 LayoutPoint GlowAnchor() noexcept;
-
-#if LSS_DEV
-/// The summon gauge glow's probes: `glow-map` (the map its points go through) and `glow-points` (raw points to try).
-/// May throw (out of memory).
-void RegisterHudPlacementCommands();
-#endif
 
 }  // namespace lss::hud

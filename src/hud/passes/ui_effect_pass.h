@@ -10,14 +10,14 @@
 // map every vertex goes through: set to a box of that layout's height at the column's band's scale and the target's
 // shape, centred where that layout's centre and the widget's own move land in the column, it moves and scales every
 // UI particle to the column's HUD at the band's scale, positions and sprite sizes together, whatever the shader did
-// before (hud/layout/viewport_placement.h EffectViewport). The glow's design points and the
-// effect's own sizes stay the game's. The lever is one call inside the pass's execute, the per-draw setup that
-// rewrites the view's uniform buffer for the target and appends the viewport command: the mod's replacement runs the
-// engine's own, then sets the command it appended to the box, after checking it holds the whole extent. The column
-// is the family's, as the composite redirect (hud/passes/column_hud_images.cpp) decides it earlier on the same
-// thread; the boxes come from the overlay's rect call of the frame's last pass (game thread, through a seqlock). On
-// the research build the call crosses a 16-byte block, so the render thread installs it from the composite redirect
-// at the first frame.
+// before (hud/layout/viewport_placement.h EffectViewport). The glow's design points and the effect's own sizes stay
+// the game's; without the pass (a build whose call is not found) the glow is drawn where the game draws it. The lever
+// is one call inside the pass's execute, the per-draw setup that rewrites the view's uniform buffer for the target and
+// appends the viewport command: the mod's replacement runs the engine's own, then sets the command it appended to the
+// box, after checking it holds the whole extent. The column is the family's, as the composite redirect
+// (hud/passes/column_hud_images.cpp) decides it earlier on the same thread; the boxes come from the overlay's rect
+// call of the frame's last pass (game thread, through a seqlock). On the research build the call crosses a 16-byte
+// block, so the render thread installs it from the composite redirect at the first frame.
 
 #include "hud/layout/viewport_placement.h"
 #include "platform/dev_switch.h"
@@ -35,10 +35,6 @@ bool Install(const platform::GameImage& image) noexcept;
 /// Puts the engine's call back (from the game thread where the site allows it; else asked of the render thread, waited
 /// for briefly, and left in place but inert when it does not come).
 void Remove() noexcept;
-
-/// The boxes act: installed, switched on, not taken down, and seen to set a viewport. The glow's design points and the
-/// effect's sizes are then left the game's (hud/layout/hud_placement.cpp, hud/layout/glow_size.h).
-bool Active() noexcept;
 
 /// Game thread, from the overlay's rect call of the frame's last pass: the viewport of one column's UI particles
 /// (hud/layout/viewport_placement.h EffectViewport: a box's centre and height as fractions of the column's image, its
