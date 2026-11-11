@@ -30,9 +30,9 @@ struct DoubleClick
     }
 };
 
-// Beside, in the ground plane: wider than the follow warp's own landing (it puts a follower on its follow spot, about
-// 4 m from the leader), so a second double click after a warp moves nothing.
-inline constexpr float kNearCm  = 500.0f;
+// Beside, in the ground plane: wider than the follow warp's own landing (it puts a follower on its follow spot, 4 to
+// 8 m from the leader as the ground allows), so a second double click after a warp moves nothing.
+inline constexpr float kNearCm  = 1000.0f;
 inline constexpr float kLevelCm = 150.0f;  // and in height: a floor above or below is not beside
 
 /// The character already stands beside player 1's: a double click there moves nothing.

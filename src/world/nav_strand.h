@@ -34,7 +34,7 @@
 // game's action tables, read through that seat's view, input/pad_buttons TakeLeftThumbPress; the rule in
 // world/party_warp_rules.h, Remake's) asks the same follow warp for the chocobo that player rides, else their member,
 // as a strand's "warp" does; behind another seat's warp it waits and is asked again once that warp is over. Not when
-// the character already stands beside player 1's (within 5 m on the same level, wider than where the warp itself lands
+// the character already stands beside player 1's (within 10 m on the same level, wider than where the warp itself lands
 // a follower: a stray double click moves nothing);
 // every other refusal is party_warp's (the split not on screen, a ride, a battle, no follow state, the party busy),
 // logged. Player 1's double click does nothing: theirs is the character the others are brought to. The asks need only

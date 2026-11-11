@@ -28,9 +28,9 @@ void BesideOrNot()
 {
     std::puts("party warp: beside player 1's character in the plane and in height, or not");
     EXPECT(Beside(0.0f, 0.0f));
-    EXPECT(Beside(400.0f, 0.0f));  // where the follow warp lands a follower
-    EXPECT(Beside(499.0f, 149.0f) && Beside(499.0f, -149.0f));
-    EXPECT(!Beside(500.0f, 0.0f));   // too far
+    EXPECT(Beside(400.0f, 0.0f) && Beside(800.0f, 0.0f));  // where the follow warp lands a follower
+    EXPECT(Beside(999.0f, 149.0f) && Beside(999.0f, -149.0f));
+    EXPECT(!Beside(1000.0f, 0.0f));  // too far
     EXPECT(!Beside(100.0f, 150.0f));  // a floor above
     EXPECT(!Beside(100.0f, -150.0f));
 }
