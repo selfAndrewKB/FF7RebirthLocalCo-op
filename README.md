@@ -552,6 +552,8 @@ src/
                             character when the level's walk through that box goes to its AI
     seat_switch_volumes     A seat's player inside CharaPop switch volumes (research/RE-p2-shop-npcs-near-p2.md)
     seat_triggers           The seats' trigger pass (research/RE-p2-trigger-overlap.md)
+    shooting_targets        Yuffie's breakable boxes for players 2 and 3: a box counts as near by their own distance
+                            (research/RE-yuffie-box-throw.md)
     shop_talk               A seat's player uses a shopkeeper's shop with the game's own field prompt and shop
     story_box_rules.h       The rules of world/story_boxes, without the game: which of a held member's story-box entries
                             wait, when a waiting one fires, whether player 1's character has come to the box, and

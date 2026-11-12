@@ -7,9 +7,24 @@
 //
 // Research: Rebirth/Documentation/research/RE-p2-field-interact.md.
 
+#include "platform/verified_code.h"
+
 #include <cstdint>
 
 namespace lss::facts {
+
+// The field-action global (research/RE-yuffie-box-throw.md): the registry of the breakable boxes' shooting-target
+// components and, per box, the game's "the party leader is near" byte, which the game refreshes once per frame from
+// the party leader's position whenever this byte asks for it. A box is a candidate for anyone's throw selection only
+// while that byte is set. Both builds (the global's address is translated).
+inline constexpr std::uintptr_t kFieldActionGlobal       = 0x14939BC90;
+inline constexpr std::uint32_t  kFieldActionGlobalWanted = 0x389;  // u8: a refresh wanted this frame (the refresh clears it)
+inline constexpr std::uint8_t   kRefreshShootingTargetsBytes[] = {0x48, 0x8B, 0xC4, 0x48, 0x89, 0x58, 0x10, 0x48,
+                                                                  0x89, 0x78, 0x18, 0x4C, 0x89, 0x78, 0x20, 0x55};
+/// FieldActionGlobal_RefreshShootingTargets_LeaderNear261(global): when the byte above is set, clears it and writes
+/// every registered box's leader-near byte from the party leader's position.
+inline constexpr platform::FunctionFact kRefreshShootingTargets{L"FieldActionGlobal_RefreshShootingTargets_LeaderNear261",
+                                                                0x141628190, kRefreshShootingTargetsBytes};
 
 // The registry: 1024 pool nodes of 288 bytes; the live list's head node (node+0x08 next, the point at node+0x18) under
 // an SRWLOCK the game holds while it walks.

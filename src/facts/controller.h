@@ -77,6 +77,8 @@ inline constexpr std::uint32_t kLeaderActionThrowPressFrame = 0x398;
 inline constexpr std::uint32_t kLeaderActionStartFlag     = 0x1E8;  // u8: bit 0 the selection starts this frame, bit 1 it consumed the start, bit 2 a target found, bit 6 Yuffie
 inline constexpr std::uint32_t kLeaderActionCandidates    = 0x1F8;  // i32: the shooting targets copied for the selection
 inline constexpr std::uint32_t kLeaderActionShootingState = 0x4E0;
+/// The aim point (FVector): the shown box's icon location the selection wrote, the throw's target.
+inline constexpr std::uint32_t kLeaderActionAimPoint      = 0x500;
 inline constexpr std::uint32_t kLeaderActionShootingKey   = 0x514;
 inline constexpr std::uint32_t kLeaderActionTickLatch     = 0x9A4;  // u8: bit 0 the component ticked this frame (the controller's pre-input clears it)
 /// Two fields of the controller the throw's start gate wants at or below zero (a float, an int): their meaning is

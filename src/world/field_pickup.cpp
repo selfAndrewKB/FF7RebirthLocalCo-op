@@ -32,6 +32,7 @@
 #include "scopes/seat_ladder.h"
 #include "session/party_member.h"
 #include "traversal/hooks.h"
+#include "world/charapop_facts.h"
 #include "world/shop_talk.h"
 #include "world/vending.h"
 
@@ -1245,10 +1246,63 @@ void FieldEnter(void* mgr) noexcept
 
 // --- The pass's hooks --------------------------------------------------------------------------------------
 
-/// The game mode tick's call of the selection update: the game's (player 1's), then each seat's pass.
+/// Player 1's own selection skips the seats' box points (the point a seat's leader-action component added for the box
+/// Yuffie's throw picked): a box another player selected is not player 1's to offer, and their press on it did nothing.
+/// The game's own disabled bit on each such point around the game's update, cleared after it (each seat's pass admits
+/// its own box, the other seats' are disabled by the pass's filter). Logged on change per seat.
+std::array<std::uint64_t, players::kMaxPlayers> g_hiddenBoxes{};       // by seat: the key hidden this update (0 none)
+std::array<std::uint64_t, players::kMaxPlayers> g_hiddenBoxesLogged{};  // by seat: the key last said
+
+void HideSeatBoxes(void* mgr, bool hide) noexcept
+{
+    if (mgr == nullptr || !players::generation::OnGameThread())
+    {
+        return;
+    }
+    const SharedLock lock(mgr);
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
+    {
+        const auto     index  = static_cast<std::size_t>(seat);
+        std::uint64_t& hidden = g_hiddenBoxes[index];
+        const auto     key    = hide ? (players::generation::Active(seat) ? ShootingKeyOf(players::generation::ControllerOf(seat)) : 0)
+                                     : hidden;
+        hidden                = 0;
+        const auto* node      = key != 0 ? PointerAt(mgr, kFieldActionPointList) : nullptr;
+        for (int n = 0; node != nullptr && n < kFieldActionMaxPoints; ++n, node = PointerAt(node, kFieldActionNodeNext))
+        {
+            auto* point = const_cast<std::uint8_t*>(node) + kFieldActionNodePoint;
+            if (ReadField<std::uint64_t>(point, kFieldActionPointKey) != key)
+            {
+                continue;
+            }
+            const std::uint8_t flags = point[kFieldActionPointFlags];
+            if (hide && (flags & kDisabledBit) == 0)
+            {
+                point[kFieldActionPointFlags] = static_cast<std::uint8_t>(flags | kDisabledBit);
+                hidden                        = key;
+            }
+            else if (!hide)
+            {
+                point[kFieldActionPointFlags] = static_cast<std::uint8_t>(flags & ~kDisabledBit);
+            }
+            break;
+        }
+        if (hide && g_hiddenBoxesLogged[index] != hidden)
+        {
+            g_hiddenBoxesLogged[index] = hidden;
+            platform::LogDebug(L"field pickup: player 1's selection skips {}'s box {}", players::SeatName(seat),
+                               hidden != 0 ? Name(hidden) : L"(none now)");
+        }
+    }
+}
+
+/// The game mode tick's call of the selection update: the game's (player 1's, the seats' boxes skipped), then each
+/// seat's pass.
 void UpdateCall(void* mgr, float dt) noexcept
 {
+    HideSeatBoxes(mgr, true);
     reinterpret_cast<TickFn>(g_updateCall.Original())(mgr, dt);
+    HideSeatBoxes(mgr, false);
     if (mgr == nullptr || !players::generation::OnGameThread())
     {
         return;
@@ -1369,6 +1423,30 @@ std::array<ThrowGate, players::kMaxPlayers> g_throwGate{};
 std::array<bool, players::kMaxPlayers>      g_throwGateLogged{};
 std::array<bool, players::kMaxPlayers>      g_keyRecordsLogged{};
 
+/// "12 m at 30 deg" from a camera to `at`, or "unread".
+std::wstring ViewText(const charapop::Camera& camera, const float (&at)[3])
+{
+    return camera.read ? std::format(L"{:.0f} m at {:.0f} deg", charapop::Distance(at, camera.location) / 100.0f,
+                                     charapop::AngleOff(camera, at))
+                       : std::wstring(L"unread");
+}
+
+/// When a box becomes shown to the seat's component, or stops being: the aim point as seen from the seat's camera
+/// and from player 1's (the selection's cone is meant to be the seat's camera; the line tells whose it follows).
+void LogAimView(int seat, const void* controller, const void* component, bool shown)
+{
+    float aim[3]{};
+    if (!platform::CopyGuarded(aim, static_cast<const std::byte*>(component) + facts::kLeaderActionAimPoint, sizeof(aim)))
+    {
+        return;
+    }
+    platform::LogDebug(L"field pickup: {}'s box {}: the aim point ({:.0f}, {:.0f}, {:.0f}) is {} from {}'s camera, {} from "
+                       L"player 1's camera",
+                       players::SeatName(seat), shown ? L"shown" : L"no longer shown (the last aim point)", aim[0], aim[1],
+                       aim[2], ViewText(charapop::CameraOf(controller), aim), players::SeatName(seat),
+                       ViewText(charapop::CameraOf(players::generation::PlayerOneController()), aim));
+}
+
 void LogThrowGate(int seat, const void* controller, std::uint64_t target, bool written) noexcept
 {
     if (!platform::Enabled(platform::Level::Debug))
@@ -1401,8 +1479,13 @@ void LogThrowGate(int seat, const void* controller, std::uint64_t target, bool w
         {
             return;
         }
+        const bool shownFlipped  = !g_throwGateLogged[index] || now.shown != g_throwGate[index].shown;
         g_throwGate[index]       = now;
         g_throwGateLogged[index] = true;
+        if (shownFlipped)
+        {
+            LogAimView(seat, controller, component, now.shown);
+        }
         // The clock and frame as the seat's tick left them: a stamp equal to them is a press of this tick, the one the
         // throw fires on; the pads' last presses say whose press it was.
         const std::int64_t clock  = scopes::scope_leaks::ClockMs();

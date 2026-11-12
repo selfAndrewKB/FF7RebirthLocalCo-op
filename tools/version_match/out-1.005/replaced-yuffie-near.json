@@ -1,0 +1,9 @@
+{
+  "build": "1.005",
+  "research_build": "1.004",
+  "date": "2026-11-12",
+  "doc": "Rebirth/Documentation/research/RE-yuffie-box-throw.md (section 9, pass YUFFIEBOX3; the field-action global 0x14939BC90 -> 0x1491D84B0 is in replaced-rumble-list.json)",
+  "facts": [
+    {"name": "FieldActionGlobal_RefreshShootingTargets_LeaderNear261", "old": "0x141628190", "new": "0x1416AD83C", "bytes": "488bc448895810488978184c89782055", "same_semantics": true, "confidence": "CONFIRMED", "note": "(global): when the global's wanted byte +0x389 is set, clears it, copies the registered shooting-target list under its lock and writes every target's leader-near byte (1.004 +0x261, 1.005 +0x259) from the party leader's (PM+0x148) root location. Entry %16=0 in 1.004, %16=12 in 1.005; called, never redirected."}
+  ]
+}

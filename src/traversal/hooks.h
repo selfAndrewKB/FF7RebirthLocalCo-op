@@ -19,7 +19,14 @@
 //    point: a player joining a point another holds gets a down and an up of the setter in their own context, a player
 //    leaving one the game's own removal of their pin;
 //  - the press: the seat's field-pickup pass admits the gun's point by its presets and a delivered rope's point by its
-//    key (AdmitsPoint), so the seat's press runs the game's own dispatcher and listener;
+//    key (AdmitsPoint), so the seat's press runs the game's own dispatcher and listener. The gun's press flag has no
+//    owner in the game and every holder's notify of the press frame would start the hookshot on its own character
+//    (research/RE-hook-follow.md): the listener notes who pressed, and the notify slot runs the game's with the flag
+//    held at 0 for a call whose character is another player's, so only the presser's character goes;
+//  - the follower path: the game's AI followers take a gun point after their leader through the actor's follower-enter
+//    slot, and a seat's member, still possessed by its AI controller underneath, counts as a follower there. The slot
+//    runs the game's for an AI member and answers 0 (the game's own answer for a character with no controller holder)
+//    for a player's member;
 //  - the start: the state switch queues, so the move's Setup (the gun spawned) and Begin run later in the member's
 //    controller tick, outside the seat's scopes: the move's Begin and End slots run a seat's inside the seat's primary
 //    scope and leader answer (the rope's Begin with the party leader answering the member too: its rail offset reads
@@ -33,8 +40,7 @@
 //    gun on a seat's member the test answers the seat's type on that thread and the seat owns the add
 //    (feedback/traversal_rumble); the flight's effects on the worker are the climb context's (the move's Tick names
 //    the seat as the owner).
-// Not handled: a press on a gun point both players hold goes to whichever notify runs first (the flag has no owner),
-// and the rope's held Dash and Accel on the worker read the merged pads; neither is logged. Game thread, except the
+// Not handled: the rope's held Dash and Accel on the worker read the merged pads (not logged). Game thread, except the
 // camera handle swaps and the End's finish path.
 //
 // Per seat (players/seats.h): the seat comes from the move's character, the primary controller of the open scope, or

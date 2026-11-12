@@ -54,6 +54,15 @@ inline constexpr std::uintptr_t kHookRopeCameraModuleGlobal = 0x1491B0E00;
 /// A gun point actor's own camera-module handle (16 bytes: the module, then its weak reference controller), the
 /// per-actor twin of the rope's global.
 inline constexpr std::uint32_t kHookShotCameraHandle = 0x9E0;
+/// A gun point actor's press flag (u8): set by the point's press listener, read by every holder's notify (each starts
+/// the hookshot on its own character while it is set), cleared only when the point goes off (RE-hook-follow.md).
+inline constexpr std::uint32_t kHookShotPressFlag = 0x9D8;
+/// A gun point actor's key-listener handle (u64): made as the point first goes on, cleared with the press flag by the
+/// point's off path; non-zero while the point is on.
+inline constexpr std::uint32_t kHookShotListener = 0x9D0;
+/// A character's field-action notify pass hands each actor's notify slot a context whose second pointer is the
+/// character the pass runs for.
+inline constexpr std::uint32_t kNotifyContextCharacter = 0x8;
 
 /// End2FieldActionActor OnTriggerEnter / OnTriggerLeave (actor vt+0x710 / +0x718; 1.005 +0x718 / +0x720), shared by every
 /// field-action actor: (actor, const FName* key, AActor* other), `other` being the overlapping actor whose first tag is

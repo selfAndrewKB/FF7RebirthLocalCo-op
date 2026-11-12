@@ -1,6 +1,7 @@
 #include "feedback/traversal_rumble.h"
 
 #include "facts/engine.h"
+#include "facts/field_action.h"
 #include "feedback/traversal_rumble_shared.h"
 #include "platform/build_value.h"
 #include "platform/call_redirect.h"
@@ -63,7 +64,6 @@ constexpr std::uint8_t   kStopNamedBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08,  // 
 // VibrationList3B0_StopNamed(key): flags the global list's entries
 constexpr platform::FunctionFact kStopNamed{L"VibrationList3B0_StopNamed", 0x1422C4818, kStopNamedBytes};
 constexpr std::size_t    kStopFirstInstruction = 5;
-constexpr std::uintptr_t kListOwner     = 0x14939BC90;  // the list's owner (StopNamed and PlayNamed read it)
 constexpr std::uintptr_t kFootSlot      = 0x1457F3ED0;  // EndChocoboCharacter vt+0x978 (1.005 +0x980): footsteps
 constexpr std::uintptr_t kFootImpact    = 0x1418BA510;  // ... its function: GetMoveState, then FFB_Chocobo_1/2
 
@@ -650,7 +650,7 @@ void Install(const platform::GameImage& image) noexcept
                      g_zipGateCall.InstallResearch(image, kZipGateCall, kZipGate,
                                                    reinterpret_cast<std::uintptr_t>(&ZipGate));
     // The stop by name: a seat's loops added to its list must stop there.
-    const auto owner  = image.Rebase(kListOwner, sizeof(void*));
+    const auto owner  = image.Rebase(facts::kFieldActionGlobal, sizeof(void*));  // the list's owner (StopNamed and PlayNamed read it)
     g_listOwner       = owner ? *owner : 0;
     const auto stopAt = platform::FindFunction(image, kStopNamed);
     const bool stop   = zip && g_listOwner != 0 && stopAt &&

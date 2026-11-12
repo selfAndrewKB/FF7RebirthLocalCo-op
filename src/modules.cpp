@@ -105,6 +105,7 @@
 #include "world/party_warp.h"
 #include "world/seat_switch_volumes.h"
 #include "world/seat_triggers.h"
+#include "world/shooting_targets.h"
 #include "world/story_boxes.h"
 #include "world/catch_up_move.h"
 #include "world/run_catch_up.h"
@@ -304,6 +305,8 @@ constexpr std::array kModules{
     Module{Call<&rides::wheelie_ride::Install>, &rides::wheelie_ride::Remove},
     // each seat's pickups: one more pass of the game's prompts
     Module{Call<&world::field_pickup::Install>, &world::field_pickup::Remove},
+    // a breakable box counts as near for a seat's throw by that player's own distance
+    Module{Call<&world::shooting_targets::Install>, &world::shooting_targets::Remove},
     // each player's rumble on their own pad
     Module{Call<&feedback::pad_rumble::Install>, &feedback::pad_rumble::Remove},
     // a seat's combat rumble (hits, montage notifies) on the seat's pad

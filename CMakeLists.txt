@@ -132,6 +132,7 @@ add_library(LocalSplitScreen SHARED
     src/camera/shoulder_scale.cpp
     src/input/walk_limits.cpp
     src/world/field_pickup.cpp
+    src/world/shooting_targets.cpp
     src/feedback/pad_rumble.cpp
     src/feedback/combat_rumble.cpp
     src/world/vending.cpp

@@ -31,6 +31,7 @@
 #include "scopes/seat_ladder.h"
 #include "session/party_member.h"
 #include "world/field_pickup.h"
+#include "world/shooting_targets.h"
 
 #include <array>
 #include <cstddef>
@@ -169,7 +170,12 @@ void TickInScopes(int seat, void* controller, void* member, void* state, int typ
     battle::lock_on::AfterBattle(seat);            // out of battle, the seat's lock ends
     battle::battle_camera::Watch();                   // every camera manager's operators, logged on change (dev tools)
     battle::battle_input::Watch(seat, member, state);  // the seat's battle state, logged on change (dev tools)
-    if (!GuardedTick(state, deltaTime))
+    // The breakable boxes' leader-near byte answered for the member before its throw selection runs in the tick, for
+    // player 1 again after (world/shooting_targets).
+    world::shooting_targets::RefreshFor(member);
+    const bool ticked = GuardedTick(state, deltaTime);
+    world::shooting_targets::RefreshForPlayerOne();
+    if (!ticked)
     {
         g_stopped[static_cast<std::size_t>(seat)] = true;
         return;
