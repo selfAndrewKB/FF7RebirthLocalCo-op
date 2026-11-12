@@ -1186,6 +1186,7 @@ void Pass(Pickup& p, void* mgr, float dt) noexcept
     Before(p, mgr, items, chests, true);
     const bool input  = InputStep(p, mgr, root, dt);
     const bool update = input && platform::CallGuarded(g_update, mgr, dt);
+    traversal::hooks::NotePressesAfter(p.seat);  // a gun point pressed in this pass: the seat's press
     After(p, mgr);
     const bool out = SwapOut(p);
     g_passSeat     = -1;
@@ -1303,6 +1304,7 @@ void UpdateCall(void* mgr, float dt) noexcept
     HideSeatBoxes(mgr, true);
     reinterpret_cast<TickFn>(g_updateCall.Original())(mgr, dt);
     HideSeatBoxes(mgr, false);
+    traversal::hooks::NotePressesAfter(0);  // a gun point pressed in the game's own update: player 1's press
     if (mgr == nullptr || !players::generation::OnGameThread())
     {
         return;

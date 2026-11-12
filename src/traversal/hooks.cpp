@@ -76,13 +76,9 @@ constexpr platform::SlotFact kShotEndSlot{L"the hookshot move's End slot", 0x146
 constexpr std::uint8_t kHitBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x74, 0x24, 0x10, 0x48, 0x89,
                                       0x7C, 0x24, 0x18, 0x41, 0x55, 0x41, 0x56, 0x41, 0x57, 0xB8, 0x50, 0x01};
 constexpr platform::FunctionFact kHit{L"HookShotChild_HitFFB_Hookshot0", 0x143D6500C, kHitBytes};
-// The press flag path (research/RE-hook-follow.md): the point's press listener sets the actor's one flag, and every
-// holder's notify of that frame starts the hookshot on its own character while it is set. The listener's entry crosses
-// a block in both builds; its first two instructions (a clear, a compare) fit the redirect.
-constexpr std::uint8_t kShotPressedBytes[] = {0x33, 0xC0, 0x39, 0x81, 0x80, 0x01, 0x00, 0x00, 0x7E, 0x0C, 0x48, 0x8B,
-                                              0x81, 0x78, 0x01, 0x00};
-constexpr platform::FunctionFact kShotPressed{L"HookShotChild_OnPointPressed_Set9D8", 0x143643B1C, kShotPressedBytes};
-constexpr std::size_t            kShotPressedFirst = 2, kShotPressedSecond = 6;
+// The press flag path (research/RE-hook-follow.md): the point's press listener sets the actor's one flag (its entry and
+// its second instruction both cross a block, so the flag is watched after each selection update instead), and every
+// holder's notify of that frame starts the hookshot on its own character while it is set.
 constexpr std::uint8_t kShotNotifyBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x55, 0x56, 0x57, 0x41, 0x54, 0x41, 0x56,
                                              0x48, 0x8D, 0x6C, 0x24};
 constexpr platform::SlotFact kShotNotifySlot{L"the gun point's notify slot", 0x1466F16E0,
@@ -126,16 +122,17 @@ using MoveFn      = std::uintptr_t (*)(void* move);
 using EndFn       = std::uintptr_t (*)(void* move, std::uint8_t abort);
 using HandleFn    = std::uintptr_t (*)(void* actor);
 using HitFn       = std::uintptr_t (*)(void* gun, std::uint8_t kind);
-using PressedFn   = std::uint8_t (*)(void* actor, const std::uint64_t* key);
 using NotifyFn    = void (*)(void* actor, void* context);
 using AIEnterFn   = std::uint8_t (*)(void* actor, void* character);
 using Handle      = std::array<std::uint8_t, kHandleSize>;
 
-/// Who pressed a gun point last: 0 player 1, a seat, -1 unknown.
+/// Who pressed a gun point last: 0 player 1, a seat, -1 unknown; and the press flag as last looked at, so a flag that
+/// came up since names the update that dispatched the press.
 struct Presser
 {
-    std::uint64_t actor  = 0;  // the actor's weak value
-    int           player = -1;
+    std::uint64_t actor    = 0;  // the actor's weak value
+    int           player   = -1;
+    std::uint8_t  lastFlag = 0;
 };
 
 /// The gun point setter's arguments after `show`, as a wishing player's call last passed them (the game's switch
@@ -166,7 +163,6 @@ PointFn                 g_shotPoint = nullptr;
 RemovePinFn             g_removePin = nullptr;
 platform::VTableEntry   g_shotInstall, g_shotLeave, g_shotBegin, g_shotEnd, g_shotNotify, g_shotAIEnter;
 platform::EntryRedirect g_hit;
-platform::EntryRedirect g_shotPressed;
 platform::EntryRedirect g_ropeActive;
 platform::VTableEntry   g_ropeInstall, g_ropeLeave, g_ropeBegin, g_ropeEnd;
 std::uintptr_t          g_ropeCamera = 0;  // the rope's global camera handle, live
@@ -308,45 +304,39 @@ Presser* PresserOf(void* actor, bool make) noexcept
     }
     for (Presser& presser : g_pressers)
     {
-        if (presser.actor == 0 || presser.player < 0 || players::weak_object::ObjectOf(presser.actor) == nullptr)
+        if (presser.actor == 0 || (presser.player < 0 && presser.lastFlag == 0) ||
+            players::weak_object::ObjectOf(presser.actor) == nullptr)
         {
-            presser = {weak, -1};
+            presser = {weak, -1, 0};
             return &presser;
         }
     }
     return nullptr;
 }
 
-/// The gun point's press listener: the game's, then the presser noted for the actor (the open scope's seat, whose
-/// field-pickup pass dispatched the press; player 1 outside any).
-std::uint8_t ShotPressed(void* actor, const std::uint64_t* key) noexcept
+/// A presser whose wish goes off while the point stays on for another player (their character flew, or they walked
+/// away, or they left the game): the game's off path, which clears the press flag, is what the OR of the wishes holds
+/// back here, so its clear is made in its stead; otherwise the pending press would hold the other player's notifies
+/// for as long as they stay.
+void SpendPressAtLeave(void* actor, int player) noexcept
 {
-    const std::uint8_t result = reinterpret_cast<PressedFn>(g_shotPressed.Original())(actor, key);
-    if (result == 0 || !players::generation::OnGameThread())
+    Presser* presser = PresserOf(actor, false);
+    if (presser == nullptr || presser->player != player)
     {
-        return result;
+        return;
     }
-    const int player  = SeatNow();
-    Presser*  presser = PresserOf(actor, true);
-    if (presser != nullptr)
-    {
-        presser->player = player;
-    }
+    constexpr std::uint8_t kOff = 0;
+    (void)platform::WriteGuarded(static_cast<std::uint8_t*>(actor) + facts::kHookShotPressFlag, &kOff, sizeof(kOff));
+    *presser = {presser->actor, -1, 0};
     try
     {
-        if (presser == nullptr && !g_pressFullLogged)
-        {
-            g_pressFullLogged = true;
-            platform::LogWarning(L"hooks: no room to note who pressed the gun point {}: the game's own notifies stand for it "
-                                 L"(said once)",
-                                 players::NameOf(actor));
-        }
-        platform::LogDebug(L"hooks: {} pressed the gun point {}", players::SeatName(player), players::NameOf(actor));
+        platform::LogDebug(L"hooks: {}'s press on the gun point {} is spent with their leave (the point stays on for another "
+                           L"player: the flag cleared as the game's off would)",
+                           players::SeatName(player), players::NameOf(actor));
     }
     catch (...)
     {
     }
-    return result;
 }
 
 /// The gun point's notify: the game's, with the press flag at 0 for a call whose character is another player's than
@@ -361,10 +351,14 @@ void ShotNotify(void* actor, void* context) noexcept
     Presser*    presser   = players::generation::OnGameThread() && ReadField<std::uint8_t>(actor, facts::kHookShotPressFlag) != 0
                                 ? PresserOf(actor, false)
                                 : nullptr;
-    const bool  known     = presser != nullptr && presser->player >= 0 &&
-                        (presser->player == 0 || players::generation::Active(presser->player));
+    if (presser != nullptr && presser->player >= 1 && !players::generation::Active(presser->player))
+    {
+        SpendPressAtLeave(actor, presser->player);  // the presser left the game with their press pending
+    }
+    const bool  known     = presser != nullptr && presser->player >= 0;
     const int   notified  = known ? PlayerOfCharacter(character) : -1;
-    if (!known || notified < 0 || notified == presser->player)
+    const int   pressed   = known ? presser->player : -1;  // kept for the line below: the entry may be reset inside
+    if (!known || notified < 0 || notified == pressed)
     {
         original(actor, context);
         return;
@@ -381,15 +375,16 @@ void ShotNotify(void* actor, void* context) noexcept
     if (pointOn)
     {
         (void)platform::WriteGuarded(flag, &kOn, sizeof(kOn));
+        presser->lastFlag = 1;
     }
     else
     {
-        presser->player = -1;
+        *presser = {presser->actor, -1, 0};
     }
     try
     {
         platform::LogDebug(L"hooks: the gun point {}'s press is {}'s: the notify for {}'s character ran with the flag off{}",
-                           players::NameOf(actor), players::SeatName(presser->player), players::SeatName(notified),
+                           players::NameOf(actor), players::SeatName(pressed), players::SeatName(notified),
                            pointOn ? L"" : L" (the point went off inside: the flag stays off)");
     }
     catch (...)
@@ -485,10 +480,14 @@ void ShotPointOr(void* actor, std::uint8_t show, std::uint8_t allAngle, std::uin
         g_shotPoint(actor, 0, allAngle, ng, r1, r2);  // the last player's off: the game's own call
         if (Presser* presser = PresserOf(actor, false); presser != nullptr)
         {
-            presser->player = -1;  // the off clears the game's press flag: no press is pending
+            *presser = {presser->actor, -1, 0};  // the off clears the game's press flag: no press is pending
         }
         LogWish(L"gun point", actor, player, wish, any, changed ? L" (the game's off)" : L"");
         return;
+    }
+    if (changed && !wish)
+    {
+        SpendPressAtLeave(actor, player);
     }
     const int        wisher = wish ? player : AWisher(*wishes);
     const PointArgs& args   = wishes->args[wisher];
@@ -868,10 +867,6 @@ void RestoreGun() noexcept
             (void)slot->Restore();
         }
     }
-    if (g_shotPressed.IsInstalled())
-    {
-        (void)g_shotPressed.Restore();
-    }
 }
 
 void RestoreRope() noexcept
@@ -917,9 +912,7 @@ void Install(const platform::GameImage& image) noexcept
           platform::ReplaceSlot(image, kShotInstallSlot, reinterpret_cast<std::uintptr_t>(&ShotInstall), g_shotInstall) &&
           platform::ReplaceSlot(image, kShotLeaveSlot, reinterpret_cast<std::uintptr_t>(&ShotLeave), g_shotLeave) &&
           platform::ReplaceSlot(image, kShotNotifySlot, reinterpret_cast<std::uintptr_t>(&ShotNotify), g_shotNotify) &&
-          platform::ReplaceSlot(image, kShotAIEnterSlot, reinterpret_cast<std::uintptr_t>(&ShotAIEnter), g_shotAIEnter) &&
-          platform::InstallAtEntryOrSecond(g_shotPressed, image, kShotPressed, reinterpret_cast<std::uintptr_t>(&ShotPressed),
-                                           kShotPressedFirst, kShotPressedSecond);
+          platform::ReplaceSlot(image, kShotAIEnterSlot, reinterpret_cast<std::uintptr_t>(&ShotAIEnter), g_shotAIEnter);
     if (!gun)
     {
         RestoreGun();
@@ -954,6 +947,57 @@ void Install(const platform::GameImage& image) noexcept
                          rope ? L"ready" : L"NOT placed (a check failed): ropes stay player 1's", hit ? L"yes" : L"no");
 }
 
+void NotePressesAfter(int player) noexcept
+{
+    if (!g_gun || !players::generation::OnGameThread())
+    {
+        return;
+    }
+    for (const Wishes& wishes : g_shotWishes)
+    {
+        void* actor = wishes.actor != 0 ? players::weak_object::ObjectOf(wishes.actor) : nullptr;
+        if (actor == nullptr)
+        {
+            continue;
+        }
+        const std::uint8_t flag    = ReadField<std::uint8_t>(actor, facts::kHookShotPressFlag);
+        Presser*           presser = PresserOf(actor, flag != 0);
+        if (presser == nullptr)
+        {
+            if (flag != 0 && !g_pressFullLogged)
+            {
+                g_pressFullLogged = true;
+                try
+                {
+                    platform::LogWarning(L"hooks: no room to note who pressed the gun point {}: the game's own notifies stand "
+                                         L"for it (said once)",
+                                         players::NameOf(actor));
+                }
+                catch (...)
+                {
+                }
+            }
+            continue;
+        }
+        if (flag != 0 && presser->lastFlag == 0)
+        {
+            presser->player = player;
+            try
+            {
+                platform::LogDebug(L"hooks: {} pressed the gun point {}", players::SeatName(player), players::NameOf(actor));
+            }
+            catch (...)
+            {
+            }
+        }
+        else if (flag == 0)
+        {
+            presser->player = -1;
+        }
+        presser->lastFlag = flag;
+    }
+}
+
 void Remove() noexcept
 {
     RestoreGun();
@@ -967,7 +1011,7 @@ void Remove() noexcept
     g_ropeWishes.fill({});
     g_pressers.fill({});
     g_ropeKeys.fill(0);
-    g_shotFullLogged = g_ropeFullLogged = false;
+    g_shotFullLogged = g_ropeFullLogged = g_pressFullLogged = false;
     const std::lock_guard<std::recursive_mutex> lock(g_handles);
     g_shotHandles.fill({});
     g_ropeHandles.fill({});

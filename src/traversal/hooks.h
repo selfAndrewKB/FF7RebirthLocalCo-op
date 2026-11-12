@@ -21,8 +21,11 @@
 //  - the press: the seat's field-pickup pass admits the gun's point by its presets and a delivered rope's point by its
 //    key (AdmitsPoint), so the seat's press runs the game's own dispatcher and listener. The gun's press flag has no
 //    owner in the game and every holder's notify of the press frame would start the hookshot on its own character
-//    (research/RE-hook-follow.md): the listener notes who pressed, and the notify slot runs the game's with the flag
-//    held at 0 for a call whose character is another player's, so only the presser's character goes;
+//    (research/RE-hook-follow.md): the flag is looked at after each selection update (the game's own, player 1's;
+//    each seat's pass, that seat's), a flag that came up names its presser, and the notify slot runs the game's with
+//    the flag at 0 for a call whose character is another player's, so only the presser's character goes. The game
+//    clears the flag on the point's off path, which the OR of the wishes holds back while another player still
+//    holds the point, so the presser's leave (their wish off while the point stays on) makes that clear in its stead;
 //  - the follower path: the game's AI followers take a gun point after their leader through the actor's follower-enter
 //    slot, and a seat's member, still possessed by its AI controller underneath, counts as a follower there. The slot
 //    runs the game's for an AI member and answers 0 (the game's own answer for a character with no controller holder)
@@ -70,5 +73,9 @@ void NoteRope(const void* actor) noexcept;
 /// Whether a field-action point is a gun point (by `preset`) or a noted rope's (by `key`): the seat's pass leaves it
 /// open. Game thread.
 bool AdmitsPoint(std::uint64_t key, std::uint64_t preset) noexcept;
+
+/// After a selection update ran for `player` (0: the game's own; a seat: its pass): a gun point whose press flag came
+/// up since the last look was pressed in that update, by that player. Game thread.
+void NotePressesAfter(int player) noexcept;
 
 }  // namespace lss::traversal::hooks
