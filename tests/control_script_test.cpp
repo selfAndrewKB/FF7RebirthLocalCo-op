@@ -1,5 +1,5 @@
 // Host-side tests for the control language (control/script.h) against a registry of its own, run without the game.
-// Taken from Remake's tests/control_script_test.cpp; added: the named values of a number shape, three players for hold.
+// Covered beyond the language's basics: the named values of a number shape, and hold with three players.
 
 #include "control/script.h"
 

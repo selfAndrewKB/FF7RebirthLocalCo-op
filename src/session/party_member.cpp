@@ -88,7 +88,7 @@ bool GuardedSwitchLeader(void* controller, void* character) noexcept
     }
 }
 
-/// Player 1's battle switch's own member test T, the game's function (RE-p2-party-switch.md §1.2): the
+/// Player 1's battle switch's own member test T, the game's function (research/RE-p2-party-switch.md): the
 /// member is live, has its battle controller component, and is neither dead nor petrified. The first
 /// rule for a seat's player is to be bound by it the way player 1 is.
 bool BattleReady(const void* character) noexcept
@@ -232,7 +232,7 @@ struct SlotRead
     LinkRecordView link{};
 };
 
-// The battle system's link manager and its records (RE-p2-synergy-skills.md S-SYNTAKE §3; the same
+// The battle system's link manager and its records (research/RE-p2-synergy-skills.md; the same
 // offsets in both builds). The battle system is kBattleStateGlobal's object.
 constexpr std::uint32_t kLinkManager      = 0x2F0;
 constexpr std::uint32_t kLinkRecords      = 0x00;  // TArray of kLinkRecordSize-byte records: data, count
@@ -385,7 +385,7 @@ void ReadSlot(int seat, void* playerOneController, std::uint8_t standIn, SlotRea
     out.member              = member;
     out.ai                  = ReadAi(character);
     // In battle only: synergy records come only from battle commands, and the battle teardown keeps a
-    // record whose started member never ended (S-SYNGATEVERIFY §3), which must not hold a seat after it.
+    // record whose started member never ended, which must not hold a seat after it.
     out.linkBusy = facts::InBattle() && FindBusyLink(type, out.link);
 }
 

@@ -1,13 +1,13 @@
 #pragma once
 
-// Each seat's own battle command menu: another FieldCommandCtrl (RE-p2-command-menu.md §5.1, §10;
-// RE-p2-command-menu-input.md §4.1, §10 Stage 3a; passes S-CMD1, S-CMD2).
+// Each seat's own battle command menu: another FieldCommandCtrl (research/RE-p2-command-menu.md,
+// RE-p2-command-menu-input.md).
 //
 // The game owns one command controller (EndUISystem[23]) and builds it with three plain calls:
 // FMemory_Malloc(0x798), FieldCommandCtrl__Ctor, FieldCommandCtrl__SetupMenuWidgets(ctrl, world). The
 // ctor registers the controller with the game's GC-referenced list and Setup creates its own widgets,
 // states and request arrays. A seat's controller is built the same way, once. Like the game's, it is
-// never freed. It follows the game's lifecycle at the game's own calls (RE-p2-command-menu-levers.md §2):
+// never freed. It follows the game's lifecycle at the game's own calls (research/RE-p2-command-menu-levers.md):
 // the one call of ResetAll and the one call of Setup on the game's controller, which every path reaches
 // (field entry and exit, the fade-deferred Setup, the Blueprint thunks, the menu-close re-Setup), are
 // redirected; each is made again on each seat's controller while that seat plays. When a seat joins, or

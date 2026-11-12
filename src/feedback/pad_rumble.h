@@ -1,6 +1,6 @@
 #pragma once
 
-// Each player's rumble on their own pad (RE-p2-rumble.md §6.1, §9; plan, "per-pad rumble").
+// Each player's rumble on their own pad (research/RE-p2-rumble.md).
 //
 // Force feedback is per controller in the engine: each PC sends its own values with its own ControllerId. Two things
 // stop a seat's pad from getting its rumble (both seen live): the seat's send ran before PC1's in each frame, and PC1's

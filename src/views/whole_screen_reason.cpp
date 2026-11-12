@@ -8,10 +8,10 @@ namespace {
 
 // On/off 36's setter is the FName of the last SetOn that passed one: the event runner passes the action's own name (its
 // Action row), the native flows their class name. Every holder in the game's Action tables is a minigame or a minigame's
-// scene (RE-p2-minigames-stage2.md, S-STAGEMG2's list of all 409), so only these two native flows are field uses. The
+// scene (research/RE-p2-minigames-stage2.md, its list of all 409), so only these two native flows are field uses. The
 // Temple's gravity rooms (their console floats the whole party until player 1 chooses) and the desert buggy course
 // (act2360_MiniGame_Buggy, a looped course with a hard mode and a shooting game; not the field vehicle, which sets no 36)
-// go single (the user's calls).
+// go single.
 constexpr std::array<std::wstring_view, 2> kFieldFlows{L"FEndChickenLureMiniGameFlow", L"EndChocoboCaptureManager"};
 
 }  // namespace
@@ -40,7 +40,7 @@ bool MinigameStage(const ScreenSignals& signals) noexcept
         return true;
     }
     // 36 is held for the whole game (the bits flash); a field use's 36 is not a minigame stage. 36 needs neither the
-    // battle nor the colosseum guard: no battle or VR / colosseum session holds it (S-HELDBITS).
+    // battle nor the colosseum guard: no battle or VR / colosseum session holds it.
     if ((signals.minigamePlaying && !signals.fieldMinigame) || signals.minigameIds || signals.frogGuys)
     {
         return true;

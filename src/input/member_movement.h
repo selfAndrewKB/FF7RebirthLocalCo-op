@@ -45,7 +45,7 @@ void Tick(int seat, void* controller, void* member) noexcept;
 /// for the rest of the session (logged).
 players::StageCounters& Counters(int seat) noexcept;
 
-/// The boarding gate of a seat's rides (chocobo_ride, wheelie_ride; RE-p2-chocobo-ride.md §7.2 item 2): the game's
+/// The boarding gate of a seat's rides (chocobo_ride, wheelie_ride; research/RE-p2-chocobo-ride.md): the game's
 /// IsUCPC_Core(`character`) as the seat's chocobo swap would see it, inside the seat's primary-controller scope and its
 /// member's leader answer, and the primary controller seen there. Calls nothing else. -1 when a scope could not be
 /// held or the test is unavailable. Game thread.
@@ -84,8 +84,7 @@ RideTick TickRide(int seat, void* controller, void* member, void* state, const v
 
 /// Runs `engine`, the game's slot 1 of a seat's ridden chocobo's move state (called by the chocobo's own actor tick:
 /// its handles and the anim sync), inside the seat's primary-controller scope and the leader answer for the member's
-/// type and `component`: the context the game gives the chocobo player 1 rides (RE-p2-chocobo-run-refresh.md §4,
-/// lever 1).
+/// type and `component`: the context the game gives the chocobo player 1 rides (research/RE-p2-chocobo-run-refresh.md).
 /// Refused calls nothing (the caller runs `engine` as the game would). With `sample`, `ridden` gets the game's
 /// ridden-vehicle test (IsActiveRiddenVehicle) for `chocobo` outside and inside the scope (-1: not evaluated).
 /// Game thread.

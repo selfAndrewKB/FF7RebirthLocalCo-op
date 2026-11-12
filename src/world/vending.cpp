@@ -40,7 +40,7 @@ namespace lss::world::vending {
 
 namespace {
 
-// RE-p2-field-interact.md §15.9 (this build).
+// research/RE-p2-field-interact.md (this build).
 constexpr std::uintptr_t kVendingPreset     = 0x149347278;  // the FName global rpaVendingMachine (the point-side preset)
 constexpr std::uint8_t   kEnd2KeyBytes[]    = {0x48, 0x89, 0x5C, 0x24, 0x08};  // mov [rsp+8], rbx
 // FieldActionKeyListener_End2FieldActionActor_CallVt6A0(mgr, &key)
@@ -52,7 +52,7 @@ constexpr platform::FunctionFact kCamera{L"ShopMenu_ActivateShopCamera_TargetOrS
 constexpr std::uint8_t   kCameraOffBytes[]  = {0xB8, 0x28, 0x00, 0x00, 0x00};  // mov eax, 28h
 // ShopMenu_DeactivateShopCamera
 constexpr platform::FunctionFact kCameraOff{L"ShopMenu_DeactivateShopCamera", 0x143550C90, kCameraOffBytes};
-// 1.005 (RE-1005-field-2.md §4): the camera's entry is at 0x14327FE5C, %16 = 12, so its first instruction crosses a
+// 1.005 (research/RE-1005-field-2.md): the camera's entry sits at %16 = 12, so its first instruction crosses a
 // 16-byte block and cannot take an entry redirect. Its seven callers (the same seven shop paths as in this build, one
 // call each, each inside one block in 1.005) are redirected instead, to the same replacement.
 constexpr std::array<std::uintptr_t, 7> kCameraCalls{
@@ -66,25 +66,25 @@ constexpr std::array<std::uintptr_t, 7> kCameraCalls{
 };
 constexpr std::size_t kChadleyCall = 3;  // kCameraCalls' FEndShowChadleyShopMenu_Begin
 using Clock = std::chrono::steady_clock;
-// A seat's press claims the shop whose camera comes within this many frames (the level script opens it the next frame,
-// §15.1) and names the pressed machine (the camera's target is the machine's Tags[0], which the pressed point's key
+// A seat's press claims the shop whose camera comes within this many frames (the level script opens it the next frame)
+// and names the pressed machine (the camera's target is the machine's Tags[0], which the pressed point's key
 // contains, e.g. VendingMachine_..._obl2250_VendingBook_NearDrawbridge_PressVolume). Any other shop stays player 1's.
 constexpr std::uint64_t kPressFrames = 60;
 constexpr auto          kPressWindow = std::chrono::seconds(5);  // a press older than this is logged as having opened no shop
-// A shopkeeper's shop opens after its greeting, if any (a voiced line of about 2 s and more; RE-p2-shopkeeper-talk.md
-// §4.1): a seat's press of a shopkeeper claims the first shop camera within this time that names the pressed NPC.
+// A shopkeeper's shop opens after its greeting, if any (a voiced line of about 2 s and more; research/RE-p2-shopkeeper-talk.md):
+// a seat's press of a shopkeeper claims the first shop camera within this time that names the pressed NPC.
 constexpr auto          kShopkeeperWindow = std::chrono::seconds(15);
 // A shop up holds a pending press's window (a seat's shop may be queued behind it) for at most this long, in case its
 // close is never seen (a map change mid-shop).
 constexpr auto          kHoldAtMost = std::chrono::seconds(120);
 
-// Each wrapped function takes at most four integer arguments (§15 listings); all four are passed on.
+// Each wrapped function takes at most four integer arguments; all four are passed on.
 using Fn = std::uint64_t (*)(std::uint64_t, std::uint64_t, std::uint64_t, std::uint64_t);
 
 platform::EntryRedirect g_end2Key, g_camera, g_cameraOff;
 // The shop camera's caller in FEndShowChadleyShopMenu_Begin (its return address, this build): Chadley's shop keeps its
 // camera for a seat, since coming back from a VR battle activates the shop camera again outside the hooked function with
-// the target and preset saved at the VR start (RE-p2-shop-camera-skip.md §7).
+// the target and preset saved at the VR start (research/RE-p2-shop-camera-skip.md).
 std::uintptr_t g_chadleyReturn = 0;
 std::array<platform::CallRedirect, kCameraCalls.size()> g_cameraCalls;  // 1.005: the camera's callers
 std::uintptr_t          g_cameraTarget = 0;  // 1.005: the camera function (the callers' target)
@@ -190,14 +190,14 @@ bool NamesPressedMachine(const Press& press, std::uint64_t target) noexcept
 }
 
 /// The text after the first '_', lower case (the NPC's ActorName and its CharaPop key share it: Npc2100_shopweapon01
-/// and oba2100_ShopWeapon01; RE-p2-shopkeeper-talk.md §7.3).
+/// and oba2100_ShopWeapon01; research/RE-p2-shopkeeper-talk.md).
 std::wstring AfterPrefix(const std::wstring& name)
 {
     return field_rules::AfterPrefix(name);
 }
 
 /// Whether the shop camera's target names the NPC of the pending shopkeeper `press` (the action passes the NPC's
-/// ActorName, §4.1). No target is never a shopkeeper's: some vending scripts pass none, and player 1's machine must not
+/// ActorName). No target is never a shopkeeper's: some vending scripts pass none, and player 1's machine must not
 /// take a seat's pending press.
 bool NamesPressedShopkeeper(const Press& press, std::uint64_t target) noexcept
 {
@@ -247,10 +247,10 @@ std::uint64_t End2Key(std::uint64_t mgr, std::uint64_t key, std::uint64_t r8, st
 }
 
 /// The shop camera's activation (every shop path; the shop UI and OnOff 148 are already up): whose shop this is.
-/// A seat's shop opens without it (the user's rule: no scripted camera zoom on player 1's view for a seat's
+/// A seat's shop opens without it (no scripted camera zoom on player 1's view for a seat's
 /// shop): the camera would run on player 1's camera manager, framing player 1's character
 /// and leaving player 1's camera at the shop's angle on close (RE-p2-shop-camera-skip.md). Nothing in the shop waits on
-/// it and no caller reads its result (§2, §3); its deactivation at the close still runs and does nothing (§4). The
+/// it and no caller reads its result; its deactivation at the close still runs and does nothing. The
 /// seats' pending presses are matched in seat order: machines first, then shopkeepers.
 std::uint64_t Camera(std::uint64_t target, std::uint64_t preset, std::uint64_t r8, std::uint64_t r9) noexcept
 {
@@ -273,7 +273,7 @@ std::uint64_t Camera(std::uint64_t target, std::uint64_t preset, std::uint64_t r
                           players::unreal::NameText(target));
         }
         // A press stays pending through another shop (player 1's opened first, and the game queues the seat's behind
-        // it: the event runner waits while a shop's Exclusion bit is live, RE-p2-shopkeeper-talk.md §6) until its own
+        // it: the event runner waits while a shop's Exclusion bit is live, research/RE-p2-shopkeeper-talk.md) until its own
         // shop names what was pressed; its window is paused while another shop is up and restarts when that shop closes
         // (CameraOff).
         if (machine)
@@ -325,12 +325,12 @@ std::uint64_t Camera(std::uint64_t target, std::uint64_t preset, std::uint64_t r
         platform::Log(L"vending: {}'s shop opened (camera target {}, preset {}, from 0x{:X}); pad {} drives it; the "
                       L"shop camera is skipped (player 1's view stays as it is)",
                       who, players::unreal::NameText(target), players::unreal::NameText(preset), caller, owner + 1);
-        return 0;  // no caller reads it (RE-p2-shop-camera-skip.md §2)
+        return 0;  // no caller reads it (research/RE-p2-shop-camera-skip.md)
     }
     std::uint64_t result = 0;
     if (type)
     {
-        const scopes::leader_scope::LeaderTypeScope scope(*type);  // the default preset by the seat's member's type (§15.3)
+        const scopes::leader_scope::LeaderTypeScope scope(*type);  // the default preset by the seat's member's type
         result = call(target, preset, r8, r9);
     }
     else

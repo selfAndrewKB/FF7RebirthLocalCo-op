@@ -26,7 +26,7 @@ namespace lss::hud::popups {
 
 namespace {
 
-// Facts read from the database (RE-p2-battle-popups.md §1; this build).
+// Facts read from the database (research/RE-p2-battle-popups.md; this build).
 constexpr std::uint32_t  kManager     = 0xA0;   // the popup manager (a pointer)
 constexpr std::uint32_t  kCanvas      = 0x10;   // TSharedPtr<SEndPopupMessageCanvas> {object, controller}
 constexpr std::uint32_t  kSharedCount = 0x8;    // a reference controller's shared count (int32)

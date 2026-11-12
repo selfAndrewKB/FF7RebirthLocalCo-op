@@ -1,7 +1,7 @@
 #pragma once
 
 // Which player's character an enemy's Condition target selector counts as "the UCPC" (the user-controlled player
-// character) for one select (RE-p2-enemy-target-bias.md §5.1, §10). Pure logic, tested on the host.
+// character) for one select (research/RE-p2-enemy-target-bias.md). Pure logic, tested on the host.
 //
 // In the single-player game the UCPC is the one character the player controls, and the story bosses' condition
 // lists weight it 2:1 to 8:2 over the AI members. With seats in, each select names one player, so every

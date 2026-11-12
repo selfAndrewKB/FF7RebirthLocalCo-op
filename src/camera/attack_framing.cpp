@@ -35,7 +35,7 @@ namespace {
 
 using Clock = std::chrono::steady_clock;
 
-// RE-p2-attack-cameras.md §10.4 (S-ATKCAMLEADER, both builds; every site re-read from both exes).
+// research/RE-p2-attack-cameras.md (both builds; every site re-read from both exes).
 // D1: the slot-20 compute's call of CamEntry_IsActive_LeaderKeyed(rcx unused, rdx entry) -> bool (1.005: crosses a block).
 constexpr std::uintptr_t kActiveCall     = 0x140E58FD0;
 constexpr std::uint8_t   kUsesTargetBytes[] = {0x8A, 0x91, 0x80, 0x08, 0x00, 0x00, 0x32, 0xC0};
@@ -188,7 +188,7 @@ std::uint8_t Decide(std::uint8_t priority, const void* camera) noexcept
     if (priority == kSyncPriority)
     {
         // A grab: the game's own test already keeps it to the caught player's camera when it involves the leader. Only
-        // the ones that passed through their ActorName / Summon selectors are decided here (§10.1h).
+        // the ones that passed through their ActorName / Summon selectors are decided here.
         bool involves = true;
         if (!platform::CallGuarded(g_involvesLeader, involves, camera) || involves)
         {

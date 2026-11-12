@@ -20,14 +20,14 @@ using facts::kUICommandController;  // the UI system's slots (facts/hud.h)
 using facts::kUIInput;
 using facts::kUIKeyGuide;
 
-// Facts read from the database (RE-p2-command-menu-input.md §2, §3.3, §10; this build).
+// Facts read from the database (research/RE-p2-command-menu-input.md; this build).
 // The input object's focus context, as {offset, size} copied in this order: the focus path
 // (FWeakWidgetPath), the focus layers (TArray), the last focus cause, and the capture map (a TSet
 // keyed by action: the widget that took a held action's press gets its release; the command menu
 // adds one for each held Attack, Unique or Guard, so it is per-player state like the path), then the
 // menu owner byte (+0x64: written by the member selecter's tick in the field top states, read by
-// SquareInput_Owner64Gate 0x143A1D738 in the key-down mapper; per-pad input state tied to that player's
-// menu, RE-p2-command-menu-levers.md §5.2).
+// SquareInput_Owner64Gate in the key-down mapper; per-pad input state tied to that player's
+// menu, research/RE-p2-command-menu-levers.md).
 struct Region
 {
     std::uint32_t offset, size;
@@ -75,7 +75,7 @@ std::array<std::uint8_t, kContextSize> EmptyContext() noexcept
     return context;
 }
 // The focus layers (TArray of 40 bytes, sorted by priority; int32 priority at +0x20). The command
-// menu's own layers sit at -1000 (RE-p2-command-menu-input.md §11).
+// menu's own layers sit at -1000 (research/RE-p2-command-menu-input.md).
 constexpr std::uint32_t kLayerSize         = 40;
 constexpr std::uint32_t kLayerPriority     = 0x20;
 constexpr std::int32_t  kCommandMenuLayer  = -1000;

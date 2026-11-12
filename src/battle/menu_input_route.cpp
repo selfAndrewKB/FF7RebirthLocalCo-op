@@ -39,12 +39,12 @@ namespace {
 // The CommandMenu action's key (logged). An action event's key name is at +0x18 (the handler compares
 // it with the FKeys' first eight bytes). Target switching (Prev/NextTarget) goes to the seat's menu
 // like every other action: its handler switches the target fields a TargetScope holds as the seat's
-// (RE-p2-targeting-scoped-tick.md §7).
+// (research/RE-p2-targeting-scoped-tick.md).
 constexpr std::uintptr_t kCommandMenuKey = 0x1491E44F0;
 constexpr std::uint32_t  kEventKey       = 0x18;
 // The input processor's key-up handler (IInputProcessor slot 3; FKeyEvent in r8, its UserIndex, the
 // pad's controller id, at +0x0C) and the up route's call in ActionUp_UpdateTables (bool(owner, event)):
-// RE-p2-command-menu-input.md §3.3, §10 Stage 3d.
+// research/RE-p2-command-menu-input.md.
 // The handler's first instruction (mov [rsp+8], rbx) is often patched by another hook (UE4SS's input
 // handling puts a jump there, live), so the slot is checked to still name the handler and the bytes
 // are checked after that instruction.
@@ -273,7 +273,7 @@ bool TakeTaken(int seat, std::uint64_t key) noexcept
 }
 
 /// A seat's pad's press through the game's own dispatcher in the seat's UI, so its route, list and
-/// command-menu handler act on the seat's menu (RE-p2-command-menu-input.md §3.3, §10 Stage 3d). The seat comes
+/// command-menu handler act on the seat's menu (research/RE-p2-command-menu-input.md). The seat comes
 /// from the press's source bit.
 bool RouteSeatPad(input::pad_buttons::ActionDownFn dispatch, void* owner, void* unused, std::uint32_t sourceBit, void* event,
                   std::uint8_t alreadyHandled, char& result) noexcept

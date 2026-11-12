@@ -15,10 +15,10 @@
 // the option's console command and saves it to the settings file, so it applies at once and at the next start. Each
 // made page and each change logged at Info, each commit at Debug, each value read at Trace. Game thread.
 //
-// Taken from Remake's menu/coop_page. Changed: a category's rows are emptied by the game's move-assign from an empty
-// array (this game has no ranged remove); the overlay add writes the page's order itself; 1.005's value read is entered
-// through its second instructions (its first crosses a block); a commit is saved to the settings file; a slider row's
-// Accept is committed by the page's key handler (this game's handler sets the value inline, never through the commit).
+// How the game's helpers are used: a category's rows are emptied by the game's move-assign from an empty array (the
+// game has no ranged remove); the overlay add writes the page's order itself; 1.005's value read is entered through
+// its second instruction (its first crosses a block); a commit is saved to the settings file; a slider row's Accept is
+// committed by the page's key handler (the game's handler sets the value inline, never through the commit).
 // Rows with more values than the game's longest list are the game's slider rows (menu/coop_slider); without the slider
 // they stay off the page (the value list cannot scroll), on the console and in the settings file.
 

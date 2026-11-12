@@ -5,8 +5,8 @@
 // the chocobo climb and jump pad): their native vtables (data; Blueprint subclasses keep them) and the trigger enter
 // and leave every one of them shares.
 //
-// Research: Rebirth/Documentation/research/RE-p2-traversal.md §1.3, RE-p2-traversal-cameras.md, RE-p2-chocobo-climb.md
-// §1.1, §3.1; 1.005 through replaced-traversal.json, replaced-traversal-classes.json, replaced-chocobo-traversal.json
+// Research: Rebirth/Documentation/research/RE-p2-traversal.md, RE-p2-traversal-cameras.md, RE-p2-chocobo-climb.md;
+// 1.005 through replaced-traversal.json, replaced-traversal-classes.json, replaced-chocobo-traversal.json
 // (every slot and entry read from both exes, tools/version_match/_traversal_check.py).
 
 #include "platform/verified_code.h"

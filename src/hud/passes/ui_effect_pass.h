@@ -3,7 +3,7 @@
 // The UI particles (the summon gauge's glow, every Niagara effect whose render target is the composite foreground)
 // placed and sized per column. The engine draws them per view family with the stock mesh-draw machinery into the
 // family's composite-foreground target, the final pass blends that into the view, and the effect's own vertex path
-// puts the particles in orthographic screen space (research/RE-ui-particle-pass.md §12). One view family per column
+// puts the particles in orthographic screen space (research/RE-ui-particle-pass.md). One view family per column
 // under the mod, so once per column. The particle itself is one per effect (one position, one size for every
 // column: the game converts its layout point once a frame, centred in the layout the overlay holds then and in its
 // half-heights), but the pass sets a viewport over the whole target just before its draw, and a viewport is the one

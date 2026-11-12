@@ -49,7 +49,7 @@ namespace seat_ladder = scopes::seat_ladder;
 
 namespace {
 
-// Facts read from the database (RE-p2-command-menu-tick.md §13.1; this build). Each call site's five
+// Facts read from the database (research/RE-p2-command-menu-tick.md; this build). Each call site's five
 // bytes lie inside one aligned 16-byte block (checked again by CallRedirect).
 constexpr std::uint8_t kTickBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x48, 0x89, 0x6C, 0x24, 0x18, 0x48, 0x89, 0x74,
                                        0x24, 0x20, 0x57, 0xB8, 0xD0, 0x00, 0x00, 0x00, 0xE8, 0x82, 0x1C, 0x67, 0x01};
@@ -74,11 +74,11 @@ constexpr std::uint8_t kHudModeBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x
 constexpr platform::FunctionFact kSetHudMode{L"FieldCommandCtrl_SetBattleHudMode540", 0x1410A80E0, kHudModeBytes};
 // Its entry (`mov [rsp+8], rbx`, inside one block in both builds) is redirected: the game's one caller,
 // EndUI_SetBattleHudMode, sets it on the game's controller at a battle's start and end, a field exit and the menu API's
-// in-battle switch (RE-p2-command-menu-lifecycle.md §11).
+// in-battle switch (research/RE-p2-command-menu-lifecycle.md).
 constexpr std::size_t kSetHudModeFirst = 5;
 // The party list's input flag (ctrl+0x4A0 = party list +0x140): while 0 its show timer collapses the field
 // menu every tick. The game sets it through EndUI23_ResumeHudInput(1) / SuspendHudInput(1), which act on
-// its own controller only (RE-p2-command-menu-lifecycle.md §1).
+// its own controller only (research/RE-p2-command-menu-lifecycle.md).
 constexpr std::uint8_t kResumeHudInputBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x6C, 0x24, 0x10, 0x48,
                                                  0x89, 0x74, 0x24, 0x18, 0x57, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8,
                                                  0xE6, 0x82, 0x42, 0x01, 0x48, 0x2B, 0xE0, 0x48, 0x8B, 0xF9};
@@ -96,28 +96,28 @@ constexpr std::uint32_t kPartyList      = 0x360;  // the controller's party list
 constexpr std::uint32_t kPartyListInput = 0x4A0;  // u8
 using facts::kCmdSetupPending;
 // FieldCommandCtrl_SetMenuFocusLayer783(ctrl, on): the menu's bottom focus layer (priority -1000),
-// pushed and focused, or popped (RE-p2-command-menu-input.md §2).
+// pushed and focused, or popped (research/RE-p2-command-menu-input.md).
 constexpr std::uint8_t kSetMenuLayerBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x74, 0x24, 0x18,
                                                0x57, 0xB8, 0x40, 0x00, 0x00, 0x00, 0xE8, 0x73, 0x80, 0x42,
                                                0x01, 0x48, 0x2B, 0xE0, 0x8A, 0x81, 0x83, 0x07, 0x00, 0x00};
 constexpr platform::FunctionFact kSetMenuLayer{L"FieldCommandCtrl_SetMenuFocusLayer783", 0x140C86EA8, kSetMenuLayerBytes};
 // UWidget::Visibility (ESlateVisibility, u8; logged). The command menu is shown and hidden by the game's
 // own calls, mirrored on each seat's controller: ResumeHudInput(ctrl, 0) makes it Visible (once "setup
-// done"), SuspendHudInput(0, _) Collapsed (RE-p2-command-menu-levers.md §7).
+// done"), SuspendHudInput(0, _) Collapsed (research/RE-p2-command-menu-levers.md).
 constexpr std::uint32_t kVisibility = 0xC3;
 using facts::kCmdMenuWidget;
 using facts::kCmdFieldMenu;
 
 // The UI system's slots: the input object [2], the command controller [23]. Two values a seat's tick
 // also writes need nothing here: EndUISystem[50]+0x20/+0x2C have no reader in the game, and the input
-// object's +0x64 is per-player state kept in the seat's focus scope (RE-p2-command-menu-levers.md §5).
+// object's +0x64 is per-player state kept in the seat's focus scope (research/RE-p2-command-menu-levers.md).
 using facts::kUICommandController;
 // The party manager's leader type (u8; PM+0x148 is the leader's weak pointer, scopes/leader_scope).
 using facts::kPartyManagerLeaderType;
 using facts::kPartyManagerPrimaryController;
 using facts::kPartyManagerLeader;
 
-// The controller (RE-p2-command-menu-tick.md §1, §2, §7).
+// The controller (research/RE-p2-command-menu-tick.md).
 using facts::kCmdStoredLeaderType;
 using facts::kCmdMembers;
 using facts::kCmdBattleInput;
@@ -261,7 +261,7 @@ namespace {
 /// off with EndUI23_ResumeHudInput(0) / SuspendHudInput(0, 0), on its own controller only; the same calls are
 /// made for a seat's (the suspend inside the seat's UI, where the UI system's controller slot names the seat's).
 /// Without it the input handler drops Attack, Unique and Guard, and the tick clears every request
-/// (RE-p2-command-menu-actions.md; RE-p2-command-menu-lifecycle.md §3.3).
+/// (research/RE-p2-command-menu-actions.md, RE-p2-command-menu-lifecycle.md).
 void CopyBattleInput(int seat, std::uintptr_t ctrl, std::uintptr_t ctrl1) noexcept
 {
     const auto want = ReadAt<std::uint8_t>(ctrl1 + kCmdBattleInput);
@@ -283,14 +283,14 @@ HudModeFn HudModeSetter() noexcept
     return g_hudModeEntry.IsInstalled() ? reinterpret_cast<HudModeFn>(g_hudModeEntry.Original()) : g_hudMode;
 }
 
-/// The game's battle HUD mode set on a seat's controller through the game's setter (§4.2, §7; the setter's other
+/// The game's battle HUD mode set on a seat's controller through the game's setter (the setter's other
 /// effects ride along: its menus and members reset, its requests cleared at a start).
 bool SetSeatHudMode(int seat, std::uintptr_t ctrl, std::uint8_t mode, std::uint8_t memberType,
                     const wchar_t* why) noexcept
 {
     if (mode != 0)
     {
-        // A written exception (RE-p2-command-menu-levers.md §4.2, §15): on its first battle frame the seat's
+        // A written exception (research/RE-p2-command-menu-levers.md): on its first battle frame the seat's
         // controller still holds player 1's field leader type, and the tick's leader-change handler would clear the
         // battle system's slot for player 1's type (BattleSys920_ClearTypeSlotForType) on a character player 1 is
         // playing. No game path gives it the seat's type earlier.
@@ -394,7 +394,7 @@ std::uint8_t VisibilityOf(std::uintptr_t controller, std::uint32_t offset) noexc
     return widget != 0 ? ReadAt<std::uint8_t>(widget + kVisibility) : 0xFF;
 }
 
-/// A seat's party list input flag follows player 1's, through the game's own calls (§10.2 R1).
+/// A seat's party list input flag follows player 1's, through the game's own calls.
 void CopyPartyListInput(int seat, std::uintptr_t ctrl, std::uintptr_t ctrl1) noexcept
 {
     const auto want = ReadAt<std::uint8_t>(ctrl1 + kPartyListInput);
@@ -569,7 +569,7 @@ void Refused(int seat, const wchar_t* why) noexcept
     }
 }
 
-/// A seat's controller's tick, inside the seat's scopes (§13.2).
+/// A seat's controller's tick, inside the seat's scopes.
 void SeatPass(int seat, float deltaTime) noexcept
 {
     const auto ctrl   = reinterpret_cast<std::uintptr_t>(command_menu::Controller(seat));
@@ -611,7 +611,7 @@ void SeatPass(int seat, float deltaTime) noexcept
         // The seat's requests are the game's own handler's (the pad's presses and releases dispatched in the seat's UI
         // set and clear them, as for player 1), the leader-switch requests included: the tick's switch step runs the
         // game's cycle for the seat inside this pass (session/party_switch.h).
-        // A written exception (RE-p2-command-menu-levers.md §4.1, §15): the battle-HUD sound is one global
+        // A written exception (research/RE-p2-command-menu-levers.md): the battle-HUD sound is one global
         // cue per edge, played by the first controller whose +0x774 differs from its HUD mode; a seat's
         // is pre-seeded with the value its own tick writes one line after the sound, so the cue plays once.
         WriteAt(ctrl + kHudSoundMode, ReadAt<std::uint8_t>(ctrl + kCmdHudMode));

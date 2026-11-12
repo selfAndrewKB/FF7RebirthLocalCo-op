@@ -10,7 +10,7 @@
 //   camera managers' immediate kick (a subject that opted out of the pass, faded at once by its own camera) skips it too.
 // - Occluder fade: player 1's camera's traces toward its pivot admit every party member's mesh; a hit on a seat's
 //   character (or anything attached to it) resolves to no actor, so the game skips the hit.
-// - Overlap fade (§9): climbing walls, spider walls and one-shot moves fade a character to 0.3 (reason bit 9) while
+// - Overlap fade: climbing walls, spider walls and one-shot moves fade a character to 0.3 (reason bit 9) while
 //   another party member overlaps it, unless the game's player test says it is the player's; the test answers yes for
 //   a seat's member.
 // Every other character, and everything else in the fades, stays the game's. The seat comes from the character the

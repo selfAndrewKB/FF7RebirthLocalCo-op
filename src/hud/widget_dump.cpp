@@ -468,9 +468,9 @@ int LogMenuSettings()
     return lines + 1;
 }
 
-// ---- the HUD's owner: EndUISystem and the stock player layers (RE-p2-hud.md P8.9) ----------------
+// ---- the HUD's owner: EndUISystem and the stock player layers (research/RE-p2-hud.md) -------------
 
-// EndUISystem (g_EndUISystem) and the members P8.9 read: 8-byte heap pointers, weak object
+// EndUISystem (g_EndUISystem) and the members the research read: 8-byte heap pointers, weak object
 // pointers as {int32 index, int32 serial} (serial 0 = null), and one-byte flags.
 constexpr std::uint32_t  kCompassHolder    = 0x348;  // in the compass manager; its +0 is the weak widget
 using facts::kUISetupDeferred;

@@ -30,7 +30,7 @@ namespace lss::battle::battle_input {
 
 namespace {
 
-// The battle target system (RE-p2-targeting.md §1, §2; a pointer global): the lock byte, the switch
+// The battle target system (research/RE-p2-targeting.md; a pointer global): the lock byte, the switch
 // latch, the skip byte, the displayed target. The soft target itself lives in each character's
 // BattlePlayer component (+0x258 object, +0x260 its reference controller).
 using facts::kBattleStateGlobal;
@@ -51,8 +51,9 @@ using facts::kCmdGuardLatch;
 using facts::kCmdRequests;
 constexpr std::array<std::int32_t, 10> kLoggedRequests{5, 6, 12, 13, 25, 26, 32, 37, 38, 39};
 
-// A party character's battle parts (§1.4, §1.5).
-constexpr platform::PerBuild<std::uint32_t> kCharacterHolder = {0x1758, 0x1778};  // holder whose +0 is the character; 1.005: vt+0xA18 getter 0x140896CC0 mov rax,[rcx+1778h], CreateMoveState 0x140D8255C
+// A party character's battle parts: the holder whose +0 is the character. In 1.005 both the vt+0xA18 getter and
+// CreateMoveState read it at [rcx+1778h].
+constexpr platform::PerBuild<std::uint32_t> kCharacterHolder = {0x1758, 0x1778};
 using facts::kCharacterControlHolder;
 constexpr std::uint32_t  kOwnerSlot         = 0x48;
 using facts::kBattlePlayerComponentVTable;

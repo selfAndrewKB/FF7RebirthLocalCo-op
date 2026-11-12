@@ -17,7 +17,7 @@ namespace lss::hud::hud_updates {
 
 namespace {
 
-// Facts read from the database (RE-p2-hud.md pass 9 table, pass 12). Each function's prologue up
+// Facts read from the database (research/RE-p2-hud.md). Each function's prologue up
 // to its stack probe call is checked before it is called.
 
 struct SubTick
@@ -42,7 +42,7 @@ constexpr std::uint8_t kTick180[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x48, 0x89, 0
 // the off-screen enemy arrows among them (hud/field/marker_timers.h)
 constexpr std::uint32_t kMarkerListMember = 0x150;
 
-// In MasterHUD_Tick's order (pass 9, P9.1).
+// In MasterHUD_Tick's order (research/RE-p2-hud.md).
 constexpr std::array<SubTick, 6> kSubTicks{{
     {0x98, {L"the HUD's +0x98 object's tick", 0x140A677F0, kTick98}},
     {0xB0, {L"the HUD's +0xB0 object's tick", 0x140B8B374, kTickB0}},
@@ -52,8 +52,8 @@ constexpr std::array<SubTick, 6> kSubTicks{{
     {0x180, {L"the HUD's +0x180 object's tick", 0x140A68620, kTick180}},
 }};
 
-// The leader-target icon (pass 9 step 7): m = *(g+0x140); if *(int32*)(m+0x20) != 0 and
-// w = FWeakObjectPtr::Get(m+0x6C) is set, 0x1417267F0(w).
+// The leader-target icon: m = *(g+0x140); if *(int32*)(m+0x20) != 0 and
+// w = FWeakObjectPtr::Get(m+0x6C) is set, the game's placer is called with w.
 constexpr std::uint32_t  kLeaderTargetMember = 0x140;
 constexpr std::uint32_t  kLeaderTargetCount  = 0x20;
 constexpr std::uint32_t  kLeaderTargetWeak   = 0x6C;

@@ -1,6 +1,6 @@
 #pragma once
 
-// The view columns: how many views the screen shows and whose each one is (plan/seats.md step 5). Pure rules and
+// The view columns: how many views the screen shows and whose each one is. Pure rules and
 // constants, no game; host-tested (tests/columns_test.cpp).
 //
 // A column is one view slot of the engine's local player list, laid out by the engine: two players side by side (or
@@ -15,7 +15,7 @@
 // (the span held over a row of three monitors, views/window_span.h) or the console's `view-columns` (the checks on one
 // monitor).
 //
-// A mirror's controller id is never a seat's: since step 4 a view draws the HUD of the seat its controller id names
+// A mirror's controller id is never a seat's: a view draws the HUD of the seat its controller id names
 // (FSceneView::PlayerIndex, hud/passes/column_hud_images.h), so a mirror at a seat's id would draw that seat's HUD. The
 // mirrors take ids past the seats' and past XInput's four users (players::kFirstMirrorId on: 4 and 5), so no pad
 // ever drives them (the engine routes XInput user N to controller id N).

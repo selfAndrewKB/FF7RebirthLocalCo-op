@@ -677,7 +677,7 @@ bool PlaceSeatHolders(const platform::GameImage& image) noexcept
     if (installAt)
     {
         // 1.005's entry instruction crosses a 16-byte block: the redirect goes on the second (the first is a store
-        // into the caller's home area, and no branch lands on the second; RE-p2-traversal-climb-holder.md §4).
+        // into the caller's home area, and no branch lands on the second; research/RE-p2-traversal-climb-holder.md).
         installed = platform::RunningBuild() == platform::BuildIndex::V1005
                         ? g_installEntry.InstallAtSecondInstruction(*installAt, install.first(kInstallFirst),
                                                                     install.subspan(kInstallFirst, kInstallSecond),

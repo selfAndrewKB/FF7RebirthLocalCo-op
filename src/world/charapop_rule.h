@@ -1,7 +1,7 @@
 #pragma once
 
-// CharaPop's Light/Middle rule, as its evaluators apply it to one camera (RE-p2-charapop-per-view.md §1.3:
-// CharaPopEntry_EvalLOD_Light 0x1408B4644, _Middle 0x1408B3B84), for the entries a seat's camera needs
+// CharaPop's Light/Middle rule, as its evaluators apply it to one camera (research/RE-p2-charapop-per-view.md:
+// CharaPopEntry_EvalLOD_Light and _Middle), for the entries a seat's camera needs
 // (world/charapop_near.h). Pure, host-tested.
 //
 //   paused  when distance > should-tick and (in the FOV cone ? distance > in-camera : distance > out-of-camera)

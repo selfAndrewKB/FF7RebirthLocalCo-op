@@ -1,7 +1,7 @@
 #pragma once
 
 // Logs when a seat's character is stranded off the loaded navmesh and asks the game's follow warp to bring
-// it back (RE-p2-party-leash.md, RE-p2-party-warp.md; the ridden chocobo: RE-p2-chocobo-warp.md §1, §4).
+// it back (RE-p2-party-leash.md, RE-p2-party-warp.md; the ridden chocobo: RE-p2-chocobo-warp.md).
 //
 // Field characters may walk only on navmesh, and the navmesh is streamed in a 3x3 block of 120 m cells
 // around the party leader. When the character stands where the block has unloaded, each move it asks for
@@ -9,10 +9,10 @@
 // it zeroes the move: the character runs in place. That call, inside EndCMC_ConstrainMoveDelta_NavMeshOnly, is
 // redirected so the mod sees the game's own answer; the answer is passed back unchanged. Only moves the
 // character asked for reach it (a zero move skips the navmesh step), so standing still is never a refusal.
-// The falling step asks the same question (EndCMC_NewFallVelocity_WorldReadyFreeze, RE-p2-party-leash.md §6c)
+// The falling step asks the same question (EndCMC_NewFallVelocity_WorldReadyFreeze, RE-p2-party-leash.md)
 // and on "not ready" zeroes the fall, every tick, so a character that stepped off an edge hangs in the air;
 // that call is redirected too and counts the same way, stick or no stick. A character frozen on its last safe
-// spot is then parked by SE's safe-transform system (§6d): MOVE_None, so neither step runs, while its 0.12 s
+// spot is then parked by SE's safe-transform system: MOVE_None, so neither step runs, while its 0.12 s
 // check keeps asking the question with the nav clause off. That third call is redirected as well; its "not
 // ready" counts only while the game's park bit (stop reason 5) is set, since short of the park the game
 // return-warps the character to its safe spot itself.
@@ -32,7 +32,7 @@
 //
 // A player asks too: L3 clicked twice within 0.4 s on player 2's or 3's own pad (the engine key's own element in the
 // game's action tables, read through that seat's view, input/pad_buttons TakeLeftThumbPress; the rule in
-// world/party_warp_rules.h, Remake's) asks the same follow warp for the chocobo that player rides, else their member,
+// world/party_warp_rules.h) asks the same follow warp for the chocobo that player rides, else their member,
 // as a strand's "warp" does; behind another seat's warp it waits and is asked again once that warp is over. Not when
 // the character already stands beside player 1's (within 10 m on the same level, wider than where the warp itself lands
 // a follower: a stray double click moves nothing);

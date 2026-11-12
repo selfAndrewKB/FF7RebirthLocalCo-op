@@ -5,7 +5,7 @@
 // Each camera manager (AEndPlayerCameraManager) spawns one plain ACameraActor at BeginPlay, keeps it
 // at +0x2DE8 and makes it its view target; every frame UpdateCamera writes the camera operators'
 // result into it. Its CameraComponent keeps the ACameraActor constructor's bConstrainAspectRatio =
-// true at 16:9, and no game code clears it (RE-p2-hud-view-levers.md §3). That flag is what keeps a
+// true at 16:9, and no game code clears it (research/RE-p2-hud-view-levers.md). That flag is what keeps a
 // split half 16:9 with bars.
 //
 // While the views fill (several views on screen, filled views chosen), each player's main camera gets the

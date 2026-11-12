@@ -50,10 +50,10 @@ namespace seat_ladder = scopes::seat_ladder;
 namespace {
 
 // 1.004 addresses (1.005 through replaced-p2-trigger.json and replaced-p2-trigger-pass.json). The field tick's per-tracker
-// body was read in both exes (RE-p2-trigger-overlap.md §5.1): the same frame layout, buffer offsets and order.
+// body was read in both exes (research/RE-p2-trigger-overlap.md): the same frame layout, buffer offsets and order.
 
 // FieldTick's `call TriggerTracker_DiffAndDispatchEnterLeave(ctx, tracker, &overlaps, &keys, &map)` (E8 inside one block
-// in both builds; 1.005 0x140935A31). `keys` and `map` are the field tick's scratch structures, reset before each tracker.
+// in both builds). `keys` and `map` are the field tick's scratch structures, reset before each tracker.
 constexpr std::uintptr_t kDispatchCall    = 0x140A562B1;
 constexpr std::uint8_t   kDispatchBytes[] = {0x48, 0x85, 0xD2, 0x0F, 0x84, 0xE2, 0x06, 0x00, 0x00, 0x48, 0x8B, 0xC4,
                                              0x48, 0x89, 0x58, 0x20, 0x4C, 0x89, 0x40, 0x18, 0x48, 0x89, 0x48, 0x08};
@@ -61,8 +61,8 @@ constexpr platform::FunctionFact kDispatch{L"TriggerTracker_DiffAndDispatchEnter
 using DispatchFn = std::uintptr_t (*)(void* context, void* tracker, void* overlaps, void* keys, void* map);
 
 // The diff's calls of TriggerMgr_OnTrackerEnter_Filter / _Leave_Filter(manager, FName key, owner, weak actor): `owner`
-// is the tracker's owner, the trigger actor. 1.004 enter +0x6 of its block, leave +0xD (crosses); 1.005 enter 0x1409369BD
-// +0xD (crosses), leave 0x14093690B +0xB.
+// is the tracker's owner, the trigger actor. 1.004 enter +0x6 of its block, leave +0xD (crosses); 1.005 enter
+// +0xD (crosses), leave +0xB.
 constexpr std::uintptr_t kEnterFilterCall = 0x140A43416;
 constexpr std::uintptr_t kLeaveFilterCall = 0x140A4352D;
 constexpr std::uint8_t   kEnterFilterBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x6C, 0x24, 0x10, 0x48, 0x89,
@@ -71,18 +71,18 @@ constexpr std::uint8_t   kLeaveFilterBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x
                                                 0x74, 0x24, 0x18, 0x57, 0xB8, 0x30, 0x00, 0x00, 0x00, 0xE8, 0xF2, 0x09};
 constexpr platform::FunctionFact kEnterFilter{L"TriggerMgr_OnTrackerEnter_Filter", 0x1409DE760, kEnterFilterBytes};
 constexpr platform::FunctionFact kLeaveFilter{L"TriggerMgr_OnTrackerLeave_Filter", 0x1409DE524, kLeaveFilterBytes};
-// The 4th argument differs (RE-p2-traversal-L1.md §1.1): the enter's is an FOverlapResult* (weak actor at +0) or null,
+// The 4th argument differs (research/RE-p2-traversal-L1.md): the enter's is an FOverlapResult* (weak actor at +0) or null,
 // the leave's a plain AActor* (0 if the tracker's weak had gone stale).
 using FilterFn = std::uintptr_t (*)(void* manager, std::uint64_t key, void* owner, void* actorArg);
 
-// Traversal L1 (RE-p2-traversal-L1.md §8). The routers find a field-action actor by the key, the overlapped actor's
-// Tags[0], in Square Enix's tag registry (1.005 0x140F48A40); the mod looks it up the same way.
+// Traversal L1 (research/RE-p2-traversal-L1.md). The routers find a field-action actor by the key, the overlapped
+// actor's Tags[0], in Square Enix's tag registry; the mod looks it up the same way.
 constexpr std::uint8_t kFindActorBytes[] = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0xF0, 0x88, 0x2D, 0x01,
                                             0x48, 0x2B, 0xE0, 0x48, 0x8B, 0xD9, 0xE8, 0xB9, 0xD5, 0xAB, 0xFF, 0x48};
 constexpr platform::FunctionFact kFindActor{L"EndActorTagRegistry_FindActorByTag", 0x140DD6634, kFindActorBytes};
 using FindActorFn = void* (*)(const std::uint64_t* key);
 
-// The classes admitted for the seats (research/RE-p2-traversal-classes.md §7): native vtables, which placed Blueprint
+// The classes admitted for the seats (research/RE-p2-traversal-classes.md): native vtables, which placed Blueprint
 // actors keep. Each registers on the leader's controller list through the shared trigger enter (checked live at the
 // slot below); its register/unregister reads only the leader, so the same delivery serves all of them. 1.005 vtables
 // through replaced-traversal-classes.json.
@@ -97,7 +97,7 @@ struct AdmittedClass
     platform::PerBuild<std::uint32_t> unregisterSlot{0x728, 0x730};  // where `unregister` sits in the vtable
     bool           rides = false;  // chocobo climbs: delivered while the seat's player rides their own chocobo too
 };
-// The chocobo climb (RE-p2-chocobo-climb.md §1.1, §3.1): a stored-character class whose unregister override sits one
+// The chocobo climb (research/RE-p2-chocobo-climb.md): a stored-character class whose unregister override sits one
 // slot past the others'. During a ride every player's member is possessed by its AI, so its register falls back to
 // the primary controller: the seat's inside the delivery's scope. 1.005 vtable through replaced-chocobo-traversal.json.
 constexpr AdmittedClass kAdmitted[] = {
@@ -123,9 +123,9 @@ inline constexpr platform::PerBuild<std::uint32_t> kEnterSlot{0x710, 0x718};
 constexpr std::size_t   kVtableSpan = 0x750;  // the slots read below, the climb's unregister (1.005 +0x740) included
 constexpr std::uint64_t kNoWeak = 0x00000000FFFFFFFFull;  // FWeakObjectPtr reset: index -1, serial 0
 
-// The wall-run move state's camera pick (RE §3.13): LeaderActionComp_FindWallRunActorEntered_Flag2A1(lac) returns the
+// The wall-run move state's camera pick (research/RE-p2-traversal-classes.md): LeaderActionComp_FindWallRunActorEntered_Flag2A1(lac) returns the
 // first actor on the LeaderActionComp's wall-run list (+0x14F0) whose REAL entered flag is set. Its only call
-// (1.004 0x1434372CA, 1.005 0x14315631A, inside one 16-byte block in both) is taken over: for a seat's
+// (inside one 16-byte block in both builds) is taken over: for a seat's
 // LeaderActionComp (*(its controller+0x598)) that seat's flags are swapped in around it.
 constexpr std::uintptr_t kWallRunPickCall = 0x1434372CA;
 constexpr std::uint8_t   kWallRunPickBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x74,
@@ -148,8 +148,8 @@ using facts::kMalloc;
 using MallocFn = void* (*)(std::size_t size, std::uint32_t alignment);
 using FreeFn   = void (*)(void* block);
 
-// The scratch set's element clear, which FieldTick calls before each tracker when the set holds anything (1.004
-// 0x140A5632C, 1.005 0x140935B44).
+// The scratch set's element clear, which FieldTick calls before each tracker when the set holds anything (both
+// builds).
 constexpr std::uint8_t kSetClearBytes[] = {0x48, 0x8B, 0xC4, 0x48, 0x89, 0x58, 0x08, 0x48, 0x89, 0x70, 0x10, 0x48,
                                            0x89, 0x78, 0x18, 0x4C, 0x89, 0x70, 0x20, 0x55, 0x48, 0x8B, 0xEC, 0xB8};
 constexpr platform::FunctionFact kSetClear{L"FieldTick's scratch set clear", 0x1409B7DCC, kSetClearBytes};
@@ -181,12 +181,12 @@ constexpr std::uint32_t kHitSize           = 0x90;
 constexpr std::uint32_t kHitActor          = 0x6C;   // FHitResult::Actor (weak)
 constexpr std::uint32_t kResultSize        = 24;     // FOverlapResult: weak actor, weak component, item, blocking
 
-// The trigger's tracker (RE-p2-trigger-overlap.md §2.3).
+// The trigger's tracker (research/RE-p2-trigger-overlap.md).
 constexpr std::uint32_t kTriggerTracker = 0x230;
 constexpr std::uint32_t kTrackerEnabled = 0x375;
 constexpr std::uint32_t kTrackerHandle  = 0x378;  // FTraceHandle {u32 frame, i32 index}
 
-// FieldTick's scratch structures (§5.1): the keys (TArray<FName>, inline 64) and the set.
+// FieldTick's scratch structures: the keys (TArray<FName>, inline 64) and the set.
 constexpr std::uint32_t kKeysNum      = 0x208;
 constexpr std::uint32_t kKeysMax      = 0x20C;
 constexpr std::uint32_t kSetNum       = 0x608;
@@ -345,7 +345,7 @@ const std::byte* Datum(const std::byte* world, std::uint32_t chunks, std::uint32
     return base != nullptr ? base + static_cast<std::size_t>(size) * slot : nullptr;
 }
 
-/// A seat's tracker's query result, read as FieldTick reads it (RE-p2-trigger-overlap.md §5.1), into `out`.
+/// A seat's tracker's query result, read as FieldTick reads it (research/RE-p2-trigger-overlap.md), into `out`.
 Read ReadResult(void* tracker, ResultArray& out) noexcept
 {
     void* registry = players::weak_object::ObjectAt(g_registryWeak);
@@ -616,7 +616,7 @@ std::uintptr_t Deliver(int seat, bool enter, FilterFn original, void* manager, s
         return 0;
     }
     // A nested delivery would take the outer call's swapped-in shadow for player 1's flag and restore it [ASSUMPTION
-    // that the game never re-enters the filter from inside it, RE-p2-traversal-L1.md §3.3]: held back instead.
+    // that the game never re-enters the filter from inside it, research/RE-p2-traversal-L1.md]: held back instead.
     if (g_delivering)
     {
         ++counts.refused;

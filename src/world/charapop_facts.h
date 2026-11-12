@@ -1,7 +1,7 @@
 #pragma once
 
 // The CharaPop manager, its entries and a camera manager's pose, as the game's character LOD reads them
-// (RE-p2-charapop-per-view.md §1; IDA addresses and offsets of this build).
+// (research/RE-p2-charapop-per-view.md; IDA addresses and offsets of this build).
 
 #include "facts/controller.h"
 #include "facts/world.h"
@@ -18,7 +18,7 @@ bool CopyGuarded(void* out, const void* from, std::size_t length) noexcept;  // 
 
 namespace lss::world::charapop {
 
-// The manager M = [[game root]+0x180] and its pop object P = [M+0x10] (§1.1).
+// The manager M = [[game root]+0x180] and its pop object P = [M+0x10].
 using facts::kEndGameRoot;
 using facts::kRootCharaPop;
 inline constexpr std::uint32_t  kManagerPop    = 0x10;
@@ -27,7 +27,7 @@ inline constexpr std::uint32_t  kPopListHeap   = 0x20C8;
 inline constexpr std::uint32_t  kPopCount      = 0x20D0;
 inline constexpr std::int32_t   kMaxEntries    = 4096;
 
-// The LOD parameters in M (RE-p2-lod-draw-distance.md §1; floats unless noted).
+// The LOD parameters in M (research/RE-p2-lod-draw-distance.md; floats unless noted).
 inline constexpr std::uint32_t kShouldTickFov        = 0x1148;  // degrees off the camera's forward
 inline constexpr std::uint32_t kLightEnableDraw      = 0x114C;
 inline constexpr std::uint32_t kLightInCamera        = 0x1150;
@@ -42,7 +42,7 @@ inline constexpr std::uint32_t kOverrideEnableDraw   = 0x1178;  // with its enab
 inline constexpr std::uint32_t kOverrideInCamera     = 0x1180;  // with its enable byte at +4
 inline constexpr std::uint32_t kOverrideOutCamera    = 0x1188;  // with its enable byte at +4
 
-// One entry (§1.3).
+// One entry.
 inline constexpr std::uint32_t kEntryKey      = 0x08;   // 8 bytes, FName layout: the setter's key
 inline constexpr std::uint32_t kEntryId       = 0x10;   // i32
 inline constexpr std::uint32_t kEntryCategory = 0x24;   // u8: 1 has the draw-distance hide, 4 enemy

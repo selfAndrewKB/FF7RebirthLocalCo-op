@@ -37,7 +37,7 @@ constexpr std::uint32_t kVehicleMap      = 0x5C0;
 constexpr std::uint32_t kMapElementSize  = 0x18;
 constexpr std::uint32_t kMapElementValue = 0x8;
 
-// UEndPlayerSBScooterCoordinator (RE-p2-wheelie-ride.md §1, §2, §4).
+// UEndPlayerSBScooterCoordinator (research/RE-p2-wheelie-ride.md).
 using facts::kScooterCoordinatorVTable;
 using facts::kCoordinatorBody;
 using facts::kCoordinatorRider;
@@ -52,7 +52,7 @@ constexpr std::uint32_t  kCoordEnabled     = 0x29;   // u8 (vt+0x300 sets it; it
 constexpr std::uint32_t  kCoordDisabled    = 0x2A;   // u8 (vt+0x308)
 constexpr std::uint32_t  kCoordStatePtr    = 0x230;  // -> u32 state id
 // The shared block: the nearest free scooter (weak), the scooter list (TArray<TWeakObjectPtr>), the ride-on point
-// (dormant), and the ride requested / idle / parking minigame on bytes and the minigame colour mask (§11, §13.1).
+// (dormant), and the ride requested / idle / parking minigame on bytes and the minigame colour mask.
 constexpr std::uint32_t kSharedListData  = 0x8;
 constexpr std::uint32_t kSharedListNum   = 0x10;
 constexpr std::uint32_t kSharedRequested = 0x28;
@@ -66,8 +66,8 @@ constexpr std::uint32_t kTableState      = 0x134;
 constexpr std::uint32_t kTableEntrySize  = 0x14;
 constexpr std::int32_t  kTableEntries    = 15;
 
-// AEndSelfBalancingScooterCharacter (SDK and §1.1): rider, ridden, parked, excluded; its control holder's accel and
-// brake as the move state's slot 11 writes them (§3.3).
+// AEndSelfBalancingScooterCharacter (SDK): rider, ridden, parked, excluded; its control holder's accel and
+// brake as the move state's slot 11 writes them.
 using facts::kScooterCharacterVTable;
 // 1.005 moved these Square Enix character fields by +0x20 (RE-1005-player-two.md).
 constexpr platform::PerBuild<std::uint32_t> kScooterRider    = {0x2210, 0x2230};
@@ -78,13 +78,13 @@ using facts::kCharacterControlHolder;
 constexpr std::uint32_t  kHolderAccel      = 0x2C0;
 constexpr std::uint32_t  kHolderBrake      = 0x2C4;
 
-// Square's input object: the merged trigger values the scooter's AccelAxis and CatchAxis read (§3.3).
+// Square's input object: the merged trigger values the scooter's AccelAxis and CatchAxis read.
 constexpr std::uint32_t kInputCatchAxis  = 0x1240;
 constexpr std::uint32_t kInputAccelAxis  = 0x1244;
 constexpr std::uint32_t kInputCatchOther = 0x11B0;
 constexpr std::uint32_t kInputAccelOther = 0x11B4;
 
-// The on/off counters (§4): [[game root]+0x170] + base + 4 * id, two arrays.
+// The on/off counters: [[game root]+0x170] + base + 4 * id, two arrays.
 using facts::kRootGameState;
 constexpr std::uint32_t                kOnOffBase      = 0x1A1238C;
 constexpr std::uint32_t                kOnOffAltBase   = 0x1A1263C;

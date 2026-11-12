@@ -1,6 +1,6 @@
 #pragma once
 
-// The seats' hits, and the hits they take, count as the player's (RE-p2-enemy-target-bias.md §12-§14).
+// The seats' hits, and the hits they take, count as the player's (research/RE-p2-enemy-target-bias.md).
 // Every seat's member is treated alike, each call about the one seat whose member it
 // names (the seat found from the attacking or hit character).
 //
@@ -17,17 +17,17 @@
 // this holds the leader test's yes for the seat's member type on this thread; player 1 keeps the game's own yes. That
 // is the single-player answer in each half: every player counts. With the seat attacking, the summon gauge's one
 // leader read answers the seat's character. Nothing is written to the party manager: the leader pointer and type stay
-// player 1's, so `GetPartyLeader` and the other pointer reads are unchanged (§14.1).
+// player 1's, so `GetPartyLeader` and the other pointer reads are unchanged.
 //
 // The ten damage slots (every vtable holding one of the seven damage functions) are replaced. Game thread only: every
-// root of the damage call found is the game thread (§14.3); a call on another thread passes straight through.
+// root of the damage call found is the game thread; a call on another thread passes straight through.
 //
 // The same answer is held when an enemy senses a seat's attack starting (OnReactionSensing and its TakeAbility
-// variant, whose argument is the attacking character; §16.4): any thread, since enemy AI may tick on workers.
+// variant, whose argument is the attacking character): any thread, since enemy AI may tick on workers.
 //
 // Each damage or reaction call also records which human it is about (the attacker, or the character hit), the
-// reaction context: battle/target_coin answers an enemy's "who is the leader" with that player there (the user's
-// rule: a counter aims at the player who hit it), and with the enemy's coin everywhere else.
+// reaction context: battle/target_coin answers an enemy's "who is the leader" with that player there (a counter
+// aims at the player who hit it), and with the enemy's coin everywhere else.
 // Logged: each call that held the answer and each summon-gauge answer (Debug), the install (Info).
 
 #include <cstdint>

@@ -13,7 +13,7 @@
 // also drives BGM, names and flags), so each tick the mod finds the volume each seat's character is in with the
 // game's own volume list, containment test and rules (strictly inside to enter, the volume's UntouchMargin to stay,
 // the lowest priority wins) and calls that seat's operators' own set/clear functions when it changes: a documented
-// recreation of the enter/leave bookkeeping only (plan, RE-p2-framing.md §2.3).
+// recreation of the enter/leave bookkeeping only (research/RE-p2-framing.md).
 //
 // The InDoor nav-modifier volumes are detected per player controller by UEndPlayerExistNavAreaComponent, whose
 // camera push goes to "the" primary camera manager. Its tick slot is replaced: a seat's controller's component

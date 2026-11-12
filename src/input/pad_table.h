@@ -1,6 +1,6 @@
 #pragma once
 
-// Which physical pad answers each of the game's pad slots (plan/remake-alignment.md step 4; research/RE-pad-slots.md).
+// Which physical pad answers each of the game's pad slots (research/RE-pad-slots.md).
 //
 // The game reads pads in one place for every reader, xinput1_3's XInputGetState import slot (Unreal's stock
 // XInputInterface::SendControllerEvents, Square's pad-type rescan and its last-active-pad check), and sends rumble

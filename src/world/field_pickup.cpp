@@ -59,18 +59,18 @@ namespace {
 
 using Clock = std::chrono::steady_clock;
 
-// The objects (RE-p2-field-interact.md §1.1, §12; this build).
+// The objects (research/RE-p2-field-interact.md; this build).
 using facts::kEndGameRoot;
 constexpr std::uint32_t  kRootStage         = 0x70;         // u8: the input step's FieldAction part runs from 8
 using facts::kRootGameState;
 using facts::kRootModeHolder;
-constexpr std::uint32_t  kRootSlotHeldOwner = 0x210;        // -> +8: a u8 TickSlots writes (§12.1)
+constexpr std::uint32_t  kRootSlotHeldOwner = 0x210;        // -> +8: a u8 TickSlots writes
 constexpr std::uint32_t  kSlotHeldByte      = 0x08;
 using facts::kRootWorldItems;
 using facts::kCmdOpenPending;
 using facts::kPauseMenuKey;  // InputKey24 "PauseMenu" (the poll needs it not held)
 
-// The input step's gate fields in GS (§12.12 item 2): i32 each.
+// The input step's gate fields in GS: i32 each.
 constexpr std::uint32_t kGsBlockA = 0x1A12288;
 constexpr std::uint32_t kGsBlockB = 0x1A17548;
 constexpr std::uint32_t kGsAllowA = 0x1A12744;  // + kGsAllowB: a non-zero sum polls despite the blocks
@@ -80,7 +80,7 @@ constexpr std::uint32_t kGsSlot0B = 0x1A125B0;
 constexpr std::uint8_t  kGameFlagBlocksPoll = 11;
 constexpr std::uint8_t  kModeBlocksPoll     = 2;
 
-// FieldActionMgr (§12.9): the per-player ranges, exchanged with the seat's copy around the pass.
+// FieldActionMgr: the per-player ranges, exchanged with the seat's copy around the pass.
 struct Range
 {
     std::uint32_t offset;
@@ -122,13 +122,13 @@ using facts::kFieldActionMaxPoints;
 using facts::kFieldActionPointKey;
 using facts::kFieldActionPointPreset;
 using facts::kFieldActionPointFlags;
-constexpr std::uint8_t  kTargetBits     = 0x06;   // bit 1 slot target, bit 2 runner-up: carried per player (§12.3)
+constexpr std::uint8_t  kTargetBits     = 0x06;   // bit 1 slot target, bit 2 runner-up: carried per player
 constexpr std::uint8_t  kDisabledBit    = 0x10;   // the game's "point disabled": the candidate query skips it
-constexpr std::uint32_t kPointMarker    = 0x78;   // UFieldTargetWidget*, the point's marker: carried per player (§12.15)
+constexpr std::uint32_t kPointMarker    = 0x78;   // UFieldTargetWidget*, the point's marker: carried per player
 
 // The two maps whose points a seat's pass admits, both a stock TMap keyed by the point's FName at element +0
-// (platform/tset_find.h): WorldItemMgr's items (§10.5, collectibles and materials) and TreasurePointMgr's chests
-// (§13.1, the chest listener's own test). Where the map sits in its owner, and its element's shape.
+// (platform/tset_find.h): WorldItemMgr's items (collectibles and materials) and TreasurePointMgr's chests
+// (the chest listener's own test). Where the map sits in its owner, and its element's shape.
 struct MapShape
 {
     std::uint32_t elements;  // from the owner object
@@ -138,12 +138,12 @@ struct MapShape
 constexpr MapShape      kWorldItemMap{facts::kWorldItemMapElements, facts::kWorldItemMapStride,
                                       facts::kWorldItemMapHashNext};
 constexpr MapShape      kChestMap{0x10, 0x70, 0x60};
-// TreasurePointMgr's second map, CharaPop key -> treasure key (24-byte elements; §14, the spawn handler's own lookup).
+// TreasurePointMgr's second map, CharaPop key -> treasure key (24-byte elements; the spawn handler's own lookup).
 constexpr MapShape      kChestByPopKeyMap{0x60, 0x18, 0x10};
 constexpr std::uint32_t kRootChests      = 0x298;  // TreasurePointMgr (not TreasureManager +0x280, the opened state)
 constexpr int           kHashChecks     = 2000;  // lookups also checked against a walk of the map, then trusted
 
-// The game's functions (§12.12), each checked by its first bytes.
+// The game's functions, each checked by its first bytes.
 constexpr std::uint8_t kTestFlagBytes[] = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8,
                                            0x9C, 0x0A, 0x68, 0x01, 0x48, 0x2B, 0xE0, 0x0F};
 constexpr std::uint8_t kModeClassBytes[] = {0x48, 0x8B, 0x05, 0x7D, 0x12, 0x94, 0x08, 0x48,
@@ -178,10 +178,10 @@ constexpr platform::FunctionFact kTickSlots{L"FieldActionMgr_TickSlots_ExecuteOn
 constexpr platform::FunctionFact kUpdate{L"FieldActionMgr_Update_CandidatesSlotsRows", 0x140E7A700, kUpdateBytes};
 constexpr platform::FunctionFact kFieldEnter{L"FieldActionMgr_OnFieldEnter_ResetSlots", 0x14161B4E0, kFieldEnterBytes};
 constexpr platform::FunctionFact kFieldExit{L"FieldActionMgr_OnFieldExit_ClearCandidatesRows", 0x14161B408, kFieldExitBytes};
-// Their one call site each, in AEndGameMode_FieldStepTick (§12.12 item 3).
+// Their one call site each, in AEndGameMode_FieldStepTick.
 constexpr std::uintptr_t kFieldEnterCall = 0x140D9C309;
 constexpr std::uintptr_t kFieldExitCall  = 0x140D9FFD8;
-// The visibility request (§12.13): its point-side preset's screen test projects the point through the world's first
+// The visibility request: its point-side preset's screen test projects the point through the world's first
 // local player (the first controller in World->PlayerControllerList at World+0x1F0 whose player is local; RE-p2-hud.md
 // reads it as the PlayerControllerList through GetFirstPlayerController, the field-interact doc names it
 // ControllerList), always player 1's. Inside a seat's pass the request runs with that seat's controller first in that
@@ -191,7 +191,7 @@ constexpr std::uint8_t   kRequestBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x18, 0x55, 
 constexpr platform::FunctionFact kRequest{L"the world items' screen-visibility request", 0x140ADE688, kRequestBytes};
 constexpr std::size_t    kRequestFirst   = 5;
 
-// The pass's hooks (§10.A, §12.12): the game mode tick's call of the selection update (the pass runs right after it),
+// The pass's hooks: the game mode tick's call of the selection update (the pass runs right after it),
 // WorldItemMgr's mark by key (a key a seat's pass marks is noted; its entry's first instruction, 5 bytes) and the
 // WorldItem tick's call of the grant (run with that seat's controller as the primary one for a noted key).
 constexpr std::uintptr_t kUpdateCall      = 0x1423EF160;
@@ -210,8 +210,8 @@ using AcquireFn   = void (*)(void* items, void* entry);
 constexpr std::uint32_t  kObjectOuter      = 0x20;
 constexpr std::uint32_t  kWorldControllers = 0x1F0;
 constexpr std::uint32_t  kWorldControllerCount = 0x1F8;
-// The marker list (§12.14): EndUISystem+0x98 points to a TSparseArray of 140-byte elements, the marker's weak widget
-// at +0x00. The game's destroy (§12.15), the call RemovePointByKey makes: it finds the element by the widget, releases
+// The marker list: EndUISystem+0x98 points to a TSparseArray of 140-byte elements, the marker's weak widget
+// at +0x00. The game's destroy, the call RemovePointByKey makes: it finds the element by the widget, releases
 // its parts, pools the Slate widget and removes the element, at once. Entry: push rbx; mov eax,20h; call (stack probe).
 constexpr std::uint32_t kMarkerEntry    = 140;
 constexpr std::uint8_t  kDestroyBytes[] = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8,
@@ -467,7 +467,7 @@ private:
 /// if the list is still where it was and names them swapped (a list the engine moved or changed in between is left
 /// alone). A join appends to the list and a leave closes it up in order, so a seat's place depends on who joined and
 /// left before it (player 1 always first); the call's one reader takes the first local player's entry and never looks
-/// further (RE-seats-step6-world-rides.md §1). Game thread.
+/// further (research/RE-seats-step6-world-rides.md). Game thread.
 class FirstPlayerScope
 {
 public:
@@ -560,7 +560,7 @@ private:
     bool                                              held_       = false;
 };
 
-/// The game's visibility request; inside a seat's pass its screen test sees that seat's view (§12.13).
+/// The game's visibility request; inside a seat's pass its screen test sees that seat's view.
 std::uint64_t RequestVisibility(void* system, void* record) noexcept
 {
     const auto original = reinterpret_cast<RequestFn>(g_request.Original());
@@ -581,7 +581,7 @@ void DestroyDoomed() noexcept;
 void DestroySeatMarkers(Pickup& p, Why why) noexcept;
 
 /// Runs a game function on the seat's copy: swapped in with each point's carried bits and marker widget (the resets
-/// read the candidates' widgets, §12.15), the shared field-enter flag showing `flagSeen` (the value the game's own call
+/// read the candidates' widgets), the shared field-enter flag showing `flagSeen` (the value the game's own call
 /// saw), and all put back after. False if it faulted.
 bool OnCopy(Pickup& p, void* mgr, ResetFn reset, std::uint8_t flagSeen) noexcept
 {
@@ -687,7 +687,7 @@ void DropCopy(Pickup& p, bool clear) noexcept
     g_oneMarkers.clear();
 }
 
-/// Whether `key` is in the map of `owner` (shaped as `shape`), by the map's own hash (§10.5; platform/tset_find.h). The
+/// Whether `key` is in the map of `owner` (shaped as `shape`), by the map's own hash (platform/tset_find.h). The
 /// first lookups are also checked against a walk of the map; a mismatch switches to the walk for good (logged). Both
 /// maps share the hash, so they share the trust in it.
 bool InMap(const std::uint8_t* owner, const MapShape& shape, std::uint64_t key) noexcept
@@ -818,7 +818,7 @@ void DestroySeatMarkers(Pickup& p, Why why) noexcept
 }
 
 /// Before the calls: each point's target bits and marker widget become the seat's (on every live point: the far-marker
-/// sweep walks them all, §12.15). With `filter`, every point that is neither a WorldItem nor a chest (§13) gets the disabled
+/// sweep walks them all). With `filter`, every point that is neither a WorldItem nor a chest gets the disabled
 /// bit (only where it is clear). Player 1's are kept for After. The seat's widgets whose point left since are doomed.
 void Before(Pickup& p, void* mgr, const std::uint8_t* items, const std::uint8_t* chests, bool filter) noexcept
 {
@@ -995,7 +995,7 @@ void LogMarkers(Pickup& p) noexcept
     }
 }
 
-/// The input step's poll gate, mirrored in the game's order (§12.12 item 2). `slot0Only` as the game picks the poll.
+/// The input step's poll gate, mirrored in the game's order. `slot0Only` as the game picks the poll.
 /// False when the poll is skipped; `faulted` when a game call raised.
 bool PollGate(const std::uint8_t* root, bool& slot0Only, bool& faulted) noexcept
 {
@@ -1053,7 +1053,7 @@ bool PollGate(const std::uint8_t* root, bool& slot0Only, bool& faulted) noexcept
     return held == 0;
 }
 
-/// The input step's FieldAction part for the seat (§12.1): the gate, the poll into the mod's own buffers, the
+/// The input step's FieldAction part for the seat: the gate, the poll into the mod's own buffers, the
 /// latch and the press tick, the last two always. False if a game call raised.
 bool InputStep(Pickup& p, void* mgr, const std::uint8_t* root, float dt) noexcept
 {
@@ -1212,7 +1212,7 @@ void Pass(Pickup& p, void* mgr, float dt) noexcept
 }
 
 /// The game's field enter/exit reset ran on the live block: the same on each seat's copy of that block, in seat
-/// order, then its latches zeroed (the resets leave them, §12.12 item 3) and its carried bits dropped (the points may
+/// order, then its latches zeroed (the resets leave them) and its carried bits dropped (the points may
 /// be recycled).
 void AfterFieldReset(void* mgr, ResetFn reset, std::uint8_t flagSeen) noexcept
 {
@@ -1292,7 +1292,7 @@ std::uint8_t MarkByKey(void* items, std::uint64_t key) noexcept
 }
 
 /// The WorldItem tick's call of the grant: an item a seat picked is granted with that seat's controller as the primary
-/// one, its only player read (the item-get rumble, §12.12 item 5).
+/// one, its only player read (the item-get rumble).
 void Acquire(void* items, void* entry) noexcept
 {
     const auto key =

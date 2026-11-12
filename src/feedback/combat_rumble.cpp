@@ -46,21 +46,21 @@ namespace {
 
 using Clock = std::chrono::steady_clock;
 
-// RE-p2-rumble.md §10.4, §10.8, §10.12 (this build).
-// BattleHit_ApplyReaction_CamFxAndFFB 0x14131CD8C: the leader gate (cl kind, rdx attacker, r8 target), the camera effect
+// research/RE-p2-rumble.md (this build).
+// BattleHit_ApplyReaction_CamFxAndFFB: the leader gate (cl kind, rdx attacker, r8 target), the camera effect
 // on the primary camera manager, and the primary-controller fallback when the attacker has no player controller.
 constexpr std::uintptr_t kGateCall     = 0x14131FE21;
 constexpr std::uintptr_t kGate         = 0x14169AE88;  // BattleHitFx_ShouldPlay_LeaderInvolved
 constexpr std::uintptr_t kCameraCall   = 0x14131FE78;
-constexpr std::uintptr_t kCamera       = 0x1416FAE10;  // PrimaryPCM_CameraEffect2DF0_Play (§10.12)
+constexpr std::uintptr_t kCamera       = 0x1416FAE10;  // PrimaryPCM_CameraEffect2DF0_Play
 constexpr std::uintptr_t kFallbackCall = 0x14131FEA2;
 using facts::kGetPrimaryEndPlayerController;
-// 1.005 (RE-1005-field-2.md §6): the fallback call is at 0x14139787C, %16 = 12, so it crosses a 16-byte block. There the
+// 1.005 (research/RE-1005-field-2.md): the fallback call sits at %16 = 12, so it crosses a 16-byte block. There the
 // three calls are changed together from the game thread's first tick (InstallFromOwnThread), outside every hit: the
 // hit reaction runs on the game thread [ASSUMPTION: battle damage is applied in the world tick; the gate's leader
 // scopes already rely on it, and Gate warns if a hit ever arrives off it].
 
-// The force-feedback notifies (SE End classes; RUMBLE3-0x1411F7C78-AnimNotify_EndFFB_family.txt): each class's vtable
+// The force-feedback notifies (SE End classes; research/RE-p2-rumble.md): each class's vtable
 // slot, the function it holds, its GetFirstPlayerController call site.
 enum class Phase : std::uint8_t
 {
@@ -123,7 +123,7 @@ constexpr Source kSources[] = {
     {0x1434AFE70, L"Niagara effect"},
     {0x1411F6EE1, L"minigame"},
 };
-// Six arguments, two on the stack (§10.12 item 7): rcx component, dl channel, r8 FName*, r9b, [rsp+0x28] u8,
+// Six arguments, two on the stack: rcx component, dl channel, r8 FName*, r9b, [rsp+0x28] u8,
 // [rsp+0x30] u8*. Returns a byte.
 using PlayFn = std::uint64_t (*)(void* component, std::uint64_t channel, const void* name, std::uint64_t r9,
                                  std::uint64_t fifth, void* sixth);
@@ -163,8 +163,8 @@ unsigned                                                 g_notifiesWrapped = 0;
 // Game thread.
 // The seat whose member the last gate ran for, when it passed (0: none). Read by the same hit's camera and fallback
 // calls, a few instructions later; between the gate and them run only the target AI component's effect-name listeners
-// (0x14173EB94 before the camera, IsEndPlayerController before the fallback), which replace an effect name and are not
-// known to start another hit [ASSUMPTION, §10.12 item 4]. A nested hit there would overwrite it.
+// (an effect-name lookup before the camera, IsEndPlayerController before the fallback), which replace an effect name
+// and are not known to start another hit [ASSUMPTION]. A nested hit there would overwrite it.
 int   g_hitSeat          = 0;
 void* g_notifyController = nullptr;  // a seat's controller while a notify for the seat runs
 platform::Every g_status{kStatusEvery};

@@ -1,7 +1,7 @@
 #pragma once
 
 // A UMG widget's render opacity, set through the game's own native UWidget::SetRenderOpacity
-// (RE-p2-hud-targets.md, S-HUD22): it writes the widget's RenderOpacity (+0xC4) and, when the Slate
+// (research/RE-p2-hud-targets.md): it writes the widget's RenderOpacity (+0xC4) and, when the Slate
 // widget is built and its opacity differs, stores it there and invalidates paint. No UMG event runs.
 //
 // Used to take a widget out of one half's image while keeping it painted, so UMG still ticks it

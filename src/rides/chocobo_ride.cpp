@@ -45,7 +45,7 @@ namespace {
 using RC::Unreal::UObject;
 using Clock = std::chrono::steady_clock;
 
-// The game's functions (RE-p2-chocobo-ride.md §9.4, §7.1; entry bytes read in IDA).
+// The game's functions (research/RE-p2-chocobo-ride.md; entry bytes read in IDA).
 using facts::kGetOrCreateVehicleCoordinator;
 using GetCoordinatorFn = void* (*)(void* controller, std::uint8_t type);
 
@@ -79,7 +79,7 @@ using facts::kChocoboForCharacter;
 using ChocoboForFn = void* (*)(const void* manager, const void* character);
 using GlobalTestFn = std::uint8_t (*)();
 
-// Objects and fields (§1.1, §9.4; this build).
+// Objects and fields (this build).
 using facts::kRootChocoboRideManager;
 using facts::kRideManagerGetOff;
 using facts::kRideManagerEntries;
@@ -103,7 +103,7 @@ using facts::kBattlePlayerComponentVTable;
 using facts::kChocoboCameraModuleVTable;
 constexpr std::uintptr_t kVehicleKeyName    = 0x1491E4538;  // FName "Vehicle": the getoff button
 // The chocobo move state's row request bytes (handle +0x48): the summon rows, then Dash, Dismount, Jet, Scent, Scour
-// (RE-p2-chocobo-rows.md §2); 1 = lit, 2 = dim.
+// (research/RE-p2-chocobo-rows.md); 1 = lit, 2 = dim.
 constexpr std::uint32_t kRowRequests[] = {0xE8, 0x138, 0x188, 0x248, 0x298, 0x2E8, 0x338, 0x388};
 
 constexpr auto          kSummaryEvery   = std::chrono::seconds(10);
@@ -196,7 +196,7 @@ std::int32_t CoordState(const void* coordinator) noexcept
     return own_ride::CoordState(coordinator, g_coordVt, kCoordState);
 }
 
-/// The game's EndRide precondition (ChocoboCoordinator_IsRidingState2_NoPending 0x143DA1044).
+/// The game's EndRide precondition (ChocoboCoordinator_IsRidingState2_NoPending).
 bool CoordRiding(const void* coordinator) noexcept
 {
     return CoordState(coordinator) == static_cast<std::int32_t>(kCoordRiding) && ReadPointer(coordinator, kCoordPending) == nullptr;
@@ -255,7 +255,7 @@ struct BeginCall
 };
 
 /// Inside the primary scope (the seat's): the game's coordinator for the seat's controller, then the leader's boarding
-/// for her (instant, applied now: the boarding enter runs inside this call, so inside the scope; §9.2).
+/// for her (instant, applied now: the boarding enter runs inside this call, so inside the scope).
 void RunBegin(void* context)
 {
     auto* call = static_cast<BeginCall*>(context);
@@ -309,7 +309,7 @@ void Finish(SeatRide& s, const Ride& ride, const wchar_t* why, const wchar_t* ho
     }
 }
 
-/// Ends the seat's ride with the game's own end (§9.2: the possession back, the ride object, the camera module and
+/// Ends the seat's ride with the game's own end (the possession back, the ride object, the camera module and
 /// ride subject, the active coordinator cleared). `force`: now, whatever the coordinator's state (a give-back, a
 /// leave); otherwise a coordinator not riding yet is retried on the next ticks.
 void End(SeatRide& s, const wchar_t* why, bool force) noexcept
@@ -379,7 +379,7 @@ void End(SeatRide& s, const wchar_t* why, bool force) noexcept
                      : L"the game's end FAULTED");
 }
 
-/// The game has seated the seat's member on her own chocobo (§9.3: her chocobo appears by her and she is seated where
+/// The game has seated the seat's member on her own chocobo (her chocobo appears by her and she is seated where
 /// she stands; taken at once, before the chocobo's follow AI can pull it toward player 1). Null when not.
 void* SeatedChocobo(SeatRide& s, void* controller, void* member) noexcept
 {
@@ -415,7 +415,7 @@ void* SeatedChocobo(SeatRide& s, void* controller, void* member) noexcept
 
 void Begin(SeatRide& s, int seat, void* controller, void* member, void* chocobo) noexcept
 {
-    // The boarding's swap runs the game's player-core test on her (§7.4): as the seat's player, it must pass.
+    // The boarding's swap runs the game's player-core test on her: as the seat's player, it must pass.
     if (!own_ride::BoardingGateOpen(seat, member, controller, L"chocobo ride"))
     {
         s.heldBack = chocobo;  // the seat's player stays a passenger for this ride
@@ -622,7 +622,7 @@ bool Tick(void* controller, void* member, const input::move_state::EngineTicks& 
     }
     if (s.phase == Phase::GettingOff)
     {
-        // The game's getoff animation detaches her; the end then gives the seat the member back (§9.2, the end order).
+        // The game's getoff animation detaches her; the end then gives the seat the member back (the end order).
         const bool done = ride_rules::GetOffDone(Attached(member), facts::InBattle(),
                                                  Clock::now() - s.ride.getOffAt >= kGetOffWait,
                                                  !scopes::leader_scope::StillNames(s.ride.weak, s.ride.vehicle));

@@ -1,7 +1,7 @@
 #pragma once
 
 // Logging only (Debug): every player's traversal camera's collision, frame by frame while a traversal module holds
-// slot 15 (RE-p2-traversal-camera-collision.md §1.1): the frames the sweep pulled the camera in, with the climbing
+// slot 15 (research/RE-p2-traversal-camera-collision.md): the frames the sweep pulled the camera in, with the climbing
 // wall's hip framing off and on, then the hand-over to the follow camera after it left; a line per camera when it
 // ends. A dev tool: traversal_camera.cpp installs and ticks it, through the empty stubs below in a player's build.
 

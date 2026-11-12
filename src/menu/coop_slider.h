@@ -1,6 +1,6 @@
 #pragma once
 
-// The Co-op page's sliders (research/RE-coop-page-facts.md §1.2, §1.3, §3): an option with more values than the game's
+// The Co-op page's sliders (research/RE-coop-page-facts.md): an option with more values than the game's
 // longest list (its value list cannot scroll) is the game's own Range row (menu/coop_page builds it;
 // coop_menu_rules::IsSlider), made to scroll. The game's gauge holds one cell per value and grows past its frame, since
 // nothing sizes its strip; the strip is the game's scrolling list, so after each of the game's own gauge updates (the
@@ -15,9 +15,9 @@
 // page's key handler (menu/coop_page_open, coop_page::CommitEdit). Only the mod's page is touched. Each open logged at
 // Debug, each step at Trace. Game thread.
 //
-// Taken from Remake's menu/coop_slider. Changed: the value text is AppendInt into an empty string (Remake: FromInt
-// returning one); SetScrollOffset takes an animate flag; the event's repeat and key at this game's offsets; 1.004's
-// gauge calls cross a block (changed from the game thread); no Slate-side readings.
+// The value text is AppendInt into an empty string; SetScrollOffset takes an animate flag; the event's repeat and key
+// are read at this game's offsets; 1.004's gauge calls cross a block, so they are redirected from the game thread;
+// nothing is read on the Slate side.
 
 namespace lss::platform {
 class GameImage;

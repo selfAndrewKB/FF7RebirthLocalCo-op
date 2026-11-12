@@ -2,7 +2,7 @@
 //
 // The bytes the mod writes near the game are EXECUTED here, installed through platform::CodeRedirect
 // over a stand-in laid out like the panel request's cold chunk: a frame of 0x118 bytes, the replaced
-// `mov [rsp+0x108], rax` at 5 bytes into a 16-byte block (0x14295F0A5 in the game), then the game's
+// `mov [rsp+0x108], rax` at 5 bytes into a 16-byte block (as at the game's site), then the game's
 // path (returns what the replaced instruction stored, the request's stand-in) and, apart, the path the
 // gate skips to (returns 2).
 

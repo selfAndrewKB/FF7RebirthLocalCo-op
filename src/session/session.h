@@ -46,7 +46,7 @@
 // skipped, and the ones before it still work. The session installs its own stages only; the other
 // modules are installed by mod.cpp next to their siblings.
 //
-// Every module a Seat calls takes the seat (plan/seats.md step 6); the command controllers' tick runs once per tick,
+// Every module a Seat calls takes the seat; the command controllers' tick runs once per tick,
 // from the first seat that plays. The log lines name the seat's player (players::SeatName).
 //
 // Game thread only, outside Draw.

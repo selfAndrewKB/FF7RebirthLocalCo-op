@@ -4,7 +4,7 @@
 // session calls it at each kind of leave (asked for, before a map load, and once the player is removed), while the
 // seat's scopes still hold, before its generation is withdrawn or ended.
 //
-// Each module listed takes the seat (plan/seats.md step 6). Game thread only.
+// Each module listed takes the seat. Game thread only.
 
 namespace lss::session::seat_out {
 

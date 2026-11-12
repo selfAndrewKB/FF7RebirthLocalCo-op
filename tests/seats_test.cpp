@@ -1,6 +1,5 @@
 // Host-side tests for the seats header (players/seats.h): the seat numbering, the names and the bounds the session
-// and the per-seat records index by. Taken from Remake's tests/seats_test.cpp; Rebirth's has no scopes header, so
-// the header carries its own player count.
+// and the per-seat records index by. The header carries its own player count (there is no scopes header).
 
 #include "players/seats.h"
 

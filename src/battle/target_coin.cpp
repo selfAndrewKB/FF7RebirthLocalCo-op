@@ -40,7 +40,7 @@ namespace {
 using RC::Unreal::UFunction;
 namespace UObjectGlobals = RC::Unreal::UObjectGlobals;
 
-// Facts read from the database (RE-p2-enemy-target-bias.md §16; this build). 1.005: replaced-target-coin.json.
+// Facts read from the database (research/RE-p2-enemy-target-bias.md; this build). 1.005: replaced-target-coin.json.
 
 // Where an enemy decides its next action, tossed exactly when the blueprint event is about to run (the game's own
 // conditions decide whether it does):
@@ -83,7 +83,7 @@ constexpr std::uint32_t kHolderSelector = 0x8;
 constexpr std::uint32_t kFrameObject = 0x18;
 
 // Whose blueprint calls are answered: the native enemy controller class and its children (BossBase and every enemy
-// AIBP, summon fights included; §16.2). A class test, not vtable addresses: 1.005 moved the controllers' slots by 8, so
+// AIBP, summon fights included). A class test, not vtable addresses: 1.005 moved the controllers' slots by 8, so
 // a vtable placed from a slot address was 8 bytes off there and no caller ever matched (seen live in a Titan fight).
 constexpr const wchar_t* kEnemyControllerClass = STR("/Script/EndGame.EndAIControllerEnemyBase");
 

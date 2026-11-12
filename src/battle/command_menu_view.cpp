@@ -27,7 +27,7 @@ using facts::kCmdMenuWidget;
 using facts::kUICommandController;
 using facts::kUIKeyGuide;
 
-// A controller's widgets shown per view (RE-p2-command-menu-views.md §10.3, §10.5): the command
+// A controller's widgets shown per view (research/RE-p2-command-menu-views.md): the command
 // menu, the field menu (the party list) and the wait-mode filter (the tactical-mode tint), each an
 // FWeakObjectPtr in the controller. In a seat's pass, the seat's command and field menus take player
 // 1's own opacity (their fades), the filter its full opacity (its own content decides).

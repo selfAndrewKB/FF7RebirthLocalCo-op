@@ -2,7 +2,7 @@
 
 #include <cstdint>
 
-// Who may issue commands to whom in the battle command menu (RE-p2-command-menu.md §4, pass S-CMD1).
+// Who may issue commands to whom in the battle command menu (research/RE-p2-command-menu.md).
 //
 // The leader commands an ally through the command menu's ally mode (LT/RT, the shortcut palette):
 // the menu's chooser walks the members and skips one with no HP (knocked out) or petrified, and a
@@ -20,7 +20,7 @@
 // ally mode and the menu agree). Player 1 refuses every playing seat's member; a seat's pass (SeatRules) refuses player
 // 1's leader and every other seat's member. The gate is a bit test (command_rules_code.h, CommandGateMaskCode): the
 // five callers pass an ordinal from 0 to the party count less one (at most 16), or -1 for none, which reads bit 31,
-// never set (RE-seats-step6-battle.md §2).
+// never set (research/RE-seats-step6-battle.md).
 
 namespace lss::platform {
 class GameImage;

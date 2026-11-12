@@ -1,6 +1,6 @@
 #pragma once
 
-// Each further column's own area-map icon manager (RE-p2-hud-icon-manager.md §4 and §8).
+// Each further column's own area-map icon manager (research/RE-p2-hud-icon-manager.md).
 //
 // The on-screen map icons and the quest and party markers belong to one Square Enix object, the
 // area-map icon manager (EndUISystem+0x1A0). Its frame function builds and places Slate icons on two
@@ -15,10 +15,10 @@
 //     while that tick runs (a redirect of that single call site; every other caller is untouched);
 //   - its one call for the range origin (the leader character by the leader's player type) answers
 //     the shown player's member the same way (a copy of player 1's picture: the game's own answer), so
-//     the icons are ranged from that player's character (RE-p2-hud-targets.md §1, R1; the tick writes no
+//     the icons are ranged from that player's character (research/RE-p2-hud-targets.md; the tick writes no
 //     shared state keyed on it);
 //   - player 1's instance is written only by three game events (Enable, HideAndClear, SetFlagD1;
-//     RE-p2-hud-view-levers.md §6, S-HUD31), from seven call sites. Each site is redirected to call
+//     research/RE-p2-hud-view-levers.md), from seven call sites. Each site is redirected to call
 //     the event itself, then apply the event's instance effect to each column's instance: +0xD0 = 1,
 //     the game's own ClearAllAndDisable, +0xD1 = the flag. The events are not run again (two of them
 //     also animate one shared widget). A column's instance takes player 1's state when the column
@@ -29,7 +29,7 @@
 // When a column changes hands, its instance is cleared with the game's own clear and its canvases are hidden.
 //
 // Still the game's shared answers: the party markers follow player 1's leader type, and the compass
-// and the "new marker" list are player 1's (§4 "still blocked").
+// and the "new marker" list are player 1's.
 // Game thread only.
 
 #include "platform/dev_switch.h"

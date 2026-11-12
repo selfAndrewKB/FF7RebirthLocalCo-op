@@ -36,7 +36,7 @@ namespace {
 
 using platform::CallGuarded;
 
-// Facts read from the database (RE-p2-hud-targets.md §3, R3; this build).
+// Facts read from the database (research/RE-p2-hud-targets.md; this build).
 constexpr std::uint8_t kCollectBytes[] = {0x48, 0x8B, 0xC4, 0x48, 0x89, 0x58, 0x10, 0x48, 0x89, 0x70, 0x18, 0x48, 0x89, 0x78,
                                           0x20, 0x55, 0x41, 0x54, 0x41, 0x55, 0x41, 0x56, 0x41, 0x57, 0x48, 0x8D, 0xA8, 0xF8,
                                           0xE7, 0xFF, 0xFF, 0xB8, 0xE0, 0x18, 0x00, 0x00, 0xE8, 0x6F, 0x2D, 0x2F, 0x01};
@@ -50,14 +50,14 @@ constexpr platform::FunctionFact kEnemyAi{L"EndCharacter_GetEnemyAIComponent", 0
 
 // The red ability label's lookup of its enemy's gauge: the entry for the character whose source is
 // the targeted key and whose widget is not Collapsed (EndUI__MF8_FindStatusScreenPointForCharacter;
-// its one call, in the ability-name tick; RE-p2-battle-popups.md §2.2).
+// its one call, in the ability-name tick; research/RE-p2-battle-popups.md).
 constexpr std::uint8_t kLookupBytes[] = {0x48, 0x8B, 0xC4, 0x48, 0x89, 0x58, 0x08, 0x4C, 0x89, 0x48, 0x20, 0x4C,
                                          0x89, 0x40, 0x18, 0x48, 0x89, 0x50, 0x10, 0x55, 0x56, 0x57, 0x41, 0x54};
 constexpr platform::FunctionFact kLookup{L"EndUI__MF8_FindStatusScreenPointForCharacter", 0x140A68C84, kLookupBytes};
 constexpr std::uintptr_t         kLookupCall = 0x140A68826;
 constexpr std::uint32_t          kTargetedKey = 0x140;  // the bar manager's targeted key, a TWeakPtr {object, controller}
 // The gauge manager's two calls to the collection: creating entries for new sources, and keeping only
-// collected ones (§3.1).
+// collected ones.
 constexpr std::uintptr_t kCreateCall = 0x140A66B85;
 constexpr std::uintptr_t kSyncCall   = 0x140B20F39;
 
@@ -299,8 +299,8 @@ bool Hide(void* widget) noexcept
 }
 
 /// Replaces the red ability label's gauge lookup. The lookup considers only the gauge of the bar
-/// manager's targeted key (+0x140/+0x148, the locked-on target, player 1's; read locally at
-/// 0x140A68CC1 and 0x140A68E01): the label makes way only for that gauge. During a seat's
+/// manager's targeted key (+0x140/+0x148, the locked-on target, player 1's; read locally
+/// twice): the label makes way only for that gauge. During a seat's
 /// updates the key holds the seat's displayed target for the length of this call, and player 1's
 /// is put back after, so the seat's label makes way for the seat's locked-on gauge only.
 std::uint8_t LabelLookup(void* manager, float* point, float* scale, void* character) noexcept

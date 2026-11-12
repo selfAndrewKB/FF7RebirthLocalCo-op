@@ -20,7 +20,7 @@ namespace lss::hud::wrangle_targets {
 
 namespace {
 
-// RE-chocobo-wrangle-targets.md §5, §6 (the offsets are the same in both builds).
+// research/RE-chocobo-wrangle-targets.md (the offsets are the same in both builds).
 constexpr std::uintptr_t kCaptureManager = 0x1490FEDC8;  // g_EndChocoboCaptureManager (data)
 constexpr std::uint32_t  kController     = 0x18;  // -> the capture controller (ctl)
 constexpr std::uint32_t  kEntries        = 664;   // ctl: the chocobo entries (data)
@@ -34,7 +34,7 @@ constexpr std::uint32_t  kTranslation    = 0x90;  // widget: RenderTransform.Tra
 constexpr std::size_t    kMaxEntries     = 16;
 
 // The game's per-entry placer (the bubble, its small form and the arrow, from the entry's state byte) and the shared
-// projection helper (a world point to the root overlay, with the edge clamp and the arrow's angle), §2 and §6.
+// projection helper (a world point to the root overlay, with the edge clamp and the arrow's angle).
 constexpr std::uint8_t kPlaceEntryBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x18, 0x48, 0x89, 0x74, 0x24, 0x20, 0x55,
                                              0x57, 0x41, 0x56, 0x48, 0x8B, 0xEC, 0xB8, 0x50, 0x00, 0x00, 0x00};
 constexpr platform::FunctionFact kPlaceEntry{L"ChocoboCapture__PlaceStatusIconAndArrow_PrimaryPC", 0x14357CB40,

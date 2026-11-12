@@ -1,6 +1,6 @@
 // Host-side tests for the engine's layout records (views/column_rules.h): the columns of their monitors' widths, the
-// stock entries and the decisions over the live entry. Taken from Remake's tests/column_rules_test.cpp (the rows of
-// the records and the decisions); Rebirth's rows: the stock three-column entry, equal widths as the stock records.
+// stock entries (the three-column one and the equal widths of the stock records among them) and the decisions over
+// the live entry.
 
 #include "views/column_rules.h"
 
@@ -285,7 +285,7 @@ void ThreeSplits()
         EXPECT(records.record[0].sizeX * records.record[0].sizeY >= records.record[1].sizeX * records.record[1].sizeY);
     }
     EXPECT(!ParseThreeSplit(L"middle").has_value());
-    EXPECT(!ParseThreeSplit(L"columns").has_value());  // three equal columns are the span's only (the user, 2026-11-07)
+    EXPECT(!ParseThreeSplit(L"columns").has_value());  // three equal columns are the span's only
     const Records left  = ThreeSplitRecords(ThreeSplit::Left);
     const Records right = ThreeSplitRecords(ThreeSplit::Right);
     EXPECT(Decide(kStockThreeColumns, left.record, kStockThreeColumns, left.record, kStockThreeColumns) == Action::Write);

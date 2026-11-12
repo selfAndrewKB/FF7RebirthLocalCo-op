@@ -2,9 +2,9 @@
 
 // CPU time per frame of the engine's three frame threads (game, render, RHI), for the perf log.
 //
-// A frame-time change alone cannot say which thread a performance change helped: the user's PC and the cloud
-// PC are bound by different threads, and a profiler capture inflates the RHI thread (RE-perf-cloudpc-costa-
-// 2026-10-08.md §5.1). The CPU time is Windows' own accounting (GetThreadTimes); the thread's cycle count over
+// A frame-time change alone cannot say which thread a performance change helped: two PCs can be bound by different
+// threads, and a profiler capture inflates the RHI thread (research/RE-perf-cloudpc-costa-2026-10-08.md). The CPU
+// time is Windows' own accounting (GetThreadTimes); the thread's cycle count over
 // the TSC rate of the window is logged beside it as a cross-check, since Microsoft does not guarantee cycles
 // to convert to time (on a virtual machine especially). A thread near
 // the frame time binds; with none near it, the GPU does. The render and RHI threads are found by the names

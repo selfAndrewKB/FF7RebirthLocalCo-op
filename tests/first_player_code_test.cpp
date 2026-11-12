@@ -16,7 +16,7 @@
 namespace {
 
 /// A stand-in for the function, with `mov eax, 28h` at the same offset in its 16-byte block as the
-/// game's (0x140CCF8E4 is 4 bytes into the block at 0x140CCF8E0):
+/// game's (the entry is 4 bytes into its block):
 ///     nop x4 ; mov eax, 28h ; mov rax, 5A5Ah (the game's own answer) ; ret
 class FunctionLike
 {

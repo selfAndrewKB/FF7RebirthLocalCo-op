@@ -1,11 +1,11 @@
 #pragma once
 
 // The machine code that records, as the game places them, each battle popup's placement call
-// (damage numbers, battle texts, UMG popups; RE-p2-battle-popups.md §1.2 and §1.3).
+// (damage numbers, battle texts, UMG popups; research/RE-p2-battle-popups.md).
 //
 // The popup manager (EndUISystem+0xA0) places every popup through one of two wrappers:
-//   EndUI__MA0_PlaceSlatePopup_SetVisibility (0x140F5F708) and EndUI__MA0_PlaceUMGPopup_SetVisibility
-//   (0x143A41704), both (rcx &out, rdx PC, r8 &canvas, r9 widget key, [rsp+28h] const FVector* loc,
+//   EndUI__MA0_PlaceSlatePopup_SetVisibility and EndUI__MA0_PlaceUMGPopup_SetVisibility,
+//   both (rcx &out, rdx PC, r8 &canvas, r9 widget key, [rsp+28h] const FVector* loc,
 //   [rsp+30h] FVector2D offset, [rsp+38h] u8 clamp).
 // The PC is the one stored in the popup at spawn (the world's first player controller), so the
 // projection is player 1's in both halves. Each wrapper's first instruction, `mov [rsp+10h], rbx`

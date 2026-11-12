@@ -5,7 +5,7 @@
 //
 // The game's copy (FString_AssignCopy, facts/menu.h) reads only a source's Data and Num, so a source over the mod's text
 // needs no allocation of the game's; Num counts the terminating zero, and an empty text is the game's empty string (no
-// Data). The text must outlive the copy. Taken from Remake's platform/game_array.h unchanged.
+// Data). The text must outlive the copy.
 
 #include <cstddef>
 #include <cstdint>

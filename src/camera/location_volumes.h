@@ -6,8 +6,8 @@
 // (g_LocationVolumeManager, a pointer) holds the volume array (+8 data, +0x10 count), its move-type stack, a pause byte
 // and the lock (+0x188, a CRITICAL_SECTION the game's update holds); each AEndLocationVolume carries its LocationId,
 // UntouchMargin, flags and the fields each rule reads; the game's own containment test
-// LocationVolume_ContainsPoint(volume, &position, margin) is a pure read (RE-p2-framing.md §2.3, RE-p2-walk-mode.md
-// §4.3.1). The facts, the checked install and the locked walk are here once; each rule (the camera-row pick, the
+// LocationVolume_ContainsPoint(volume, &position, margin) is a pure read (research/RE-p2-framing.md,
+// RE-p2-walk-mode.md). The facts, the checked install and the locked walk are here once; each rule (the camera-row pick, the
 // move-type enter/leave with its refcounted stack) stays in its module, as a visitor of the walk. Game thread.
 
 #include <cstdint>

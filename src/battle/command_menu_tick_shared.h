@@ -12,7 +12,7 @@
 
 namespace lss::battle::command_menu_tick {
 
-/// The controller's request array's indices (RE-p2-command-menu-tick.md §2).
+/// The controller's request array's indices (research/RE-p2-command-menu-tick.md).
 enum Request : std::int32_t
 {
     kPrevMember = 0,

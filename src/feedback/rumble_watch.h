@@ -1,7 +1,7 @@
 #pragma once
 
 // Logging only: where each player controller's force feedback goes, pad by pad, frame by frame
-// (RE-p2-rumble.md §6; plan, "Per-pad rumble"). A dev tool (dev/dev_tools.h installs it; a player's build has the
+// (research/RE-p2-rumble.md). A dev tool (dev/dev_tools.h installs it; a player's build has the
 // empty stubs below): the only view of the per-pad device writes.
 //
 // The stock path is per controller: each PC's ProcessForceFeedbackAndHaptics sends its own values with its own

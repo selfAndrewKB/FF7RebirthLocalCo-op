@@ -20,7 +20,7 @@ namespace lss::battle::command_rules {
 
 namespace {
 
-// Facts read from the database (RE-p2-command-menu.md §4.2, §4.4, §10; this build).
+// Facts read from the database (research/RE-p2-command-menu.md; this build).
 // The chooser's HP call: Party_GetHpByType(u8 type), 0 for a knocked-out member.
 constexpr std::uint8_t kHpBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x57, 0xB8, 0x20,
                                      0x00, 0x00, 0x00, 0xE8, 0x9C, 0x2B, 0x67, 0x01};
@@ -51,7 +51,7 @@ OrdinalTypeFn          g_ordinalType = nullptr;
 // The refused ordinals, one bit each (bit n: ordinal n; 0 refuses none), read by the code at the test's entry and
 // written through SetMask: Remove may run off the game thread. The five callers pass an ordinal from 0 to the party
 // count less one (at most 16), or -1 for none, which the bit test reads as bit 31, never set here
-// (RE-seats-step6-battle.md §2).
+// (research/RE-seats-step6-battle.md).
 std::uint32_t g_mask = 0;
 
 // Game thread.

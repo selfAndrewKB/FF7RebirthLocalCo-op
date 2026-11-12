@@ -56,7 +56,7 @@ using facts::kCmdHudMode;
 std::atomic<unsigned> g_uiRefusals{0};  // battle updates that ran without the seat's UI context
 
 // UpdateCamera's call of the Field operator's Activate when a special camera (a shop's) first blends out: the resume
-// before it gave the Field operator that camera's last rotation (RE-p2-shop-camera-skip.md §5, §6). Its return address,
+// before it gave the Field operator that camera's last rotation (research/RE-p2-shop-camera-skip.md). Its return address,
 // this build (0 when not found): logged, to settle whether the mirror below snaps a seat's camera to it.
 constexpr std::uintptr_t kBlendOutResume = 0x140E5629C;
 std::uintptr_t           g_blendOutResume = 0;
@@ -284,7 +284,7 @@ int ActsFor(void* cameraManager) noexcept
 /// In battle the update also runs in the seat's UI context: the Command camera module (21), which
 /// the seat's command controller turns on for the seat's camera while its target list is open,
 /// frames the command menu's selected target (EndUISystem[23]'s provider, which reads the selected
-/// row from the focus path) and the party leader (RE-p2-target-select-views.md §6, §9). Without it,
+/// row from the focus path) and the party leader (research/RE-p2-target-select-views.md). Without it,
 /// player 1's target list would move the seat's camera.
 void RunAsPrimary(int seat, void* cameraManager, float deltaTime)
 {
@@ -310,7 +310,7 @@ void RunAsPrimary(int seat, void* cameraManager, float deltaTime)
         }
     }
     // In battle the leader view decides which camera an attack camera belongs to (the game's leader-keyed test of each
-    // battle camera sequence, RE-p2-attack-cameras.md §3.2), so it opens even when the UI context was refused.
+    // battle camera sequence, research/RE-p2-attack-cameras.md), so it opens even when the UI context was refused.
     std::optional<seat_ladder::SeatScopes> leader;
     if (scopes.Holds<seat_ladder::FocusPart>() ||
         (member != nullptr && battle::battle_camera::SeatBattleActive(cameraManager)))

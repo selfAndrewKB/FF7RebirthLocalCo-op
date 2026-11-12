@@ -16,7 +16,7 @@ namespace lss::world::field_rules {
 // ---- vending: the shopkeeper's name ----
 
 /// The text after the first '_', lower case (the NPC's ActorName and its CharaPop key share it: Npc2100_shopweapon01
-/// and oba2100_ShopWeapon01; RE-p2-shopkeeper-talk.md §7.3).
+/// and oba2100_ShopWeapon01; research/RE-p2-shopkeeper-talk.md).
 inline std::wstring AfterPrefix(const std::wstring& name)
 {
     const auto   at   = name.find(L'_');

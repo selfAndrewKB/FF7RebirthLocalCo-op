@@ -2,7 +2,6 @@
 
 // Where the title menu's Co-op row goes among its rows' kinds (research/RE-coop-page-menus.md): directly below Options,
 // so the rows through Options keep their places. Pure: tested on the host (tests/title_row_rules_test.cpp).
-// Taken from Remake's menu/title_row_rules.h unchanged.
 
 #include <cstddef>
 #include <cstdint>

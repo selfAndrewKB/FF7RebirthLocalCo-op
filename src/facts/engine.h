@@ -31,7 +31,7 @@ using platform::FunctionFact;
 using platform::SlotFact;
 
 // ---------------------------------------------------------------------------------------------
-// The view-family submission (RE-onefamily-feasibility.md §Q1, §Q2)
+// The view-family submission (RE-onefamily-feasibility.md)
 // ---------------------------------------------------------------------------------------------
 
 /// FRendererModule::BeginRenderingViewFamily: renders one view family.
@@ -42,9 +42,9 @@ inline constexpr std::uintptr_t kBeginRenderingViewFamily = 0x140BEE184;
 inline constexpr std::uintptr_t kBeginRenderingViewFamilyEntry = 0x14698B4D0;
 
 /// GFrameNumber (data, uint32): stepped once per frame by PostRenderAllViewports. Read by the HUD trace's frame line
-/// and held one back for the seats' HUD passes (hud/passes/column_hud_images, RE-damage-numbers-per-view.md §5). Its
+/// and held one back for the seats' HUD passes (hud/passes/column_hud_images, RE-damage-numbers-per-view.md). Its
 /// 1.005 twin is 0x146DDD224, carried by the hand-found table: the generated data range around FApp::DeltaTime
-/// would put it 0x1C bytes off (S-DMGNUM).
+/// would put it 0x1C bytes off.
 inline constexpr std::uintptr_t kFrameNumber = 0x146FAA370;
 
 /// The single call in UGameViewportClient::Draw (0x140CC2194) that submits the game's view
@@ -70,7 +70,7 @@ inline constexpr FunctionFact kAdditionalFamilyStore{L"the bAdditionalViewFamily
                                                      kAdditionalFamilyStoreBytes};
 
 // ---------------------------------------------------------------------------------------------
-// The final output's load action (RE-additional-view-family-reader.md §Q1)
+// The final output's load action (RE-additional-view-family-reader.md)
 // ---------------------------------------------------------------------------------------------
 
 /// Inside AddPostProcessingPasses (0x14111A238), the inlined CreateViewFamilyOutput, from
@@ -123,7 +123,7 @@ inline constexpr std::uint8_t   kGetViewPointPrologue[] = {
 inline constexpr FunctionFact kGetViewPoint{L"ULocalPlayer::GetViewPoint", 0x140BF1270, kGetViewPointPrologue};
 
 // ---------------------------------------------------------------------------------------------
-// Removing a local player (RE-remove-local-player.md §Q1)
+// Removing a local player (RE-remove-local-player.md)
 // ---------------------------------------------------------------------------------------------
 
 /// UGameInstance::RemoveLocalPlayer(ULocalPlayer*). Stock GameInstance.cpp:798. Reached through
@@ -134,7 +134,7 @@ inline constexpr std::uint8_t kRemoveLocalPlayerPrologue[] = {
 inline constexpr FunctionFact kRemoveLocalPlayer{L"UGameInstance::RemoveLocalPlayer", 0x144F561F0,
                                                  kRemoveLocalPlayerPrologue};
 inline constexpr platform::PerBuild<std::uint32_t> kRemoveLocalPlayerVTableOffset = {0x2E8, 0x2F0};
-/// UObject's GetWorld virtual (1.005's UObject vtables are one slot longer; RE-p2-trigger-overlap.md §6,
+/// UObject's GetWorld virtual (1.005's UObject vtables are one slot longer; RE-p2-trigger-overlap.md,
 /// RE-coop-rows-facts.md).
 inline constexpr platform::PerBuild<std::uint32_t> kObjectGetWorldSlot = {0x160, 0x168};
 
@@ -153,7 +153,7 @@ inline constexpr FunctionFact kRemoveLocalPlayerControllerTest{L"RemoveLocalPlay
 inline constexpr std::uint32_t kLocalPlayerControllerOffset = 0x30;
 
 // ---------------------------------------------------------------------------------------------
-// The split layout and each half's field of view (RE-vertical-split-and-fill.md §Q1, §Q3)
+// The split layout and each half's field of view (RE-vertical-split-and-fill.md)
 // ---------------------------------------------------------------------------------------------
 //
 // Both are set through reflection by name. The offsets are what the engine's own code reads, so a

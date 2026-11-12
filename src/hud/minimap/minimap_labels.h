@@ -1,10 +1,10 @@
 #pragma once
 
-// Each player's own minimap label text and layout (hud/minimap/label_states.h; RE-p2-minimap-cost.md §7).
+// Each player's own minimap label text and layout (hud/minimap/label_states.h; research/RE-p2-minimap-cost.md).
 //
-// The one call that sets an icon label's text, SEndMapIcon::SetLabelText → SEndTextBlock SetText (0x14098EBB1), is
+// The one call that sets an icon label's text, SEndMapIcon::SetLabelText → SEndTextBlock SetText, is
 // redirected. Inside the mod's holder run for a seat only, the seat's last state is swapped into the text block first;
-// after the seat's paint it is swapped out again. Each seat keeps its own states (plan/seats.md step 4). Anywhere else
+// after the seat's paint it is swapped out again. Each seat keeps its own states. Anywhere else
 // the call goes straight to the game's. Optional: if a check fails, the labels are not swapped (a relayout per pass
 // each frame while a seat's minimap is on). Game thread.
 

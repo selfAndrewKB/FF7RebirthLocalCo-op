@@ -23,8 +23,8 @@ namespace lss::world::party_warp {
 
 namespace {
 
-// The follow-state variants whose four warp slots hold the functions the research read (RE-p2-party-warp.md §1 and
-// §7 for PLAYER; RE-p2-chocobo-warp.md §2.1 for the chocobo sub-types). Each is checked at install, and a state is
+// The follow-state variants whose four warp slots hold the functions the research read (research/RE-p2-party-warp.md for
+// PLAYER; RE-p2-chocobo-warp.md for the chocobo sub-types). Each is checked at install, and a state is
 // driven only if its vtable is a checked one of its subject's kind.
 constexpr std::uint32_t kTeleportQuerySlot = 0x58;
 constexpr std::uint32_t kForceTeleportSlot = 0x270;
@@ -57,7 +57,7 @@ constexpr std::uint8_t kPartyIdleBytes[] = {0x48, 0x8B, 0x05, 0x99, 0x11, 0x88, 
                                             0x80, 0x38, 0x00, 0x0F, 0x94, 0xC0, 0xC3, 0xB0, 0x01, 0xC3, 0xCC, 0xCC};
 constexpr platform::FunctionFact kPartyIdle{L"PartyManager_IsIdle", 0x140B1AB40, kPartyIdleBytes};
 
-// The follow update's own gates a forced request skips (RE-warp-gates.md §1-2):
+// The follow update's own gates a forced request skips (research/RE-warp-gates.md):
 //   G1: the character's field controller state, its virtual check (ladder, squeeze, crawl, climbing wall, grappling
 //       hook, jump spot and the rest): the game asks it of the leader and the follow target; the mod of both player 1's
 //       character and the one it brings back (a held member keeps a FOLLOW state while its player steers it). The slot
@@ -81,7 +81,7 @@ using facts::kAiStateFollow;
 using facts::kAiStateType;
 using facts::kBrainState;
 using facts::kFollowStateForced;
-// The teleport query runner (RE-p2-party-warp.md §10): the result pointer and its status (1 = done).
+// The teleport query runner (research/RE-p2-party-warp.md): the result pointer and its status (1 = done).
 constexpr std::uint32_t kStateQueryResult = 0x540;
 constexpr std::uint32_t kQueryStatus      = 0x28;
 
@@ -416,7 +416,7 @@ bool Start(int seat, void* pawn, Subject subject, bool attached, bool splitShown
     void*          state   = FollowOf(pawn, subject, &variant, &ai);
     bool           idle = false, battle = true;
     // A forced request skips the state's own can-teleport checks, so the game's other conditions for a party
-    // warp are checked here. Riding: the game warps a rider's ride body, not the rider (RE-p2-party-warp.md §4), so a
+    // warp are checked here. Riding: the game warps a rider's ride body, not the rider (research/RE-p2-party-warp.md), so a
     // member on a ride is refused and her chocobo is warped instead.
     // The follow update's own gates first (RE-warp-gates.md), then the forced request's. G1 asks player 1's pawn (no
     // answer from a mount or vehicle) and the member on foot; a chocobo's warp carries its seated rider.

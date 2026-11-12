@@ -36,8 +36,9 @@ struct Site
     std::uintptr_t call;
     bool           late = false;  // the call crosses a 16-byte line in a build: installed from the game thread (Tick)
 };
-// The notifies' calls of the shared check (RE-p2-ladder-approach-L2.md §5). The last four cross an aligned 16-byte line
-// in at least one build; every notify runs only on the game thread (RE-p2-spider-oneshot-notify-threads.md B), so those
+// The notifies' calls of the shared check (research/RE-p2-ladder-approach-L2.md). The last four cross an aligned 16-byte
+// line in at least one build; every notify runs only on the game thread (research/RE-p2-spider-oneshot-notify-threads.md),
+// so those
 // are swapped from the game thread outside any character's tick, the way the HUD's crossing calls are.
 constexpr Site kDirSites[] = {
     {L"ladder", 0x1416434D7},         {L"crawl", 0x141642652},         {L"squeeze", 0x141645CCB},
@@ -53,7 +54,7 @@ constexpr Site        kBeamSite{L"balance beam", 0x142A94023};
 // write to the closest point.
 using DirCheckFn = bool (*)(void* character, const void* endTransform, void* outPoint, float forward, float back,
                             float radius, float slack, float lift, float angle);
-// bool Check(character, ...): pointer-sized arguments only (RE-p2-ladder-approach-L2.md §5).
+// bool Check(character, ...): pointer-sized arguments only (research/RE-p2-ladder-approach-L2.md).
 using BeamCheckFn = bool (*)(void* character, void* a2, void* a3, void* a4, void* a5, void* a6);
 
 platform::CallRedirect g_dirCalls[kDirCount];

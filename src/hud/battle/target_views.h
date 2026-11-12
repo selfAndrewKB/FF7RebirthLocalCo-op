@@ -1,7 +1,6 @@
 #pragma once
 
-// Each view's target marks follow its own player's target (RE-p2-hud-targets.md §2.3, §3, R2, R3; per seat since
-// plan/seats.md step 4).
+// Each view's target marks follow its own player's target (research/RE-p2-hud-targets.md).
 //
 // Enemy gauges: which enemies have a name and HP gauge is decided by one collection (the displayed
 // target, enemies whose AI asks to always show status, and a sticky list), read by the gauge manager's

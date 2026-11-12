@@ -1,6 +1,6 @@
 #pragma once
 
-// Player 1's UI focus, logged on change (RE-p2-command-menu-input.md §2, §10 Stage 3a, pass S-CMD2). Read-only; a dev
+// Player 1's UI focus, logged on change (research/RE-p2-command-menu-input.md). Read-only; a dev
 // tool (dev/dev_tools.h installs it; a player's build has the empty stubs below).
 //
 // UI actions reach one focus path only: the focused widget and its ancestors, kept by Square's input

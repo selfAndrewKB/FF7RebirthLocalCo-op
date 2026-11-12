@@ -1,6 +1,6 @@
 #pragma once
 
-// Each seat's own UI focus context (RE-p2-command-menu-input.md §2, §3.3, §11, pass S-CMD2). Every
+// Each seat's own UI focus context (research/RE-p2-command-menu-input.md). Every
 // seat has its own saved context and key guide (indexed by the seat, index 0 unused: player 1's
 // context is the game's own, in place outside a scope). One scope at a time, whichever seat's: the seats swap in turn,
 // never one inside another's.

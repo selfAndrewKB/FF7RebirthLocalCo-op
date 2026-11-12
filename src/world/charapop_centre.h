@@ -1,7 +1,7 @@
 #pragma once
 
-// The game's NPC population follows every player: each NPC is scored from the nearest player (the user's choice,
-// over one midpoint between the players; RE-p2-charapop-two-centres.md, RE-p2-charapop-spawn-gate.md §2).
+// The game's NPC population follows every player: each NPC is scored from the nearest player (not from one midpoint
+// between the players; research/RE-p2-charapop-two-centres.md, RE-p2-charapop-spawn-gate.md).
 //
 // CharaPop keeps a budget of characters spawned (128 live), ranked by a score whose distance part is measured from one
 // centre: the party leader, or the override centre event scripts set with CharaPop_SetOverrideCenter. Far from that
@@ -18,7 +18,7 @@
 // copy of its old transform (+0x80..+0x10F) is put back after each seat's call. An event's centre (on/off 70 or event
 // command 0x7E; the mod never leaves its own set, so a set override is always an event's), a cleared leader centre and
 // externally managed entries keep the game's single score. Nothing persistent is written. Game thread only (the score
-// runs only there, §3).
+// runs only there).
 //
 // Per seat (players/seats.h): each playing seat's member's location, read every 10 ticks, and its share of the summary
 // counts. Shared: the switch, the event-centre watch and the redirect.

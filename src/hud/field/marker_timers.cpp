@@ -19,7 +19,7 @@ namespace lss::hud::marker_timers {
 
 namespace {
 
-// Facts read from the database (RE-p2-enemy-markers.md §7.5; this build). The list is a TSet like
+// Facts read from the database (research/RE-p2-enemy-markers.md; this build). The list is a TSet like
 // the enemy-status manager's: its element TSparseArray at +0x10 (platform/sparse_array.h); each
 // element 0x30 bytes: +0 the weak widget, +0x14 T.
 constexpr std::uint32_t  kMarkerList  = 0x150;

@@ -115,7 +115,7 @@ inline constexpr ExecClass kExecClasses[] = {
     // Every one-shot type (squeeze, crouch, door steps, point to point) is this one class (type at actor+0x710); the
     // camera (squeeze and crouch only) goes on in the Tick's phase update behind IsUCPC_Core, with no handle: the
     // actor's flag +0x88C records it. Start runs unscoped for the leader: its only leader read records a non-leader's
-    // safe spot for the save file (RE-p2-traversal-cameras.md §11), and to the save a seat's member is a party member.
+    // safe spot for the save file (research/RE-p2-traversal-cameras.md), and to the save a seat's member is a party member.
     {L"one-shot move", facts::kOneShotMoveVTable, 0x58, 0x58, 0, 0, false, true, TickRule::Whole,
      {L"the one-shot executer's Start slot", 0x146706C50, {L"OneShotMoveExecuter_Start_Vt10", 0x143693618, kOneShotStartBytes}},
      {L"the one-shot executer's End slot", 0x146706C58, {L"OneShotMoveExecuter_End_Vt18", 0x143695630, kOneShotEndBytes}},
@@ -126,7 +126,7 @@ inline constexpr std::size_t kExecCount = std::size(kExecClasses);
 inline constexpr std::size_t kLadder    = 0;
 inline constexpr std::size_t kOneShot   = 5;
 
-// The one-shot's camera off (RE-p2-traversal-cameras.md §10): the actor's leave (vt+0x8F8; 1.005 +0x900) tests and
+// The one-shot's camera off (research/RE-p2-traversal-cameras.md): the actor's leave (vt+0x8F8; 1.005 +0x900) tests and
 // deactivates slot 15 of the camera manager GetEndPlayerCameraManager answers, then clears +0x88C. The action's end
 // delegate reaches it with the leaving character (exec+0x10): on the anim worker at a normal finish, on the game thread
 // from the executer End's abort; EndPlay calls it with no character. For a seat's member (or, with no character, the
@@ -149,7 +149,7 @@ inline constexpr std::uint32_t kModuleActive      = 0x44;   // FEndCameraModule:
 inline constexpr std::uint32_t kLadderSlide       = 0x434;
 inline constexpr std::size_t   kMaxHandle         = 32;
 
-// The ladder's smooth exit (RE-p2-traversal-ladder-exit.md §2, §6): the climb move's state delegate (anim worker) asks,
+// The ladder's smooth exit (research/RE-p2-traversal-ladder-exit.md): the climb move's state delegate (anim worker) asks,
 // through IsUCPC_Core and a global count, for the ladder module's exit state S2, a 1 s blend into the follow camera
 // after which the module switches itself off; the executer's camera off then finds S2 and does nothing. Off the game
 // thread the member's answer is the engine's no, and the ladder holds player 1's handle, so a seat had a cut instead.
@@ -188,7 +188,7 @@ inline bool ExitState(std::uint8_t state) noexcept
     return world::world_rules::ClimbExitState(state);
 }
 
-// The climbing wall's hip framing (RE-p2-traversal-camera-collision.md §3, §6): entering phase 3 (on the wall, between
+// The climbing wall's hip framing (research/RE-p2-traversal-camera-collision.md): entering phase 3 (on the wall, between
 // holds) sets the holder's module +0x484, which moves the camera's look-at, the start of the collision sweep, onto the
 // hip raised by CameraDefaultSweepOffsetZ; leaving it clears the flag. Both are behind IsUCPC_Core(character), on the
 // anim worker, where a seat's member is the engine's no: a seat never had the hip framing. The two calls answer yes
@@ -202,7 +202,8 @@ inline constexpr std::uintptr_t kClimbingModuleVt = 0x145854970;  // FEndClimbin
 inline constexpr std::uint32_t  kClimbHip         = 0x484;        // u8: hip framing wanted
 inline constexpr std::uint32_t  kClimbHipBlend    = 0x488;        // float: eases toward it at 5/s
 
-// The camera manager's collision sweep result (§1.1): "pulled in this frame", and the hit actor's weak reference.
+// The camera manager's collision sweep result (research/RE-p2-traversal-camera-collision.md): "pulled in this frame",
+// and the hit actor's weak reference.
 inline constexpr std::uint32_t kPcmPulledIn = 0x2DE4;
 inline constexpr std::uint32_t kPcmHitActor = 0x2DC0;
 // frames watched after a traversal module leaves slot 15 (the ladder top)

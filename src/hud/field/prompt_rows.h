@@ -1,7 +1,7 @@
 #pragma once
 
 // The field prompt rows (FieldAction_Command_C): each player sees their own, in their own view
-// (RE-p2-field-prompts.md; per seat since plan/seats.md step 4).
+// (research/RE-p2-field-prompts.md).
 //
 // Every prompt row the game shows is a widget in one global list (EndUISystem+0x208: a pointer to
 // {FWeakObjectPtr* data, int32 num}). The rows have no link back to their owner, but their owners

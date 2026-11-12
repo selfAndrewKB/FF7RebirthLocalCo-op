@@ -29,7 +29,7 @@ namespace lss::input::walk_limits {
 
 namespace {
 
-// RE-p2-walk-mode.md §4.2: PartyManager_SetPrimaryPC_CreateNavAreaComp(partyManager, controller) sets the primary
+// PartyManager_SetPrimaryPC_CreateNavAreaComp(partyManager, controller) (research/RE-p2-walk-mode.md) sets the primary
 // controller, ensures its trigger, NewObjects and registers its UEndPlayerExistNavAreaComponent (pc+0x590) and sets
 // pc+0x7DC. It has no guard of its own (a second call makes a second component), so it runs only while +0x590 is null.
 constexpr std::uint8_t   kCreateNavAreaBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x55, 0x48, 0x8B,
@@ -39,9 +39,9 @@ constexpr platform::FunctionFact kCreateNavArea{L"PartyManager_SetPrimaryPC_Crea
 constexpr std::uint32_t  kControllerNavArea  = 0x590;
 using camera::location_volumes::kNavAreaController;
 
-// §4.3.3: LocMoveTypeListener_Vt40_SetPrimaryPCLayer7(listener, LocationId, move, dash, enter) writes the primary
+// LocMoveTypeListener_Vt40_SetPrimaryPCLayer7(listener, LocationId, move, dash, enter) writes the primary
 // controller's layer 7 (+0x897 move, +0x8AB dash): {move, dash} on enter, {6, 0} on leave; nothing for LocationId 0.
-// `this` is unused; the game's instance is the singleton at 0x14939BCE8.
+// `this` is unused; the game's one instance is a singleton.
 constexpr std::uint8_t   kSetLayer7Bytes[] = {0x48, 0x85, 0xD2, 0x74, 0x54, 0x48, 0x89, 0x5C,
                                               0x24, 0x08, 0x57, 0xB8, 0x20, 0x00, 0x00, 0x00};
 constexpr platform::FunctionFact kSetLayer7{L"LocMoveTypeListener_Vt40_SetPrimaryPCLayer7", 0x14182BE00,
@@ -50,7 +50,7 @@ constexpr std::uintptr_t kMoveTypeListener = 0x14939BCE8;
 constexpr std::uint32_t  kControllerLayer7Move = 0x890 + 7;
 constexpr std::uint32_t  kControllerLayer7Dash = 0x8A4 + 7;
 
-// §4.3.1: the location manager's volumes, lock, pause byte and move-type stack, each volume's fields and the game's
+// The location manager's volumes, lock, pause byte and move-type stack, each volume's fields and the game's
 // containment test: camera/location_volumes.h.
 using camera::location_volumes::kFlagChangeMovementType;
 using camera::location_volumes::kFlagDisabled;

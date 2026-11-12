@@ -30,7 +30,7 @@ namespace {
 
 namespace rules = enemy_leader_rules;
 
-// The game's leader-change walk (RE-enemy-leader-reads.md §3): its snapshot of the battle's flagged characters, the
+// The game's leader-change walk (research/RE-enemy-leader-reads.md): its snapshot of the battle's flagged characters, the
 // snapshot's step to the next live character, and the call that runs a battle AI blueprint's OnChangeLeader.
 constexpr std::uint8_t kSnapshotBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x48, 0x89, 0x6C,
                                            0x24, 0x18, 0x56, 0x57, 0x41, 0x56, 0xB8, 0x50};

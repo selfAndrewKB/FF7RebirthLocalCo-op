@@ -149,13 +149,13 @@ void LogShapeOnChange(int slot, const std::byte* viewInfo) noexcept
 //
 // While a seat is in, every player's view takes the mod's FOV rule
 // (ULocalPlayer::AspectRatioAxisConstraint), read by GetProjectionData after this function returns
-// (0x140CC0B1D) for a view without the 16:9 constraint. The constraint itself is the main camera's
+// for a view without the 16:9 constraint. The constraint itself is the main camera's
 // own setting, cleared once per camera through the game's setter (camera/main_camera_shape.h).
 //
 // The FOV rule is written once per player, at the player's first split frame (and again only if
 // the mod's own FOV mode changes), then left alone while a scene may be at work: the game's only
 // writer, the level-sequence camera cut, saves the value before it writes its own and puts that
-// value back when the cut returns to the previous view target (RE-p2-hud-view-levers.md §4). A
+// value back when the cut returns to the previous view target (research/RE-p2-hud-view-levers.md). A
 // value the game holds meanwhile is logged, not overwritten. A scene that ends without that
 // return leaves the game's rule in place (seen live: a skippable field scene left player 1's
 // column on MaintainXFOV, the picture zoomed out), so when the split comes back after player 1's

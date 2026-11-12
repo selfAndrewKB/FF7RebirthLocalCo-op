@@ -68,8 +68,8 @@ constexpr std::uintptr_t kListOwner     = 0x14939BC90;  // the list's owner (Sto
 constexpr std::uintptr_t kFootSlot      = 0x1457F3ED0;  // EndChocoboCharacter vt+0x978 (1.005 +0x980): footsteps
 constexpr std::uintptr_t kFootImpact    = 0x1418BA510;  // ... its function: GetMoveState, then FFB_Chocobo_1/2
 
-// The list object's size, as the global owner's creator allocates it (1.004 `mov ecx,178h` at 0x1436F4AF2, 1.005
-// `mov ecx,1B0h` at 0x143429CAA; read from both exes).
+// The list object's size, as the global owner's creator allocates it (1.004 `mov ecx,178h`, 1.005 `mov ecx,1B0h`; read
+// from both exes).
 constexpr platform::PerBuild<std::size_t> kListSize{0x178, 0x1B0};
 
 constexpr std::uint32_t kComponentOwner = 0xA0;   // the leader-action component's controller
@@ -172,7 +172,7 @@ bool AddToSeat(int seat, std::uint64_t key, const void* params, std::uint8_t fla
 
 /// `seat`'s stop, as the game's stop does it, on the seat's list: under the game's lock (re-entrant, so the game's own
 /// lock inside nests), the owner names the seat's list for the length of the call. Every other reader of the owner's
-/// list is under that lock or on this thread (RE-p2-zipline-rumble-hook-who.md §4.2), so no one else sees the swap; one
+/// list is under that lock or on this thread (research/RE-p2-zipline-rumble-hook-who.md), so no one else sees the swap; one
 /// seat's swap is put back before the next seat's begins. False if the seat has no list now. Game thread.
 bool StopOnSeat(int seat, StopNamedFn original, std::uint64_t key) noexcept
 {
@@ -368,7 +368,7 @@ void StopNamed(std::uint64_t key) noexcept
     if (route == traversal_rumble_rules::Route::LeftOnWorker)
     {
         // A source of a seat's stopping on a worker: the owner's list can be named only on the game thread, and no
-        // source found stops there (RE-p2-rumble-owner-chocobo.md §9.4). Player 1's entries are left alone.
+        // source found stops there (research/RE-p2-rumble-owner-chocobo.md). Player 1's entries are left alone.
         if (g_counts[seat].ownerStopsLeft.fetch_add(1, std::memory_order_relaxed) == 0)
         {
             platform::Log(L"rumble list: a stop of {}'s ({}) ran on a worker; player 1's list was left alone "

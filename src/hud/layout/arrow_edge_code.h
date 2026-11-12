@@ -2,23 +2,23 @@
 
 // The machine code that picks the screen edge an off-screen enemy arrow pins to by where the ray from
 // the centre actually leaves the half, while the HUD is laid out in a split half
-// (RE-p2-overlay-ui-size.md §3.1 and §4).
+// (research/RE-p2-overlay-ui-size.md).
 //
-// EndUI__PlaceMarkerWidgetAtWorld_Clamped (0x140A59A30) chooses a side edge when the arrow's angle is
+// EndUI__PlaceMarkerWidgetAtWorld_Clamped chooses a side edge when the arrow's angle is
 // between 60° and 120°, else the top or bottom edge. Those angles are a 16:9 rectangle's corners; in
 // a 32:9 half (corner ~74°) arrows between 60° and 74° leave the half, and in an 8:9 half (corner
 // ~42°) side arrows bunch in the middle. The ray from the centre meets a side edge first exactly when
 // |ySide − cy| ≤ cy, where ySide is the side edge's y the function has already computed.
 //
-// Replaced: `vfmadd231ss xmm8, xmm13, [rsp+24h]` (7 bytes at 0x140A59DB8, inside one block), the last
-// instruction before the game's split (`jbe` at 0x140A59DBF on the 60° compare, then the 120° compare
+// Replaced: `vfmadd231ss xmm8, xmm13, [rsp+24h]` (7 bytes at kArrowEdgeSite, inside one block), the last
+// instruction before the game's split (`jbe` at the site + 7 on the 60° compare, then the 120° compare
 // and `jae`). The code runs that instruction, then:
 //   - flag set (a split half): dx = 0 (xmm14 = 0) → top/bottom; else |ySide − cy| ≤ cy → side, else
 //     top/bottom;
 //   - flag clear: the game's own two compares (the 60° flags cannot survive the flag test, so both
 //     are redone against the game's constants) → exactly the game's choice;
-// and jumps to the side branch (0x140A59DCB) or the top/bottom branch (0x140A59E19).
-// Registers there (the function is checked byte for byte up to 0x140A59DCF): xmm0 = ySide,
+// and jumps to the side branch (kArrowEdgeSide) or the top/bottom branch (the site + 0x61).
+// Registers there (the function is checked byte for byte up to the site + 0x17): xmm0 = ySide,
 // xmm10 = cy, xmm14 = cx/|dx|, xmm6 = 0, xmm1 = |angle|; xmm3 and xmm4 are free (clobbered by the
 // atan2 call before). Only rax, xmm3, xmm4 and the flags change; no calls, no stack writes.
 
@@ -33,10 +33,10 @@ namespace lss::hud {
 
 inline constexpr std::uintptr_t kArrowEdgeSite       = 0x140A59DB8;
 inline constexpr std::uintptr_t kArrowEdgeSide       = 0x140A59DCB;  // the side branch
-inline constexpr std::uintptr_t kArrowEdgeSixty      = 0x1460A2ABC;  // 60.0f (read at 0x140A59DA1)
-inline constexpr std::uintptr_t kArrowEdgeOneTwenty  = 0x1460A3814;  // 120.0f (read at 0x140A59DC1)
+inline constexpr std::uintptr_t kArrowEdgeSixty      = 0x1460A2ABC;  // 60.0f (read at the site - 0x17)
+inline constexpr std::uintptr_t kArrowEdgeOneTwenty  = 0x1460A3814;  // 120.0f (read at the site + 9)
 
-/// 0x140A59D44 through 0x140A59DCE, as the research read it (the split and the side branch's first compare).
+/// The site - 0x74 through the site + 0x16, as the research read it (the split and the side branch's first compare).
 inline constexpr std::uint8_t kArrowEdgeBytes[] = {
     0xC5, 0xFA, 0x11, 0x44, 0x24, 0x24, 0xC5, 0xF8, 0x54, 0xC3, 0xC5, 0xF8, 0x2F, 0xC6, 0xC4, 0xC1,
     0x3A, 0x5C, 0xE3, 0xC4, 0x41, 0x10, 0x57, 0xED, 0xC4, 0x41, 0x08, 0x57, 0xF6, 0xC4, 0x41, 0x42,

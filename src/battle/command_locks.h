@@ -1,7 +1,7 @@
 #pragma once
 
 // Each seat's command controller gets the battle's command values through the game's own setters
-// (RE-p2-command-menu-levers.md §1, §3; IDA passes S-CMD9, S-CMD10).
+// (research/RE-p2-command-menu-levers.md).
 //
 // The game writes these into its one command controller only (EndUISystem[23]); they are battle-wide,
 // so each seat's controller takes the same values:
@@ -17,7 +17,7 @@
 // HUD masks); the bytes it changed on the game's controller are stored on each seat's right after it
 // returns. Nothing is replayed before a seat's controller exists or off the game thread (logged).
 //
-// A written exception (RE §1.3, §3.3, §8): the game pushes these values only when they change, and a
+// A written exception: the game pushes these values only when they change, and a
 // seat's controller misses every push made before it follows (it is built later, and its creation Setup
 // resets +0x782). Sync() copies them once after each join Setup.
 //

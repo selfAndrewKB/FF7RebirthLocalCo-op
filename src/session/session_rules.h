@@ -55,7 +55,7 @@ struct WaitOutsideFacts
 };
 
 /// A player in without their member while the game holds it (the slot wait, whatever its reason) leaves the game on
-/// one monitor and waits outside for it, with two players in or three (the user's rule: on one monitor no view of
+/// one monitor and waits outside for it, with two players in or three (on one monitor no view of
 /// a waiting player is shown, no copy of player 1's view and no switch to player 1's view alone on their account; the
 /// player's view goes until their character is back), once the wait has lasted `grace`: a party swap that resolves
 /// within a second keeps the player in. With columns held (the monitor row, the console's `view-columns`) the player

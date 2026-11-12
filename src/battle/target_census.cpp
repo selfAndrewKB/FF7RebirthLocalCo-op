@@ -30,7 +30,7 @@ namespace lss::battle::target_census {
 
 namespace {
 
-// Facts read from the database (RE-p2-enemy-target-bias.md §8, S-TGTCENSUS; this build). 1.005: the
+// Facts read from the database (research/RE-p2-enemy-target-bias.md; this build). 1.005: the
 // replaced-target-census.json rows (16, read from both exes); every site fits one 16-byte block in both builds.
 
 // Creation: EnemyChar_InitTargetSelector's call of void Create(holder*), its only caller. Init runs at every battle start;
@@ -113,7 +113,7 @@ constexpr std::uint32_t kCondLastKind = 0x1E0, kCondRunCount = 0x1E4;
 // Party manager: the leader (FWeakObjectPtr), player 1's character.
 using facts::kPartyManagerLeader;
 // Lock group (a TMap value; its FName key is 8 bytes before it). +0x25 is bIgnoreProvocation: the strong lock slot (7)
-// when set, else the weak one (1); each member's priority is in the member (RE §18.4).
+// when set, else the weak one (1); each member's priority is in the member.
 constexpr std::int32_t  kGroupName = -8;
 constexpr std::uint32_t kGroupMembersNum = 0x08, kGroupMaxEach = 0x20, kGroupPrioritize = 0x24, kGroupStrong = 0x25;
 
@@ -125,7 +125,7 @@ constexpr const wchar_t* kLockNames[] = {L"Dispersion",    L"LockGroupWeak", L"B
 constexpr const wchar_t* kCharacterTypes[] = {L"UCPC", L"AIPC", L"ALL"};
 constexpr auto           kSummaryEvery     = std::chrono::seconds(60);
 
-// Every wrapped function takes at most four integer arguments and no float (§8 listings); all four are passed on.
+// Every wrapped function takes at most four integer arguments and no float; all four are passed on.
 using Fn         = std::uint64_t (*)(std::uint64_t, std::uint64_t, std::uint64_t, std::uint64_t);
 using HateTypeFn = std::uint8_t (*)(void* character);
 using AppliedFn  = void* (*)(void* controller);

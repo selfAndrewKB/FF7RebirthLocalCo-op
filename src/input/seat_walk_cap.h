@@ -1,7 +1,7 @@
 #pragma once
 
 // Each seat's walk cap from a walk-only step ends when the step ends, as player 1's does (players/seats.h;
-// research/RE-p2-walk-mode.md §7).
+// research/RE-p2-walk-mode.md).
 //
 // Move-type layer 2 (ActionPlayerMoveType) on "the" primary controller caps a character's gait. A behavior action's
 // walk-only step (the leader action's type 4, phase 4) sets it to Walk on its phase enter and back to 6 on its phase

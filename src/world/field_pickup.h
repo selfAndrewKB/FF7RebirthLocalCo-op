@@ -1,7 +1,6 @@
 #pragma once
 
-// A seat's player picks up collectibles and materials with the game's own field prompts (RE-p2-field-interact.md
-// §4.1, §12; plan, "Player 2 triggers field prompts").
+// A seat's player picks up collectibles and materials with the game's own field prompts (research/RE-p2-field-interact.md).
 //
 // FieldActionMgr keeps every field prompt as a point and runs one selection per frame around one probe, the
 // party leader, with one slot block: the candidates, the visibility-trace handles, eight button slots with
@@ -9,12 +8,12 @@
 // (player 1's; its call in the game mode's tick is redirected here), the same game code runs once more for
 // each seat's player:
 //   - inside the seat's scopes: the seat's pad's sticks and buttons, the seat's controller as the primary one, the
-//     seat's member as the leader (and its type). Every gate and the probe then resolve to the seat's player (§12.7);
-//   - with the seat's copy of the manager's per-player ranges swapped in (§12.9; player 1's put back after),
+//     seat's member as the leader (and its type). Every gate and the probe then resolve to the seat's player;
+//   - with the seat's copy of the manager's per-player ranges swapped in (player 1's put back after),
 //     and of each point's carried target bits (+0x104 bits 1 and 2), kept by point key;
 //   - with the game's own "point disabled" bit (+0x104 bit 4, which the candidate query skips) set on every
-//     point that is neither one of WorldItemMgr's items, one of TreasurePointMgr's chests (§13; the chest listener's
-//     own test), a vending machine (its point preset rpaVendingMachine, §15.5; world/vending) nor a shopkeeper
+//     point that is neither one of WorldItemMgr's items, one of TreasurePointMgr's chests (the chest listener's
+//     own test), a vending machine (its point preset rpaVendingMachine; world/vending) nor a shopkeeper
 //     (the game's data names a shop action for its key; world/shop_talk), and cleared again after: the seat's player
 //     is offered collectibles, materials, chests, vending machines and shopkeepers; talk, doors, scripts and menus
 //     stay player 1's. A chest or machine the seat's player uses runs the game's own state (treasure, field action) on
@@ -23,10 +22,10 @@
 //   - the input step's FieldAction part in the game's order (its gate, the slot poll into the mod's own
 //     buffers, the latch, the press/execute tick), then the selection update;
 //   - with the seat's controller first in the world's controller list for each visibility request the pass
-//     makes: the request's screen test projects the point through "the first local player" (§12.13), so the
+//     makes: the request's screen test projects the point through "the first local player", so the
 //     offer follows the seat's own screen, not player 1's;
-//   - with each point's marker widget (+0x78) swapped too, on every live point, the seat's kept by point key
-//     (§12.15): the game's own marker code makes, drives and sweeps the seat's own widget in the pass, so the
+//   - with each point's marker widget (+0x78) swapped too, on every live point, the seat's kept by point key:
+//     the game's own marker code makes, drives and sweeps the seat's own widget in the pass, so the
 //     two players no longer write one widget's state in turn. The seat's widgets the game would not destroy
 //     (point gone between passes, field exit, the seat's player leaving) go through its own destroy call.
 // Selection, traces, rows, markers, the look-at, the press and the grant are all the game's. The one global
@@ -35,8 +34,8 @@
 //
 // Three more hooks carry the pass's edges: the game mode tick's call of the selection update (the pass runs right
 // after it), WorldItemMgr's mark by key (a key a seat's pass marks is noted) and the WorldItem tick's call of the
-// grant (run with that seat's controller as the primary one for a noted key: the item-get rumble's only player read,
-// §12.12 item 5). Each tells the one observer (world/interact_watch, a dev tool) what passed through it.
+// grant (run with that seat's controller as the primary one for a noted key: the item-get rumble's only player read).
+// Each tells the one observer (world/interact_watch, a dev tool) what passed through it.
 //
 // Logged: the scopes or gates that stopped a pass (counted), each seat's slot targets and marker widgets on
 // change, each widget the mod destroys, a status line once a minute. Game thread only.
@@ -103,7 +102,7 @@ void NoteMarked(int seat, std::uint64_t key) noexcept;
 
 /// The seat whose pass marked `key` (forgotten once asked), or -1: the grant then runs with that seat's controller
 /// as the primary one, so the item-get rumble plays on its pad (the only player read in the grant,
-/// RE-p2-field-interact.md §12.12 item 5).
+/// research/RE-p2-field-interact.md).
 int TakeMarked(std::uint64_t key) noexcept;
 
 /// Whose point marker widget is (a UFieldTargetWidget at a point's +0x78), as of the seats' last passes: 0

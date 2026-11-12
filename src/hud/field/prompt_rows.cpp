@@ -40,7 +40,7 @@ namespace {
 
 using RC::Unreal::UObject;
 
-// RE-p2-field-prompts.md §1.2 and §4 (this build).
+// research/RE-p2-field-prompts.md (this build).
 constexpr std::uint32_t  kLeaderActions     = 0x598;        // PC -> the leader-action component
 constexpr std::uint32_t  kComponentRowBytes = 0x9A8;        // + 12*i: request byte
 constexpr std::uint32_t  kComponentRowWeak  = 0x9AC;        // + 12*i: the row's weak widget
@@ -233,7 +233,7 @@ void ReadSeatNames(int seat, SeatNames& names, std::array<std::uint8_t, kCompone
         names.component[i] = Read(component + kComponentRowWeak + kRowStride * i, weak) ? Resolve(weak) : nullptr;
     }
     // The seat's driven chocobo's own handles (Dash, Dismount, Jet, Scent, Scour): its tick makes their rows in the
-    // one shared list, so they are the seat's the same way (RE-p2-chocobo-rows.md §4).
+    // one shared list, so they are the seat's the same way (research/RE-p2-chocobo-rows.md).
     const auto ride = reinterpret_cast<std::uintptr_t>(rides::chocobo_ride::DrivenMoveState(seat));
     for (std::size_t i = 0; ride != 0 && i < names.ride.size(); ++i)
     {

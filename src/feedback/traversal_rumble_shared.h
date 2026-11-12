@@ -71,7 +71,7 @@ inline std::atomic<int> g_memberType[players::kMaxPlayers] = {-1, -1, -1};
 // seat's list at its list load (0: free), and that seat's list (null: none). Read by the code at the load, under the
 // game's lock, against the running thread's id; a route claims a free slot and sets its list under the game's lock, a
 // list's drop clears it from every slot under it. Two chocobos landing on two animation workers at once each name their
-// own slot (RE-seats-step6-camera-rumble.md §2).
+// own slot (research/RE-seats-step6-camera-rumble.md).
 inline traversal_rumble_code::JumpSlots g_jumpSlots{};
 
 // The seat one of whose rumble sources this thread runs (SeatOwner), or 0.

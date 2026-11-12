@@ -1,6 +1,6 @@
 #pragma once
 
-// Enemies aim their moves at one of the players, one coin per enemy action (RE-p2-enemy-target-bias.md §12, §16).
+// Enemies aim their moves at one of the players, one coin per enemy action (research/RE-p2-enemy-target-bias.md).
 //
 // Enemy blueprints name "the player" with a few native functions: GetPartyLeader (the summons' signature lock-ons,
 // distances and angles to the leader, lists that drop the leader), IsUCPC / IsAIPC (is this character the player, an
@@ -49,14 +49,14 @@ void Remove() noexcept;
 /// Game thread, once per frame: the UFunction swaps until they are in place, and the summary.
 void Tick() noexcept;
 
-/// A lock-group pick is a decision whose target holds until it dies (RE §18.4, §20): tosses `controller`'s coin now,
+/// A lock-group pick is a decision whose target holds until it dies: tosses `controller`'s coin now,
 /// by the same rule, and keeps it as the enemy's coin. The player's number (1 player 1, seat + 1 a seat's player:
 /// 2 player 2; coin_table::SeatOfNumber gives the seat), 0 none (off, no seat's member, or not an enemy controller; the
 /// caller must already have checked that `controller` is a live object). Any thread.
 int TossForLockPick(const void* controller) noexcept;
 
 /// `enemy`'s AI controller, only when the controller's own enemy pointer names `enemy` back (the game's path to it:
-/// character +0x588; RE-p2-enemy-target-bias.md §18.2). Null on any mismatch. Guarded reads; any thread.
+/// character +0x588; research/RE-p2-enemy-target-bias.md). Null on any mismatch. Guarded reads; any thread.
 const void* ControllerOfEnemy(const void* enemy) noexcept;
 
 /// `controller` itself when its enemy character's controller pointer names it back, else null. Any thread.
@@ -66,8 +66,8 @@ const void* CheckedController(const void* controller) noexcept;
 /// enemy's and boss's, not the party's). False until the class is found. Any thread.
 bool IsEnemyController(const void* controller) noexcept;
 
-/// The coin `controller` holds now, for a native read of "the player" made for that enemy (RE-p2-leader-native-reads.md
-/// S-LEADERLEVERS): tossed if it has none, tossed again if it names a seat's player who is no longer a candidate (the
+/// The coin `controller` holds now, for a native read of "the player" made for that enemy (research/RE-p2-leader-native-reads.md):
+/// tossed if it has none, tossed again if it names a seat's player who is no longer a candidate (the
 /// blueprint answers' rule). The player's number as TossForLockPick gives it, 0 none (off, no seat's member, or not an
 /// enemy controller; the caller must already have checked that `controller` is a live object). Any thread.
 int CoinFor(const void* controller) noexcept;

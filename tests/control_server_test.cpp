@@ -1,5 +1,5 @@
 // Host-side tests for control::Server, the console's socket, over real loopback connections (port kTestPort).
-// New with the port of Remake's server (Remake has no test of it): lines split and joined across sends,
+// Lines split and joined across sends,
 // replies out, a long line and a leaving client reported closed, the replies queued before Close sent, a client
 // that stops reading closed, the client limit, a taken port, Close.
 
@@ -30,7 +30,8 @@ namespace {
 using lss::control::Server;
 using namespace std::chrono_literals;
 
-constexpr std::uint16_t kTestPort = 4429;  // not the mod's (4419) nor Remake's (4418): a running game never clashes
+// Not the mod's port (4419) nor the other game's (4418): a running game never clashes.
+constexpr std::uint16_t kTestPort = 4429;
 
 /// A blocking client socket with a receive timeout; INVALID_SOCKET if the connection was refused.
 SOCKET Connect()

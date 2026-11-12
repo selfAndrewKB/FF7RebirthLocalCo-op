@@ -53,7 +53,7 @@ namespace {
 
 using RC::Unreal::UObject;
 
-// RE-p2-party-leash.md §2.1 (this build). The call is the one after the navmesh push-back found no
+// research/RE-p2-party-leash.md (this build). The call is the one after the navmesh push-back found no
 // navmesh; the game zeroes the move delta when it returns false.
 constexpr std::uint8_t kReadyAtBytes[] = {0x48, 0x89, 0x54, 0x24, 0x10, 0x53, 0x55, 0x56, 0x57, 0x41, 0x54, 0x41,
                                           0x56, 0x41, 0x57, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0xCF, 0xF8, 0x67};
@@ -74,7 +74,7 @@ constexpr std::uint8_t   kAfterCallBytes[] = {0x84, 0xC0, 0x75, 0x2D, 0xC5, 0xFA
 constexpr platform::FunctionFact kAfterCall{L"after the move refusal's call", 0x140A538CB, kAfterCallBytes};
 constexpr std::ptrdiff_t kMoveBelowLocation = 0xB8 - 0x90;
 
-// The falling step's call (RE-p2-party-leash.md §6c): EndCMC_NewFallVelocity_WorldReadyFreeze asks the same
+// The falling step's call (research/RE-p2-party-leash.md): EndCMC_NewFallVelocity_WorldReadyFreeze asks the same
 // question with the same arguments when CMC+0xB6B is set (`cmp byte [rcx+0B6Bh], 0` before it; `lea rdx,
 // [rbp-51h]`, a copy of the updated component's world location) and on false returns a zero velocity.
 constexpr std::uintptr_t kFallCall          = 0x140F22706;
@@ -86,14 +86,14 @@ constexpr platform::FunctionFact kFallLocation{L"the falling step's location arg
 constexpr std::uint8_t   kFallAfterCallBytes[] = {0x84, 0xC0, 0x75, 0x13, 0x48, 0xC7, 0x03, 0x00, 0x00,
                                                   0x00, 0x00, 0xC7, 0x43, 0x08, 0x00, 0x00, 0x00, 0x00};
 constexpr platform::FunctionFact kFallAfterCall{L"after the falling step's call", 0x140F2270B, kFallAfterCallBytes};
-// 1.005 (RE-1005-field-2.md §2): the falling step's call is at 0x140C5FAEE, %16 = 14, so it crosses a 16-byte block,
+// 1.005 (research/RE-1005-field-2.md): the falling step's call sits at %16 = 14, so it crosses a 16-byte block,
 // and characters move on worker threads too, so no one thread can change it (platform/call_redirect.h). There the
 // falls are heard at the entry of EndWorld_IsReadyAt instead (its first instruction `mov [rsp+10h], rdx`, 5 bytes at
 // %16 = 8): the replacement counts only the answers that return to the falling step's call and passes every other
 // caller through unchanged.
 constexpr std::size_t kReadyAtFirstInstruction = 5;
 
-// The safe-transform check (RE-p2-party-leash.md §6d): every 0.12 s EndChar_UpdateSafeTransform_Check asks the same
+// The safe-transform check (research/RE-p2-party-leash.md): every 0.12 s EndChar_UpdateSafeTransform_Check asks the same
 // question about the character's root with the nav clause off (`xor r8d, r8d`; `lea rdx, [rsp+50h]`, a copy of the
 // root's world location; the reason byte zeroed and passed in rcx) and on false marks the spot unsafe (`S+0x70 = 1`).
 // The next pawn tick either return-warps the character to its last safe spot or, standing on it, parks it: stop
@@ -110,7 +110,7 @@ constexpr platform::FunctionFact kParkAfterCall{L"after the park's call", 0x140D
 // The character's movement owner (a native SE object) and its 32-bit stop-reason mask; reason 5 is the
 // safe-transform park (read live: 0x20 on the parked member, 0 on player 1).
 // 1.005: +0x1418 (End character native field +0x20): the char interface (pawn+0x4B8) accessor `cmp qword
-// [rcx+0F40h],0` (1.004 0x140889748) is `cmp qword [rcx+0F60h],0` in 1.005 (0x1408B3A04), unique in both builds.
+// [rcx+0F40h],0` (1.004) is `cmp qword [rcx+0F60h],0` in 1.005, unique in both builds.
 constexpr platform::PerBuild<std::uint32_t> kCharacterMoveOwner = {0x13F8, 0x1418};
 constexpr std::uint32_t kOwnerStopMask      = 0x1BC;
 constexpr std::uint32_t kStopReasonParked   = 1u << 5;
@@ -201,7 +201,7 @@ struct Subject
 
 // By seat (players/seats.h; index 0, player 1's, never aimed). The member: counted and watched as one. The chocobo:
 // counted while the seat's player rides it (getting off too), its strand watched only while seated
-// (RE-p2-chocobo-warp.md §1, §4).
+// (research/RE-p2-chocobo-warp.md).
 Subject g_members[players::kMaxPlayers] = {{L"player 1's member", party_warp::Subject::Member, 0},
                                            {L"player 2's member", party_warp::Subject::Member, 1},
                                            {L"player 3's member", party_warp::Subject::Member, 2}};
@@ -624,7 +624,7 @@ void Step(Subject& subject, bool splitShown, float seconds) noexcept
         return;  // counted, not watched (the chocobo while the seat's player gets off)
     }
     // A failed check alone may still end in the game's own return-warp to the safe spot (the collision wall,
-    // RE-p2-party-leash.md §6b); it strands the character only once the game has parked it.
+    // research/RE-p2-party-leash.md); it strands the character only once the game has parked it.
     const std::uint32_t parkChecks = ParkChecks(counts.unsafe, counts.unsafe > 0 && Parked(subject.pawn));
     Status(subject, counts);
     switch (subject.watch.Step(counts.refusals > 0 || parkChecks > 0, seconds))

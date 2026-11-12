@@ -26,7 +26,7 @@ namespace lss::battle::command_locks {
 
 namespace {
 
-// Facts read from the database (RE-p2-command-menu-levers.md §1, §3, §14; this build).
+// Facts read from the database (research/RE-p2-command-menu-levers.md; this build).
 // The two lock setters: void(u8), each storing one byte on EndUISystem[23]; one call site each in
 // BattleSystem_Tick, each call's five bytes inside one aligned 16-byte block.
 constexpr std::uint8_t kEnabledBytes[] = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0xB0,
@@ -52,14 +52,14 @@ constexpr std::size_t kFirstInstruction = 5;
 
 using facts::kUICommandController;  // the UI system's slot (facts/hud.h)
 
-// The controller's values (RE-p2-command-menu-views.md §10.2; levers §3.2).
+// The controller's values (research/RE-p2-command-menu-views.md, RE-p2-command-menu-levers.md).
 constexpr std::uint32_t kCommandsEnabled = 0x5E2;  // u8
 constexpr std::uint32_t kCommandsLocked  = 0x5E3;  // u8
 constexpr std::uint32_t kCategoryLocks   = 0x2D8;  // u8 array {data, count +0x8}
 constexpr std::uint32_t kCategoryCount   = 0x2E0;  // i32
 constexpr std::int32_t  kMaxCategories   = 32;
 // u8 each, stored on EndUISystem[23] by the dispatcher's cmds 0x2B (+0x77C = !on, EndUI23_Set77C), 0x3E, 0x3F
-// and 0x43 (levers §3.1, §14.4).
+// and 0x43.
 constexpr std::array<std::uint32_t, 4> kTableBytes{0x77C, 0x77F, 0x780, 0x782};
 
 using LockFn     = void (*)(std::uint8_t value);

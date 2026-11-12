@@ -22,7 +22,7 @@ namespace lss::feedback::traversal_rumble {
 
 namespace {
 
-// A list entry (0x30 bytes, both builds; RE-p2-ffb-manager-per-pc.md §11, S-RUMSEED) and the add's params (0x20).
+// A list entry (0x30 bytes, both builds; research/RE-p2-ffb-manager-per-pc.md) and the add's params (0x20).
 constexpr std::uint32_t kEntrySize     = 0x30;
 constexpr std::uint32_t kEntryFlags    = 0x00;  // u8: 0x02 loop, 0x04 finished, 0x08 stop requested, 0x10 fading out
 constexpr std::uint32_t kEntryState    = 0x01;  // u8: 6 stop, 7 fade-out

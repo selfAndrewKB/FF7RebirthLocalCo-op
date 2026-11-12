@@ -19,7 +19,7 @@ namespace lss::battle::menu_focus {
 
 namespace {
 
-// Facts read from the database (RE-p2-command-menu-input.md §1.2, §2, §10; this build).
+// Facts read from the database (research/RE-p2-command-menu-input.md; this build).
 // The input object: the focus path (FWeakWidgetPath: TArray<TWeakPtr<SWidget>> first) and the focus
 // layers (TArray of 40 bytes: weak layer widget, weak saved focus at +0x10, int32 priority at +0x20).
 constexpr std::uint32_t kPath       = 0x08;

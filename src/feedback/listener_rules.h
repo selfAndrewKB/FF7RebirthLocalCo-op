@@ -3,12 +3,11 @@
 // The sound listeners' decisions as pure functions (feedback/sound_listeners.h), tested on the host
 // (tests/listener_rules_test.cpp). The module keeps the threads, the engine reads and the redirects.
 //
-// Taken from Remake's audio/listener_rules.h, which grew out of this game's listener_choice.h: the
-// nearest-of-N choice whose hold lasts only while the held listener is within the sound's range (listener_choice's
-// ChooseNearer held a listener out of range: a sound near another player could stay silent), and the frame-stamped
-// choice table with a probe (one entry per slot let two colliding sounds trade choices between test and update).
-// Rebirth's own: the gates' nearest listener (the AutoSe getter has no character argument here, so the clip and the
-// rustle measure take the nearest player's place instead of asking the game once per player) and the LOD rules.
+// The nearest-of-N choice holds a listener only while it is within the sound's range (a hold kept out of range leaves a
+// sound near another player silent), and the frame-stamped choice table carries a probe (one entry per slot would let
+// two colliding sounds trade choices between test and update). The gates take the nearest listener: the AutoSe getter
+// has no character argument, so the clip and the rustle measure take the nearest player's place instead of asking the
+// game once per player. The LOD rules are this game's.
 
 #include <array>
 #include <cmath>

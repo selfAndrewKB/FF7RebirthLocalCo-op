@@ -37,7 +37,7 @@ using AddViewSlaveLocationFn = char (*)(const float* location, const float* dire
 
 using platform::kRadiansPerDegree;
 // 0 keeps r.MassiveEnvironment.FrustumScaleForMainPass as the game set it. A positive value is written to that cvar
-// every tick (EndGameState tick 0x140C94690), so 1.0 would halve the game's off-screen margin (2 on Windows) for good.
+// every tick (the EndGameState tick), so 1.0 would halve the game's off-screen margin (2 on Windows) for good.
 constexpr float kMainPassScale    = 0.0f;
 constexpr const wchar_t* kMainPassMarginVariable = L"r.MassiveEnvironment.FrustumScaleForMainPass";
 constexpr bool  kSkipSlaveFrusta  = false;  // true would switch the slave frustums off until the game restarts

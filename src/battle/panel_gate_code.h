@@ -1,19 +1,19 @@
 #pragma once
 
 // The machine code that keeps a seat's targeting run out of player 1's target panel, at the one
-// panel request whose call site straddles a code block (RE-p2-targeting-scoped-tick.md §2, §4.3).
+// panel request whose call site straddles a code block (research/RE-p2-targeting-scoped-tick.md).
 //
-// The displayed-target update posts "old target cleared" to the target panel from a cold chunk entered
-// only for that request (0x14295F095): it copies the old target (a TWeakPtr) into a local, adds a weak
+// The site is the chunk's `mov [rsp+0x108], rax` (8 bytes, one instruction inside one 16-byte block; its address
+// in the installer). The displayed-target update posts "old target cleared" to the target panel from a cold chunk
+// entered only for that request (the site - 0x10): it copies the old target (a TWeakPtr) into a local, adds a weak
 // reference, and calls EndUI4_QueueTargetCleared, which releases that reference at its end; then it
-// goes on at 0x14295F0C3. The call (0x14295F0BE) straddles a 16-byte block, so the chunk is gated at
-// `mov [rsp+0x108], rax` (8 bytes at 0x14295F0A5, one instruction inside one block): the code runs the
-// replaced instruction, and while the gate is set (a seat's run) it counts the skip and jumps to
-// 0x14295F0C3, past the added reference and the call together, so the net effect on the reference
-// count is the call's own (none) and the panel gets no request; otherwise the chunk goes on as the
+// goes on at the site + 0x1E. The call (the site + 0x19) straddles a 16-byte block, so the chunk is gated at
+// the site instead: the code runs the replaced instruction, and while the gate is set (a seat's run) it counts
+// the skip and jumps to the site + 0x1E, past the added reference and the call together, so the net effect on
+// the reference count is the call's own (none) and the panel gets no request; otherwise the chunk goes on as the
 // game's.
 //
-// rcx is written at 0x14295F0B6 before anything reads it, so the code may use it; after the skipped
+// rcx is written at the site + 0x11 before anything reads it, so the code may use it; after the skipped
 // call it would hold nothing either. No calls, no stack use. Kept apart from the installer so the host
 // tests can execute exactly these bytes.
 
@@ -36,10 +36,10 @@ static_assert(offsetof(PanelGate, skipped) == 4);
 
 inline constexpr std::size_t kPanelGateCodeSize = 40;
 
-/// The instruction replaced at 0x14295F0A5, as the research read it.
+/// The instruction replaced at the site, as the research read it.
 inline constexpr std::uint8_t kPanelGateSiteBytes[] = {0x48, 0x89, 0x84, 0x24, 0x08, 0x01, 0x00, 0x00};  // mov [rsp+0x108], rax
 
-/// `skipTo` is the live address the gated path goes on at (0x14295F0C3 in this build).
+/// `skipTo` is the live address the gated path goes on at (the site + 0x1E in the research build).
 inline std::array<std::uint8_t, kPanelGateCodeSize> PanelGateCode(const PanelGate& gate, std::uintptr_t skipTo) noexcept
 {
     std::array<std::uint8_t, kPanelGateCodeSize> code = {

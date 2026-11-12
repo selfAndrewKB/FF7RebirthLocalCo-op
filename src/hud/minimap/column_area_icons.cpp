@@ -28,7 +28,7 @@ namespace lss::hud::column_area_icons {
 
 namespace {
 
-// Facts read from the database (RE-p2-hud-icon-manager.md §1, §4 and §8; this build). Each
+// Facts read from the database (research/RE-p2-hud-icon-manager.md; this build). Each
 // function's prologue up to its stack probe call is checked before it is called or redirected.
 constexpr std::uintptr_t kInstanceOne = 0x149349880;  // the game's instance (EndUISystem+0x1A0), a pointer
 constexpr std::size_t    kInstanceSize = 0x160;
@@ -45,19 +45,19 @@ constexpr std::uint8_t   kClearAllPrologue[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x
 // AreaMapIconMgr__ClearAllAndDisable(instance)
 constexpr platform::FunctionFact kClearAll{L"AreaMapIconMgr__ClearAllAndDisable", 0x140F5D854, kClearAllPrologue};
 
-// The frame function's only call for the first player controller (§8.2): E8 rel32 at 0x1409F7439
-// to UWorld__GetFirstPlayerController, rcx = the world, inside the block at 0x1409F7430.
+// The frame function's only call for the first player controller: E8 rel32 to
+// UWorld__GetFirstPlayerController, rcx = the world, inside one 16-byte block.
 constexpr std::uintptr_t kFirstControllerCall = 0x1409F7439;
 
 // The frame function's call for the range origin, the leader character by the leader's player type
-// (RE-p2-hud-targets.md §1.1, R1): E8 rel32 at 0x1409F73E4 to Party_GetLeaderCharacterByLeaderType,
-// no arguments, inside the block at 0x1409F73E0.
+// (research/RE-p2-hud-targets.md): E8 rel32 to Party_GetLeaderCharacterByLeaderType,
+// no arguments, inside one 16-byte block.
 constexpr std::uintptr_t kLeaderCall = 0x1409F73E4;
 constexpr std::uint8_t   kLeaderPrologue[] = {0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8, 0x46, 0xD1, 0x42, 0x01};
 constexpr platform::FunctionFact kLeader{L"Party_GetLeaderCharacterByLeaderType", 0x140C81DE0, kLeaderPrologue};
 
 // The three game events that write player 1's instance, and their seven call sites
-// (RE-p2-hud-view-levers.md §6 and S-HUD31). None takes the instance: each reads EndUISystem+0x1A0.
+// (research/RE-p2-hud-view-levers.md). None takes the instance: each reads EndUISystem+0x1A0.
 // Each site keeps calling the event, then the event's instance effect is applied to each column's
 // instance directly. The events themselves are not run again: Enable and HideAndClear also play
 // the in/out animation of one shared widget (EndUISystem+0x60), which a second run would restart.
@@ -94,7 +94,7 @@ constexpr EventSite kEventSites[] = {
     {0x1435680F4, Event::SetFlagD1, false},     // a stop/cleanup (cl = 1)
 };
 
-// The instance (§1, §2): the canvases as TWeakPtr {object, reference controller} (#1 icons, #2 quest
+// The instance: the canvases as TWeakPtr {object, reference controller} (#1 icons, #2 quest
 // and party markers), the icon and marker maps, and the fields game events write.
 constexpr std::array<std::uint32_t, 2> kCanvases{0x10, 0x70};
 constexpr std::array<std::uint32_t, 2> kMaps{0x20, 0x80};
@@ -400,8 +400,8 @@ void SetFlagD1Site(char flag) noexcept
     FollowEvent(Event::SetFlagD1, flag);
 }
 
-/// Puts the event sites back, the last installed first: two of them share one 16-byte block
-/// (0x143544CB0, 0x143544CB9), and each redirect restores the block exactly as it found it, so only
+/// Puts the event sites back, the last installed first: two of them share one 16-byte block,
+/// and each redirect restores the block exactly as it found it, so only
 /// the reverse of the install order finds each block as its redirect left it.
 void RestoreEventSites() noexcept
 {

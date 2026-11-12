@@ -16,9 +16,6 @@
 // redirects and the table words are placed on the first tick (game thread), the row's tables last, so the row never
 // shows without its opener. Each tick runs the page's queued changes, then watches the open page's close. Reading
 // `menu.coop`. Every step logged at Info. Game thread.
-//
-// Taken from Remake's menu/coop_menu. Changed: kind 13 (12 in Remake); the builder's gate per build (Remake writes an
-// unlock slot).
 
 #include "platform/dev_switch.h"
 

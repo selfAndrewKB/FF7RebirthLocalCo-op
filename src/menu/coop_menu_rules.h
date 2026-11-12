@@ -8,9 +8,8 @@
 // makes, so its own value code reads 0 for them and writes nothing. Pure: tested on the host
 // (tests/coop_menu_rules_test.cpp).
 //
-// Taken from Remake's menu/coop_menu_rules.h. Changed: the pause menu's row takes the trial's "Buy Now" kind 13 (12 in
-// Remake); the game's own settings end at 0x54 (0x34 in Remake); the category keys and the longest stock list are this
-// game's (below).
+// The pause menu's row takes the trial's "Buy Now" kind 13; the game's own settings end at 0x54; the category keys and
+// the longest stock list are read from this game (below).
 
 #include "platform/command_registry.h"
 #include "platform/settings.h"
@@ -37,7 +36,7 @@ inline constexpr std::uint8_t kFirstRowByte = 0x80;
 
 /// The Options screen's category keys the page fills, in order: keys with a label slot after the game's construct (it
 /// leaves at least seven) and a heading in both builds' tables (seven in 1.004), and never 5 or 6, the controller and
-/// keyboard pages, which take their own paths (research/RE-coop-page-facts.md §2, §3.7).
+/// keyboard pages, which take their own paths (research/RE-coop-page-facts.md).
 inline constexpr std::array<std::uint8_t, 5> kCategoryKeys{0, 1, 2, 3, 4};
 
 /// A section's name and help on the page.
@@ -128,8 +127,8 @@ inline std::optional<int> OptionOf(std::uint8_t rowByte) noexcept
 
 /// The game's longest value list (its value pull-down cannot scroll), so a row with more values is the game's slider
 /// row instead (a Range row over its values' places, 0 to count - 1, the same number a list row passes), shown through
-/// a window of the stock gauge's 10 cells that scrolls with the value. [ASSUMPTION: Remake's 11, until the live read of
-/// the longest stock list, research/RE-coop-page-options-screen.md §6 check 1.]
+/// a window of the stock gauge's 10 cells that scrolls with the value. [ASSUMPTION: 11 is the other game's
+/// longest list; this game's longest stock list is unread (research/RE-coop-page-options-screen.md).]
 inline constexpr std::size_t kListLongest  = 11;
 inline constexpr int         kSliderWindow = 10;
 

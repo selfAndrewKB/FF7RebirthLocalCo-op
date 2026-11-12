@@ -29,8 +29,8 @@ namespace lss::battle::leader_reads {
 
 namespace {
 
-// Facts read from the database (RE-p2-leader-native-reads.md S-LEADERLEVERS L1-L7; this build; every call site's bytes
-// and target and every slot's function re-read from both executables before this was written). 1.005:
+// Facts read from the database (research/RE-p2-leader-native-reads.md; this build; every call site's bytes
+// and target and every slot's function read from both executables). 1.005:
 // replaced-leader-reads.json. "Leader read" = a call of ResolvePartyLeaderWeakPtr (UObject* (); only rax is live after
 // each one, both builds).
 
@@ -84,7 +84,7 @@ constexpr std::uintptr_t kFilterLeaderCall = 0x141464FFC;  // crosses on 1.004
 // E7 Reno's mine: RenoMine_SetState (15 callers; no usable entry) first calls the mine's part getter right after its
 // state gate, then (with no target) reads the leader's TYPE and dereferences that type's character without a null
 // check. The getter call records the mine; the read takes it. Never redirect the state-13/14 test call between them
-// (0x1431B94BA: its caller keeps using rcx).
+// (its caller keeps using rcx).
 constexpr std::uintptr_t kMinePartCall = 0x1431B9490;  // crosses on 1.005
 constexpr std::uintptr_t kMinePart     = 0x1431B46E8;  // u64(mine)
 constexpr std::uintptr_t kMineTypeCall = 0x1431B9664;  // call UEndPartyAPI_GetPartyLeaderType, u8()

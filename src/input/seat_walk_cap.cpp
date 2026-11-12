@@ -40,7 +40,7 @@ constexpr std::uint8_t kClearBytes[] = {0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8};
 constexpr platform::FunctionFact kClear{L"PrimaryPC_ClearMoveTypeLayer2_IfFieldLeaderPC", 0x1412E4484, kClearBytes};
 using ClearFn = void (*)();
 
-// The walk step: phase-table entry 4 of the behavior action vt 0x1458DFA88 (move rcx, event dl, dt xmm2).
+// The walk step: phase-table entry 4 of the walk-only behavior action (move rcx, event dl, dt xmm2).
 constexpr std::uint8_t kPhaseFourBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x48, 0x89, 0x74,
                                             0x24, 0x18, 0x48, 0x89, 0x7C, 0x24, 0x20, 0x41};
 const platform::SlotFact kPhaseFour{L"the walk step's phase-4 handler (phase table entry 4)", 0x1470B98C0,

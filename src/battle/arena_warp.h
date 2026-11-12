@@ -2,7 +2,7 @@
 
 // Player 2's or 3's character brought into the fight on a double click of the left stick: a character can be shut
 // outside a fight (a crawlspace the game closes while it lasts), and nothing in Rebirth brings a battle member in during
-// a fight (research/RE-arena-warp.md §1).
+// a fight (research/RE-arena-warp.md).
 //
 // The game has no in-battle recovery warp; what it does to a member far from a fight is the battle start's gather. In a
 // fight that gather places the member with the game's own navmesh query around the field leader (3 m, else 1 m, at

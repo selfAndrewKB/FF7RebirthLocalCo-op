@@ -1,7 +1,6 @@
 #pragma once
 
-// Which player an enemy's attack camera shows, decided by the user (research/RE-p2-attack-cameras.md §10,
-// S-ATKCAMLEADER):
+// Which player an enemy's attack camera shows (research/RE-p2-attack-cameras.md):
 //
 //   - D1, "only the target's half": a battle camera sequence that frames its target and plays on every camera
 //     (priority 30 enemy specials such as Granite Jail, Rude's and Elena's finishers; and the priority-10 grabs that

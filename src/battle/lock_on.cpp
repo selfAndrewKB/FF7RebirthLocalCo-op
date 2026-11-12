@@ -52,7 +52,7 @@ namespace seat_ladder = scopes::seat_ladder;
 
 namespace {
 
-// Facts read from the database (RE-p2-targeting-scoped-tick.md §4.3, RE-p2-lock-on.md §R.4; this
+// Facts read from the database (research/RE-p2-targeting-scoped-tick.md, RE-p2-lock-on.md; this
 // build). Each function's first bytes, through its stack probe, are checked before it is used.
 constexpr std::uint8_t kTickTargetingBytes[] = {0x40, 0x53, 0xB8, 0x30, 0x00, 0x00, 0x00, 0xE8, 0xF4, 0xAC, 0x74, 0x01};
 constexpr std::uint8_t kSetLockBytes[]       = {0xB8, 0x98, 0x00, 0x00, 0x00, 0xE8, 0xCE, 0x3B, 0x81, 0x00,
@@ -108,7 +108,7 @@ constexpr std::uintptr_t kPanelClearedSkipTo   = 0x14295F0C3;  // after the requ
 constexpr std::uintptr_t kPanelSetCall         = 0x14295F139;  // crosses a block on 1.005 (placed from the game thread)
 constexpr std::uintptr_t kMarkerNameCall       = 0x140C8F9C9;
 
-// The battle system (a pointer global) and its target fields (§R.1, §9; S-TGT5 §5).
+// The battle system (a pointer global) and its target fields.
 using facts::kBattleStateGlobal;
 constexpr std::uint32_t  kCursor       = 0x68;  // the target cursor widget
 constexpr std::uint32_t  kDisplayed    = 0x70;  // TWeakPtr {object, reference controller}
@@ -432,7 +432,7 @@ void LogSeat(int seat) noexcept
     }
 }
 
-/// The game's targeting tick once more, for `seat`, inside the seat's scopes (S-TGT5 §4).
+/// The game's targeting tick once more, for `seat`, inside the seat's scopes.
 void SeatTargeting(int seat, TickFn engine, void* system, float deltaTime) noexcept
 {
     if (!g_runReady || !g_enabled || g_failed || g_held)
@@ -468,7 +468,7 @@ void SeatTargeting(int seat, TickFn engine, void* system, float deltaTime) noexc
     }
     // The seat's UI context, as around its command controller's own tick: the targeting reads the command controller
     // (EndUISystem[23]) and, for an open target list, the list's selected row, which the list answers from the focus
-    // path (RE-p2-target-select-views.md §9). The controller slot alone would read player 1's focus path, find no row
+    // path (research/RE-p2-target-select-views.md). The controller slot alone would read player 1's focus path, find no row
     // and clear the seat's target.
     args.controller = command_menu::Controller(seat);
     if (args.controller == nullptr)
@@ -579,7 +579,7 @@ void Targeting(void* system, float deltaTime) noexcept
         }
     }
     // The game's tick once more for each seat, in seat order, each run's scopes closed before the next's. A
-    // third run is as safe as the second (RE-seats-step6-battle.md §1): the one timer the tick advances by frame time,
+    // third run is as safe as the second (research/RE-seats-step6-battle.md): the one timer the tick advances by frame time,
     // the lock camera's rest (+0x90), is in each seat's copied fields, and its shared writes are the ones already gated.
     for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
     {
@@ -986,8 +986,8 @@ void RegisterCommands()
                                 L"them); the other bits are retired and ignored; on at start",
                        .set   = [](const Value& v) {
                            // Bit 8 is player 2's targeting run. The other bits (1, 2, 4, 16: the direct actions;
-                           // 32, 64, 128, 256: the mod's own lock, switching, lock camera and cursor) are retired:
-                           // the game's own handler and targeting tick do those for player 2.
+                           // 32, 64, 128, 256: a lock, switching, lock camera and cursor of the mod's own) are
+                           // ignored: the game's own handler and targeting tick do those for player 2.
                            SetEnabled((std::get<std::int64_t>(v) & 8) != 0);
                            return Outcome{true, L"battle mask set (see the log)"};
                        },

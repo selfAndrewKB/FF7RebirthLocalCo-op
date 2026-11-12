@@ -1,7 +1,7 @@
 #pragma once
 
 // The field search pins in each view: placed from that view's camera, and only that view's player's own
-// (RE-p2-ranged-reticle.md; RE-p2-world-markers.md row 10; per seat since plan/seats.md step 4).
+// (research/RE-p2-ranged-reticle.md, RE-p2-world-markers.md).
 //
 // A leader-action component (PC+0x598) shows a search pin for each active interact point of its own: the ranged
 // lock-on on a breakable box (`FieldShootingLockOn`, Barret and Yuffie) and the hookshot points. Each pin is a

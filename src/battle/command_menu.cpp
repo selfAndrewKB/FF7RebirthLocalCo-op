@@ -49,7 +49,7 @@ namespace seat_ladder = scopes::seat_ladder;
 
 namespace {
 
-// Facts read from the database (RE-p2-command-menu.md §1.1, §10; this build).
+// Facts read from the database (research/RE-p2-command-menu.md; this build).
 using facts::kMalloc;
 constexpr std::uint8_t kCtorBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x74, 0x24, 0x10, 0x48,
                                        0x89, 0x7C, 0x24, 0x18, 0x55, 0x41, 0x56, 0x41, 0x57, 0x48, 0x8B,
@@ -59,15 +59,15 @@ constexpr std::uint8_t kSetupBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x20, 0x48, 0x89
                                         0x56, 0x57, 0x41, 0x54, 0x41, 0x55, 0x41, 0x56, 0x41, 0x57, 0x48,
                                         0x8B, 0xEC, 0xB8, 0x40, 0x00, 0x00, 0x00, 0xE8, 0x1A, 0x3E, 0xB2, 0x00};
 constexpr platform::FunctionFact kSetup{L"FieldCommandCtrl__SetupMenuWidgets", 0x14158B0F4, kSetupBytes};
-// The game's only calls of Setup and ResetAll on its controller (RE-p2-command-menu-levers.md §2): every
+// The game's only calls of Setup and ResetAll on its controller (research/RE-p2-command-menu-levers.md): every
 // path (field entry and exit steps, the fade-deferred Setup in MasterHUD_Tick, the Blueprint thunks, the
 // menu-close re-Setup) ends at one of them. Both redirected; each call is made again on each seat's
 // controller (Setup while the seat plays, ResetAll always). Each call's five bytes lie inside one aligned
 // 16-byte block.
-constexpr std::uintptr_t kSetupCall    = 0x140F52378;  // in SetupFieldCommandOrDefer 0x140F5231C
-constexpr std::uintptr_t kResetAllCall = 0x140F52301;  // in ClearFieldCommandSetupPending 0x140F522DC
+constexpr std::uintptr_t kSetupCall    = 0x140F52378;  // in SetupFieldCommandOrDefer
+constexpr std::uintptr_t kResetAllCall = 0x140F52301;  // in ClearFieldCommandSetupPending
 constexpr std::uintptr_t kResetAll     = 0x140F51D00;  // FieldCommandCtrl_ResetAll(ctrl)
-// The Members panel's rebuild from the party (levers §16): FieldCommandCtrl_RefreshFieldMenu(ctrl) fills the
+// The Members panel's rebuild from the party: FieldCommandCtrl_RefreshFieldMenu(ctrl) fills the
 // party list's display array from the party manager's battle members. Setup calls it only when it creates
 // the field menu; every later rebuild (field step 9 after a load, party changes, the party menu, scripted
 // battles, the on/off table, Blueprint) goes through EndUI23_RefreshFieldMenu, which tail-jumps here with
@@ -83,7 +83,7 @@ constexpr std::size_t            kRefreshFirst = 5;
 // and Setup's call (the same two as in this build).
 constexpr std::uintptr_t kRefreshTailCall  = 0x140C08A59;  // jmp, in EndUI23_RefreshFieldMenu
 constexpr std::uintptr_t kRefreshSetupCall = 0x142A77DF9;  // call, in Setup's cold chunk
-// The in-field squad switch (levers §17): LB/RB in the field command menu (PartyList360_CycleSquad_ApplyAndShow)
+// The in-field squad switch: LB/RB in the field command menu (PartyList360_CycleSquad_ApplyAndShow)
 // and the squad picked by index (PartyList360_SelectSquad_ApplyAndShow) apply the squad to the party, then
 // lay out the Members panel of the controller that took the key directly, never through the rebuild above.
 // Their one layout call each, LayoutFieldMenuCells(ctrl, 1, 0, 1), is redirected; after it, each seat's
@@ -93,7 +93,7 @@ constexpr std::array<std::uintptr_t, 2> kSquadLayoutCalls{0x143A49EDB, 0x143A49D
 
 constexpr std::size_t kControllerSize = 0x798;
 // The key guide (EndUISystem[53]): the game builds its one with FMemory_Malloc(0x38) and KeyGuide53__Ctor
-// (EndUISystem__Ctor); a seat's is built the same way (RE-p2-command-menu-views.md §10.4). Its widget
+// (EndUISystem__Ctor); a seat's is built the same way (research/RE-p2-command-menu-views.md). Its widget
 // (FWeakObjectPtr at +4) is created by the game's own ShowMode the first time the seat's controller drives it.
 constexpr std::uint8_t kKeyGuideCtorBytes[] = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0xE0,
                                                0x0F, 0x69, 0xFE, 0x48, 0x2B, 0xE0, 0x48, 0x8B, 0xD9};
@@ -101,14 +101,14 @@ constexpr platform::FunctionFact kKeyGuideCtor{L"KeyGuide53__Ctor", 0x143A1DF44,
 constexpr std::size_t   kKeyGuideSize   = 0x38;
 using facts::kUICommandController;  // the UI system's slots (facts/hud.h)
 using facts::kUIKeyGuide;
-// The controller's lifecycle facts (facts/command_controller.h; RE-p2-command-menu-lifecycle.md §2, §3.1).
+// The controller's lifecycle facts (facts/command_controller.h; research/RE-p2-command-menu-lifecycle.md).
 using facts::kCmdSetupDone;
 using facts::kCmdSetupPending;
 using facts::kUISetupDeferred;
 using facts::kCmdMenuLayer;
 // What the log reads of a controller: the members (leader, ally, shortcut target, ally pick), the
-// menu widget (FWeakObjectPtr) and its back pointer to the controller, and the focus bytes (§11 of
-// RE-p2-command-menu-input.md: battle input, switching layer, +0x777, menu focus layer, ready, HUD mode).
+// menu widget (FWeakObjectPtr) and its back pointer to the controller, and the focus bytes
+// (research/RE-p2-command-menu-input.md: battle input, switching layer, +0x777, menu focus layer, ready, HUD mode).
 using facts::kCmdMembers;
 using facts::kCmdMenuWidget;
 constexpr std::uint32_t kWidgetCtrl = 0x4E0;

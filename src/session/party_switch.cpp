@@ -26,7 +26,7 @@ namespace lss::session::party_switch {
 
 namespace {
 
-// Facts read from the database (RE-p2-party-switch.md §Q1, §Q4, recipe; this build).
+// Facts read from the database (research/RE-p2-party-switch.md; this build).
 // The two component getters the switch asks per member, and their calls in the cycle and CanSwitch.
 constexpr std::uint8_t kPlayerComponentBytes[] = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0x08, 0xF7, 0x6B, 0x01};
 constexpr platform::FunctionFact kPlayerComponent{L"EndCharacter_GetBattlePlayerControllerComponent", 0x1409EF81C,
@@ -43,7 +43,7 @@ constexpr platform::FunctionFact kDisabled{L"CommandSwitchHud_IsMemberSwitchDisa
 using facts::kCharacterByPlayerType;
 constexpr std::uintptr_t kDisabledCalls[] = {0x140F318C3, 0x140F31BB5};
 
-// The forced switches (RE-ko-stay.md §2, §4): the KO tick's call to the cycle every frame while player 1's character
+// The forced switches (research/RE-ko-stay.md): the KO tick's call to the cycle every frame while player 1's character
 // is down, and the petrify tick's once when its wait runs out. The cycle itself, and those two calls.
 constexpr std::uint8_t kCycleSwitchBytes[] = {0x48, 0x8B, 0xC4, 0x48, 0x89, 0x58, 0x08, 0x44, 0x88, 0x48,
                                               0x20, 0x44, 0x88, 0x40, 0x18, 0x88, 0x50, 0x10, 0x55, 0x56};
@@ -52,7 +52,7 @@ constexpr std::uintptr_t         kKnockedOutCall = 0x142A2170F;  // in the dead 
 constexpr std::uintptr_t         kPetrifiedCall  = 0x142A7EE7D;  // in the battle component's tick, at the petrify wait's end
 constexpr auto                   kForcedQuietMs  = std::chrono::milliseconds(1000);  // a refusal after this starts a new spell
 
-// The player's request (RE-p2-own-battle-switch.md §1.1): FieldCommandCtrl_RequestLeaderCycleSwitch, the d-pad's
+// The player's request (research/RE-p2-own-battle-switch.md): FieldCommandCtrl_RequestLeaderCycleSwitch, the d-pad's
 // path, refuses while the game's two event counters hold, then jumps into the cycle with "require CanSwitch" set.
 // That tail jump (its five bytes inside one block in both builds) is redirected.
 constexpr std::uintptr_t kRequestJump = 0x14158B95B;

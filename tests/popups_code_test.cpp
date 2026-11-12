@@ -2,7 +2,7 @@
 //
 // The bytes the mod writes near the game (hud/battle/popups_code.h) are EXECUTED here, installed through
 // platform::CodeRedirect over a stand-in for a popup wrapper's entry: `mov [rsp+10h], rbx` 8 bytes
-// into a 16-byte block (0x140F5F708 in the game), then a body returning rdx ^ r9, so a changed
+// into a 16-byte block (as at the game's site), then a body returning rdx ^ r9, so a changed
 // argument register shows. The seven arguments are passed as the game passes them.
 
 #include "hud/battle/popups_code.h"

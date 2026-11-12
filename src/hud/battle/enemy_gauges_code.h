@@ -1,12 +1,12 @@
 #pragma once
 
 // The machine code that records, as the game's enemy-status tick runs, each untargeted gauge's
-// placement call (RE-p2-enemy-markers.md §7.4 and §7.7 A.1).
+// placement call (research/RE-p2-enemy-markers.md).
 //
-// EndUI__MF8_ProjectEntryByWidget(mgr, widget, const FVector* loc) (0x14176201C) places one gauge from
+// EndUI__MF8_ProjectEntryByWidget(mgr, widget, const FVector* loc) places one gauge from
 // the location the tick computed this frame. Its call site crosses a 16-byte block, and so does its
-// first instruction, so the second instruction is replaced: `mov [rsp+18h], r8` (5 bytes at
-// 0x141762021, inside one block). The code appends {widget, *loc} to a record in this DLL, unless
+// first instruction, so the second instruction is replaced: `mov [rsp+18h], r8` (5 bytes, inside
+// one block). The code appends {widget, *loc} to a record in this DLL, unless
 // the record is full or the mod is replaying the gauges itself (its own calls are not the game's),
 // then runs the replaced instruction; the function continues as the game's (hud/battle/placement_record.h:
 // the head, the scale and the replaced instruction; the payload here).
@@ -42,7 +42,7 @@ inline constexpr std::uint32_t kGaugeRecordCapacity = 48;  // the pool holds 16 
 using GaugeRecord = PlacementRecord<GaugePlacement, kGaugeRecordCapacity>;
 static_assert(offsetof(GaugeRecord, replaying) == 4 && offsetof(GaugeRecord, placements) == 16);
 
-/// The instruction replaced at 0x141762021, as the research read it.
+/// The instruction replaced at the site, as the research read it.
 inline constexpr std::uint8_t kGaugeEntryBytes[] = {0x4C, 0x89, 0x44, 0x24, 0x18};  // mov [rsp+18h], r8
 
 inline constexpr std::size_t kGaugePayloadSize = 23;

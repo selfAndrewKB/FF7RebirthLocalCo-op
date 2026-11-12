@@ -48,7 +48,7 @@ namespace {
 
 using RC::Unreal::UObject;
 
-// Facts read from the database (RE-p2-hud.md pass 9, pass 12).
+// Facts read from the database (research/RE-p2-hud.md).
 constexpr std::uintptr_t kGameMode            = 0x1490FF2B8;  // g_AEndGameMode (pointer)
 constexpr std::uint32_t  kGameModeHudTimeStep = 0x5D8;        // float, written once per engine tick
 
@@ -56,12 +56,12 @@ constexpr std::uint32_t  kGameModeHudTimeStep = 0x5D8;        // float, written 
 constexpr std::uintptr_t kFirstGamePlayer       = 0x140CCF8E4;
 constexpr std::uintptr_t kFirstGamePlayerResume = 0x140CCF8E9;
 
-// The enemy ability-name labels (RE-p2-battle-popups.md §2.1): a TSparseArray at *(EndUISystem+0x180),
+// The enemy ability-name labels (research/RE-p2-battle-popups.md): a TSparseArray at *(EndUISystem+0x180),
 // 72-byte elements, the label's weak widget at +8. A new label is made for each name shown.
 constexpr std::uint32_t  kAbilityNames      = 0x180;
 constexpr std::uint32_t  kAbilityNameEntry  = 0x48;
 constexpr std::uint32_t  kAbilityNameWidget = 0x8;
-// The field-target markers (RE-p2-field-interact.md §12.14): EndUISystem+0x98 points to a TSparseArray of 140-byte
+// The field-target markers (research/RE-p2-field-interact.md): EndUISystem+0x98 points to a TSparseArray of 140-byte
 // elements; weak widgets at +0x00 (projected), +0x28 (placed at the point), +0x30 (animated).
 constexpr std::uint32_t  kFieldTargetWidgets[] = {0x00, 0x28, 0x30};
 
@@ -197,7 +197,7 @@ struct UpdatesFor
 bool RunUpdates(const UpdatesFor& pass) noexcept
 {
     // The gauges first: the enemy attack names in the +0x180 list read each gauge's placed point
-    // (RE-p2-battle-popups.md §1), so they must see this view's. Classified and sized by the shown player's target.
+    // (research/RE-p2-battle-popups.md), so they must see this view's. Classified and sized by the shown player's target.
     if (Acts(kLeverGauges))
     {
         enemy_gauges::Replay(pass.shown);
@@ -378,7 +378,7 @@ void AdoptAbilityNames()
     });
 }
 
-/// The field-target markers (EndUISystem+0x98; one per field-action point, RE-p2-field-interact.md §12.14) are
+/// The field-target markers (EndUISystem+0x98; one per field-action point, research/RE-p2-field-interact.md) are
 /// self-placing roots: their tick projects each through its own context and collapses it when that fails, so one
 /// collapsed by player 1's projection (an item off player 1's screen) must still get a seat's context in the
 /// seat's run, which shows it again from the seat's camera; player 1's re-run collapses it again for player 1's view.

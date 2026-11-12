@@ -3,7 +3,7 @@
 // Looks a key up in an Unreal TSet or TMap keyed by an FName by the set's own hash, by reading memory only, and
 // walks its allocated elements as the check of that lookup and the fallback.
 //
-// Stock UE4 4.26 TSet, x64 (read in the game's own lookups, RE-p2-field-interact.md §10.5): the element array is a
+// Stock UE4 4.26 TSet, x64 (read in the game's own lookups, research/RE-p2-field-interact.md): the element array is a
 // TSparseArray at +0 (platform/sparse_array.h; +0x08 ArrayNum, +0x34 NumFreeIndices), then the hash buckets: +0x38
 // one inline bucket, +0x40 their heap pointer (used when non-null), +0x48 HashSize (a power of two). A bucket holds
 // the index of its chain's first element; each element holds the next index (HashNextId, an i32) at the shape's

@@ -41,9 +41,9 @@ using RC::Unreal::UStruct;
 using Clock = std::chrono::steady_clock;
 
 // The manager, entries and camera pose are read as world/charapop_facts.h names them; these are the
-// watch's own extra fields (RE-p2-charapop-per-view.md §1.1, §1.3; this build).
+// watch's own extra fields (research/RE-p2-charapop-per-view.md; this build).
 using namespace charapop;
-constexpr std::uint32_t  kManagerParams  = 0x1148;  // through +0x118C (RE-p2-lod-draw-distance.md §1)
+constexpr std::uint32_t  kManagerParams  = 0x1148;  // through +0x118C (research/RE-p2-lod-draw-distance.md)
 constexpr std::uint32_t  kParamsSize     = 0x1190 - kManagerParams;
 constexpr std::uint32_t  kPopForceAll    = 0x619C;
 constexpr std::uint32_t  kPopQueueCount  = 0x6228;
@@ -52,7 +52,7 @@ constexpr std::uint32_t  kEntryPauseFlag = 0x110;  // u32, cleared on unpause
 constexpr std::uint32_t  kEntryPauseWant = 0x114;  // u8, set on a pause request
 constexpr std::uint32_t  kEntryRequested = 0x1B0;  // i32
 constexpr std::uint32_t  kEntryLock      = 0x1B4;  // u8
-// The population pass's fields (RE-p2-charapop-spawn-gate.md §2, §4).
+// The population pass's fields (research/RE-p2-charapop-spawn-gate.md).
 constexpr std::uint32_t  kEntryUseCount    = 0x40;   // i32: 0 -> despawn
 constexpr std::uint32_t  kEntryScore       = 0x44;   // i32: below the threshold -> despawn
 constexpr std::uint32_t  kEntryFlags       = 0x118;  // u32: 1 managed, 2 placed, 0x20 no despawn fade, 0x100 important
@@ -65,7 +65,7 @@ constexpr std::uint32_t  kLeaderCentre     = 0x11B0;  // FVector, M
 constexpr std::uint32_t  kManagerSelect    = 0x18;    // M: pointer; the threshold at +0xE8 (i32)
 constexpr std::uint32_t  kThreshold        = 0xE8;
 
-// The SE hidden-reason fade (spawn-gate doc §3.1, §4): CharaPopEntry_GetEndActorInterface(entry) (a pure
+// The SE hidden-reason fade (research/RE-p2-charapop-spawn-gate.md): CharaPopEntry_GetEndActorInterface(entry) (a pure
 // lookup, like the base-interface getter), then the interface's getter at slot +0x1D0 (may return null; its
 // creator at +0x1D8 is never called). Entry: as the base-interface getter's, then call __alloca_probe; sub rsp,rax.
 constexpr std::uint8_t kActorInterfaceOfBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x74, 0x24, 0x10, 0x57, 0xB8,
@@ -78,16 +78,16 @@ constexpr std::uint32_t kFadeOpacity = 0x8C;  // float, now
 constexpr std::uint32_t kFadeTarget  = 0x90;  // float
 constexpr std::uint32_t kFadeReasons = 0xA4;  // u32: bit 0 CharaPop or the wild-animal AI
 
-// Stock visibility (spawn-gate doc §4; offsets of this build).
+// Stock visibility (offsets of this build).
 constexpr std::uint32_t kActorHiddenByte  = 0x58;   // AActor::bHidden, bit 0x20
 constexpr std::uint8_t  kActorHiddenBit   = 0x20;
 constexpr std::uint32_t kCompVisibleByte  = 0x14C;  // bVisible, bit 0x20
 constexpr std::uint8_t  kCompVisibleBit   = 0x20;
 constexpr std::uint32_t kCompHiddenByte   = 0x14D;  // bHiddenInGame, bit 0x04
 constexpr std::uint8_t  kCompHiddenBit    = 0x04;
-constexpr platform::PerBuild<std::uint32_t> kCompLastRender = {0x2A4, 0x294};  // float: LastRenderTime, written by any view that drew it; 1.005: EndSkelMeshComp_UpdateRecentlyRendered 0x1408B101E [rdi+294h] (1.004 0x140A2E386 [rdi+2A4h])
+constexpr platform::PerBuild<std::uint32_t> kCompLastRender = {0x2A4, 0x294};  // float: LastRenderTime, written by any view that drew it; 1.005: EndSkelMeshComp_UpdateRecentlyRendered writes [rdi+294h] (1.004 [rdi+2A4h])
 
-// The actor's paused state as the evaluators read it (§7): CharaPopEntry_GetEndActorBaseInterface(entry)
+// The actor's paused state as the evaluators read it: CharaPopEntry_GetEndActorBaseInterface(entry)
 // resolves the entry's actor and returns its EndActorBaseInterface (null if none), a pure lookup; the
 // evaluators then call the interface's slot +0x30 with reason 6. Entry: mov [rsp+8],rbx; mov [rsp+10h],rsi;
 // push rdi; mov eax,80h.
@@ -100,7 +100,7 @@ constexpr std::uint32_t kPausedSlot  = 0x30;
 constexpr std::uint8_t  kPauseReason = 6;
 constexpr std::uint8_t  kUnread      = 0xFF;
 
-// The animation world manager W = [0x14939BC48] and its camera snapshot (§2.1).
+// The animation world manager W (its global) and its camera snapshot.
 using facts::kAnimWorldManager;
 constexpr std::uint32_t  kSnapshotLocation  = 0x8C0;
 constexpr std::uint32_t  kSnapshotSpeed     = 0x908;  // float
@@ -108,14 +108,14 @@ constexpr std::uint32_t  kSnapshotTurn      = 0x90C;  // float
 constexpr std::uint32_t  kSnapshotFaster    = 0x910;  // two u8
 constexpr std::uint32_t  kSnapshotValid     = 0x913;  // u8
 
-// UEndSkeletalMeshComponent's optimisation fields (§2.2).
-constexpr platform::PerBuild<std::uint32_t> kCompLevelOn    = {0x121C, 0x120C};  // u8: reads the owner's CharaPop level; 1.005: AnimOptimizationEval 0x140861DEF cmp byte [rdi+120Ch]
-constexpr platform::PerBuild<std::uint32_t> kCompForced     = {0x1220, 0x1210};  // u8; 1.005: AnimOptimizationEval 0x140861E05 mov [rdi+1210h],al
-constexpr platform::PerBuild<std::uint32_t> kCompShadow     = {0x1224, 0x1214};  // u8: cast shadow; 1.005: AnimOptimizationEval 0x140861DAD mov byte [rcx+1214h],1
-constexpr platform::PerBuild<std::uint32_t> kCompPauseLevel = {0x1226, 0x1217};  // u8; 1.005: AnimOptimizationEval 0x140861D8C movzx eax,byte [rcx+1217h] (not -0x10: a byte was inserted)
-constexpr platform::PerBuild<std::uint32_t> kCompLevel      = {0x1228, 0x1219};  // u8: the owner's CharaPop level, copied; 1.005: AnimOptimizationEval 0x140861E3E mov [rdi+1219h],al
-constexpr platform::PerBuild<std::uint32_t> kCompDistance   = {0x1234, 0x1224};  // float, to the snapshot camera; 1.005: AnimOptimizationEval 0x1408628BE, CalcAnimSignificance 0x1409D9D8F [rcx+1224h]
-constexpr platform::PerBuild<std::uint32_t> kCompAngle      = {0x1238, 0x1228};  // float, radians; 1.005: CalcAnimSignificance 0x1409D9DAF [rcx+1228h]
+// UEndSkeletalMeshComponent's optimisation fields.
+constexpr platform::PerBuild<std::uint32_t> kCompLevelOn    = {0x121C, 0x120C};  // u8: reads the owner's CharaPop level; 1.005: AnimOptimizationEval `cmp byte [rdi+120Ch]`
+constexpr platform::PerBuild<std::uint32_t> kCompForced     = {0x1220, 0x1210};  // u8; 1.005: AnimOptimizationEval `mov [rdi+1210h],al`
+constexpr platform::PerBuild<std::uint32_t> kCompShadow     = {0x1224, 0x1214};  // u8: cast shadow; 1.005: AnimOptimizationEval `mov byte [rcx+1214h],1`
+constexpr platform::PerBuild<std::uint32_t> kCompPauseLevel = {0x1226, 0x1217};  // u8; 1.005: AnimOptimizationEval `movzx eax,byte [rcx+1217h]` (not -0x10: a byte was inserted)
+constexpr platform::PerBuild<std::uint32_t> kCompLevel      = {0x1228, 0x1219};  // u8: the owner's CharaPop level, copied; 1.005: AnimOptimizationEval `mov [rdi+1219h],al`
+constexpr platform::PerBuild<std::uint32_t> kCompDistance   = {0x1234, 0x1224};  // float, to the snapshot camera; 1.005: AnimOptimizationEval and CalcAnimSignificance read [rcx+1224h]
+constexpr platform::PerBuild<std::uint32_t> kCompAngle      = {0x1238, 0x1228};  // float, radians; 1.005: CalcAnimSignificance reads [rcx+1228h]
 
 constexpr std::uint32_t kSampleEvery   = 10;      // ticks
 constexpr float         kFarFromOneCm  = 5000.0f;  // entries more than 50 m from player 1's camera, or
@@ -224,7 +224,7 @@ void Line(std::wformat_string<A...> format, A&&... args) noexcept
 }
 
 /// The actor's own paused state for the evaluators' reason 6: the game's interface getter, then the call the
-/// evaluators make (`iface vt+0x30(iface, 6)`), both guarded (RE-p2-charapop-per-view.md §7). 0xFF if unread.
+/// evaluators make (`iface vt+0x30(iface, 6)`), both guarded (research/RE-p2-charapop-per-view.md). 0xFF if unread.
 std::uint8_t PausedOf(const void* entry) noexcept
 {
     void* iface = nullptr;
@@ -321,7 +321,7 @@ void ReadEntry(Sample& sample)
     s.state                = ReadField<std::int32_t>(e, kEntryState);
     s.requested            = ReadField<std::int32_t>(e, kEntryRequested);
     s.pauseFlag            = ReadField<std::uint32_t>(e, kEntryPauseFlag);
-    // Asked only in states 5 and 7, where the evaluators ask it themselves (§1.3, §7.4).
+    // Asked only in states 5 and 7, where the evaluators ask it themselves.
     s.paused               = s.state == 5 || s.state == 7 ? PausedOf(e) : kUnread;
     const void* mesh       = EndMeshOf(sample.actor);
     s.meshRead             = mesh != nullptr;

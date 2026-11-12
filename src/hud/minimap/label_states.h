@@ -1,6 +1,6 @@
 #pragma once
 
-// A seat's own copy of each minimap label's text and layout, one book per seat (RE-p2-minimap-cost.md §7).
+// A seat's own copy of each minimap label's text and layout, one book per seat (research/RE-p2-minimap-cost.md).
 //
 // A minimap icon's distance label is one Square Enix text block (SEndTextBlock) shared by every view. The game sets its
 // text through SetText, which compares the new text with the block's current text and lays the text out again only when
@@ -23,7 +23,7 @@
 
 namespace lss::hud::label_states {
 
-// The swapped ranges of an SEndTextBlock (§7.1); everything else stays in the widget.
+// The swapped ranges of an SEndTextBlock; everything else stays in the widget.
 inline constexpr std::uint32_t kTextOffset    = 0x2C8;  // FString text
 inline constexpr std::uint32_t kTextSize      = 0x10;
 inline constexpr std::uint32_t kRunsOffset    = 0x530;  // run arrays, desired size, last allotted size and wrap width
@@ -43,7 +43,7 @@ struct alignas(8) Parked
     alignas(8) std::byte quads[kQuadsSize];
 };
 
-/// The state the block's constructor writes: what the game's first relayout starts from (§7.8 A).
+/// The state the block's constructor writes: what the game's first relayout starts from.
 Parked EmptyState() noexcept;
 
 /// The engine side. Every function is called on the game thread.

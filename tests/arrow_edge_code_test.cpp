@@ -3,7 +3,7 @@
 // The bytes the mod writes near the game (hud/layout/arrow_edge_code.h) are EXECUTED here, installed through
 // platform::CodeRedirect over a stand-in: it loads a case into the registers the game has there
 // (xmm0 ySide, xmm1 |angle|, xmm6 0, xmm8, xmm10 cy, xmm13, xmm14 cx/|dx|, the float at [rsp+24h]),
-// reaches `vfmadd231ss xmm8, xmm13, [rsp+24h]` 8 bytes into a 16-byte block (0x140A59DB8 in the game),
+// reaches `vfmadd231ss xmm8, xmm13, [rsp+24h]` 8 bytes into a 16-byte block (as at the game's site),
 // and returns 1 from its side stub, 2 from its top/bottom stub (3 if the code fell through), with
 // xmm8 stored back so the replaced instruction's result is checked too.
 

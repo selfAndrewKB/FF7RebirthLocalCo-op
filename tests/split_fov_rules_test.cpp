@@ -1,5 +1,5 @@
-// Host-side tests for the split FOV rule (views/split_fov_rules.h). Taken from Remake's tests/split_fov_rules_test.cpp;
-// the weights' section reads this mod's settings table (one option, the horizontal split's weight).
+// Host-side tests for the split FOV rule (views/split_fov_rules.h); the weights' section reads this mod's settings
+// table (one option, the horizontal split's weight).
 
 #include "platform/settings.h"
 #include "views/split_fov_rules.h"

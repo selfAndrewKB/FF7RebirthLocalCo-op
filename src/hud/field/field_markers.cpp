@@ -21,9 +21,9 @@ namespace lss::hud::field_markers {
 
 namespace {
 
-// The marker list (RE-p2-field-interact.md §12.14): EndUISystem+0x98 points to a TSparseArray of 140-byte elements.
+// The marker list (research/RE-p2-field-interact.md): EndUISystem+0x98 points to a TSparseArray of 140-byte elements.
 // The element's weak widgets: +0x00 the marker (projected; a point's marker is a point's +0x78), +0x08 made last at
-// creation, +0x28 placed at the point, +0x30 animated. The game's destroy releases all four with the element (§12.15).
+// creation, +0x28 placed at the point, +0x30 animated. The game's destroy releases all four with the element.
 constexpr std::uint32_t  kMarkerWidgets[] = {0x00, 0x08, 0x28, 0x30};
 
 struct Hidden

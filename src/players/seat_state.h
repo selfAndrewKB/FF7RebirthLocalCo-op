@@ -1,14 +1,14 @@
 #pragma once
 
-// A seat's state in one word, derived from the session's record of the seat (plan/seats.md, the close of step 3). The
-// session keeps flags for its stages; the frame the modules read, the console's readings and the log take the word.
-// Pure, host-tested (tests/seat_state_test.cpp).
+// A seat's state in one word, derived from the session's record of the seat. The session keeps flags for its stages;
+// the frame the modules read, the console's readings and the log take the word. Pure, host-tested
+// (tests/seat_state_test.cpp).
 //
-// Taken from Remake's players/seat_state.h, the same six words. Changed: "handed" is Rebirth's own case: the seat
-// stays in without a member until the game frees one (the game's party has not freed it yet, or player 1 rides a
-// vehicle the whole party shares): kept on the monitor row, or on one monitor for a ride and for the short grace before
-// a waiting player leaves to wait outside (session/session_rules.h WaitOutside), when the seat is Awaiting. A script's
-// hand of the member to its AI keeps the seat's member and view (the session's RidesAlong): "in".
+// Of the words below, "handed" is the seat staying in without a member until the game frees one (the game's party has
+// not freed it yet, or player 1 rides a vehicle the whole party shares): kept on the monitor row, or on one monitor for
+// a ride and for the short grace before a waiting player leaves to wait outside (session/session_rules.h WaitOutside),
+// when the seat is Awaiting. A script's hand of the member to its AI keeps the seat's member and view (the session's
+// RidesAlong): "in".
 
 namespace lss::players {
 

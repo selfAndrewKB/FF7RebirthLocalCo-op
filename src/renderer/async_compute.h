@@ -9,7 +9,7 @@
 // console: r.MassiveEnvironment.UsingAsyncComputeForMainPass 1. The mod writes 1 to the setting from its
 // constructor, before the game creates its D3D12 device (renderer/before_device.h); the vendor rule still decides.
 // Performance work, authorized as a change to game behaviour (the plan's performance roadmap).
-// Off unless `async_compute_on.txt` is in the mod's folder (`watch_only.txt` still wins): on the user's RTX the switch
+// Off unless `async_compute_on.txt` is in the mod's folder (`watch_only.txt` still wins): on an RTX 5080 the switch
 // alone changed nothing (84.5 against 84.3 fps) and the async main pass cost 1.5 ms of GPU time, so it
 // is kept only to measure other GPUs (the cloud L4).
 

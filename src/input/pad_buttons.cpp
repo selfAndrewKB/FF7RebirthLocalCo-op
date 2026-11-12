@@ -37,8 +37,8 @@ namespace lss::input::pad_buttons {
 
 namespace {
 
-// The input processor's Tick (RE-p2-per-pad-buttons.md §1.3 step 5): IInputProcessor vtable
-// 0x145D40580, slot 1. (this, float DeltaTime, FSlateApplication&, TSharedRef<ICursor> by address.)
+// The input processor's Tick (research/RE-p2-per-pad-buttons.md): the IInputProcessor vtable's slot 1.
+// (this, float DeltaTime, FSlateApplication&, TSharedRef<ICursor> by address.)
 constexpr std::uint8_t kInputTickBytes[] = {0x40, 0x55, 0x53, 0x56, 0x57, 0x41, 0x54, 0x41, 0x55, 0x41, 0x56, 0x41,
                                             0x57, 0x48, 0x8D, 0xAC, 0x24, 0x18, 0xFD, 0xFF, 0xFF, 0xB8, 0xE8, 0x03};
 constexpr platform::SlotFact kInputTick{L"the Square input processor's Tick slot (1)", 0x145D40588,
@@ -46,7 +46,7 @@ constexpr platform::SlotFact kInputTick{L"the Square input processor's Tick slot
 
 using TickFn = void (*)(void* self, float deltaTime, void* application, void* cursor);
 
-// The action-down dispatcher (§9): updates the tables and, unless its alreadyHandled byte is set,
+// The action-down dispatcher: updates the tables and, unless its alreadyHandled byte is set,
 // hands the action to the UI handler stack and the menu core's delegate (menus, field prompts,
 // battle commands). Its callers that can carry a seat's pad's presses and whose call fits one aligned
 // block: the XInput main loop (every bound action) and two DirectInput loops.
@@ -54,17 +54,17 @@ constexpr std::uint8_t   kActionDownBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x5
                                                0x41, 0x56, 0x41, 0x57, 0xB8, 0x00, 0x01, 0x00, 0x00, 0xE8, 0x6A, 0xB1};
 constexpr platform::FunctionFact kActionDown{L"SquareInput's action-down dispatcher", 0x1407C3DAC, kActionDownBytes};
 constexpr std::array<std::uintptr_t, 3> kActionDownCalls{0x140E745A0, 0x140E74141, 0x140E74312};
-// 1.005 (RE-1005-field-2.md §8): the DirectInput key list's call is at 0x140E93C3D, %16 = 13, so it crosses a 16-byte
+// 1.005 (research/RE-1005-field-2.md): the DirectInput key list's call sits at %16 = 13, so it crosses a 16-byte
 // block. It is in KeyDown_MapKeyToActions too, so on 1.005 a dispatch call that crosses a block is changed with the
 // extra-key calls, from the game thread in the input Tick after the game's (outside that function).
 
-// The XInput loop's two extra-key calls (§9.2): per-button extra keys (0x140E7468D) and the extra-key
-// list (0x140E7477E, SquareInput_CollectShortcutSecondKeys: the Shortcut1..5_Second keys a face button
-// sends while the shortcut modifier is held; RE-p2-command-menu-input.md §3.1). Their alreadyHandled
+// The XInput loop's two extra-key calls: the per-button extra keys and the extra-key list
+// (SquareInput_CollectShortcutSecondKeys: the Shortcut1..5_Second keys a face button sends while the shortcut
+// modifier is held; research/RE-p2-command-menu-input.md). Their alreadyHandled
 // is the loop's result so far. Both calls cross a 16-byte block, so they are changed only from the
 // game thread, in the input Tick after the game's (outside KeyDown_MapKeyToActions, the only function
 // that runs them, which runs on the game thread: from Slate's key-down, the Tick and the analog
-// handler [ASSUMPTION from §9.2]). The DirectInput-only single calls (0x140E741CE, 0x140E7424F) stay
+// handler [ASSUMPTION]). The DirectInput-only single calls stay
 // the game's.
 constexpr std::array<std::uintptr_t, 2> kExtraKeyCalls{0x140E7468D, 0x140E7477E};
 constexpr unsigned                      kExtraKeyLines = 40;
@@ -72,14 +72,14 @@ constexpr std::size_t                   kActionEventKey = 0x18;  // the action e
 
 // ActionDownFn: pad_buttons.h.
 
-// The menu-opening actions (RE-pause-menu-any-pad.md §1.3): the FKey globals PauseMenu, MapMenu and EnemyIntel
+// The menu-opening actions (research/RE-pause-menu-any-pad.md): the FKey globals PauseMenu, MapMenu and EnemyIntel
 // (facts/controller.h), whose FNames the game's one pause poll reads pressed or held on the merged tables (and the
 // menus' close handlers read on the UI route). Read once the game has filled them (guarded, from the Tick), since the
 // globals are built by the game's own start-up, which may run after the mod installs.
 constexpr std::array<std::uintptr_t, 3> kOpenerKeyNames{facts::kPauseMenuKey, facts::kMapMenuKey, facts::kEnemyIntelKey};
 constexpr unsigned                      kOpenerReadFrames = 600;  // input ticks to wait for them before a warning
 
-// A TSet<element> in the input object, stock TSparseArray layout (§1.1): data, ArrayNum, the
+// A TSet<element> in the input object, stock TSparseArray layout: data, ArrayNum, the
 // allocation bits (4 inline dwords, a heap pointer, NumBits, MaxBits).
 struct TableFields
 {
@@ -88,7 +88,7 @@ struct TableFields
 };
 constexpr std::array<TableFields, 2> kTables{{{0xF8, L"raw"}, {0x148, L"UI"}}};
 #if LSS_DEV
-// The chocobo's Accel (R2) and Dash actions (RE-p2-chocobo-input.md §2.4): FName globals, traced frame by frame (dev
+// The chocobo's Accel (R2) and Dash actions (research/RE-p2-chocobo-input.md): FName globals, traced frame by frame (dev
 // tools).
 constexpr std::uintptr_t kAccelKeyName = 0x1491E4550;
 constexpr std::uintptr_t kDashKeyName  = 0x1491E4580;
@@ -426,7 +426,7 @@ void ReadOpeners() noexcept
 }
 
 /// Whether every element shows the game's merged state this frame: a menu owns the game's input and no seat's shop is
-/// up (a shop is not a pause-family menu and keeps its seat's pad, RE-pause-menu-any-pad.md §3; its view wins while it
+/// up (a shop is not a pause-family menu and keeps its seat's pad, research/RE-pause-menu-any-pad.md; its view wins while it
 /// is up, as its presses do in ActionDown).
 bool MergedEverywhere() noexcept
 {
@@ -435,7 +435,7 @@ bool MergedEverywhere() noexcept
 
 /// Fills `bytes` with what the Tick writes into each element: the game's own merged state (its previous and held bytes
 /// under its one-pad merge) for the three menu openers, and for every element while a menu owns the game's input
-/// (RE-pause-menu-any-pad.md §8); otherwise the menu player's view (player 1's, or a seat's while its player's shop is
+/// (research/RE-pause-menu-any-pad.md); otherwise the menu player's view (player 1's, or a seat's while its player's shop is
 /// up).
 void WrittenBytes(const Table& table, std::vector<HeldBytes>& bytes) noexcept
 {

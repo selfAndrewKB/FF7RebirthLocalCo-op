@@ -92,6 +92,16 @@ A file in the mod's folder keeps the game's behaviour:
 `watch_only.txt` runs the game unmodified for comparisons. `perf_log.txt` turns the perf log on from launch, and
 `census.txt` (or `census on`) adds a count of every GPU submission per frame to it.
 
+## Comments
+
+A comment says what the code does and why, in plain sentences, and stays true as the code ages. It carries no date, no
+version number, no quote of or credit to a person, and no history (`until`, `used to`, `now`): the reason behind a rule is
+stated as a fact, and a fault the code prevents as what would happen without it. It does not name the Remake mod: where a
+piece came from, and how the two mods differ, is in the topic's History in the documentation. Addresses live in
+`src/facts/` and `src/platform/builds/`, research in `../Documentation/research`: a comment names the game's function
+without its address (in a machine-code stub, the file's named constant, with an offset where needed), and may name a
+research file, without a section number or pass tag. It may mark a claim `[CONFIRMED]` or `[ASSUMPTION]`.
+
 ## Layout
 
 Generated from each module's first header comment by `tools/layout_doc.py` (a ctest checks it is current).
@@ -239,10 +249,8 @@ src/
     object_fields.h         A native engine object's fields at fixed offsets, under the mod's names (namespace lss,
                             every module)
     object_slot.h           One GUObjectArray slot, read through the loader
-    seat_state.h            A seat's state in one word, derived from the session's record of the seat (plan/seats.md,
-                            the close of step 3)
-    seats.h                 The seats: the human players the mod adds (Documentation/plan/seats.md): seat 1 is player 2,
-                            seat 2 player 3
+    seat_state.h            A seat's state in one word, derived from the session's record of the seat
+    seats.h                 The seats: the human players the mod adds: seat 1 is player 2, seat 2 player 3
     single_view             The engine's single view: the whole screen player 1's view alone while the seats' players
                             are in (their controllers, characters and pads untouched)
     split_layout            Which way the screen is split for two players: top/bottom or side by side
@@ -264,7 +272,7 @@ src/
                             opacity differs, stores it there and invalidates …
   session/                  players 2 and 3's join, party member and leave; the lead gate and the ride-along
     field_exit              The seats' players leave before the game leaves the field, and rejoin once the field is
-                            running again (RE-p2-retry-reload.md, pass S-RL1)
+                            running again (research/RE-p2-retry-reload.md)
     field_hold.h            When a script needs a player-held party member back, and when it does not
                             (research/RE-held-member-scripts.md)
     handover_watch          Logs, read-only, what the member choice and the hand-over need; a dev tool (dev/dev_tools.h
@@ -278,7 +286,7 @@ src/
     leave_sequence          The order in which a seat's player leaves, as a small state machine (tested on the host:
                             tests/leave_sequence_test.cpp)
     leave_watch             Logging only: what becomes of a seat's controller after a leave
-                            (RE-p2-controller-after-leave.md, S-PC2LEAK, "Logging step")
+                            (research/RE-p2-controller-after-leave.md)
     leftover_actors         The actors a seat's objects leave behind, destroyed by exact pointer once its player is
                             removed
     outside_join            A seat is out and wants back in: when the join is tried, as a pure state machine (tested on
@@ -311,10 +319,9 @@ src/
     tag_counts              How many times the game has registered an actor tag, for the join and leave log (a dev tool:
                             dev/dev_tools.h installs it; a player's build has the empty stubs below)
   scopes/                   one game call made as player 2 or 3
-    leader_answer           The party-leader test answered for a seat (RE-p2-enemy-target-bias.md §10.3,
-                            RE-p2-chocobo-ride.md §7.0 item 2, RE-p2-chocobo-run-refresh.md §4)
-    leader_scope            The party leader answering a seat's member for one engine call (RE-p2-targeting.md §5.2,
-                            §5.3)
+    leader_answer           The party-leader test answered for a seat (research/RE-p2-enemy-target-bias.md,
+                            RE-p2-chocobo-ride.md, RE-p2-chocobo-run-refresh.md)
+    leader_scope            The party leader answering a seat's member for one engine call (research/RE-p2-targeting.md)
     primary_controller      Running one engine call as if a seat's player (players/seats.h) were the primary player
     scope_ladder.h          A seat's scopes opened in one order for one game call, all or nothing
     scope_leaks             Putting back what the mod's two "as a seat's player" calls change outside that player's own
@@ -325,18 +332,16 @@ src/
     thread_hold.h           A game call made with this thread's answer held
   camera/                   each player's cameras
     attack_cameras          The game's attack cameras (battle camera sequences: grabs, enemy specials, bursts) on each
-                            player's own camera (research/RE-p2-attack-cameras.md §1, §9)
-    attack_framing          Which player an enemy's attack camera shows, decided by the user
-                            (research/RE-p2-attack-cameras.md §10, S-ATKCAMLEADER):
+                            player's own camera (research/RE-p2-attack-cameras.md)
+    attack_framing          Which player an enemy's attack camera shows (research/RE-p2-attack-cameras.md):
     camera_access           The lookups every camera module makes, once: a controller's End camera manager (checked by
                             vtable and by its owner field naming the controller back), its Field and Battle operators
                             (checked by vtable), the module in a slot of an …
-    camera_distance         Every player's camera follows the Options camera distance (RE-p2-battle-camera.md §6, pass
-                            S-CAMDIST1)
+    camera_distance         Every player's camera follows the Options camera distance (research/RE-p2-battle-camera.md)
     camera_override         Each player's camera plays only its own character's animation camera overrides
-                            (RE-p2-battle-camera.md §5, pass S-CAM4)
+                            (research/RE-p2-battle-camera.md)
     camera_repair           A seat's camera with a non-finite pose gets the game's own player-warp camera reset
-                            (RE-p2-chocobo-warp-camera.md §5; RE-p2-party-warp.md §11.4)
+                            (research/RE-p2-chocobo-warp-camera.md, RE-p2-party-warp.md)
     field_camera            Each seat's camera (players/seats.h): the field camera's settings, and the seat's own camera
                             update
     framing_watch           Logs each player's field-camera framing while the split is shown (read-only; roadmap 2b)
@@ -348,9 +353,8 @@ src/
     near_fade               No seat's character (players/seats.h) is ever faded by the game's proximity fades
                             (research/RE-p2-camera-near-fade.md)
     seat_camera_effects     Each seat's member's own battle camera effects on that seat's camera (players/seats.h;
-                            research/RE-p2-attack-cameras.md §2, §9.4-§9.6)
-    shoulder_scale          The camera's sideways (shoulder) offset keeps its single-player look in a split half (the
-                            user's rule)
+                            research/RE-p2-attack-cameras.md)
+    shoulder_scale          The camera's sideways (shoulder) offset keeps its single-player look in a split half
     vault_camera            A seat's chocobo vaulting off a ledge no longer takes that seat's and player 1's ride
                             framing (research/RE-p2-chocobo-jump-camera.md, lever L1b)
     view_target             Pointing a seat's camera manager at its own camera actor
@@ -372,27 +376,25 @@ src/
     pad_rules.h             The pure rules of each physical pad's input, as the pad table reads it (input/pad_table) and
                             the player windows hear it (session/player_window)
     pad_sticks              Each pad's sticks drive only its own player
-    pad_table               Which physical pad answers each of the game's pad slots (plan/remake-alignment.md step 4;
-                            research/RE-pad-slots.md)
+    pad_table               Which physical pad answers each of the game's pad slots (research/RE-pad-slots.md)
     seat_walk_cap           Each seat's walk cap from a walk-only step ends when the step ends, as player 1's does
-                            (players/seats.h; research/RE-p2-walk-mode.md §7)
+                            (players/seats.h; research/RE-p2-walk-mode.md)
     stick_select            Choosing one pad's sticks from Square's per-pad records, as a pure function (tested on the
                             host: tests/stick_select_test.cpp)
     walk_limits             Each seat's walk and run limits come from its own surroundings (players/seats.h;
-                            RE-p2-walk-mode.md §4.2, §4.3)
+                            research/RE-p2-walk-mode.md)
   feedback/                 rumble and sound
-    combat_rumble           Combat rumble on a seat's own pad (RE-p2-rumble.md §10; plan, "per-pad rumble: combat and
-                            other sources")
+    combat_rumble           Combat rumble on a seat's own pad (research/RE-p2-rumble.md)
     listener_rules.h        The sound listeners' decisions as pure functions (feedback/sound_listeners.h), tested on the
                             host (tests/listener_rules_test.cpp)
-    pad_rumble              Each player's rumble on their own pad (RE-p2-rumble.md §6.1, §9; plan, "per-pad rumble")
+    pad_rumble              Each player's rumble on their own pad (research/RE-p2-rumble.md)
     rumble_watch            Logging only: where each player controller's force feedback goes, pad by pad, frame by frame
-                            (RE-p2-rumble.md §6; plan, "Per-pad rumble")
+                            (research/RE-p2-rumble.md)
     seat_ffb_managers       Each seat's own force-feedback manager (research/RE-p2-ffb-manager-per-pc.md)
     sound_listeners         Every player hears the sounds near them: each SEAD sound is measured from the nearest
                             player's listener
     traversal_rumble        Each player's traversal rumble plays on their own pad
-                            (research/RE-p2-zipline-rumble-hook-who.md §4)
+                            (research/RE-p2-zipline-rumble-hook-who.md)
     traversal_rumble_code.h The bytes feedback/traversal_rumble_sources.cpp places at the 1.004 jump box's inline list
                             load (PlaceJumpListLoad): after the game's own load, on a thread a jump route named, the
                             rumble list the route named with it (the seat's …
@@ -424,16 +426,17 @@ src/
                             (platform/settings.h)
     battle_rates_rules.h    The battle's rates (battle/battle_rates.h): the multipliers' words and the arithmetic, done
                             the game's way
-    battle_warps            Which party members the game warps at a battle's start and end (RE-p2-battle-gather-warp.md,
-                            S-BTLWARP and S-BTLWARP2)
+    battle_warps            Which party members the game warps at a battle's start and end
+                            (research/RE-p2-battle-gather-warp.md)
     battle_warps_rules.h    Who the game warps at a battle's start and end, as the setting decides it without the game
                             (battle/battle_warps.h applies it at the game's two calls)
     coin_table.h            The coins enemies hold (battle/target_coin.h): a lock-free table keyed by the enemy's
                             controller, each coin the player it names (1 for player 1, seat + 1 for a seat's player: 1
                             to 3, players/seats.h) and when it was tossed
     command_locks           Each seat's command controller gets the battle's command values through the game's own
-                            setters (RE-p2-command-menu-levers.md §1, §3; IDA passes S-CMD9, S-CMD10)
+                            setters (research/RE-p2-command-menu-levers.md)
     command_menu            Each seat's own battle command menu: another FieldCommandCtrl
+                            (research/RE-p2-command-menu.md, RE-p2-command-menu-input.md)
     command_menu_shared.h   What the seats' command menus' units share (battle/command_menu.h): whether a game call may
                             be made again on a seat's controller, whether its stage is live, and the UI system's address
     command_menu_tick       Each seat's command controller ticked at the game's own spot, and that seat's battle actions
@@ -442,47 +445,47 @@ src/
                             What the command menu tick's units share (battle/command_menu_tick.h): the pass in flight
                             and the tick's reads the route and the tint need, the controller's request indices and their
                             reader
-    command_menu_view       Each seat's command menu widgets per view (RE-p2-command-menu-views.md §10.3, §10.5; per
-                            seat since plan/seats.md step 4)
-    command_rules           Who may issue commands to whom in the battle command menu (RE-p2-command-menu.md §4, pass
-                            S-CMD1)
+    command_menu_view       Each seat's command menu widgets per view (research/RE-p2-command-menu-views.md)
+    command_rules           Who may issue commands to whom in the battle command menu (research/RE-p2-command-menu.md)
     command_rules_code.h    The machine code that answers "no" for one member in FieldCommandCtrl_IsMemberCommandable
-                            (RE-p2-command-menu.md §4.2, §4.4)
+                            (research/RE-p2-command-menu.md)
     enemy_leader            Enemies turn on a standing member when the game's leader is down in co-op
                             (RE-enemy-leader-reads.md)
     enemy_leader_rules.h    Whom enemies follow while the game's leader is down in co-op (battle/enemy_leader.h), as a
                             pure rule over what the game reports; tested on the host
-    equal_targeting         Condition enemies favour every player equally (RE-p2-enemy-target-bias.md §5.1, §9, §10)
-    focus_scope             Each seat's own UI focus context (RE-p2-command-menu-input.md §2, §3.3, §11, pass S-CMD2)
+    equal_targeting         Condition enemies favour every player equally (research/RE-p2-enemy-target-bias.md)
+    focus_scope             Each seat's own UI focus context (research/RE-p2-command-menu-input.md)
     leader_reads            The game's own native reads of "the party leader" made for an enemy follow that enemy's coin
+                            (research/RE-p2-leader-native-reads.md)
     lock_group_coin         Lock groups prefer player 1 or a seat's player by each picking enemy's coin
-                            (RE-p2-enemy-target-bias.md §18, §20)
+                            (research/RE-p2-enemy-target-bias.md)
     lock_group_rules.h      The lock groups' rules (battle/lock_group_coin.h) as pure pieces, tested on the host
                             (tests/lock_group_rules_test.cpp)
     lock_on                 Each seat's targeting: the game's own targeting tick run again, for that seat
-    menu_focus              Player 1's UI focus, logged on change (RE-p2-command-menu-input.md §2, §10 Stage 3a, pass
-                            S-CMD2)
+                            (research/RE-p2-targeting-scoped-tick.md; the fields in RE-p2-lock-on.md)
+    menu_focus              Player 1's UI focus, logged on change (research/RE-p2-command-menu-input.md)
     menu_input_route        A seat's pad's presses and releases to the seat's menu in battle
-                            (RE-p2-command-menu-input.md §3.3, §10 Stage 3d)
+                            (research/RE-p2-command-menu-input.md)
     menu_rules.h            The command menu's pure rules (battle/command_menu_tick.h, command_menu.h), tested on the
                             host (tests/menu_rules_test.cpp)
     menu_tint               The tactical-mode tint (UI filter type 0) and the wait-mode sound, shared by every
                             controller's menu (RE-p2-command-menu-tint.md)
     panel_gate_code.h       The machine code that keeps a seat's targeting run out of player 1's target panel, at the
                             one panel request whose call site straddles a code block
-    player_hits             The seats' hits, and the hits they take, count as the player's (RE-p2-enemy-target-bias.md
-                            §12-§14)
+    player_hits             The seats' hits, and the hits they take, count as the player's
+                            (research/RE-p2-enemy-target-bias.md)
     shortcut_follow         The shortcut tables followed on the other controller (RE-p2-shortcut-refresh.md)
     synergy_partner         Synergy skills and synergy abilities with a human's character as the partner
+                            (research/RE-p2-synergy-skills.md, research/RE-p2-synergy-abilities.md)
     synergy_rules.h         The synergy partner's decisions (battle/synergy_partner.h) as pure functions over values
                             read from the game, and the table it keeps, tested on the host
     target_census           How enemies choose whom to attack, and how often they choose each player
-                            (RE-p2-enemy-target-bias.md §6, hook facts §8, S-TGTCENSUS)
+                            (research/RE-p2-enemy-target-bias.md)
     target_coin             Enemies aim their moves at one of the players, one coin per enemy action
-                            (RE-p2-enemy-target-bias.md §12, §16)
+                            (research/RE-p2-enemy-target-bias.md)
     ucpc_choice.h           Which player's character an enemy's Condition target selector counts as "the UCPC" (the
                             user-controlled player character) for one select
-    widget_owner            Each seat's widgets tick in their owner's view (RE-p2-party-list-views.md §8, pass S-CMD8)
+    widget_owner            Each seat's widgets tick in their owner's view (research/RE-p2-party-list-views.md)
   traversal/                climbing, vaulting and the rest of traversal
     chocobo_climb           A seat's player climbs chocobo walls with their own chocobo
     traversal_camera        The seats' traversal cameras (research/RE-p2-traversal-L3-ladder-camera.md,
@@ -502,71 +505,72 @@ src/
     traversal_shared.h      The traversal camera's state its units share (traversal/traversal_camera.h): the "inside a
                             scoped call" flag, the executer and actor readers, each seat's last ladder module, and each
                             unit's placement, removal and tick, which …
-    traversal_watch         Traversal for the seats' players, logging only (research/RE-p2-traversal.md §8,
-                            RE-p2-chocobo-traversal.md §12)
+    traversal_watch         Traversal for the seats' players, logging only (research/RE-p2-traversal.md,
+                            RE-p2-chocobo-traversal.md)
   world/                    the world around each player: crowds, triggers, story boxes, pickups, shops, the catch-up
                             warps
     anim_views              Characters near a seat's player animate as the game animates them near player 1
                             (research/RE-p2-anim-optimisation-two-views.md)
     catch_up_move           The game's own way to put a character beside another on the field, as its battle gather
-                            calls it (research/RE-member-story-boxes.md §9):
+                            calls it (research/RE-member-story-boxes.md):
     charapop_centre         The game's NPC population follows every player: each NPC is scored from the nearest player
     charapop_facts.h        The CharaPop manager, its entries and a camera manager's pose, as the game's character LOD
                             reads them
     charapop_near           The characters a seat's player is near keep the detail the game would give them from that
-                            player's own camera
+                            player's own camera (research/RE-p2-charapop-per-view.md)
     charapop_rule.h         CharaPop's Light/Middle rule, as its evaluators apply it to one camera, for the entries a
                             seat's camera needs (world/charapop_near.h)
     charapop_watch          Logs, read-only, how the game's character detail treats the characters near the seats'
-                            players (RE-p2-charapop-per-view.md §3; plan §3 item 7)
+                            players (research/RE-p2-charapop-per-view.md)
     data_rows               The game's mapped data rows (StateChange, StateTrigger, Action, ActionGroup...): a row found
                             by its FName through the game's own accessor, and the mapped fields read out of it
     field_pickup            A seat's player picks up collectibles and materials with the game's own field prompts
+                            (research/RE-p2-field-interact.md)
     field_rules.h           The field-interaction modules' pure pieces (vending, shop_talk, seat_triggers, scope_leaks),
                             tested on the host (tests/field_rules_test.cpp)
     interact_watch          Logs the game's field interactions (FieldActionMgr) around the seats' pickups
-                            (RE-p2-field-interact.md §6, §10)
+                            (research/RE-p2-field-interact.md)
     nav_strand              Logs when a seat's character is stranded off the loaded navmesh and asks the game's follow
                             warp to bring it back
     party_warp              Brings a seat's player back to the party through the game's own follow warp
+                            (research/RE-p2-party-warp.md; RE-p2-chocobo-warp.md for the ridden chocobo)
     party_warp_rules.h      A player's ask to bring their character back beside player 1's (world/nav_strand.h, from L3
                             clicked twice): the double click and the "already beside" refusal as pure rules
     run_catch_up            A character player 2 or 3 walked past its own story box is brought back beside player 1's
                             character when the level's walk through that box goes to its AI
-    seat_switch_volumes     A seat's player inside CharaPop switch volumes (research/RE-p2-shop-npcs-near-p2.md §2, §6,
-                            §10)
-    seat_triggers           The seats' trigger pass (research/RE-p2-trigger-overlap.md §5 Lever 2;
-                            plan/topics/traversal.md, the trigger pass)
+    seat_switch_volumes     A seat's player inside CharaPop switch volumes (research/RE-p2-shop-npcs-near-p2.md)
+    seat_triggers           The seats' trigger pass (research/RE-p2-trigger-overlap.md)
     shop_talk               A seat's player uses a shopkeeper's shop with the game's own field prompt and shop
     story_box_rules.h       The rules of world/story_boxes, without the game: which of a held member's story-box entries
                             wait, when a waiting one fires, whether player 1's character has come to the box, and
                             whether a straight run passes through it
     story_boxes             Player 2's or 3's character never fires its own story box ahead of the story, and never
                             loses one (research/RE-member-story-boxes.md)
-    strand_watch            When player 2's member counts as stranded off the loaded navmesh (RE-p2-party-leash.md §2.1)
+    strand_watch            When player 2's member counts as stranded off the loaded navmesh
+                            (research/RE-p2-party-leash.md)
     vending                 A seat's player uses vending machines with the game's own field action and shop
-                            (RE-p2-field-interact.md §15; plan, "Player 2 triggers field prompts")
+                            (research/RE-p2-field-interact.md)
     world_actor_reach       The game's world actors (chests and the other WorldActorMgr items) pop in around a seat's
-                            player too
+                            player too (research/RE-p2-world-streaming.md)
     world_rules.h           The camera and world modules' pure decisions (attack_framing, location_rows, walk_limits,
                             world_actor_reach, seat_switch_volumes, camera_repair, party_warp, traversal_camera,
                             camera_distance, shoulder_scale), tested on the host
   rides/                    chocobos, the wheelie and the shared rides
-    chocobo_ride            Each seat's player rides their own chocobo (plan §3, "Player 2 rides their own chocobo";
-                            RE-p2-chocobo-ride.md §7, Lever 1)
+    chocobo_ride            Each seat's player rides their own chocobo (research/RE-p2-chocobo-ride.md)
     own_ride                The lease layer the two own rides share (rides/chocobo_ride.h, rides/wheelie_ride.h): a
                             seat's controller holds a vehicle through the seat's own coordinator, the member is her AI's
                             for the ride, and at the end the seat's …
     ride_rules.h            The rides' pure decisions (rides/chocobo_ride.h, wheelie_ride.h, shared_ride.h), tested on
                             the host (tests/ride_rules_test.cpp)
     ride_watch              Logs, read-only, the game's chocobo and buggy rides while a seat's player is in
+                            (research/RE-p2-chocobo-ride.md)
     shared_ride             The buggy and the Tiny Bronco are each one vehicle for the whole party: while player 1 rides
-                            one, the players take turns at it (the user's rule: one picture for a shared vehicle, no
-                            mirror images; the same for the bronco, whose …
-    wheelie_ride            Each seat's player rides a Wheelie (SB scooter) of their own (plan §3, "Wheelie";
-                            RE-p2-wheelie-ride.md §13, §14, option A)
+                            one, the players take turns at it (one picture for a shared vehicle, no mirror images; the
+                            same for the bronco, whose crossing the other …
+    wheelie_ride            Each seat's player rides a Wheelie (SB scooter) of their own
+                            (research/RE-p2-wheelie-ride.md, option A)
     wheelie_watch           Logs, read-only, the game's Wheelie (SB Scooter) system while a seat's player is in
-                            (RE-p2-wheelie-ride.md §6; plan, "Player 2 rides their own Wheelie")
+                            (research/RE-p2-wheelie-ride.md)
   views/                    the view points, the whole-screen states, the streaming views, the columns and mirror views,
                             the window span
     axis_records.h          The players whose FOV rule the mod wrote (views/player_view_point.h): the value to put back,
@@ -577,8 +581,7 @@ src/
                             for three players
     column_rules.h          The pure rules of the engine's layout records for the view columns
     column_source           Where each column's view comes from, decided in one place each tick
-    columns.h               The view columns: how many views the screen shows and whose each one is (plan/seats.md step
-                            5)
+    columns.h               The view columns: how many views the screen shows and whose each one is
     display_align           The monitors placed to make the row, for as long as the game holds it, and put back at the
                             leave
     display_config          Windows' display configuration as QueryDisplayConfig gives it: the outputs (paths) and their
@@ -591,7 +594,8 @@ src/
     minimal_view_info.h     The FMinimalViewInfo fields the mod reads or writes, as ULocalPlayer::GetViewPoint fills the
                             struct in this build
     mirror_player           The mirror views: a local player of the mod's in every column no player has, showing player
-                            1's picture, so the held columns are never black
+                            1's picture, so the held columns are never black (the columns rule: a third column only
+                            while the three-player monitor mode is on, and …
     monitor_list            The desktop's monitors as Windows has them now, for the mod's span (views/window_span) and
                             the setup app (setup/): each monitor's rect and effective DPI, its GDI device name, and an
                             id and a name from the display configuration
@@ -631,18 +635,17 @@ src/
   hud/                      the HUD in each view: the passes, the band, the minimap, prompts, markers and pins, the
                             battle HUD
     battle/enemy_gauges     The enemy name and life gauges (EnemyStatus_C) placed in each player's view (Stage B3b;
-                            RE-p2-enemy-markers.md §7.3, §7.4 and §7.7 A; RE-p2-bar-targeted.md)
+                            research/RE-p2-enemy-markers.md, RE-p2-bar-targeted.md)
     battle/enemy_gauges_code.h
                             The machine code that records, as the game's enemy-status tick runs, each untargeted gauge's
-                            placement call (RE-p2-enemy-markers.md §7.4 and §7.7 A.1)
+                            placement call (research/RE-p2-enemy-markers.md)
     battle/placement_record.h
                             Capture-and-replay of the game's placement calls, written once (hud/battle/popups_code.h
                             records battle popups, hud/battle/enemy_gauges_code.h the untargeted enemy gauges)
     battle/popups           Battle popups (damage and heal numbers, battle texts such as Dodge, UMG popups such as
-                            level-up) placed in each player's view (RE-p2-battle-popups.md §1)
+                            level-up) placed in each player's view (research/RE-p2-battle-popups.md)
     battle/popups_code.h    The machine code that records, as the game places them, each battle popup's placement call
-    battle/target_views     Each view's target marks follow its own player's target (RE-p2-hud-targets.md §2.3, §3, R2,
-                            R3; per seat since plan/seats.md step 4)
+    battle/target_views     Each view's target marks follow its own player's target (research/RE-p2-hud-targets.md)
     context_owners.h        Whose player context each HUD root carries (hud/hud_roots.h), so a switch calls the game's
                             setter only on the roots whose player changes
     field/action_icon_base  The field-action icons ("Call Chocobo" and the other prompt rows, UEndFieldActionIcon /
@@ -651,20 +654,20 @@ src/
     field/action_rows       The field-action row list, read and laid out once for its two users
                             (hud/field/prompt_rows.h: each player's own rows; hud/field/action_icon_base.h: the rows'
                             base in a split half)
-    field/field_markers     Each view shows only its own player's field-action point markers (RE-p2-field-interact.md
-                            §12.15; per seat since plan/seats.md step 4)
+    field/field_markers     Each view shows only its own player's field-action point markers
+                            (research/RE-p2-field-interact.md)
     field/marker_timers     Each view's own linger timer for the off-screen enemy arrows (OutOfScreenTarget_C;
-                            RE-p2-enemy-markers.md §7.5 and §7.7 B)
+                            research/RE-p2-enemy-markers.md)
     field/prompt_rows       The field prompt rows (FieldAction_Command_C): each player sees their own, in their own view
-                            (RE-p2-field-prompts.md; per seat since plan/seats.md step 4)
+                            (research/RE-p2-field-prompts.md)
     field/search_pins       The field search pins in each view: placed from that view's camera, and only that view's
-                            player's own
+                            player's own (research/RE-p2-ranged-reticle.md, RE-p2-world-markers.md)
     field/wrangle_targets   The chocobo wrangle's targets in each view: placed from that view's camera
     hud_roots               The HUD's root widgets and whose they are (lever L1 of hud/passes/seat_hud_content.h)
     hud_rules.h             The HUD modules' pure decisions (hud_placement, search_pins, marker_timers, minimap,
                             target_views, enemy_gauges), tested on the host
-    hud_trace               Logging only: how the HUD's content is made each frame, and for which player (RE-p2-hud.md
-                            pass 8, P8.5 items 3 and 6-9; call sites in P8.9)
+    hud_trace               Logging only: how the HUD's content is made each frame, and for which player
+                            (research/RE-p2-hud.md)
     hud_updates             The HUD's view-dependent updates that can run more than once a frame, for
                             hud/passes/seat_hud_content.h: the lists at EndUISystem+0x98, +0xB0, +0x150 (markers),
                             +0x188, +0x170, +0x180, then the leader-target icon at +0x140, in …
@@ -673,10 +676,10 @@ src/
                             ray from the centre actually leaves the half, while the HUD is laid out in a split half
     layout/centered_frame_code.h
                             The machine code that makes the HUD's "centred 1920x1080 frame" the whole layout while the
-                            HUD is laid out in a split half
+                            HUD is laid out in a split half (research/RE-p2-overlay-ui-size.md)
     layout/hud_placement    Where the HUD's main widgets sit in a split half: as in single player, each in its corner or
-                            edge of the half (the user's reference): compass top centre, command menu and button prompts
-                            bottom left, the Members panel bottom …
+                            edge of the half: compass top centre, command menu and button prompts bottom left, the
+                            Members panel bottom right; and the World Intel …
     layout/layout_scale     The HUD overlay's layout scale by the game's own contain rule
     layout/layout_scale_code.h
                             The bytes hud/layout/layout_scale.cpp places over the overlay's layout-scale instruction:
@@ -691,22 +694,22 @@ src/
     lead_mark               Player 2's or 3's own marker for the walk they keep: the game's own main-objective diamond
                             and minimap pin at the walk's stop, in that player's view only
     minimap/column_area_icons
-                            Each further column's own area-map icon manager (RE-p2-hud-icon-manager.md §4 and §8)
+                            Each further column's own area-map icon manager (research/RE-p2-hud-icon-manager.md)
     minimap/label_relayouts Which text blocks the game lays out again, where in the frame, and why (logging only;
-                            RE-perf-solo-vs-split §12)
+                            research/RE-perf-solo-vs-split-2026-10-03.md)
     minimap/label_states    A seat's own copy of each minimap label's text and layout, one book per seat
-                            (RE-p2-minimap-cost.md §7)
-    minimap/minimap         Each seat's own minimap: its centre, rotation and icons, in its view (RE-p2-own-minimap.md,
-                            "Recommended design" and §8; per seat since plan/seats.md step 4)
-    minimap/minimap_icons   Each player's minimap keeps the icons another player's minimap needs (RE-p2-minimap-cost.md
-                            §9, §10; per seat since plan/seats.md step 4)
+                            (research/RE-p2-minimap-cost.md)
+    minimap/minimap         Each seat's own minimap: its centre, rotation and icons, in its view
+                            (research/RE-p2-own-minimap.md)
+    minimap/minimap_icons   Each player's minimap keeps the icons another player's minimap needs
+                            (research/RE-p2-minimap-cost.md)
     minimap/minimap_labels  Each player's own minimap label text and layout (hud/minimap/label_states.h;
-                            RE-p2-minimap-cost.md §7)
+                            research/RE-p2-minimap-cost.md)
     minimap/minimap_once    The minimap's map rendered once per frame, by player 1's HUD pass (RE-oom-path.md, "The 32
                             KB leak")
     minimap/minimap_once_code.h
                             The machine code that lets a seat's HUD pass skip the minimap's own map render
-                            (RE-oom-path.md, "Player 2's minimap paint: hook facts and the skip")
+                            (research/RE-oom-path.md)
     passes/column_hud_images
                             The further columns' HUD images: the game's own overlay rendered once more each frame per
                             further column with a pass, each into a layer entry of its own in the same pool-2 slot, and
@@ -716,13 +719,13 @@ src/
                             view family draw only its own column's entry
     passes/first_player_code.h
                             The machine code that lets a seat's overlay pass ask "the first game player" and get the
-                            seat's player (lever L2 of RE-p2-hud.md P8.6; facts in pass 12)
+                            seat's player (research/RE-p2-hud.md)
     passes/menu_buffers.h   A second set of the menu renderer's vertex and index buffers, for a layer entry drawn beside
                             the game's own in one slot (hud/passes/column_hud_images.h: the overlay's pool 2;
                             hud/minimap/minimap.h: the minimap's pool 0)
-    passes/overlay_pass.h   Which pass of the overlay render is running, by the column whose view it draws (as Remake's
-                            hud/overlay_pass): first one extra render per further column with an image this frame,
-                            highest column first (the mod's, …
+    passes/overlay_pass.h   Which pass of the overlay render is running, by the column whose view it draws: first one
+                            extra render per further column with an image this frame, highest column first (the mod's,
+                            hud/passes/column_hud_images.h), then the game's …
     passes/pass_opacity     Widgets taken out of one overlay pass's image: the other players' prompt rows
                             (hud/field/prompt_rows.h), point markers (hud/field/field_markers.h), search pins
                             (hud/field/search_pins.h), target marks (hud/battle/target_views.h), …
@@ -756,22 +759,22 @@ src/
     async_compute           The GPU's async compute queue on for the session (RE-perf-me-shadows.md, Phase 2, option A)
     before_device           Whether the game has created its D3D12 device yet
     family_boundary         Between the players' view families, the game's own end-of-frame state reset, in RHI stream
-                            order
+                            order (research/RE-p2-main-menu-crash.md)
     family_boundary_list.h  The RHI command-list and context layout the family boundary relies on (family_boundary.h;
-                            RE-p2-main-menu-crash.md, pass S-CRASH3 §S3.1, §S3.4)
+                            research/RE-p2-main-menu-crash.md)
     me_feedback_once        One streaming-feedback hand-in per frame for the game's scenery ("ME") streaming, as with
-                            one player (RE-p2-distant-lod-swap.md §9)
+                            one player (research/RE-p2-distant-lod-swap.md)
     me_shadow_feedback_code.h
                             The machine code that lets an additional family skip the ME shadow pass's streaming-feedback
                             writes (RE-perf-me-shadows.md, Phase 3, option D; performance work)
     one_family_per_view     Submits a multi-view family to the renderer as one family per view
     output_load_action_code.h
                             The machine code that restores stock Unreal's rule for the final output's load action
-    residency_off           The D3D12 residency manager off for the session (RE-perf-submission-path.md §2 and option A)
+    residency_off           The D3D12 residency manager off for the session (research/RE-perf-submission-path.md, option
+                            A)
     scene_view_family.h     The few FSceneViewFamily and FSceneView fields the mod reads or writes, with the evidence
                             for each
-    submission_census       Diagnosis: a census of the game's GPU submissions (RE-perf-submission-census.md; the parent
-                            doc's §7)
+    submission_census       Diagnosis: a census of the game's GPU submissions (research/RE-perf-submission-census.md)
     submit_hints            Split screen without the per-parallel-pass GPU submissions
     view_family_submission  Routes the game viewport's view family through SubmitOneFamilyPerView
   menu/                     the Co-op page: a row in the pause and title menus opening a page of the game's Options

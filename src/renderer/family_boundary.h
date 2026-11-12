@@ -1,7 +1,7 @@
 #pragma once
 
 // Between the players' view families, the game's own end-of-frame state reset, in RHI stream order
-// (RE-p2-main-menu-crash.md: S-CRASH2 cause, S-CRASH3 route, "Live run" confirmation).
+// (research/RE-p2-main-menu-crash.md).
 //
 // Why: the D3D12 state cache's SRV-array records (SE code) only grow, and only
 // FD3D12CommandContext::ClearState empties them, once per frame in RHIEndFrame. Each scene render
@@ -17,7 +17,7 @@
 //
 // How, all through the game's own functions and objects:
 //   1. game thread, between two submissions: a render-thread task queued with the game's
-//      TGraphTask SetupPrereqs/QueueTask (0x1420B8090), the same queue BeginRenderingViewFamily
+//      TGraphTask SetupPrereqs/QueueTask, the same queue BeginRenderingViewFamily
 //      puts its own render commands on, so it runs after family k's and before family k+1's;
 //   2. render thread: a 16-byte node appended to the immediate RHI command list, exactly as the game
 //      appends its own EndFrame and SubmitCommandsHint nodes (or run at once while the list is being

@@ -1,6 +1,6 @@
 #pragma once
 
-// Logs the game's field interactions (FieldActionMgr) around the seats' pickups (RE-p2-field-interact.md §6, §10). A
+// Logs the game's field interactions (FieldActionMgr) around the seats' pickups (research/RE-p2-field-interact.md). A
 // dev tool: dev/dev_tools.h installs it; a player's build has the stub below. It changes nothing: its own two hooks
 // pass the game's calls on, and the pass's three hooks (world/field_pickup.h) tell it what passed through
 // them.

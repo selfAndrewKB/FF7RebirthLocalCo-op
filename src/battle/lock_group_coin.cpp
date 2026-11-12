@@ -23,7 +23,7 @@ namespace lss::battle::lock_group_coin {
 
 namespace {
 
-// Facts read from the database (RE-p2-enemy-target-bias.md §18, S-LOCKGRP; this build). 1.005:
+// Facts read from the database (research/RE-p2-enemy-target-bias.md; this build). 1.005:
 // replaced-lock-group-coin.json.
 
 // The lock-group family's only two leader reads, each a call of ResolvePartyLeaderWeakPtr (UObject* (), the leader
@@ -35,7 +35,7 @@ constexpr std::uintptr_t kCountLeaderCall = 0x1431DFC57;  // in LockGroup_CountL
 constexpr std::uintptr_t kRebalanceCall = 0x14295F34C;  // in LockGroups_TickPruneAndRepick
 constexpr std::uintptr_t kRebalance     = 0x1431DAD5C;  // LockGroup_RebalanceLevelLocks
 // The pick, bool Pick(group*, FWeakObjectPtr* out), from the battle tick's re-pick and the Blueprint registration
-// (RE §8, S-TGTCENSUS; both sites fit one 16-byte block in both builds).
+// (both sites fit one 16-byte block in both builds).
 constexpr std::uint8_t kPickBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x18, 0x55, 0x56, 0x57,
                                        0x41, 0x54, 0x41, 0x55, 0x41, 0x56, 0x41, 0x57};
 constexpr platform::FunctionFact kPick{L"LockGroup_PickTarget_PrioritizeUCPC", 0x1431EB200, kPickBytes};
@@ -97,7 +97,7 @@ const std::byte* Members(const void* group, std::int32_t& num) noexcept
 }
 
 /// The member a pick is for: the first one without a live target (the tick picks for exactly that one; the
-/// registration's new member is that one unless an older member also lost its target, RE §18.2).
+/// registration's new member is that one unless an older member also lost its target).
 const std::byte* PickedFor(const void* group) noexcept
 {
     std::int32_t      num  = 0;
@@ -206,7 +206,7 @@ std::uint64_t Pick(CallFn pick, std::uint64_t group, std::uint64_t out, std::uin
                                                    : L"no coin (not an enemy controller, or no other player can be targeted)");
         return own;
     }
-    // Pick writes only `out` (RE §18.9), so it may run again: this time with the seat's member as "the player".
+    // Pick writes only `out`, so it may run again: this time with the seat's member as "the player".
     const void* const   seated = players::generation::MemberOf(seat);
     const std::uint64_t held   = seated != nullptr ? scopes::thread_hold::Holding(t_player, seated, pick, group, out, c, d) : 0;
     if ((held & 0xFF) != 0 && scopes::leader_scope::ObjectAt(reinterpret_cast<const void*>(out)) == seated)
@@ -259,7 +259,7 @@ bool Install(const platform::GameImage& image) noexcept
     }
     g_resolveLeader = reinterpret_cast<ResolveFn>(*resolver);
     // All five together or none: a pick naming a seat without the rebalance's answer would let the game release and
-    // re-pick the group's locks every frame (RE §18.7.3), and the coin acts only through the two pick calls.
+    // re-pick the group's locks every frame, and the coin acts only through the two pick calls.
     // on_unreal_init: no battle yet, so no thread can be at the two crossing calls (InstallFromOwnThread's rule; a
     // reload of the mod in the middle of a battle would break it, as for the sibling modules' crossing calls).
     const bool pickCalls =

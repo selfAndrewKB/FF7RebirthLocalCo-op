@@ -34,7 +34,7 @@ namespace {
 
 using Clock = std::chrono::steady_clock;
 
-// RE-p2-attack-cameras.md §9.4-§9.6 and §9.11 (S-ATKCAMEDGE); this build's slots and the functions they hold.
+// research/RE-p2-attack-cameras.md; this build's slots and the functions they hold.
 // Guard effect: vt_FEndCharacterControllerComponentBattlePlayer +0x678 (1.005 +0x680): char fn(component, const FVector*).
 constexpr std::uintptr_t kGuardSlot = 0x145796550;
 constexpr std::uintptr_t kGuard     = 0x14143C948;  // CharComp_Vt_PlayCameraEffectIfEnabled
@@ -72,7 +72,7 @@ struct Counts
 };
 std::array<Counts, players::kMaxPlayers> g_counts{};  // by seat; index 0 unused
 // The meshes whose shake NotifyState Begin ran on a seat's camera, with the seat: their End stops it there (the handle
-// is per component, so an End on another camera could stop an unrelated shake; S-ATKCAMVERIFY 4b).
+// is per component, so an End on another camera could stop an unrelated shake).
 struct ShakeMesh
 {
     const void* mesh = nullptr;

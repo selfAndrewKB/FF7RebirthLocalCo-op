@@ -34,7 +34,7 @@ namespace lss::camera::location_rows {
 
 namespace {
 
-// RE-p2-framing.md "Live finding" §1.1, §2.3, §3.3 (this build; slots and entries checked by disassembly).
+// research/RE-p2-framing.md (this build; slots and entries checked by disassembly).
 // vtbl_OpLocationListener slot 2: OpLocationListener_OnCameraSetting_ForwardToOp(listener, location, row, enter):
 // op = *(listener+8); enter -> op vt+0xE0 (set layer 5), else op vt+0xE8 (clear layer 5).
 constexpr std::uint8_t kListenerForwardBytes[] = {0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8, 0x5E, 0x94, 0x07,
@@ -52,7 +52,7 @@ constexpr platform::SlotFact kNavAreaTickSlot{L"UEndPlayerExistNavAreaComponent'
 using location_volumes::kNavAreaController;
 using facts::kCameraManagerBattleOperator;
 
-// A seat's own location rows (§2.3, a documented recreation of the manager's enter/leave bookkeeping only): the
+// A seat's own location rows (a documented recreation of the manager's enter/leave bookkeeping only): the
 // game's volume list, containment test and the volume's row and priority (camera/location_volumes.h).
 using location_volumes::kFlagChangeCamera;
 using location_volumes::kFlagDisabled;

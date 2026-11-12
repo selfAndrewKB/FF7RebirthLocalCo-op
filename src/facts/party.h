@@ -8,8 +8,8 @@
 // stage is installed only if every fact it uses holds (platform/verified_code.h). Each offset was read at an
 // instruction that uses it.
 //
-// Research: Rebirth/Documentation/research/RE-p2-build-facts-ida.md, RE-p2-deployed-party.md §4.1,
-// RE-p2-party-switch.md §1.2, RE-p2-member-handover.md §3.3, RE-p2-sticks-tags-ida.md, RE-p2-classic-autoplay.md.
+// Research: Rebirth/Documentation/research/RE-p2-build-facts-ida.md, RE-p2-deployed-party.md,
+// RE-p2-party-switch.md, RE-p2-member-handover.md, RE-p2-sticks-tags-ida.md, RE-p2-classic-autoplay.md.
 
 #include "platform/build_value.h"
 #include "platform/verified_code.h"
@@ -23,7 +23,7 @@ using platform::SlotFact;
 
 // The party manager
 /// The party manager (a native singleton): +0x140 is the primary player controller, an FWeakObjectPtr {index, serial}
-/// read by GetPrimaryEndPlayerController_FromPartyManager (its only read, RE-p2-camera-movement-ida.md §1.1); +0x148
+/// read by GetPrimaryEndPlayerController_FromPartyManager (its only read, RE-p2-camera-movement-ida.md); +0x148
 /// the leader (an FWeakObjectPtr, read by ResolvePartyLeaderWeakPtr); +0x150 the leader's player type (u8).
 inline constexpr std::uintptr_t kPartyManagerGlobal            = 0x14939BCE0;
 inline constexpr std::uint32_t  kPartyManagerPrimaryController = 0x140;
@@ -38,11 +38,11 @@ inline constexpr std::uint8_t kGetPartyLeaderTypeBytes[] = {0x48, 0x8B, 0x05, 0x
 inline constexpr FunctionFact kGetPartyLeaderType{L"UEndPartyAPI_GetPartyLeaderType", 0x1408070C4,
                                                   kGetPartyLeaderTypeBytes};
 /// Party_IsTypeDead_AIHolder6(unused, u8 type): the member of `type`'s control state is Dead (6); the type in dl
-/// (RE-downed-ally-commands.md §2.1).
+/// (RE-downed-ally-commands.md).
 inline constexpr std::uint8_t kIsTypeDeadBytes[] = {0x40, 0x53, 0xB8, 0x80, 0x00, 0x00, 0x00};
 inline constexpr FunctionFact kIsTypeDead{L"Party_IsTypeDead_AIHolder6", 0x140805200, kIsTypeDeadBytes};
 /// PartyType_HasStateId(u8 type, u8 status): the member of `type` has the status; the battle switch's own member test
-/// and the command menu's gates ask it for Petrify (RE-downed-ally-commands.md §5.2, RE-p2-party-switch.md).
+/// and the command menu's gates ask it for Petrify (RE-downed-ally-commands.md, RE-p2-party-switch.md).
 inline constexpr std::uint8_t kTypeHasStateIdBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x74,
                                                         0x24, 0x10, 0x57, 0xB8, 0x80, 0x00, 0x00, 0x00};
 inline constexpr FunctionFact kTypeHasStateId{L"PartyType_HasStateId", 0x140A40050, kTypeHasStateIdBytes};
@@ -107,7 +107,7 @@ inline constexpr std::uint8_t kIsEndCharacterBytes[] = {
     0x48, 0x89, 0x5C, 0x24, 0x08, 0x57, 0xB8, 0x80, 0x00, 0x00, 0x00, 0xE8,
     0xD8, 0x58, 0x1B, 0x01, 0x48, 0x2B, 0xE0, 0x48, 0x8B, 0x05, 0xE6, 0x01};
 inline constexpr FunctionFact kIsEndCharacter{L"IsEndCharacter", 0x140EF9648, kIsEndCharacterBytes};
-// Player 1's battle switch's member test T (RE-p2-deployed-party.md §4.1, RE-p2-party-switch.md §1.2)
+// Player 1's battle switch's member test T (RE-p2-deployed-party.md, RE-p2-party-switch.md)
 // as the game's own function (al only; 167 callers, so called, never hooked): the character is live,
 // has its battle controller component, is not in the dead state (6) and is not petrified (id 22).
 // And the two leader types the game hands back to player 1, and the deployed test itself.
@@ -117,7 +117,7 @@ inline constexpr std::uint8_t kIsBattleActiveBytes[] = {
 inline constexpr FunctionFact kIsBattleActive{L"Character_IsBattleActive_NotDeadNotPetrified", 0x140A401BC,
                                               kIsBattleActiveBytes};
 /// AEndCharacter::SwitchAIControl_Async(character, toPlayer, controller): on the game thread it possesses at once
-/// (S-SYNANYTHREAD Q1; the rides and the synergy partner call it).
+/// (the rides and the synergy partner call it).
 inline constexpr std::uint8_t kSwitchAiControlAsyncBytes[] = {
     0x40, 0x55, 0x48, 0x8D, 0x6C, 0x24, 0xA9, 0xB8, 0x90, 0x00, 0x00, 0x00,
     0xE8, 0x23, 0x93, 0x5B, 0x01, 0x48, 0x2B, 0xE0, 0x80, 0x3D, 0x3A, 0x72};
@@ -136,12 +136,12 @@ inline constexpr FunctionFact kPlayerTypeFromComponent{L"EndCharacter_GetPlayerT
 inline constexpr std::uintptr_t kFollowStatePlayerVTable = 0x14580C8F8;
 // Enemy AI controllers (EndAIControllerEnemyBase, both builds): an FWeakObjectPtr to the enemy character.
 inline constexpr std::uint32_t kEnemyControllerCharacter = 0x464;
-// The AI controller's active brain and its state (RE-p2-member-handover.md §3.3)
+// The AI controller's active brain and its state (RE-p2-member-handover.md)
 inline constexpr std::uint32_t kAiActiveBrain = 0x518;
 inline constexpr std::uint32_t kBrainIndex    = 0x19;  // u8; 0 is the base brain
 inline constexpr std::uint32_t kBrainState    = 0x20;
 inline constexpr std::uint32_t kAiStateType   = 0x18;  // u8, EEndAIState
-inline constexpr std::uint32_t kAiPauseMask   = 0x460; // u32 (RE-p2-party-warp.md §1, the sampler table)
+inline constexpr std::uint32_t kAiPauseMask   = 0x460; // u32 (RE-p2-party-warp.md, the sampler table)
 /// EEndAIState, the state's type byte (the reflected enum, FF7R2UProj/Source/EndGame/Public/EEndAIState.h).
 enum AiState : std::uint8_t
 {
@@ -167,7 +167,7 @@ enum AiState : std::uint8_t
 /// "tick / don't tick" on alternate frames and this bit follows it (RE-ai-pause-bit.md); no AI decision reads it on
 /// a possessed member. The probes read the mask without it.
 inline constexpr std::uint32_t kAiPauseAnimationBudget = 0x2000;
-// The follow state's teleport (RE-p2-party-warp.md §1): the range it allows, and its forced request pending (set by
+// The follow state's teleport (RE-p2-party-warp.md): the range it allows, and its forced request pending (set by
 // ForceTeleport, cleared by the commit).
 inline constexpr std::uint32_t kFollowStateTeleportRange = 0x344;  // float
 inline constexpr std::uint32_t kFollowStateForced        = 0x39D;  // u8
@@ -197,7 +197,7 @@ inline constexpr std::uint8_t kTagSetFindIdBytes[] = {
 inline constexpr FunctionFact kTagSetFindId{L"the tag registry lookup", 0x1408428F0, kTagSetFindIdBytes};
 
 // Battle targeting: the Condition target selector's select, bool(selector, u8 reason, UObject** out), in its vtable's
-// slot +0x88 (the out is written on every path; 0 keeps the current target). RE-p2-enemy-target-bias.md §8; the slot
+// slot +0x88 (the out is written on every path; 0 keeps the current target). RE-p2-enemy-target-bias.md; the slot
 // is replaced by battle/equal_targeting, watched by target_census.
 inline constexpr std::uint8_t kCondTargetSelectBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x55, 0x56, 0x57,
                                                           0x41, 0x54, 0x41, 0x55, 0x41, 0x56, 0x41, 0x57};

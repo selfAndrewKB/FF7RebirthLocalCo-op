@@ -38,7 +38,7 @@ namespace {
 using RC::Unreal::UClass;
 using RC::Unreal::UObject;
 
-// RE-p2-hud-view-levers.md §1 and RE-p2-field-prompts.md §4 (this build).
+// research/RE-p2-hud-view-levers.md and RE-p2-field-prompts.md (this build).
 constexpr std::int32_t   kBasePos     = 0x3C8;        // UEndFieldActionIcon._BasePosY, an FVector2D
 
 constexpr int kMaxOwnBaseLines = 20;

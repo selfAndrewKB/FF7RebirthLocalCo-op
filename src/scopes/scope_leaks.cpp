@@ -26,9 +26,9 @@ namespace lss::scopes::scope_leaks {
 
 namespace {
 
-// Leak 1 (RE-p2-scope-leak-audit.md, "Patch facts"): the component vt+0x428 block at 0x14125C189.
-// Its `inc qword [rip+...]` at 0x14125C1A7 names the frame count; the check of those bytes is the
-// check that the three globals are where the research read them.
+// Leak 1 (research/RE-p2-scope-leak-audit.md): the block in the component's tick slot that advances the game
+// clock. Its `inc qword [rip+...]` (kClockIncrement) names the frame count; the check of those bytes is the check
+// that the three globals are where the research read them.
 constexpr std::uint8_t   kClockIncrementBytes[] = {0x48, 0xFF, 0x05, 0x52, 0x2C, 0xEA, 0x07};
 constexpr platform::FunctionFact kClockIncrement{L"the clock's frame-count increment", 0x14125C1A7,
                                                  kClockIncrementBytes};
@@ -41,8 +41,8 @@ constexpr platform::FunctionFact kClockMsScale{L"the clock's 1000.0 multiplier",
 constexpr std::uint32_t  kComponentGuard      = 0x9A4;        // bit 0: this component advanced the clock this frame
 constexpr int            kNudges              = 4;
 
-// Leak 2: the leader block written by 0x14125C394 (A only): a dword, the 48-byte transform at
-// +0x10, two 12-byte vectors and dt. The byte after it (0x14911F28C) is an unrelated flag.
+// Leak 2: the block the same tick writes for the leader alone: a dword, the 48-byte transform at +0x10, two 12-byte
+// vectors and dt (kLeaderBlock, kLeaderBlockSize). The byte after it is an unrelated flag.
 constexpr std::uintptr_t kLeaderBlock     = 0x14911F230;
 constexpr std::size_t    kLeaderBlockSize = 0x5C;
 

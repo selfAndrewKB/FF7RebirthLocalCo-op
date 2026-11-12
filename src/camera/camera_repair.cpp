@@ -29,16 +29,16 @@ namespace {
 
 using Clock = std::chrono::steady_clock;
 
-// PrimaryPCM_ResetCameraToField(u8 bForce) (1.005 0x1414335C4): GetEndPlayerCameraManager(), then
-// AEndPlayerCameraManager::ResetCameraToField_Cut (0x1408A55DC): the camera-cut bit, the collision and occlusion state
+// PrimaryPCM_ResetCameraToField(u8 bForce): GetEndPlayerCameraManager(), then
+// AEndPlayerCameraManager::ResetCameraToField_Cut: the camera-cut bit, the collision and occlusion state
 // cleared, the operators reset, and the Reset module re-armed on the primary camera's current operator. 31 game
-// callers (player warps, fast travel). RE-p2-chocobo-warp-camera.md §5.1.
+// callers (player warps, fast travel). research/RE-p2-chocobo-warp-camera.md.
 constexpr std::uint8_t kResetBytes[] = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0xD8,
                                         0xAE, 0x80, 0x00, 0x48, 0x2B, 0xE0, 0x8A, 0xD9};
 constexpr platform::FunctionFact kReset{L"PrimaryPCM_ResetCameraToField", 0x1418A404C, kResetBytes};
 using ResetFn = void (*)(std::uint8_t force);
 
-// The Field operator (camera manager +0x2CB0) and its modules (§5.1, §6).
+// The Field operator (camera manager +0x2CB0) and its modules.
 constexpr std::uint32_t kOpPose        = 0x40;  // the pose floats +0x40..+0x98; pitch, yaw, roll at +0x50;
                                                 // three of them are stack residue (world::world_rules::kPoseLanes)
 constexpr std::uint32_t kOpPoseFloats  = (0x98 - 0x40) / 4;
@@ -55,7 +55,7 @@ constexpr std::uint32_t kResetYaw      = 0x40C;  // float
 constexpr std::uint32_t kPcmFlags      = 0x2C10;  // bit 0x400: the stock bGameCameraCutThisFrame
 constexpr std::uint32_t kCameraCutBit  = 0x400;
 
-// The ride framing (RE-p2-chocobo-warp-camera.md §3, §6): while a player rides, slot 15 holds the chocobo camera
+// The ride framing (research/RE-p2-chocobo-warp-camera.md): while a player rides, slot 15 holds the chocobo camera
 // module the boarding installed; the repair lines describe it.
 using facts::kChocoboCameraModuleVTable;
 constexpr std::uint32_t  kModuleOwner       = 0x50;         // the operator SetModuleSlot15 wrote
@@ -75,7 +75,7 @@ struct Pose
     std::uint32_t nonFinite = 0;          // bit i: values[i] is not finite (the lanes included)
 };
 
-/// What the float at pose offset `4 * i` is (RE-p2-framing.md §1.3: the operator's 0x58-byte camera command).
+/// What the float at pose offset `4 * i` is (research/RE-p2-framing.md: the operator's 0x58-byte camera command).
 const wchar_t* PoseFloatName(std::uint32_t i) noexcept
 {
     constexpr const wchar_t* kNames[kOpPoseFloats] = {

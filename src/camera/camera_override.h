@@ -1,7 +1,7 @@
 #pragma once
 
 // Each player's camera plays only its own character's animation camera overrides
-// (RE-p2-battle-camera.md §5, pass S-CAM4).
+// (research/RE-p2-battle-camera.md).
 //
 // Attack animations can carry an "override camera" notify state (UEndAnimNotifyStateOverrideCameraParams).
 // It sends a request through a delegate on the character, bound by the camera manager that follows

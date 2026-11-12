@@ -10,7 +10,7 @@
 // Two ways in:
 // - Ctrl+F2 / `window-span on` with a seat in: one monitor per column shown, the window following the
 //   columns (two with player 2, three under `view-columns 3`), and left when one column is left (every seat out).
-// - The three-player monitor mode, Ctrl+F3 / `multi-monitor on` (the user's columns rule): the span held over the
+// - The three-player monitor mode, Ctrl+F3 / `multi-monitor on` (the columns rule): the span held over the
 //   row whatever the players, so the mirror views (views/mirror_player.h) fill the columns no player has. The
 //   settings file's `multi-monitor = on` (platform/settings.h) holds it from the game's first steady frame. The mode
 //   is a standing wish: refused or lost to the desktop, it is tried again at each later change of the desktop; the

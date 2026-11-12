@@ -21,17 +21,17 @@ namespace lss::views {
 
 namespace {
 
-// RE-p2-single-view.md §2 (pass S-SV1) and its S-SV2 verification; this build.
+// research/RE-p2-single-view.md; this build.
 //
 // The game state through the game's own getter, which also checks its class (null otherwise): it
-// reads g_AEndGameMode 0x1490FF2B8 +0x288, takes no arguments, and changes nothing.
+// reads g_AEndGameMode +0x288, takes no arguments, and changes nothing.
 constexpr std::uint8_t   kGetEndGameStateBytes[] = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8,
                                                     0x70, 0x0A, 0x68, 0x01, 0x48, 0x2B, 0xE0, 0x48};
 constexpr platform::FunctionFact kGetEndGameState{L"the EndGameState getter", 0x140A2E4B4, kGetEndGameStateBytes};
 constexpr std::uint32_t  kState    = 0x278;  // uint8: the EndGameState state (+0x279 is its history)
 constexpr std::uint32_t  kMenuKind = 0x3BC;  // uint8: EEndSystemPauseMenuKind
 
-// The on/off table: its owner at [[0x1490FEDE8]+0x170] (a native game object the game mode creates
+// The on/off table: its owner at [[kEndGameRoot]+0x170] (a native game object the game mode creates
 // and frees), two int32 counts per id; an id is on while their sum is not zero.
 using facts::kEndGameRoot;
 using facts::kRootGameState;
@@ -42,17 +42,17 @@ constexpr std::uint32_t  kOnOffCountB  = 0x1A1263C;
 // ShowMainMenuInPV, ShowMainMenu_CardGameDecks.
 constexpr std::array<std::int32_t, 6> kMenuIds{147, 148, 149, 154, 155, 156};
 // EndFieldOnOffTable ShowSkipPauseMenu: held by the dialogue ("Dialogue") and camera-planner ("PlannerEvent")
-// scenes while they can be skipped (§7.2).
+// scenes while they can be skipped.
 constexpr std::int32_t kSkippableSceneId = 12;
 
-// The job board (§7.1): EndUISystem's slot +0x1E8 (a static) points to the board's 8-byte FWeakObjectPtr;
+// The job board: EndUISystem's slot +0x1E8 (a static) points to the board's 8-byte FWeakObjectPtr;
 // the board's script command keeps running while the game's FWeakObjectPtr_IsValid says it is valid.
 constexpr std::uintptr_t kJobBoardSlot          = 0x1493498C8;
 constexpr std::uint8_t   kWeakIsValidBytes[]    = {0x44, 0x8B, 0x49, 0x04, 0x45, 0x33, 0xC0, 0x45,
                                                    0x85, 0xC9, 0x74, 0x4F, 0x8B, 0x01, 0x85, 0xC0};
 constexpr platform::FunctionFact kWeakIsValid{L"FWeakObjectPtr_IsValid", 0x1418EB3D4, kWeakIsValidBytes};
 
-// The pause-menu family (RE-p2-menu-census.md E1, S-MENUEDGE): UEndMenuAPI::IsPauseMenuClosed, the game's own
+// The pause-menu family (research/RE-p2-menu-census.md): UEndMenuAPI::IsPauseMenuClosed, the game's own
 // EndUI_NoBlockingWidgetAlive thunk (bool fn(), true = closed). It only reads; its EndUISystem__Get would build the UI
 // system if it did not exist, so it is called only once the system's slot 27 (written by its constructor) is set.
 constexpr std::uint8_t   kPauseMenuClosedBytes[] = {0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8};
@@ -74,7 +74,7 @@ constexpr std::uint32_t  kWidgetState    = 0x3D8;
 constexpr std::uint32_t  kWidgetZOrder   = 0x2A8;  // -1 once the game's RemoveFromParent took it off its overlay
 constexpr std::uint8_t   kRaceMenuDone   = 5;
 
-// On/off 153 ShowColosseumMenu, held by a VR or colosseum session from Begin to End (RE-p2-minigames.md §7.2). For the
+// On/off 153 ShowColosseumMenu, held by a VR or colosseum session from Begin to End (research/RE-p2-minigames.md). For the
 // log only (E4, E6): 92 SoundCallEventMiniGameMenuInOut (set by no native code: Blueprint or script data), and Chadley's
 // manager [root+0x258]: state machine count +0x1D0, table +0x1D8 (32-byte records {i32 id; Enter; Tick; Exit}), current
 // +0x1E0, requested +0x1E8.
@@ -87,7 +87,7 @@ constexpr std::uint32_t kChadleyCurrent   = 0x1E0;
 constexpr std::uint32_t kChadleyRequested = 0x1E8;
 constexpr std::uint32_t kChadleyRecord    = 32;
 
-// Minigames (RE-p2-minigames.md §1, §7, §9-§10; RE-p2-minigames-stage2.md; both builds, the same offsets): the
+// Minigames (research/RE-p2-minigames.md, RE-p2-minigames-stage2.md; both builds, the same offsets): the
 // field-exclusion mask (u32 in the on/off table's owner), the on/off ids 36 MiniGamePlaying, 139 CrashBoxMiniGamePlaying,
 // 140 CactusMissionMiniGamePlaying.
 constexpr std::uint32_t kExclusionMask  = 0x1A12288;
@@ -97,7 +97,7 @@ constexpr std::int32_t  kCactusId       = 140;
 // Id 36's setter (SM+0x1A128EC + 8*36: the FName of the last SetOn that passed one, cleared when 36 goes off); the field
 // uses by name are in FieldUseName (whole_screen_reason.cpp).
 constexpr std::uint32_t kId36Setter = 0x1A12A0C;
-// The game's battle test, UEndBattleAPI_IsInBattle (1.004 0x1408E242C), as reads: the battle system's byte +0x300 is 0
+// The game's battle test, UEndBattleAPI_IsInBattle, as reads: the battle system's byte +0x300 is 0
 // and the encounter state ([[game root]+0x1B8]+0x3D558) is 3 or 4. The game does not null-check the battle system; this
 // does.
 using facts::kBattleStateGlobal;
@@ -106,7 +106,7 @@ using facts::kRootModeHolder;
 constexpr std::uint32_t  kEncounterState = 0x3D558;
 // The frog-guys manager (a pointer global to a plain C++ object, cleared in its destructor before it dies) and its
 // EndStateMachine's current row (+0x18, into a static table in the exe; the state id is the row's first i32: 2 load ..
-// 7 play .. 8 result .. 11 retry or finish, 0 done, 1 unused; RE-p2-minigames.md §9); the G-Bike manager actor's weak pointer (a
+// 7 play .. 8 result .. 11 retry or finish, 0 done, 1 unused; research/RE-p2-minigames.md); the G-Bike manager actor's weak pointer (a
 // static FWeakObjectPtr).
 constexpr std::uintptr_t kFrogManager  = 0x14939BCC0;
 constexpr std::uint32_t  kFrogStateRow = 0x18;
@@ -114,7 +114,7 @@ constexpr std::uintptr_t kGBikeManager = 0x1470C6CF0;
 // The minigame-only maps (the game state's location): views/whole_screen_rules.h.
 
 // The game state's current location (an 8-byte FName; +0x30C requested, +0x314 previous) and the
-// title's, which the game compares against itself (§7.3).
+// title's, which the game compares against itself.
 constexpr std::uint32_t  kLocation  = 0x304;  // the title's name: views/whole_screen_rules.h
 
 // The cutscene manager (a pointer global; the game creates the manager on first use, so the check
@@ -383,7 +383,7 @@ bool FrogGuysPlaying() noexcept
     return row != 0 && Read(row, state) && state >= 2 && state <= 11;
 }
 
-/// The minigame inputs of the signals (RE-p2-minigames.md §7.6, §9-§10).
+/// The minigame inputs of the signals (research/RE-p2-minigames.md).
 void ReadMinigame(ScreenSignals& signals, std::uintptr_t root, std::uintptr_t stateManager) noexcept
 {
     signals.inBattle    = g_battleSystem == 0 || InBattle(root);  // no battle test: the minigame bit is not read

@@ -24,10 +24,10 @@ namespace lss::hud {
 namespace {
 
 // UUserWidget::execSetPositionInViewport's call to SetPositionInViewport (bytes read from the running game):
-//   call UUserWidget__SetPositionInViewport at 0x144CED910 (the start of its 16-byte block).
+//   call UUserWidget__SetPositionInViewport (the start of its 16-byte block).
 constexpr std::uintptr_t kBlueprintSetPositionCall = 0x144CED910;
 
-// The widget's viewport slot as UUserWidget keeps it (pass 4: anchors +0x210, offsets +0x220,
+// The widget's viewport slot as UUserWidget keeps it (anchors +0x210, offsets +0x220,
 // alignment +0x230; read, never written).
 constexpr std::uint32_t kViewportAnchors   = 0x210;  // FAnchors: Min, Max
 constexpr std::uint32_t kViewportOffsets   = 0x220;  // FMargin: Left, Top, Right, Bottom

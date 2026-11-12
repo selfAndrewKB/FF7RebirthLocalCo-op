@@ -1,7 +1,7 @@
 #pragma once
 
 // Every player hears the sounds near them: each SEAD sound is measured from the nearest player's listener
-// (research/RE-p2-audio-listener.md for the mechanism, RE-listener-per-seat.md for every player; plan/seats.md).
+// (research/RE-p2-audio-listener.md for the mechanism, RE-listener-per-seat.md for every player).
 //
 // UE's stock viewport draw sets one audio listener per view, in the local player list's order (FAudioDevice listeners
 // [0], [1], [2]: one per column, views/columns.h). Square Enix's SEAD audio device pushes only listener [0] into SEAD's

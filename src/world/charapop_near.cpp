@@ -36,13 +36,13 @@ using Clock = std::chrono::steady_clock;
 // CharaPop_SetEntryMinLODLevel_ByKey(const key*, u8 level, bool evaluateNow): through the game root's
 // manager to CharaPopObj_SetEntryMinLODLevel_Impl, which writes entry+0x1A1 and, with evaluateNow, queues the
 // key for the next LOD tick; off the game thread it posts itself as a game-thread task
-// (RE-p2-charapop-per-view.md §1.5). Entry: mov eax,28h; call __alloca_probe; sub rsp,rax; mov rax,rcx.
+// (research/RE-p2-charapop-per-view.md). Entry: mov eax,28h; call __alloca_probe; sub rsp,rax; mov rax,rcx.
 constexpr std::uint8_t kSetMinLevelBytes[] = {0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8, 0x32, 0x07,
                                               0x14, 0x01, 0x48, 0x2B, 0xE0, 0x48, 0x8B, 0xC1};
 constexpr platform::FunctionFact kSetMinLevel{L"CharaPop_SetEntryMinLODLevel_ByKey", 0x140F6E7F4, kSetMinLevelBytes};
 using SetMinLevelFn = std::uint8_t (*)(const std::uint64_t* key, std::uint8_t level, bool evaluateNow);
 
-// The evaluator runs for these states only (§1.3).
+// The evaluator runs for these states only.
 constexpr std::int32_t kFirstEvaluatedState = 4;
 constexpr std::int32_t kLastEvaluatedState  = 9;
 
@@ -115,7 +115,7 @@ float FloatAt(const std::byte* manager, std::uint32_t offset) noexcept
     return ReadField<float>(manager, offset);
 }
 
-/// The distances the evaluator uses for an entry of `level`, the manager's overrides applied (§1.3).
+/// The distances the evaluator uses for an entry of `level`, the manager's overrides applied.
 charapop::LodDistances DistancesFor(const std::byte* manager, std::uint8_t level) noexcept
 {
     using namespace charapop;
@@ -603,7 +603,7 @@ bool Installed() noexcept
 
 void Release() noexcept
 {
-    // Any thread: the setter posts itself to the game thread when called off it (§1.5), and the tick that
+    // Any thread: the setter posts itself to the game thread when called off it, and the tick that
     // shares these records is unregistered first (~LocalSplitScreenMod in mod.cpp unregisters the engine tick
     // callback before calling this; the records are not locked, so keep that order).
     if (g_installed && g_pop != nullptr)

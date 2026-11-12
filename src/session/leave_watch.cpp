@@ -179,7 +179,7 @@ void ListHolders() noexcept
             {
                 return RC::LoopAction::Continue;
             }
-            // RE-p2-controller-after-leave.md S-PC2LEAK2: UInputComponent::CachedKeyToActionInfo at +0x120 (0x70-B
+            // research/RE-p2-controller-after-leave.md: UInputComponent::CachedKeyToActionInfo at +0x120 (0x70-B
             // entries, +0 the UPlayerInput*), dropped only when the collector nulls the PlayerInput.
             if (input != nullptr && inputComponent != nullptr && object->IsA(inputComponent))
             {

@@ -1,6 +1,6 @@
 #pragma once
 
-// Lock groups prefer player 1 or a seat's player by each picking enemy's coin (RE-p2-enemy-target-bias.md §18, §20).
+// Lock groups prefer player 1 or a seat's player by each picking enemy's coin (research/RE-p2-enemy-target-bias.md).
 //
 // A lock group (RegisterTargetLockGroup; in Rebirth only the Temple of the Ancients Stun Ray) spreads its enemies over
 // the party, at most N on each target, and with bPrioritizeUCPC prefers "the player": Pick takes the party leader when

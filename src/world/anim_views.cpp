@@ -77,7 +77,7 @@ constexpr platform::PerBuild<std::uint32_t> kMeshAngle = {0x1238, 0x1228};
 constexpr float kReach        = 33000.0f;
 constexpr auto  kSummaryEvery = std::chrono::seconds(10);
 
-// The tick-time measure (RE-p2-detail-drop-p1-facing.md §2). Its first instruction crosses a block in 1.004, so the
+// The tick-time measure (research/RE-p2-detail-drop-p1-facing.md). Its first instruction crosses a block in 1.004, so the
 // second is replaced there (both a store into the caller's home area).
 constexpr std::uint8_t   kMeasureFirstTwo[]  = {0x48, 0x89, 0x5C, 0x24, 0x10,   // mov [rsp+10h],rbx
                                                 0x48, 0x89, 0x74, 0x24, 0x18};  // mov [rsp+18h],rsi
@@ -290,7 +290,7 @@ void MeasureEveryView(void* mesh, const float* location, const float* forward) n
     {
         return;
     }
-    // Both of the game's callers (the budgeted mesh tick and 1.004 0x140AFD2B8 / 1.005 0x141983790) pass stack copies
+    // Both of the game's callers (the budgeted mesh tick and one other) pass stack copies
     // of player 1's snapshot (W+0x8C0, W+0x8E0), so every call here is a measure from player 1's camera (seen
     // live: a test for W+0x8C0's own address never matched). The mod's own measures call the original directly.
     CameraCopy   cameras[players::kMaxPlayers];
@@ -344,8 +344,8 @@ std::uintptr_t Refilled(void* a, std::uintptr_t b, std::uintptr_t c, std::uintpt
 
 /// Each registered actor near a seat's camera gets that seat's {distance, angle} in its pair list, one pair per seat in
 /// seat order (game thread, before the parallel evaluation: nothing else touches the lists or the meshes' two fields
-/// now). The evaluation takes the minimum over the whole list (it walks Num entries, RE-p2-anim-optimisation-two-views.md
-/// §1.2), and the list grows through the game's own grow, so a pair per seat fits.
+/// now). The evaluation takes the minimum over the whole list (it walks Num entries, research/RE-p2-anim-optimisation-two-views.md),
+/// and the list grows through the game's own grow, so a pair per seat fits.
 void AppendSeatPairs() noexcept
 {
     charapop::Camera cameras[players::kMaxPlayers];

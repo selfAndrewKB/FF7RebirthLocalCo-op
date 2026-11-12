@@ -22,7 +22,7 @@ int DumpWidgets() noexcept;
 /// anchors, alignment) and bAutoSize. Returns the number of slots logged, negative on failure.
 int DumpSlots(const std::wstring& className) noexcept;
 
-/// `dump hud-players`: which player the HUD is built for (RE-p2-hud.md pass 8, P8.5 items 1, 2, 4 and 5, P8.9):
+/// `dump hud-players`: which player the HUD is built for (research/RE-p2-hud.md):
 ///   - the local players and their controllers;
 ///   - the order of the world's controller list (UGameplayStatics::GetPlayerController by index),
 ///     which the compass and quest icons take their first entry of;

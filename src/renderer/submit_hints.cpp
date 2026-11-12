@@ -24,13 +24,13 @@ namespace lss::renderer {
 namespace {
 
 // `lea rax,[FRHICommandSubmitCommandsHint vtable]; mov [rcx],rax` where the parallel-pass dispatch builds its hint node.
-// Research build; 1.005 0x141018B78. The opcode is checked, and the displacement must reach kSubmitCommandsHintVTable.
+// Research build; 1.005 through the build table. The opcode is checked, and the displacement must reach kSubmitCommandsHintVTable.
 constexpr std::uint8_t   kLeaOpcode[]  = {0x48, 0x8D, 0x05};
 constexpr platform::FunctionFact kHintNodeLea{L"the parallel dispatch's hint-node lea", 0x14190784C, kLeaOpcode};
 using facts::kSubmitCommandsHintVTable;
 using facts::kSubmitCommandsHintExecute;
 constexpr std::uint8_t   kRetZero[]    = {0xC2, 0x00, 0x00};
-// slot 0 of the vtable 8 bytes on; 1.005 0x140743B50
+// slot 0 of the vtable 8 bytes on; 1.005 through the build table
 constexpr platform::FunctionFact kNullsub{L"the hint vtable's nullsub", 0x14076B370, kRetZero};
 constexpr std::uint8_t   kVtableStep   = 8;
 

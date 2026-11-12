@@ -30,7 +30,7 @@ namespace lss::camera::camera_override {
 
 namespace {
 
-// Facts read from the database (RE-p2-battle-camera.md §5; this build).
+// Facts read from the database (research/RE-p2-battle-camera.md; this build).
 constexpr std::uintptr_t kModuleGlobal   = 0x1491A4B78;  // TWeakPtr {object, reference controller}
 constexpr std::uintptr_t kModuleVTable   = 0x1466B70D0;  // FEndNotifyOverrideCameraModule
 constexpr std::uint32_t  kSlotFour       = 4;            // layer 4, NotifyOverride (camera/camera_access.h)
@@ -42,9 +42,9 @@ constexpr std::uint32_t  kFieldOperator  = 0x2CB0;       // operator 12
 // A player character's override delegates: the added one (fn at +0x17A0, payload at +0x17C8), the
 // removed one (fn at +0x17E0, payload at +0x1808), and the requests it holds (+0x1770 count). 1.005 moved the Square
 // Enix character fields by +0x20 (RE-1005-player-two.md: both fn fields read in code, CONFIRMED). The payloads:
-// CONFIRMED, OnLeaderChanged 0x1412FB179..0x1412FB1F2 swaps each 0x40-byte delegate whole at +0x17C0 / +0x1800 (1.004:
-// +0x17A0 / +0x17E0), so the payload keeps its place inside it. The count: CONFIRMED, RemoveCameraOverride 0x14102F3F5
-// mov esi,[rcx+1790h] (1.004 0x141200B15 [rcx+1770h]); RE-1005-offsets-B.md.
+// CONFIRMED, OnLeaderChanged swaps each 0x40-byte delegate whole at +0x17C0 / +0x1800 (1.004: +0x17A0 / +0x17E0), so
+// the payload keeps its place inside it. The count: CONFIRMED, RemoveCameraOverride reads `mov esi,[rcx+1790h]` (1.004
+// [rcx+1770h]); research/RE-1005-offsets-B.md.
 constexpr platform::PerBuild<std::uint32_t> kAddedFn        = {0x17A0, 0x17C0};
 constexpr platform::PerBuild<std::uint32_t> kAddedPayload   = {0x17C8, 0x17E8};
 constexpr platform::PerBuild<std::uint32_t> kRemovedFn      = {0x17E0, 0x1800};
@@ -89,7 +89,7 @@ std::size_t Index(int seat) noexcept
 }
 
 /// The seat whose thunk a delegate called with `payload`, or -1 for none. The game hands each handler the address of
-/// the delegate's own storage inside the character, not the character (RE-seats-step6-camera-rumble.md §1): the added
+/// the delegate's own storage inside the character, not the character (research/RE-seats-step6-camera-rumble.md): the added
 /// delegate's at member+kAddedPayload (which holds the member: Tick checks it), the removed one's at
 /// member+kRemovedPayload (which holds nothing the handler reads). So the seat is the one whose member that storage is
 /// in. A payload in no seat's member (a delegate the game moved whole to another character keeps the thunk) goes to the

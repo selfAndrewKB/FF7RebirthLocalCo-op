@@ -73,15 +73,15 @@ void ApplyClipMap(float (&matrix)[16], const ClipMap& map) noexcept;
 /// The host scale that puts markers on their objects when the overlay is laid out in `band` of the
 /// image and the image is cover-fitted to the view: bandUiScale * coverScale. The marker factor is
 /// UIScale / host, and `bandUiScale` is the game's own UIScale of the band: its contain scale,
-/// EndUI__ContainScaleFor1920x1080 (0x1409F52B0), which the caller calls (the layout scale now
-/// equals it). 0 for unusable sizes.
+/// EndUI__ContainScaleFor1920x1080, which the caller calls (the layout scale equals it).
+/// 0 for unusable sizes.
 float MarkerHostScale(const IntRect& band, float bandUiScale, std::int32_t imageWidth, std::int32_t imageHeight,
                       float viewWidth, float viewHeight) noexcept;
 
 /// The x/y terms of the overlay entry's projection matrix (FEndMenuLayerEntry+0x50..+0x8F) that
 /// draw a layout of `band`'s size unstretched into `band` of an `imageWidth` x `imageHeight`
 /// target. The game builds this matrix from the rect's size alone, which stretches any rect over
-/// the whole target (FEndMenuLayerEntry__OrthoMatrixFromRectSize 0x142F83508); for the whole image
+/// the whole target (FEndMenuLayerEntry__OrthoMatrixFromRectSize); for the whole image
 /// these are exactly its terms. The z terms are the game's and are left alone.
 struct EntryPlacement
 {

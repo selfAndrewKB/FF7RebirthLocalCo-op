@@ -1,7 +1,7 @@
 #pragma once
 
 // The seats' players leave before the game leaves the field, and rejoin once the field is running again
-// (RE-p2-retry-reload.md, pass S-RL1).
+// (research/RE-p2-retry-reload.md).
 //
 // A retry, a checkpoint reload, loading a save, chapter select and a scripted location jump all
 // leave the field and enter it again inside the same world: no map load, so the LoadMap pre-callback

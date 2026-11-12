@@ -1,6 +1,6 @@
 #pragma once
 
-// Traversal for the seats' players, logging only (research/RE-p2-traversal.md §8, RE-p2-chocobo-traversal.md §12).
+// Traversal for the seats' players, logging only (research/RE-p2-traversal.md, RE-p2-chocobo-traversal.md).
 //
 // Ladders, climbing walls, zip lines, squeezes, beams and the chocobo's climb walls and launch pads are field-action
 // actors. When a player's trigger actor (controller +0x610) overlaps one, the actor registers itself on the party
@@ -16,7 +16,7 @@
 //   - a ladder climb's start and end, and whether its input update ran in a seat's scope;
 //   - the chocobo's glide and water-jet state enter and exit: the chocobo, the thread, whether a seat's scope is
 //     open, and the camera manager the primary controller resolves to (the exit hazard of
-//     RE-p2-chocobo-traversal.md §4.3).
+//     RE-p2-chocobo-traversal.md).
 // Every hook passes the game's call through unchanged. Events at Debug, per-frame lines at Trace.
 
 #include "platform/image.h"

@@ -1,7 +1,7 @@
 #pragma once
 
 // Battle popups (damage and heal numbers, battle texts such as Dodge, UMG popups such as level-up)
-// placed in each player's view (RE-p2-battle-popups.md §1).
+// placed in each player's view (research/RE-p2-battle-popups.md).
 //
 // The popup manager (EndUISystem+0xA0) stores the world's first player controller in each popup when
 // it spawns, and places the popup through that controller every frame, so every view shows player 1's

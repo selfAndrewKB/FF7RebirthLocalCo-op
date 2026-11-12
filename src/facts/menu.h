@@ -53,7 +53,7 @@ inline constexpr std::uint32_t kTopRows       = 0x4A0;  // TArray<u8>: the kinds
 
 /// The key guide the main menu's tick shows comes from the current window's guide getter (a vtable slot): the first
 /// page's answers its own text field, every other window's (the base window's) the focused widget's guide, so their
-/// guide hides over an open gauge or list and comes back at a cancel (research/RE-coop-page-guide.md §2.3, §4).
+/// guide hides over an open gauge or list and comes back at a cancel (research/RE-coop-page-guide.md).
 inline constexpr std::uint8_t kTopGuideGetterBytes[] = {0x48, 0x8D, 0x81, 0x88, 0x04, 0x00, 0x00, 0xC3};
 inline constexpr SlotFact     kTopGuideSlot{L"the first page's guide getter", 0x1457B1DF8,
                                         {L"UEndMainMenuTopWindow_GetGuideText_Field488", 0x1418EF9A0, kTopGuideGetterBytes}};
@@ -93,7 +93,7 @@ inline constexpr std::uintptr_t kTopRowDemoCall = 0x1414A605F;        // 1.005 o
 inline constexpr std::uintptr_t kTopRowDemoTest = 0x1414A51C4;        // 1.005 only: its target
 inline constexpr std::uint8_t   kTopRowDemoCallBytes[] = {0xE8, 0x60, 0xF1, 0xFF, 0xFF, 0x84, 0xC0, 0x74, 0xB4};
 
-// --- The title menu's row: the demo's "Buy Now", kind 9 (research/RE-coop-rows-facts.md §1.1, §1.2) ---------------
+// --- The title menu's row: the demo's "Buy Now", kind 9 (research/RE-coop-rows-facts.md) ---------------
 
 /// UEndStartMenu's construct (vtable 0x1467579B8 +0x320; 1.005 +0x328): it builds the rows' kinds, then the list.
 inline constexpr std::uint8_t kStartMenuConstructBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x48, 0x89, 0x6C,
@@ -120,7 +120,7 @@ inline constexpr FunctionFact   kStartMenuKindCoopPress{L"UEndStartMenu_Kind9_Bu
                                                         kStartMenuKindCoopBytes};
 inline constexpr std::uintptr_t kStartMenuKindCoopCall = 0x1439645C8;
 /// The list: UUserWidget's find by name (on the start menu itself) with the game's own FName global, then the game's
-/// class tests (the Cast_* functions answer a bool in al, read live 2026-11-07: the low byte 1, the rest of rax left over).
+/// class tests (the Cast_* functions answer a bool in al, read live: the low byte 1, the rest of rax left over).
 inline constexpr std::uint8_t kFindWidgetBytes[] = {0xB8, 0x48, 0x00, 0x00, 0x00, 0xE8, 0x3A, 0xFB,
                                                     0xE7, 0x00, 0x48, 0x2B, 0xE0, 0x48, 0x8B, 0x89};
 inline constexpr FunctionFact   kFindWidget{L"UUserWidget_FindWidgetByName", 0x14122F3EC, kFindWidgetBytes};
@@ -228,14 +228,14 @@ inline constexpr FunctionFact kOptionsResetConfirm{L"OptionsMenu_ResetCategoryTo
                                                    kOptionsResetConfirmBytes};
 inline constexpr std::size_t  kOptionsResetConfirmFirst = 5;
 
-/// The page's key handler (pass 2: Back, Accept, the options button), a slot of MainMenu_OptionsTop2_C's vtable
+/// The page's key handler (Back, Accept, the options button), a slot of MainMenu_OptionsTop2_C's vtable
 /// (0x14590C758 +0x3A8; 1.005 +0x3B0).
 inline constexpr std::uint8_t kOptionsKeyDownBytes[] = {0x40, 0x55, 0x53, 0x56, 0x57, 0x41, 0x54, 0x41,
                                                         0x55, 0x41, 0x56, 0x41, 0x57, 0x48, 0x8D, 0xAC};
 inline constexpr SlotFact kOptionsKeyDown{L"the Options page's key handler", 0x14590CB00,
                                           {L"UEndMainOptionsMenu_KeyDown", 0x141808C00, kOptionsKeyDownBytes}};
 
-// --- The page's slider rows (research/RE-coop-page-facts.md §1.2, §1.3, §3) -----------------------------------------
+// --- The page's slider rows (research/RE-coop-page-facts.md) -----------------------------------------
 
 /// OptionsMenu_UpdateGaugeMarker(page, gauge, const FOptionInfo*): placed after at its two calls, the Range row's press
 /// and each Left/Right step (1.004's both cross a block: changed from the game thread).
@@ -250,7 +250,7 @@ inline constexpr std::uint8_t   kAppendIntBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x1
                                                      0x24, 0x18, 0x56, 0x57, 0x41, 0x56, 0xB8, 0x50};
 inline constexpr FunctionFact   kAppendInt{L"FString_AppendInt", 0x140A38D24, kAppendIntBytes};
 inline constexpr std::uintptr_t kRowValueTextCall = 0x140BE6C25;
-/// The page's action handler (pass 1: the d-pad; state 5 Left/Right steps unless the event repeats), a slot of
+/// The page's action handler (the d-pad; state 5 Left/Right steps unless the event repeats), a slot of
 /// MainMenu_OptionsTop2_C's vtable (+0x3A0; 1.005 +0x3A8).
 inline constexpr std::uint8_t kOptionsActionDownBytes[] = {0x40, 0x55, 0x53, 0x56, 0x57, 0x41, 0x54, 0x41,
                                                            0x55, 0x41, 0x56, 0x41, 0x57, 0x48, 0x8D, 0x6C};
@@ -276,7 +276,7 @@ inline constexpr std::uint32_t kPanelSlotParent   = 0x28;   // UPanelSlot::Paren
 inline constexpr std::uint32_t kCanvasSlotLeft    = 0x38;   // Square's canvas slot: LayoutData.Offsets.Left
 inline constexpr std::uint32_t kCanvasSlotTop     = 0x3C;   // and .Top
 
-// --- Taking the page down the way its own no-animation Back does (research/RE-coop-page-facts.md §5) ---------------
+// --- Taking the page down the way its own no-animation Back does (research/RE-coop-page-facts.md) ---------------
 
 /// UEndUserWidget::RemoveFromParent (the overlay add's counterpart).
 inline constexpr std::uint8_t kRemoveFromParentBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x48, 0x89, 0x6C,

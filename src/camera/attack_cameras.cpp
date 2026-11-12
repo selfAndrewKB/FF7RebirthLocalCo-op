@@ -32,8 +32,8 @@ namespace {
 
 using Clock = std::chrono::steady_clock;
 
-// RE-p2-attack-cameras.md §1.1, §1.3, §9.1 (S-ATKCAM, S-ATKCAMEDGE; both builds).
-// The battle system (a pointer global; it creates the list with itself and frees it with itself, §9.1d) and its
+// research/RE-p2-attack-cameras.md (both builds).
+// The battle system (a pointer global; it creates the list with itself and frees it with itself) and its
 // sequence list at +0x50: entry list head +0x08; per-camera state +0x48 (u8 last active priority) and +0x70..+0x8F (the
 // previous focus point and camera location, an FVector and 4 bytes of padding each).
 using facts::kBattleStateGlobal;
@@ -55,7 +55,7 @@ using facts::kSequenceActorCamera;
 using facts::kBattleCameraOwner;
 constexpr std::uint32_t                     kCameraTarget = 0xA68;
 
-// The shot change (§9.3): BattleCamSeqList_AnyActive_ApplyCam's call of FirstPC_PCM_SetCameraCutBit400 (cl = 1; 1.005
+// The shot change: BattleCamSeqList_AnyActive_ApplyCam's call of FirstPC_PCM_SetCameraCutBit400 (cl = 1; 1.005
 // also dl = 1, passed on to its anim world manager), and the game's own PrimaryPCM_SetGameCameraCutThisFrame, which sets
 // bGameCameraCutThisFrame (PCM+0x2C10 bit 10) on GetEndPlayerCameraManager()'s and tells the anim world manager.
 constexpr std::uintptr_t kCutCall       = 0x140C42F23;
@@ -326,7 +326,7 @@ SeatUpdate::SeatUpdate(int seat) noexcept
         {
             activeOne.entries[activeOne.count++] = entry;
         }
-        // The seat's own byte from its last update (the Skill module re-flags every entry first, RE §1.3; this keeps any
+        // The seat's own byte from its last update (the Skill module re-flags every entry first; this keeps any
         // reader before that on the seat's own history). A new entry starts inactive, as in the game.
         WriteField<std::uint8_t>(entry, kEntryActive, Contains(mine.entries, mine.count, entry) ? 1 : 0);
     });
@@ -377,7 +377,7 @@ SeatUpdate::~SeatUpdate()
         }
         // Entries still in the list after the seat's update hold "active on any camera": the readers outside the
         // updates (the stop by id, which defers the end of a sequence some camera still plays; the battle system's
-        // post-tick) then see a sequence the seat plays as playing, as solo sees the one camera's (S-ATKCAMVERIFY 2e).
+        // post-tick) then see a sequence the seat plays as playing, as solo sees the one camera's.
         // One the update removed is not touched (the walk finds only live entries).
         const auto seatActive = ReadField<std::uint8_t>(entry, kEntryActive);
         for (std::size_t i = 0; i < g_flagCount; ++i)

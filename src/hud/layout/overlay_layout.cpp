@@ -54,14 +54,14 @@ using ContainScaleFn = float (*)(Size2D size);
 platform::CallRedirect g_rectCall;
 platform::CallRedirect g_entryCall;
 platform::CallRedirect g_submitCall;
-// Game version 1.005 (RE-1005-hud-2.md): the rect call (0x140B0EFAD there) crosses a 16-byte block. The overlay renders
+// Game version 1.005 (research/RE-1005-hud-2.md): the rect call crosses a 16-byte block. The overlay renders
 // on the game thread alone, so the call is placed from there, outside the render (platform/deferred_sites.h: the
 // session's tick), and is only restored from there.
 platform::DeferredSites g_rect;
 std::uintptr_t         g_rectSite         = 0;
 std::uintptr_t         g_rectTarget       = 0;
 ContainScaleFn         g_containScale     = nullptr;  // the game's UI scale of a rect (facts/hud.h)
-std::uintptr_t         g_overlaySingleton = 0;  // live 0x1491D1948
+std::uintptr_t         g_overlaySingleton = 0;  // found live at install
 bool                   g_installed        = false;
 
 std::atomic<bool> g_bandEnabled{true};  // `hud-band off` turns it off for diagnosis

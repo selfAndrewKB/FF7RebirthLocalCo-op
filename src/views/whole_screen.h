@@ -1,7 +1,7 @@
 #pragma once
 
 // Whether the game shows something that takes the whole screen, from the game's own state
-// (RE-p2-single-view.md §2): the reason players/single_view.h turns the split off.
+// (research/RE-p2-single-view.md): the reason players/single_view.h turns the split off.
 //
 //   - the EndGameState machine (Square Enix): state 8 is "a pause menu owns the screen" (the camp /
 //     main menu, the map journal, battle pause, game over, colosseum, the script-opened pause and map
@@ -11,11 +11,11 @@
 //     ShowSkipPauseMenu, which the game's dialogue and camera-planner scenes hold on while they can be
 //     skipped (ordinary NPC talk cannot, so it stays split);
 //   - the job board, opened by its own script command, which keeps it in a weak pointer and runs while
-//     that pointer is valid (§7.1): the same test here;
+//     that pointer is valid: the same test here;
 //   - the cutscene manager: a sequence of type 0 or 2 playing (the game's own check, used by 92 of
 //     its callers), or a cutscene skip under way;
 //   - the title: the game state's current location is "0005-TITLB", the comparison the game itself
-//     makes (§7.3);
+//     makes;
 //   - the pause-menu family's widgets, by the game's own UEndMenuAPI::IsPauseMenuClosed: also the pause
 //     modes a Blueprint opens without the state machine, and script-shown widgets (RE-p2-menu-census.md E1);
 //   - the script menus that keep their widget in their own EndUISystem slot (jukebox, chocobo carriage,
@@ -26,11 +26,11 @@
 //   - the VR and colosseum menus and result screens (Chadley's combat simulator, the Gold Saucer colosseum):
 //     the session's on/off 153 with the minigame bit, outside a battle (the game sets the bit in the session's
 //     menu, intro and result states and clears it for the fight; the intro is already a battle);
-//   - a minigame (the user's rule: single, except the field uses where the party stays with player 1:
+//   - a minigame (single, except the field uses where the party stays with player 1:
 //     the chicken lure and the chocobo capture's chase; the Temple's gravity rooms and the desert buggy course go
 //     single). The game's own switch is
 //     on/off 36 MiniGamePlaying: the event runner holds it from before an action's opening fade to after its closing
-//     fade, named after the action, and the native flows hold it for their game (RE-p2-minigames.md §9-§10,
+//     fade, named after the action, and the native flows hold it for their game (research/RE-p2-minigames.md,
 //     RE-p2-minigames-stage2.md). The field-exclusion bits only flash during play (frog jumping and Run Wild clear
 //     them for the play state), so they cover only what comes before a game's 36: bit 21 DisableController_MiniGame
 //     outside battles and the VR / colosseum session. Plus the crash box's and cactus mission's own ids (139, 140),
@@ -69,9 +69,9 @@ bool GameStatePresent() noexcept;
 
 /// Game thread: why the engine would refuse a new local player now, or null. One case is known: while the
 /// pause-family menu owns the screen (EndGameState 8) CreatePlayer returned no player (seen live for a seat's
-/// join). The creation chain is stock engine code that reads no game state (research/RE-mirror-anytime.md §2), so
+/// join). The creation chain is stock engine code that reads no game state (research/RE-mirror-anytime.md), so
 /// the state is the observed gate, not the reader; the likely cause is the game instance's world under the menu,
-/// which has no game mode [ASSUMPTION, §4 lists the log that would settle it]. The same gate for a seat's join and
+/// which has no game mode [ASSUMPTION; the research names the log that would settle it]. The same gate for a seat's join and
 /// a mirror view's add, so neither tries a create the engine refuses (a seat's try would also take the mirrors out
 /// first). Null when the state is unreadable: the engine's own answer then decides. The reason is one literal,
 /// compared by address by its callers.

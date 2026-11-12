@@ -28,7 +28,7 @@ constexpr std::uintptr_t kKick       = 0x1418969BC;
 constexpr std::uintptr_t kHitResolveCall = 0x140A54DCB;  // NearFade_BuildCandidateSet: call FWeakObjectPtr::Get(hit actor)
 constexpr std::uint8_t   kAttachParentBytes[] = {0x48, 0x8B, 0x81, 0x38, 0x01, 0x00, 0x00, 0x48, 0x85, 0xC0, 0x74, 0x0C};
 const platform::FunctionFact kAttachParent{L"Pawn_RootAttachParent_FieldA0", 0x1408F18AC, kAttachParentBytes};
-// The overlap fade (§9): climbing walls, spider walls and one-shot moves turn on a per-character tick that fades the
+// The overlap fade: climbing walls, spider walls and one-shot moves turn on a per-character tick that fades the
 // character to 0.3 (hidden reason bit 9) while another party member is inside its capsule, unless the game's player test
 // says it is the player's character. A seat's character is one too.
 constexpr std::uintptr_t kOverlapPlayerCall = 0x1414D74C6;  // CharActionCtrl_TickOverlapFade_HiddenReason9: call IsUCPC_...
@@ -37,7 +37,7 @@ constexpr std::uintptr_t kIsPlayerChar      = 0x140806FE0;  // IsUCPC_WithVehicl
 // The gather's output, a TArray<AEndCharacterBase*>.
 constexpr std::uint32_t kArrayNum = 8;
 
-// A seat's character's SE fade object (RE-p2-camera-near-fade.md §1.4, same in both builds): the EndActorInterface
+// A seat's character's SE fade object (research/RE-p2-camera-near-fade.md, same in both builds): the EndActorInterface
 // subobject at +0x4B8, its fade getter at vtable +0x1D0 (may return null).
 constexpr std::uint32_t kCharInterface = 0x4B8;
 constexpr std::uint32_t kFadeGetter    = 0x1D0;

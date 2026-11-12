@@ -44,7 +44,7 @@ constexpr platform::FunctionFact kMenuSound{L"EndSound_PostMenuEventIdx", 0x140B
 constexpr platform::FunctionFact kRefInc{L"EndUIFilter_RefInc", 0x1411F1B74, kRefIncBytes};
 constexpr platform::FunctionFact kRefDec{L"EndUIFilter_RefDec", 0x1411F14AC, kRefDecBytes};
 // The wait's muffle at its open: the sound event (event table entry 12) and the audio mode "WaitMode", both inlined in
-// the wait machine (RE-menu-slow.md §1).
+// the wait machine (research/RE-menu-slow.md).
 constexpr std::uint8_t kSoundEventBytes[] = {0x48, 0x89, 0x4C, 0x24, 0x08, 0xB8, 0x38, 0x04,
                                              0x00, 0x00, 0xE8, 0xA9, 0x4F, 0x51, 0x01, 0x48};
 constexpr std::uint8_t kSoundModeBytes[]  = {0x40, 0x53, 0xB8, 0x30, 0x00, 0x00, 0x00, 0xE8,

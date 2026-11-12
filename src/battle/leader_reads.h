@@ -1,7 +1,7 @@
 #pragma once
 
 // The game's own native reads of "the party leader" made for an enemy follow that enemy's coin
-// (RE-p2-leader-native-reads.md: S-LEADEREDGE, S-LEADERLEVERS; the user's decisions).
+// (research/RE-p2-leader-native-reads.md).
 //
 // Enemy blueprints ask "who is the player" through natives that battle/target_coin answers; this covers the places
 // where the game's C++ reads the leader pointer itself, each for one enemy (player 1 everywhere in co-op until now):
@@ -14,12 +14,12 @@
 //   - E7 Reno's mines without a target head for the leader type's character: each mine's own coin;
 //   - E8 Crimson Mare's rocket-punch arms: the boss's coin.
 //
-// The levers, all from the S-LEADERLEVERS table (both builds): a wrapper where the enemy is known records it in a
+// The levers (both builds): a wrapper where the enemy is known records it in a
 // thread-local around the game's own call (a call redirect, an entry redirect or a vtable slot); a redirect of the leader
 // read inside answers a seat's member (or, for E7, that member's type) while that enemy's coin names the seat, else the
 // game's own answer. E6's read answers the causer itself when it is a seat's member (the read is compared only for
 // equality with the causer). While player 1's character is down in co-op, a coin naming player 1 answers the standing
-// member battle/enemy_leader publishes instead, and that member's attacks pass E6 as the player's. Nothing is written to game state; no player-1 pointer is built by hand. Every seat
+// member battle/enemy_leader publishes instead, and that member's attacks pass as the player's. Nothing is written to game state; no player-1 pointer is built by hand. Every seat
 // playing a member is treated the same way; the seat comes from the enemy's coin or from the causing character.
 //
 // Any thread (enemy AI runs on workers too): every context is thread-local. Logged: the install per item (Info), each

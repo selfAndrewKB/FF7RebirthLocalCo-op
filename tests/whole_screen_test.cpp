@@ -221,7 +221,7 @@ void TestMinigames()
     mixed.frogGuys    = true;
     EXPECT(ReasonOf(mixed) == WholeScreenReason::Minigame);
 
-    auto session            = Readable();  // 36 under on/off 153 (no session holds it; S-HELDBITS): the session decides
+    auto session            = Readable();  // 36 under on/off 153 (no session holds it): the session decides
     session.minigamePlaying = true;
     session.colosseumFlag   = true;
     session.exclusion       = kExclusionMiniGame;

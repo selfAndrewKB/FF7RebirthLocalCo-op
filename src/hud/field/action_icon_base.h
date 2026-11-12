@@ -3,7 +3,7 @@
 // The field-action icons ("Call Chocobo" and the other prompt rows, UEndFieldActionIcon /
 // FieldAction_Command_C) keep their single-player corner in a split half, by the game's own layout.
 //
-// The game places these icons itself (RE-p2-hud-view-levers.md §1): FieldActionIconList__
+// The game places these icons itself (research/RE-p2-hud-view-levers.md): FieldActionIconList__
 // SortAndLayout gives slot i the point `_BasePosY + i * _PaddingY`, read from each icon's own
 // reflected fields (+0x3C8, +0x3D0), and the icon slides there through SetPositionInViewport, which
 // also resets the viewport anchors. So the anchors cannot hold the corner; the base can. The base

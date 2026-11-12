@@ -41,7 +41,7 @@ namespace lss::camera::camera_distance {
 
 namespace {
 
-// Facts read from the database (RE-p2-battle-camera.md §6; this build).
+// Facts read from the database (research/RE-p2-battle-camera.md; this build).
 constexpr std::uint8_t kPrimaryApplyBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x57, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8,
                                                0x34, 0x5A, 0xCB, 0xFE, 0x48, 0x2B, 0xE0, 0x8A, 0xDA, 0x40, 0x8A, 0xF9};
 constexpr platform::FunctionFact kPrimaryApply{L"PrimaryPCM_ApplyCameraDistanceOptions", 0x1433F94EC, kPrimaryApplyBytes};
@@ -51,12 +51,12 @@ constexpr platform::FunctionFact kManagerApply{L"AEndPlayerCameraManager__ApplyC
                                                kManagerApplyBytes};
 constexpr std::uintptr_t kSetterCall  = 0x142ADCBCA;  // in the option setter: the primary camera manager's apply
 constexpr std::uintptr_t kConfirmCall = 0x14180A4D6;  // in the confirm-key handler: the per-camera-manager apply
-// 1.005 (RE-1005-field-2.md §7): the setter was merged into OptionsMenu_SetOptionValue_CopyApplyCommit and its call is
-// at 0x1410B9F6D, %16 = 13, so it crosses a 16-byte block. There it is heard at the primary apply's entry instead
+// 1.005 (research/RE-1005-field-2.md): the setter was merged into OptionsMenu_SetOptionValue_CopyApplyCommit and its
+// call sits at %16 = 13, so it crosses a 16-byte block. There it is heard at the primary apply's entry instead
 // (first instruction `mov [rsp+8], rbx`, 5 bytes at %16 = 4; that call is its only caller), by its return address.
 constexpr std::size_t kPrimaryApplyFirstInstruction = 5;
 
-// Split framing (RE-p2-framing.md §1.4, §3, §6.1; RE-p2-battle-camera.md §6).
+// Split framing (research/RE-p2-framing.md, RE-p2-battle-camera.md).
 // GetSystemOptionData(): the global option struct (pure read: [[[g]+0x100]+0x28]+0x10).
 constexpr std::uint8_t kOptionDataBytes[] = {0x48, 0x8B, 0x05, 0xF5, 0xCB, 0xB1, 0x08, 0x48, 0x85, 0xC0, 0x74, 0x10,
                                              0x48, 0x8B, 0x80, 0x00, 0x01, 0x00, 0x00};

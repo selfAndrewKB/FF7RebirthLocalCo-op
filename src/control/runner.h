@@ -21,11 +21,10 @@
 //   help <name> <shape> -- <text>       from help
 //   note <n> <text>                     the note, echoed
 //
-// Taken from Remake's control/runner. The query's turn in the queue was found missing in Remake while porting (a
-// script's status after a wait reported before the wait); Remake took the same fix. Changed: replies are
-// structured; Busy(client) tells a front end when one client's script is through; every
-// submitted line is numbered, blanks and comments included, so a script's numbers are its file lines; a hold the mod
-// ended on its own (Holds::Held) leaves the runner's count.
+// A query takes its turn in the queue like any command, so a script's status after a wait reports after the wait.
+// Replies are structured; Busy(client) tells a front end when one client's script is through; every submitted line is
+// numbered, blanks and comments included, so a script's numbers are its file lines; a hold the mod ended on its own
+// (Holds::Held) leaves the runner's count.
 
 #include "platform/command_registry.h"
 #include "control/script.h"

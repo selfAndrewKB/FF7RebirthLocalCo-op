@@ -1,7 +1,7 @@
 #pragma once
 
 // The machine code that lets a seat's HUD pass skip the minimap's own map render
-// (RE-oom-path.md, "Player 2's minimap paint: hook facts and the skip").
+// (research/RE-oom-path.md).
 //
 // Each minimap widget's OnPaint renders its map into its render target through the menu renderer's
 // pool 0 (acquire a slot, paint the map into a layer entry, submit), then adds the element that shows
@@ -9,22 +9,22 @@
 // platform/code_redirect.h. While the skip byte is set (a seat's pass), the code jumps over the
 // block to the instruction after the submit, doing first what that code needs from the block:
 //
-// Circle (SEndNaviMapCircle, site 0x140FC6C95 `mov rcx,[r15+1C0h]`, to 0x140FC6F18): xmm13 = 0. rcx is
+// Circle (SEndNaviMapCircle, the site `mov rcx,[r15+1C0h]`, to the instruction after the submit): xmm13 = 0. rcx is
 // loaded by the replaced instruction, so it is free before it; the code after the submit reloads rcx
 // and rax first. Flags are not read before the next call on either path.
 //
-// Octagon (SEndNaviMapOctagon, site 0x143A60235 `vmovss [rsp+78h],xmm15`, to 0x143A604E5): the two
+// Octagon (SEndNaviMapOctagon, the site `vmovss [rsp+78h],xmm15`, to the instruction after the submit): the two
 // stores at the site, then xmm13 = 0. rax was last written before the site and is not read before the
 // next call (its arguments are rcx and rdx); the code after the submit writes rax first.
 //
 // Each path counts itself in the fields (lock inc): the skips and the stock paints per widget.
 //
-// Game version 1.005 (RE-1005-hud-2.md), circle only: the research site (0x14130A4FF there) crosses a 16-byte block, so
-// the site is the next instruction, `vmovq rdx,xmm0` (0x14130A506), still before the resize, acquire, paint and submit
-// (to 0x14130A77E). rdx is loaded by the replaced instruction, so it is free before it, and rcx (already loaded with
-// [r15+1C0h], the resize's argument) is kept for the stock path. The code after the submit now also reads a stack slot
-// the block writes: `vmovss xmm7,[rsp+40h]` (0x14130A78E), 1.0f stored at 0x14130A5A2 (1.004 loaded its 1.0f from
-// .rdata after the submit), so the skip stores 1.0f there too.
+// Game version 1.005 (research/RE-1005-hud-2.md), circle only: the research site crosses a 16-byte block, so
+// the site is the next instruction, `vmovq rdx,xmm0`, still before the resize, acquire, paint and submit
+// (to the instruction after the submit). rdx is loaded by the replaced instruction, so it is free before it, and rcx
+// (already loaded with [r15+1C0h], the resize's argument) is kept for the stock path. The code after the submit
+// also reads a stack slot the block writes: `vmovss xmm7,[rsp+40h]`, 1.0f stored inside the block (1.004 loads its
+// 1.0f from .rdata after the submit), so the skip stores 1.0f there too.
 
 #include <array>
 #include <cstddef>

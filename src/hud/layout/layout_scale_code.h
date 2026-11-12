@@ -1,7 +1,7 @@
 #pragma once
 
 // The bytes hud/layout/layout_scale.cpp places over the overlay's layout-scale instruction: the contain rule,
-// min(height/1080, width/1920), with the game's own constants (RE-p2-hud.md passes 4-5; RE-1005-hud-2.md for 1.005).
+// min(height/1080, width/1920), with the game's own constants (research/RE-p2-hud.md; RE-1005-hud-2.md for 1.005).
 // Pure data, so it is executed on the host (tests/layout_scale_code_test.cpp).
 
 #include "platform/verified_code.h"
@@ -13,14 +13,14 @@ namespace lss::hud::layout_scale_code {
 
 // In SEndRootOverlay__RenderToCompositeLayer, after `sub edx, r9d` (edx = rect height) and
 // `sub ecx, r8d` (ecx = rect width), read from the running game:
-//   0x140C95FBE  vxorps    xmm7, xmm7, xmm7
-//   0x140C95FC2  vcvtsi2ss xmm7, xmm7, edx               ; H
-//   0x140C95FC6  vmulss    xmm0, xmm7, [1/1080]          ; s = H/1080     <- redirected
-//   0x140C95FCE  vdivss    xmm1, xmm2, xmm0              ; xmm1 overwritten here, so free before
+//   context +0   vxorps    xmm7, xmm7, xmm7
+//   context +4   vcvtsi2ss xmm7, xmm7, edx               ; H
+//   context +8   vmulss    xmm0, xmm7, [1/1080]          ; s = H/1080     <- redirected (kSite)
+//   context +16  vdivss    xmm1, xmm2, xmm0              ; xmm1 overwritten here, so free before
 inline constexpr std::uint8_t   kContextBytes[] = {
     0xC5, 0xC0, 0x57, 0xFF,                          // vxorps xmm7, xmm7, xmm7
     0xC5, 0xC2, 0x2A, 0xFA,                          // vcvtsi2ss xmm7, xmm7, edx
-    0xC5, 0xC2, 0x59, 0x05, 0x62, 0xDB, 0x40, 0x05,  // vmulss xmm0, xmm7, [rip+0x0540DB62] = [0x1460A3B30]
+    0xC5, 0xC2, 0x59, 0x05, 0x62, 0xDB, 0x40, 0x05,  // vmulss xmm0, xmm7, [rip+0x0540DB62] = the game's 1/1080
     0xC5, 0xEA, 0x5E, 0xC8};                         // vdivss xmm1, xmm2, xmm0
 inline constexpr platform::FunctionFact kContext{L"the overlay's layout-scale instruction and its context", 0x140C95FBE,
                                                  kContextBytes};
@@ -28,7 +28,7 @@ inline constexpr std::uintptr_t kSite     = 0x140C95FC6;
 inline constexpr std::size_t    kReplaced = 8;
 inline constexpr std::uintptr_t kResume   = 0x140C95FCE;
 
-// min(H * (1/1080), W * (1/1920)) with the game's constants (0x1460A3B30, 0x14656D540), placed
+// min(H * (1/1080), W * (1/1920)) with the game's constants (its 1/1080 and 1/1920 floats), placed
 // after the instructions and reached rip-relative, so the code is the same wherever it is placed:
 //   +0   vmulss    xmm0, xmm7, [rip+18]   ; H/1080          (next +8,  constant at +26)
 //   +8   vcvtsi2ss xmm1, xmm1, ecx        ; W
@@ -47,10 +47,10 @@ inline constexpr std::uint8_t kCode[] = {
 inline constexpr std::size_t kConstant1080 = 26;  // where the two constants sit in kCode
 inline constexpr std::size_t kConstant1920 = 30;
 
-// Game version 1.005 (RE-1005-hud-2.md): the vmulss (0x140B0F01C there) crosses a 16-byte block, and so does every
+// Game version 1.005 (research/RE-1005-hud-2.md): the vmulss crosses a 16-byte block, and so does every
 // single instruction around it that a jump fits in. The two instructions before it (vxorps, vcvtsi2ss: 8 bytes,
-// 0x140B0F014, one block, neither RIP-relative) are replaced instead by themselves followed by the code above, which
-// resumes after the vmulss (0x140B0F024), so the game's vmulss is left in place unrun. A thread stopped between the two
+// one block, neither RIP-relative) are replaced instead by themselves followed by the code above, which
+// resumes after the vmulss, so the game's vmulss is left in place unrun. A thread stopped between the two
 // would resume inside the jump, so this is installed from the game thread, the only one rendering the overlay, while it
 // is outside the render (platform/deferred_sites.h: the session's tick).
 inline constexpr std::size_t  kReplaced1005 = 8;

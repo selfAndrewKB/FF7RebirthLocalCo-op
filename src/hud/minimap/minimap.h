@@ -1,7 +1,6 @@
 #pragma once
 
-// Each seat's own minimap: its centre, rotation and icons, in its view (RE-p2-own-minimap.md,
-// "Recommended design" and §8; per seat since plan/seats.md step 4).
+// Each seat's own minimap: its centre, rotation and icons, in its view (research/RE-p2-own-minimap.md).
 //
 // The minimap widget (SEndNaviMapCircle) renders its map into a render target through the menu renderer's pool 0,
 // then shows that target in the HUD. Its content (centre, rotations, icons) is written each frame by the game's

@@ -40,7 +40,7 @@ namespace {
 using RC::Unreal::UObject;
 using Clock = std::chrono::steady_clock;
 
-// AEndPlayerController (SDK offsets, RE-p2-chocobo-ride.md §1.1, §4).
+// AEndPlayerController (SDK offsets, research/RE-p2-chocobo-ride.md).
 using facts::kControllerActiveVehicle;
 constexpr std::uint32_t kVehicleMapCount = 0x5C8;  // VehicleCoordinators (TMap) element count, i32
 // A vehicle coordinator: its body and rider; the chocobo's boarding flag; each kind's state machine.
@@ -49,13 +49,13 @@ using facts::kCoordinatorRider;
 constexpr std::uint32_t kChocoboBoarding    = 0x155;  // u8
 constexpr std::uint32_t kChocoboStatePtr    = 0x58;   // -> u32 state id
 constexpr std::uint32_t kBuggyStatePtr      = 0x1E8;  // -> u32 state id
-// The coordinators' vtables (§4).
+// The coordinators' vtables.
 using facts::kChocoboCoordinatorVTable;
 using facts::kBuggyCoordinatorVTable;
 using facts::kBroncoCoordinatorVTable;
 using facts::kScooterCoordinatorVTable;
 
-// The chocobo ride manager [[game root]+0x270] (§1.1): state, getoff request, party ride, in battle; member
+// The chocobo ride manager [[game root]+0x270]: state, getoff request, party ride, in battle; member
 // entries at +0x40 + 0x2C * player type (state byte +0, weak chocobo +0x20).
 using facts::kRootChocoboRideManager;
 constexpr std::uint32_t kManagerState    = 0x8;  // u8 (the next byte read the same value live: 0x0707 riding)
@@ -67,9 +67,9 @@ using facts::kRideManagerEntrySize;
 constexpr std::uint32_t kEntryChocobo    = 0x20;
 using facts::kRideManagerPlayerTypes;
 
-// AEndChocoboCharacter's native tail (§1.1) and the input component the player-core test reads (§3, lever 1).
-// 1.005 moved this tail by +0x20 (RE-1005-offsets-C.md): CreateRideObject 0x143B05BC3/0x143B05C10 (+0x1938, +0x1930),
-// 0x140A41434 `cmp byte [rbx+1940h]`, 0x143B06AF9 `cmp byte [rcx+1942h]`, 0x143B13E48 `mov al,[rdi+1944h]`.
+// AEndChocoboCharacter's native tail and the input component the player-core test reads.
+// 1.005 moved this tail by +0x20 (research/RE-1005-offsets-C.md): CreateRideObject writes +0x1938 and +0x1930, and the
+// ride-state tests read `byte [rbx+1940h]`, `byte [rcx+1942h]` and `[rdi+1944h]`.
 constexpr platform::PerBuild<std::uint32_t> kChocoboRideMode   = {0x1910, 0x1930};  // u8
 using facts::kChocoboRideObject;
 constexpr platform::PerBuild<std::uint32_t> kChocoboFlag1920   = {0x1920, 0x1940};  // u8
@@ -83,19 +83,19 @@ using facts::kSceneComponentAttachParent;
 
 using CoreTestFn = std::uint8_t (*)(const void* character);
 
-// The game's read-only lookups (RE-p2-chocobo-ride.md §7.1; entry bytes read in IDA).
+// The game's read-only lookups (research/RE-p2-chocobo-ride.md; entry bytes read in IDA).
 using facts::kChocoboForCharacter;
 using ChocoboForFn = void* (*)(const void* manager, const void* character);
 using facts::kPlayerTypeFromComponent;
 using ComponentTypeFn = std::uint8_t (*)(const void* character);
 using GlobalTestFn    = std::uint8_t (*)();
 
-// The ride manager entry's grace timer and flags (§7.7: the entry machine skips its own dismount tests in a party
+// The ride manager entry's grace timer and flags (the entry machine skips its own dismount tests in a party
 // ride while +0x1C is 0 or the timer runs).
 constexpr std::uint32_t kEntryGrace = 0x18;  // float
 constexpr std::uint32_t kEntry1C    = 0x1C;  // u8
 constexpr std::uint32_t kEntry1D    = 0x1D;  // u8
-// A move state's row request bytes: the base ones and the chocobo's (§7.6; which the chocobo's rows use is logged).
+// A move state's row request bytes: the base ones and the chocobo's (which the chocobo's rows use is logged).
 constexpr std::uint32_t kRowRequests[] = {0xE8, 0x138, 0x188, 0x298, 0x2E8, 0x338, 0x388};
 
 constexpr std::uint32_t kEvery         = 5;  // ticks between samples
@@ -453,7 +453,7 @@ void LogSnapshot(int seat, SeatWatch& w, const Sample& s, const void* member, co
     {
         w.seatAt[i] = chocoboAt[i];
     }
-    // The dry run of the chocobo swap's gate (RE-p2-chocobo-ride.md §7.2 item 2): the game's player-core test of the
+    // The dry run of the chocobo swap's gate (research/RE-p2-chocobo-ride.md): the game's player-core test of the
     // member as the swap would see it (1 and the seat's controller expected), and of her chocobo (0 until the mod
     // answers for it).
     const auto dryMember  = input::member_movement::PlayerCoreAsSeat(seat, member, member);

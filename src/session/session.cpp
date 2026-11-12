@@ -79,7 +79,7 @@ constexpr std::uint32_t kTakeTicks = 120;
 constexpr std::uint32_t kOwnSwitchEndTicks = 10;
 
 /// How often, in ticks, the seat's member is checked for its battle controller component: character
-/// state that no party funnel reports (RE-p2-session-levers.md §3.2).
+/// state that no party funnel reports (research/RE-p2-session-levers.md).
 constexpr std::uint32_t kControllerCheckTicks = 30;
 
 /// The game's party funnels (session/party_events.h) drive the party checks. These slow checks
@@ -238,7 +238,7 @@ void Seat::Tick(bool& commandMenusTicked) noexcept
 
 void Seat::WatchOwnCamera() noexcept
 {
-    // Watch only (RE-p2-session-levers.md §2): the game writes the seat's view target once, at spawn
+    // Watch only (research/RE-p2-session-levers.md): the game writes the seat's view target once, at spawn
     // (InitializeFor; the join repeats that aim once), and no game code retargets a seat's
     // controller afterwards, so nothing re-aims it here (riding along re-aims it: RideAlongTick). A move off its
     // camera actor is logged, one line per move for the first few; later ones are only counted on the status line.
@@ -394,7 +394,7 @@ bool Seat::MemberDestroyed() noexcept
     const auto forgotten = rides::own_ride::Forget(seat_);
     camera::camera_override::MemberDestroyed(seat_);
     // The seat's controller still names the destroyed character: cleared, so neither the game's
-    // give-back nor the controller's unpossess reads it (RE-p2-retry-reload.md §3.2, recipe 3).
+    // give-back nor the controller's unpossess reads it (research/RE-p2-retry-reload.md).
     for (const std::uint32_t field : {facts::kControllerLeader, facts::kControllerPawn})
     {
         const void* named = ReadPointer(controller_, field);
@@ -765,7 +765,7 @@ void Seat::WaitForSlot(const party_member::SlotChoice& choice) noexcept
     slotWaitLogged_ = key;
     if (choice.wait == party_member::SlotWait::LinkPartner)
     {
-        // RE-p2-synergy-skills.md S-SYNTAKE: the game gives a partner back only at the link's member end.
+        // research/RE-p2-synergy-skills.md: the game gives a partner back only at the link's member end.
         Log(L"{} waits for party member type {} (the {} slot, ordinal {}): a synergy partner the game has not "
             L"given back yet (its link: ability kind {} mode {}, partner state {}, started {} ended {}); taken once the "
             L"game ends its part of the link",
@@ -975,7 +975,7 @@ void Seat::RideAlongTick() noexcept
 
 /// The one readiness gate of a join: the seat's camera manager can be started safely, the game has started,
 /// and the field runs again (the entry steps done, the party rebuilt: a join before that would be undone by the
-/// entry's own unpossess of every non-leader, RE-p2-retry-reload.md §2.3). Null when ready, else why not, as the
+/// entry's own unpossess of every non-leader, research/RE-p2-retry-reload.md). Null when ready, else why not, as the
 /// join's refusal line says it. The same gate for the join by the key, the rejoin after a map load and the wait
 /// for a free member.
 const wchar_t* Seat::NotReadyToJoin() const noexcept
@@ -1129,7 +1129,7 @@ std::chrono::milliseconds Seat::WaitedForSlot() const noexcept
 
 /// On one monitor a player whose member the game holds leaves the game once the wait has lasted the grace, with two
 /// players in or three, and waits outside for the member by the same slot test (OutsideTick, the first test on the
-/// next tick): their view leaves the screen and the others' fill it (the user's rule). With columns held their
+/// next tick): their view leaves the screen and the others' fill it. With columns held their
 /// column stays on player 1's picture (views/column_source.h). The grace counts only the time on one monitor and off a
 /// shared ride: the timer restarts while either holds.
 void Seat::LeaveToWaitOutside() noexcept
@@ -1299,7 +1299,7 @@ void Seat::Teardown() noexcept
         LogTagCounts(L"after the give-back");
     }
     const auto actors = leftover_actors::Collect(controller_);
-    leave_watch::BeforeRemove(players_.Player(), controller_, actors);  // logging only (S-PC2LEAK)
+    leave_watch::BeforeRemove(players_.Player(), controller_, actors);  // logging only
     const bool out = players_.Remove();
     leave_watch::AfterRemove(out);
     leave_.Finish();
@@ -1678,8 +1678,8 @@ const void* Session::PlayerOne() const noexcept
 
 namespace {
 
-/// One seat's join and readings, named with `prefix` (`p2`, `p3`); `join` is the join command's name. Taken from
-/// Remake's RegisterSeatCommands (mod.cpp); its leave stays the module table's (modules.h).
+/// One seat's join and readings, named with `prefix` (`p2`, `p3`); `join` is the join command's name; its leave stays
+/// the module table's (modules.h).
 void RegisterSeatCommands(Session& session, int seat, const wchar_t* prefix, const wchar_t* join)
 {
     using control::Outcome;

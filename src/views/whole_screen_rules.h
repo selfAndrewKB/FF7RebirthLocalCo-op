@@ -10,7 +10,7 @@
 
 namespace lss::views {
 
-/// The title's location name, which the game compares against itself (RE-p2-single-view.md §7.3).
+/// The title's location name, which the game compares against itself (research/RE-p2-single-view.md).
 inline constexpr std::wstring_view kTitleName = L"0005-TITLB";
 
 /// The minigame-only maps (the game state's location).

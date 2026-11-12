@@ -1,5 +1,5 @@
-// Host-side tests for a seat's state word (players/seat_state.h). Taken from Remake's tests/seat_state_test.cpp;
-// changed with the header: "handed" is a seat in without its member, and InGame is new.
+// Host-side tests for a seat's state word (players/seat_state.h): every word, "handed" (a seat in without its member)
+// and InGame among them.
 
 #include "players/seat_state.h"
 

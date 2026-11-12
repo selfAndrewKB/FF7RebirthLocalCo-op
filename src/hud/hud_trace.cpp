@@ -21,7 +21,7 @@ namespace lss::hud {
 
 namespace {
 
-// Call sites and targets, as IDA shows them (RE-p2-hud.md P8.9; bytes read from the database). Each
+// Call sites and targets, as IDA shows them (research/RE-p2-hud.md; bytes read from the database). Each
 // target's prologue up to its stack probe call is checked before anything is redirected; each call
 // is an E8 rel32 inside one aligned 16-byte block.
 
@@ -59,7 +59,7 @@ using ProjectFn  = bool (*)(void* controller, const void* location, void* out);
 platform::CallRedirect                 g_tickCall;
 platform::CallRedirect                 g_markerCall;
 std::array<platform::CallRedirect, 4>  g_projectCalls;
-// Game version 1.005 (RE-1005-hud-2.md): two project sites (0x1409B810C, 0x140808AEE there) cross a 16-byte block. The
+// Game version 1.005 (research/RE-1005-hud-2.md): two project sites cross a 16-byte block. The
 // game thread alone runs them, so they are installed from there, around the overlay render (TraceBeforeRender), and
 // only restored from there.
 std::array<std::uintptr_t, 4>          g_projectPending{};  // live call sites still to install (0: none)

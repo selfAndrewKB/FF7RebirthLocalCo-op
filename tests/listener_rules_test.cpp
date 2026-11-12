@@ -2,7 +2,6 @@
 //
 // The nearest-of-N choice with its hold and hand-over, the choice table between a sound's test and its update, the
 // gates' nearest listener, the quaternion rotation the device's push uses, the audibility compare and the LOD rules.
-// Remake's tests (audio/listener_rules_test.cpp) for the rules taken from it.
 
 #include "feedback/listener_rules.h"
 

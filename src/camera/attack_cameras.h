@@ -1,7 +1,7 @@
 #pragma once
 
 // The game's attack cameras (battle camera sequences: grabs, enemy specials, bursts) on each player's own camera
-// (research/RE-p2-attack-cameras.md §1, §9).
+// (research/RE-p2-attack-cameras.md).
 //
 // The game keeps one list of playing sequences (the battle system's +0x50), and every camera manager's Skill module
 // (slot 20 of its Battle and Field operators) tests each entry against "the party leader" during its own update. A
@@ -23,7 +23,7 @@
 // The shot change: a sequence cut asks UWorld::GetFirstPlayerController's camera manager for a camera cut, so a cut in
 // a seat's update cut player 1's view (its TAA / motion-blur history) and left that seat's smeared. Inside a seat's
 // update that call goes to the game's own "cut the primary camera" function instead, which the primary-controller scope
-// points at that seat's camera manager (§9.3). The cut call names no camera: it reads the seat whose update is open
+// points at that seat's camera manager. The cut call names no camera: it reads the seat whose update is open
 // (InsideSeat, the "inside seat" context).
 //
 // Per seat: the copy, its list and the entries its camera found active; the counts. Shared: the open update's saved

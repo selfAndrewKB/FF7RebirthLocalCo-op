@@ -2,7 +2,7 @@
 
 // The seats' players, as every wrapper sees them: one generation per seat (players/seats.h).
 //
-// This is the one record of each seat's game objects (plan/seats.md, the close of step 3): its controller, the member
+// This is the one record of each seat's game objects: its controller, the member
 // it plays and the chocobo it drives, and the reverse lookups from an object the engine hands a wrapper to its seat.
 // The session writes the controller and member (Begin at the join, SetMember at the take and the give-back, Withdraw
 // and Fault to stop the wrappers, End at the removal) and keeps its own working copy in its Seat; the chocobo comes
@@ -15,10 +15,9 @@
 //   - camera_override's member per seat: cleared when the seat lets go or the session sees the member destroyed;
 //   - shared_ride's given member and traversal_holders' climb member: kept with their weak pointers;
 //   - own_ride's and chocobo_ride's ride objects: the rides' own, released by the session's leave (rides::own_ride::Release).
-// Remake keeps its record as weak pairs (players/seat_objects.h): there only the camera module's copy of a seat's
-// controller was checked, and the session's record and the scopes' binding were not. Here End forgets a removed
-// controller before the collection frees it, and a member the game destroys is caught by its weak pointer each tick
-// (the session's MemberDestroyed; BeginTick's weaks for the wrappers on other threads).
+// Each of these copies is guarded against a dead object, the session's record and the scopes' binding too: End
+// forgets a removed controller before the collection frees it, and a member the game destroys is caught by its weak
+// pointer each tick (the session's MemberDestroyed; BeginTick's weaks for the wrappers on other threads).
 //
 // A seat's generation runs from the moment its player has its own controller until the leave begins. While it is
 // active, the wrappers act for that seat's objects; the moment it is withdrawn, every wrapper passes straight through
@@ -56,7 +55,7 @@ void* CameraMemberOf(int seat) noexcept;
 void Withdraw(int seat) noexcept;
 
 /// After the seat's player's removal: also forgets its controller and member. The removed controller is freed by the
-/// next garbage collection (RE-p2-controller-after-leave.md, S-PC2LEAK2), so no reader may still find it here.
+/// next garbage collection (research/RE-p2-controller-after-leave.md), so no reader may still find it here.
 /// Player 1's controller stays: it lives on, and the leave before a world change clears the viewport's split switch
 /// through it right after this.
 void End(int seat) noexcept;

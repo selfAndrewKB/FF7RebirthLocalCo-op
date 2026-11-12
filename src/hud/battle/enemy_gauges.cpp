@@ -38,11 +38,11 @@ namespace lss::hud::enemy_gauges {
 
 namespace {
 
-// Facts read from the database (RE-p2-enemy-markers.md §7; RE-p2-bar-targeted.md; this build).
+// Facts read from the database (research/RE-p2-enemy-markers.md, RE-p2-bar-targeted.md; this build).
 constexpr std::uint32_t  kGate        = 0xC8;         // u8: the manager updates its entries only when set
 constexpr std::uint32_t  kLockOnKey   = 0x140;        // player 1's targeted key, a TWeakPtr {object, controller}
 
-// The entries (§7.1): a TSet whose element TSparseArray is at +0x10 (platform/sparse_array.h); each
+// The entries: a TSet whose element TSparseArray is at +0x10 (platform/sparse_array.h); each
 // element 0x180 bytes: +0 source, +8 its reference controller (thread-safe: +0xC weak count), +0x10 = p,
 // whose first field is the weak widget.
 constexpr std::uint32_t kEntries     = 0x10;
@@ -54,13 +54,13 @@ constexpr std::uint32_t kWeakCount   = 0xC;
 constexpr std::uint32_t kScreenPoint = 0xB8;
 constexpr std::uint32_t kYOffset     = 0x134;
 constexpr std::uint32_t kFinalFlags  = 0x155;  // 3 bytes
-// The targeted clamp's half size from the source's owner (bar-targeted §2 #1c): c = *(owner+0x298),
+// The targeted clamp's half size from the source's owner (RE-p2-bar-targeted.md): c = *(owner+0x298),
 // B = 3 floats at c+0x1E0, max(min(B.x, B.y) * c[0x4AC], B.z * c[0x4A8]).
 constexpr std::uint32_t kOwnerSlot   = 0x28;
 constexpr std::uint32_t kHalfSource  = 0x298;
 constexpr std::uint32_t kHalfBounds  = 0x1E0;
 // c is the owner's UCapsuleComponent (ACharacter::CapsuleComponent +0x298): +0x4AC CapsuleRadius, +0x4A8 CapsuleHalfHeight.
-// 1.005: UPrimitiveComponent shrank by 0x10; UpdateEntries reads [rax+49Ch] at 0x14097550E and [rax+498h] at 0x14097551B.
+// 1.005: UPrimitiveComponent shrank by 0x10; UpdateEntries reads [rax+49Ch] and [rax+498h].
 constexpr platform::PerBuild<std::uint32_t> kHalfScaleXY = {0x4AC, 0x49C};
 constexpr platform::PerBuild<std::uint32_t> kHalfScaleZ  = {0x4A8, 0x498};
 
@@ -71,7 +71,7 @@ constexpr platform::FunctionFact kByWidget{L"EndUI__MF8_ProjectEntryByWidget", 0
 constexpr std::uintptr_t kByWidgetSite   = 0x141762021;
 constexpr std::uintptr_t kByWidgetResume = 0x141762026;
 
-// The tick's one call to EndUI__MF8_ProjectEntry_Targeted (§7.3): rcx mgr, rdx widget, r8 &key
+// The tick's one call to EndUI__MF8_ProjectEntry_Targeted: rcx mgr, rdx widget, r8 &key
 // {source, controller} (the callee releases one weak reference), r9 &loc, then scratch, halfSize,
 // skipLeaderClamp on the stack.
 constexpr std::uintptr_t kTargetedCall = 0x140DBA664;
@@ -96,7 +96,7 @@ constexpr platform::FunctionFact kYStep{L"EndUI__MF8_ApplyYOffsetLerp_SetPositio
 // EndUI__MF8_LeaderDistanceScaleLerp(unused, widget, owner, float* state, unused, caseC): eases a
 // gauge's size (p+0x38) toward one set by its enemy's distance from the leader (read through
 // ResolvePartyLeaderWeakPtr: a LeaderScope answers it), then writes the widget's render scale
-// (+0x98/+0x9C) and applies it (bar-targeted §2 #4, §3.3).
+// (+0x98/+0x9C) and applies it (RE-p2-bar-targeted.md).
 constexpr std::uint8_t   kScaleStepPrologue[] = {0x48, 0x85, 0xD2, 0x0F, 0x84, 0x98, 0x01, 0x00, 0x00, 0x48, 0x89, 0x5C, 0x24, 0x08,
                                                  0x48, 0x89, 0x74, 0x24, 0x10, 0x57, 0xB8, 0x80, 0x00, 0x00, 0x00, 0xE8, 0xB6, 0x3F,
                                                  0x52, 0x01};
@@ -379,7 +379,7 @@ bool AnyFlag(const Capture& capture) noexcept
     return capture.flags[0] != 0 || capture.flags[1] != 0 || capture.flags[2] != 0;
 }
 
-/// Player 1's view: the tick's final step for this gauge, if the tick takes it (§7.3): the gauge at its
+/// Player 1's view: the tick's final step for this gauge, if the tick takes it: the gauge at its
 /// cached point, its y offset added.
 bool FinalStep(void* widget, std::uintptr_t p, const GaugePlacement& placement, const Capture& capture) noexcept
 {
@@ -395,7 +395,7 @@ bool FinalStep(void* widget, std::uintptr_t p, const GaugePlacement& placement, 
     return SetPositionGuarded(widget, packed);
 }
 
-/// The targeted clamp's half size for a source the tick placed untargeted (bar-targeted §2 #1c).
+/// The targeted clamp's half size for a source the tick placed untargeted (RE-p2-bar-targeted.md).
 float HalfSize(std::uintptr_t source) noexcept
 {
     void*      owner = nullptr;

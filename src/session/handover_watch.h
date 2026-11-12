@@ -1,7 +1,7 @@
 #pragma once
 
-// Logs, read-only, what the member choice and the hand-over need (RE-p2-party-order.md §6,
-// RE-p2-member-handover.md §7); a dev tool (dev/dev_tools.h installs and ticks it; a player's build has the empty
+// Logs, read-only, what the member choice and the hand-over need (research/RE-p2-party-order.md,
+// RE-p2-member-handover.md); a dev tool (dev/dev_tools.h installs and ticks it; a player's build has the empty
 // stubs below, and keeps the party-order Info line through party_member::ChooseSlot's own log at the session's
 // party-change check):
 //   - the deployed party's order (the battle-member list the party panel shows), the field leader and

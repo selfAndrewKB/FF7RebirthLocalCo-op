@@ -1,7 +1,7 @@
 #pragma once
 
 // A character player 2 or 3 walked past its own story box is brought back beside player 1's character when the level's
-// walk through that box goes to its AI (research/RE-member-story-boxes.md §9, §12).
+// walk through that box goes to its AI (research/RE-member-story-boxes.md).
 //
 // The lead gate hands a walk whose step moves on at the character's own armed story box to its AI (session/lead_gate
 // OwnBoxAhead), so the game's walk carries the character in on the game's clock. A character its player took past that

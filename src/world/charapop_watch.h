@@ -1,7 +1,7 @@
 #pragma once
 
 // Logs, read-only, how the game's character detail treats the characters near the seats' players
-// (RE-p2-charapop-per-view.md §3; plan §3 item 7). CharaPop decides each NPC's tick pause, its hide
+// (research/RE-p2-charapop-per-view.md). CharaPop decides each NPC's tick pause, its hide
 // with a fade and its detail level from one camera, player 1's; SE's animation optimisation decides
 // shadows, update rate and anim pauses from a camera snapshot of player 1's too.
 //

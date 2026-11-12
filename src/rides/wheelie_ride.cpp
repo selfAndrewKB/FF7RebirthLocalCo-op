@@ -45,7 +45,7 @@ namespace {
 
 using Clock = std::chrono::steady_clock;
 
-// The game's functions (RE-p2-wheelie-ride.md §14; entry bytes from §14.12). All Square Enix End code.
+// The game's functions (research/RE-p2-wheelie-ride.md). All Square Enix End code.
 constexpr std::uint8_t kShouldRideBytes[] = {0x48, 0x8B, 0xC4, 0x48, 0x89, 0x58, 0x08, 0x48, 0x89, 0x70, 0x18, 0x48,
                                              0x89, 0x78, 0x20, 0x55, 0x48, 0x8D, 0x68, 0xA1, 0xB8, 0xD0, 0x00, 0x00};
 constexpr platform::FunctionFact kShouldRide{L"SBScooterCoordinator_ShouldRideAuto_Vt2F8", 0x141258734, kShouldRideBytes};
@@ -94,7 +94,7 @@ constexpr platform::SlotFact kSwapBackSlot{
     L"the scooter coordinator's getoff swap-back slot (vt+0x2F0)", 0x145D770E0,
     {L"SBScooterCoordinator_Vt2F0_FinishGetOff_SwapBack", 0x143DA83F0, kSwapBackBytes}};
 
-// The single-player animated getoff's swap back (§14.15, §14.16): the getoff motion's "End DetachFromSBScooter" notify
+// The single-player animated getoff's swap back: the getoff motion's "End DetachFromSBScooter" notify
 // on the rider's mesh. It detaches the rider, then calls `[PM+0x140]+0x5B8`'s vt+0x2F0 only when the rider is the party
 // data's field leader. Its function is shared with the base detach class and the chocobo's; only the scooter class's
 // slot is replaced.
@@ -108,7 +108,7 @@ constexpr std::uintptr_t kResolveLeader    = 0x140A6085C;  // PartyManager_Resol
 
 using facts::kSwitchAiControlAsync;
 
-// The key-4 "should ride" request FieldSummonBody builds (§14.1), zeroed: type, character, world stick, FName out.
+// The key-4 "should ride" request FieldSummonBody builds, zeroed: type, character, world stick, FName out.
 struct alignas(16) RideAsk
 {
     std::uint8_t  type = 0;
@@ -120,7 +120,7 @@ struct alignas(16) RideAsk
 };
 static_assert(offsetof(RideAsk, character) == 0x08 && offsetof(RideAsk, stick) == 0x10 && offsetof(RideAsk, out) == 0x20);
 
-// The dispatch request (§14.3), zeroed: type +0, FName +4 (unaligned), +0xD = 1 as FieldSummonBody passes.
+// The dispatch request, zeroed: type +0, FName +4 (unaligned), +0xD = 1 as FieldSummonBody passes.
 struct alignas(16) BeginRequest
 {
     std::uint8_t bytes[0x70]{};
@@ -128,7 +128,7 @@ struct alignas(16) BeginRequest
 constexpr std::uint32_t kBeginName    = 0x04;
 constexpr std::uint32_t kBeginFlagD   = 0x0D;
 
-// The 16-byte getoff parameters (§14.6): type filter +0 (4 = scooter), instant +2.
+// The 16-byte getoff parameters: type filter +0 (4 = scooter), instant +2.
 struct alignas(8) GetOffParams
 {
     std::uint8_t bytes[16]{};
@@ -151,7 +151,7 @@ using SwitchAiFn      = void (*)(void* character, std::uint8_t toPlayer, void* c
 using NotifyFn        = void (*)(void* notify, void* mesh, void* a3, void* a4);  // rcx, rdx; the rest passed on
 using ResolveLeaderFn = void* (*)(std::uint8_t selector);
 
-// Objects and fields (§14; this build).
+// Objects and fields (this build).
 constexpr std::uint8_t   kScooterKey        = 4;
 using facts::kScooterCoordinatorVTable;
 using facts::kScooterCharacterVTable;
@@ -168,9 +168,9 @@ constexpr std::uint32_t  kCoordStatePtr     = 0x230;        // -> u32 state id
 constexpr std::uint32_t  kCoordPending      = 0x238;        // pending row (null when none)
 constexpr std::uint32_t  kSharedTarget      = 0x0;
 constexpr std::int32_t   kStateIdle = 0, kStateBoarding = 2, kStateRiding = 3, kStateGettingOff = 4;
-// 1.005 moved these scooter fields by +0x20 (RE-1005-offsets-C.md): SetRider 0x1410E9D1B writes +0x2338 (1.004
-// 0x140DE02C7 +0x2318); FindNearestFreeScooter 0x140F3598D reads +0x233A (1.004 0x140AB2F71 +0x231A);
-// ShouldRideAuto_Vt2F8 0x140E8838D loads MovementSetting from +0x1890 (1.004 0x141258A71 +0x1870).
+// 1.005 moved these scooter fields by +0x20 (research/RE-1005-offsets-C.md): SetRider writes +0x2338 (1.004 +0x2318);
+// FindNearestFreeScooter reads +0x233A (1.004 +0x231A); ShouldRideAuto_Vt2F8 loads MovementSetting from +0x1890
+// (1.004 +0x1870).
 using facts::kScooterRidden;
 using facts::kScooterExcluded;
 constexpr platform::PerBuild<std::uint32_t> kScooterSetting  = {0x1870, 0x1890};  // MovementSetting*: +0x394 distance, +0x398 max yaw, +0x39C min power
@@ -181,18 +181,18 @@ using facts::kCharacterControlHolder;
 constexpr std::uint32_t  kHolderMoveRequest = 0x18;         // FVector: SetMoveInput's dir * scale
 constexpr std::uint32_t  kStateStickX       = 0x10;         // the on-foot state's stick pair (slot 11 TickInput)
 constexpr std::uint32_t  kStateStickY       = 0x14;
-constexpr float          kMoveEpsilon       = 1e-4f;        // FieldSummonBody's test (0x1460A26F8)
-constexpr float          kWarpDistance      = 5000.0f;      // the rental-return warp: > 50 m from the leader (§13.2 row 6)
+constexpr float          kMoveEpsilon       = 1e-4f;        // FieldSummonBody's test
+constexpr float          kWarpDistance      = 5000.0f;      // the rental-return warp: > 50 m from the leader
 constexpr float          kNearTarget        = 300.0f;       // the ask's Debug line: the seat's member within 3 m of the mark
 constexpr std::uint32_t  kMeshOwner         = 0xA0;         // a component's owner (the notify's mesh -> the rider)
-constexpr std::uint32_t  kActorRoot         = 0x138;        // an actor's root component (§14.15)
+constexpr std::uint32_t  kActorRoot         = 0x138;        // an actor's root component
 using facts::kSceneComponentAttachParent;
 
 constexpr auto     kSummaryEvery = std::chrono::seconds(10);
 constexpr int      kIdleTicks    = 4;          // the coordinator's own ticks run to bring it to idle on a forced end
 constexpr float    kIdleTickTime = 1.0f / 30.0f;
 
-// The game's forced getoffs (§14.6): each caller of Vehicle_RequestGetOff_PrimaryActive that is not the driver's own
+// The game's forced getoffs: each caller of Vehicle_RequestGetOff_PrimaryActive that is not the driver's own
 // button and can reach the scooter. The call is followed by the same call for each riding seat's coordinator.
 struct Site
 {
@@ -422,7 +422,7 @@ using own_ride::ControllerHolds;
 
 // ---- The question (Ask) ----
 
-/// FieldSummonBody's world stick for this state (§14.1): the stick pair turned by the primary camera's yaw, when the
+/// FieldSummonBody's world stick for this state: the stick pair turned by the primary camera's yaw, when the
 /// holder's move request is not zero. False when it is zero (the game's request then carries no stick: no ride).
 bool WorldStick(const void* state, const void* member, float (&stick)[4]) noexcept
 {
@@ -637,7 +637,7 @@ void RunSwapBack(void* context)
     call->ok   = platform::CallGuarded(g_swapBackOriginal, call->returned, call->coordinator, call->a2, call->a3, call->a4);
 }
 
-/// Every scooter coordinator's vt+0x2F0, the getoff's swap back (§14.0 item 3): the animated getoff runs it from the
+/// Every scooter coordinator's vt+0x2F0, the getoff's swap back: the animated getoff runs it from the
 /// motion's end, outside every scope, where the possession swap would leave a seat's member to her AI. For a seat's
 /// coordinator (the seat found from it) it runs inside that seat's scopes (as player 1's runs as the primary player);
 /// others pass through.
@@ -722,7 +722,7 @@ void FollowForcedGetOff(int seat, const GetOffParams* params, std::uintptr_t fro
                   name, ran ? L"ran" : L"COULD NOT RUN");
 }
 
-/// A forced getoff's call of Vehicle_RequestGetOff_PrimaryActive (§14.6): the game's call as it is (it reaches the
+/// A forced getoff's call of Vehicle_RequestGetOff_PrimaryActive: the game's call as it is (it reaches the
 /// primary controller's ride), then the same getoff for each riding seat's coordinator in turn, in seat order, each
 /// inside its own scope (FollowForcedGetOff). Called inside a seat's scope, nothing follows: the game's call reached
 /// that seat's coordinator, and player 1's ride was not the one ended.
@@ -755,7 +755,7 @@ std::uint8_t ForcedGetOff(const GetOffParams* params)
 
 /// The driver's getoff button (scooter slot 16's call): player 1's passes through; a seat's (inside the seat's scope:
 /// the seat whose controller is primary) is made instant when player 1 is more than 50 m from the scooter, where the
-/// game's rental-return warp would take it home during the getoff animation (§13.2 row 6).
+/// game's rental-return warp would take it home during the getoff animation.
 std::uint8_t OwnGetOff(const GetOffParams* params)
 {
     const int seat = params != nullptr && players::generation::OnGameThread()
@@ -774,7 +774,7 @@ std::uint8_t OwnGetOff(const GetOffParams* params)
     return g_fn.getOffPrimary(params);
 }
 
-/// The detach notify's field-leader test (§14.15): while a seat's member's own notify runs in the seat's scope, she
+/// The detach notify's field-leader test: while a seat's member's own notify runs in the seat's scope, she
 /// is the rider it asks about, so it answers her; otherwise the game's answer (the party data's field leader).
 void* NotifyLeader(std::uint8_t selector)
 {
@@ -810,7 +810,7 @@ void RunDetach(void* context)
     g_detachSeat = -1;
 }
 
-/// The getoff motion's "End DetachFromSBScooter" notify (§14.15, §14.16). For a seat's member (the seat from the
+/// The getoff motion's "End DetachFromSBScooter" notify. For a seat's member (the seat from the
 /// mesh's owner) while her coordinator is getting off, the game's notify runs in the seat's scope with her as the field
 /// leader it tests for: it detaches her, then calls the seat's controller's active coordinator's swap back, as player
 /// 1's notify does for player 1. Everything else passes through.
@@ -908,7 +908,7 @@ bool Install(const platform::GameImage& image) noexcept
                            g_resolveLeader != nullptr;
     g_installed = functions && g_coordVt != 0 && g_scooterVt != 0 && g_moveVt != 0 && scopes::leader_scope::Installed() &&
                   platform::ReplaceSlot(image, kSwapBackSlot, reinterpret_cast<std::uintptr_t>(&SwapBack), g_swapBackSlot);
-    // The animated getoff's swap back for a seat (§14.15): without it the member, the scooter and the seat's camera are
+    // The animated getoff's swap back for a seat: without it the member, the scooter and the seat's camera are
     // left on the ride, so no ride is offered.
     g_installed = g_installed && platform::ReplaceSlot(image, kDetachNotifySlot, reinterpret_cast<std::uintptr_t>(&DetachNotify),
                                                        g_detachSlot);
@@ -956,7 +956,7 @@ void Ask(void* state) noexcept
     // The walk-in question is asked of player 1's coordinator, whose one marked scooter is the free one nearest player
     // 1's leader, re-picked each frame (option A). The question changes nothing and measures from whoever asks, so every
     // seat may ask about that mark; two seats answered yes for one scooter are kept apart at the boarding
-    // (AfterMemberTick: the first boards, the second finds it held). RE-seats-step6-world-rides.md §2.
+    // (AfterMemberTick: the first boards, the second finds it held). research/RE-seats-step6-world-rides.md.
     void*     member = ReadPointer(state, facts::kMoveStateCharacter);
     const int seat   = member != nullptr ? players::generation::SeatOfMember(member) : -1;
     SeatRide* record = RideOf(seat);
@@ -1258,7 +1258,7 @@ bool Tick(void* controller, void* member, const input::move_state::EngineTicks& 
                       name, ok ? L"ran" : L"COULD NOT RUN");
         return !ControllerHolds(member, controller);
     }
-    // The field ticker runs the leader's ride body while it is the primary controller's active ride (§14.5): the seat's
+    // The field ticker runs the leader's ride body while it is the primary controller's active ride: the seat's
     // scooter is ticked the same way, on the frames the ticker runs, while the seat's controller holds it.
     void*      state16 = ReadPointer(ride.vehicle, facts::kCharacterMoveState);
     const bool holds   = ReadPointer(controller, kControllerActiveVehicle) == ride.coordinator &&

@@ -157,7 +157,7 @@ void TestHex()
     const Entry wide{.name = L"wide-mask", .shape = Shape::Hex, .max = INT64_MAX, .set = Done};
     EXPECT(RoundTrip(wide, L"7FFFFFFFFFFFFFFF") == L"7FFFFFFFFFFFFFFF");
     EXPECT(Refused(wide, L"10000000000000000"));
-    EXPECT(Format(wide, Value{std::int64_t{-1}}) == L"-1");  // as Remake; a module's get never returns one
+    EXPECT(Format(wide, Value{std::int64_t{-1}}) == L"-1");  // a module's get never returns one
 }
 
 void TestWordFloatText()

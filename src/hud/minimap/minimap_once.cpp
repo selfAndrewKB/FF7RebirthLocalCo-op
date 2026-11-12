@@ -51,12 +51,12 @@ constexpr WidgetSite kCircle{L"circle", 0x140FC6C95, kCircleSiteBytes, facts::kN
                              facts::kNaviMapCircleSubmitCall, kCircleAfter};
 constexpr WidgetSite kOctagon{L"octagon", 0x143A60235, kOctagonSiteBytes, kOctagonAcquireCall, kOctagonSubmitCall,
                               kOctagonAfter};
-// Game version 1.005 (RE-1005-hud-2.md): the circle's site is the next instruction, 0x140FC6C9C here (the same block
+// Game version 1.005 (research/RE-1005-hud-2.md): the circle's site is the next instruction (the same block
 // and landing point; its own skip code, hud/minimap/minimap_once_code.h).
 constexpr WidgetSite kCircle1005{L"circle", 0x140FC6C9C, kCircleSiteBytes1005, facts::kNaviMapCircleAcquireCall,
                                  facts::kNaviMapCircleSubmitCall, kCircleAfter};
 
-constexpr ULONGLONG kLogPeriodMs = 60'000;  // the counts line, once a minute (the 32 KB leak's pool reading is retired)
+constexpr ULONGLONG kLogPeriodMs = 60'000;  // the counts line, once a minute
 
 MinimapOnceFields      g_fields;  // read and counted into by the installed code, through its address
 platform::CodeRedirect g_circleCode;

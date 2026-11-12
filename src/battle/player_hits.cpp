@@ -20,7 +20,7 @@ namespace lss::battle::player_hits {
 
 namespace {
 
-// Facts read from the database (RE-p2-enemy-target-bias.md §13-§14; this build). 1.005: replaced-player-hits.json (the
+// Facts read from the database (research/RE-p2-enemy-target-bias.md; this build). 1.005: replaced-player-hits.json (the
 // damage slot is +0x388 there).
 
 // The seven damage functions, each OnTakeDamage(component, attacker, hit, damage, a5): five integer arguments, no float

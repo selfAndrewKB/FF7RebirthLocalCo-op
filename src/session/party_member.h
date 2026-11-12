@@ -50,8 +50,8 @@ struct SlotChoice
 };
 
 /// The member `seat`'s player plays: player 2 the 2nd slot of the game's party order, the row after the field
-/// leader in the battle-member list the party panel shows and player 1's battle switch cycles (RE-p2-party-order.md
-/// §5); player 3 the 3rd slot, the row after that (party_lease.h SeatSlotOrdinal). While player 1 is on the seat's
+/// leader in the battle-member list the party panel shows and player 1's battle switch cycles
+/// (research/RE-p2-party-order.md); player 3 the 3rd slot, the row after that (party_lease.h SeatSlotOrdinal). While player 1 is on the seat's
 /// row (the battle leader option, a switch), the seat plays the field leader's character player 1 left
 /// (RowOrFieldLeader); with `standIn` set (party_lease.h StandInFor: the game's leader change took the seat's
 /// member), the seat plays that character instead while it is deployed and not player 1's. The member is taken
@@ -66,7 +66,7 @@ bool IsFieldLeader(const void* character) noexcept;
 /// The game's leader is the field leader's character: player 1 is home, no stand-in can hold. Guarded.
 bool LeaderHome() noexcept;
 
-/// One of the game's link records (RE-p2-synergy-skills.md S-SYNTAKE §3, S-SYNSTUCK2 §1); every read guarded, so any
+/// One of the game's link records (research/RE-p2-synergy-skills.md); every read guarded, so any
 /// thread that is running the record (an empty view for null).
 LinkRecordView ReadLinkRecord(const void* record) noexcept;
 

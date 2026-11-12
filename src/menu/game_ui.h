@@ -3,8 +3,8 @@
 // The game's UI pieces the Co-op menu's modules share: the UI system's managers, the main menu's first page, weak
 // pointers held in the game's widgets, and FStrings read and copied the game's way. Used by menu/coop_menu,
 // menu/coop_page_open and menu/coop_page; found at install, then only read. Game thread.
-// Taken from Remake's menu/game_ui. Changed: the UI system is a static object whose qwords are the managers; the weak
-// pointers are players/weak_object's 8-byte values.
+// The UI system is one static object and its managers are the qwords in it; a widget's weak pointer is
+// players/weak_object's 8-byte value.
 
 #include <cstdint>
 #include <string>

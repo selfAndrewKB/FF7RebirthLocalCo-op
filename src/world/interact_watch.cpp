@@ -45,7 +45,7 @@ namespace lss::world::interact_watch {
 
 namespace {
 
-// The objects (RE-p2-field-interact.md §1.1, §10; this build).
+// The objects (research/RE-p2-field-interact.md; this build).
 using facts::kEndGameRoot;
 using facts::kRootWorldItems;
 using facts::kPartyManagerGlobal;
@@ -53,7 +53,7 @@ using facts::kPartyManagerPrimaryController;
 using facts::kPartyManagerLeader;
 using facts::kPartyManagerLeaderType;
 
-// FieldActionMgr (§1.2, §1.3, §10.D).
+// FieldActionMgr.
 constexpr std::uint32_t kOctree         = 0x10;
 constexpr std::uint32_t kCandidateCount = 0x298;    // i32
 using facts::kFieldActionPointList;
@@ -71,7 +71,7 @@ using facts::kFieldActionPending;
 using facts::kFieldActionSlots;
 using facts::kFieldActionMaxPoints;
 
-// A point (§1.2 as corrected in §10.B).
+// A point.
 constexpr std::uint32_t kPointTalk          = 0x08;   // u8
 using facts::kFieldActionPointKey;
 constexpr std::uint32_t kPointOwner         = 0x1C;   // FName
@@ -84,13 +84,13 @@ constexpr std::uint32_t kPointKind          = 0xF0;   // u8
 constexpr std::uint32_t kPointVariant       = 0xF1;   // u8
 using facts::kFieldActionPointFlags;
 
-// WorldItemMgr's map of items (§10.E): a stock TMap keyed by the item's FName at element +0 (facts/world.h).
+// WorldItemMgr's map of items: a stock TMap keyed by the item's FName at element +0 (facts/world.h).
 using facts::kWorldItemMapElements;
 using facts::kWorldItemMapStride;
 constexpr std::int32_t  kMaxItems       = 16384;
 using facts::kFieldActionEntryKeyBack;
 
-// The hooked functions (§10.A). Entry redirects replace the first instruction (5 bytes); the rest of the
+// The hooked functions. Entry redirects replace the first instruction (5 bytes); the rest of the
 // listed bytes are checked too.
 constexpr std::uint8_t   kAddPointBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x4C, 0x89, 0x4C,
                                              0x24, 0x20, 0x55, 0x56, 0x57, 0x41, 0x54, 0x41};
@@ -101,16 +101,16 @@ constexpr std::uint8_t   kExecuteSlotBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x
 // void(mgr, u8 slot)
 constexpr platform::FunctionFact kExecuteSlot{L"FieldActionMgr's ExecuteSlot", 0x1414A90E4, kExecuteSlotBytes};
 constexpr std::size_t    kFirstInstruction = 5;
-// 1.005 (RE-1005-field-2.md §5): AddPoint's entry is at 0x140FED95C, %16 = 12, so its first instruction crosses a
+// 1.005 (research/RE-1005-field-2.md): AddPoint's entry sits at %16 = 12, so its first instruction crosses a
 // 16-byte block. Its second (mov [rsp+20h], r9 at %16 = 1) takes the redirect instead: the first only stores rbx into
 // the caller's home area and nothing branches to the second, so the replacement is entered as at the entry, with every
 // caller's registration, on any thread (the trampoline replays both instructions).
 constexpr std::size_t    kSecondInstruction = 5;
-// The Wheelie ride-on point's key (an FName global, RE-p2-wheelie-ride.md §11): no analysed code adds it, so its
+// The Wheelie ride-on point's key (an FName global, research/RE-p2-wheelie-ride.md): no analysed code adds it, so its
 // registration is logged at Info to name the registrar.
 constexpr std::uintptr_t kScooterKey = 0x1491E6D10;
 constexpr std::uintptr_t kMarkFromListener = 0x1414A90AD;  // the WorldItem key listener's call returns here
-// The candidate query, called read-only for the dry run (§10.C): void(octree, node, context, box*, cap*).
+// The candidate query, called read-only for the dry run: void(octree, node, context, box*, cap*).
 constexpr std::uint8_t   kQueryBytes[] = {0x41, 0x55, 0x41, 0x56, 0xB8, 0x28, 0x01, 0x00, 0x00};
 constexpr platform::FunctionFact kQuery{L"the octree's candidate query", 0x1422BA490, kQueryBytes};
 constexpr float          kQueryExtent  = 10.0f;  // as the update's call (cm)
@@ -358,7 +358,7 @@ void OnMarked(std::uint64_t key, std::uint8_t taken, std::uintptr_t returnAddres
     }
 }
 
-/// The pass's grant hook, before the game's grant: each controller's active force-feedback effects (RE-p2-rumble.md §6
+/// The pass's grant hook, before the game's grant: each controller's active force-feedback effects (research/RE-p2-rumble.md
 /// item 4: expect +1 on the primary one). The grant's line is Debug: its reads are made only when it is written.
 void OnGranting(std::uint64_t, int) noexcept
 {

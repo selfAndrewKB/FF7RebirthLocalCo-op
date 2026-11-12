@@ -1,8 +1,8 @@
 #pragma once
 
 // The mirror views: a local player of the mod's in every column no player has, showing player 1's picture, so the
-// held columns are never black (plan/seats.md step 5; the user's columns rule: a third column only
-// while the three-player monitor mode is on, and then player 1's picture in an empty one).
+// held columns are never black (the columns rule: a third column only while the three-player monitor
+// mode is on, and then player 1's picture in an empty one).
 //
 // The engine's own levers, as views/third_view (the multi-monitor measurement) proved them: a local
 // player through UGameplayStatics::CreatePlayer (players/local_players.h), inside a seat's join scope
@@ -20,12 +20,10 @@
 // camera manager is ready for a join, whatever the game shows (the title, a loading screen, a movie, a menu), unless
 // the caller names a hold; and again if the engine drops it. The mirrors stay in through a field exit inside the
 // world (a save load from the title or the menu, a retry, chapter select: the loading screen is then drawn in every
-// column, as Remake's is) and leave only before a real map load (a map load would spawn their controllers again
-// outside a join; research/RE-mirror-loads.md). The user's ask: the title, the loading screens and the
-// movies in every column, as Remake does it or better.
-// Changed from Remake's views/mirror_player: the camera by SetViewTarget (Rebirth's camera manager honours it), the
-// mirrors kept through the field exits (Remake refills a column on the leave's tick), the controller ids after the
-// seats' (step 4 keys the HUD by the id).
+// column) and leave only before a real map load (a map load would spawn their controllers again outside a join;
+// research/RE-mirror-loads.md), so the title, the loading screens and the movies show in every column. The camera
+// is set by SetViewTarget (the camera manager honours it); the mirrors are kept through the field exits; the
+// controller ids come after the seats' (the HUD is keyed by the id).
 //
 // Wanted while more columns are held than players are in (views/columns.h). Game thread only. Logged at Info on each
 // add and remove, at Debug for the status.

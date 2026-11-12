@@ -11,10 +11,9 @@
 // Driving it: `python tools/remote.py shell` (or `-c "<line>"`, `run <file>`, `status`); the regression harness
 // (tools/regression/run.py) and tools/relaunch.ps1 go through it.
 //
-// Taken from Remake's control/remote. Changed: the port (Remake's plus one, so both games' consoles can
-// listen at once); a reply's log level read from its kind and command, not its text, and notes at Info (they mark the
-// log); `log-level` stays the platform's (platform::RegisterLogCommands); no `tick` reading. The file inbox it ran
-// beside for a row of the port is retired: scripts are console clients now.
+// kPort leaves 4418 to the other game's mod console, so both can listen at once. A reply's log level is read from
+// its kind and command, not its text, and notes log at Info so they mark the log; `log-level` stays the platform's
+// (platform::RegisterLogCommands). Scripts are console clients; there is no file inbox.
 
 #include "control/runner.h"
 #include "control/server.h"

@@ -95,7 +95,7 @@ std::uintptr_t RunForOwner(TickFn engine, void* state, float deltaTime, bool via
 /// Runs `engine` with player 1's pad as the only stick when owner is player 1's controller and
 /// per-pad sticks act on player 1's detection. Everything after slot 11 in player 1's tick reads the
 /// stick too: the input update's terrain detection turns its probes toward it, and the leader-action
-/// tick keeps its history (RE-p2-terrain-action-conflict.md §7). Unscoped, they read the merged stick,
+/// tick keeps its history (research/RE-p2-terrain-action-conflict.md). Unscoped, they read the merged stick,
 /// which is a seat's pad's whenever only that seat's player moves. A scope already open (a seat's
 /// member, or slot 11 inside slot 16) passes through.
 std::uintptr_t RunOnPlayerOnesPad(TickFn engine, void* object, float deltaTime, const void* owner) noexcept
@@ -126,7 +126,7 @@ std::uintptr_t PlayerUpdateInput(void* state, float deltaTime)
 }
 
 /// Player 1's ridden chocobo or scooter: the field tick runs its move state for player 1 (PC1 possesses it,
-/// RE-p2-chocobo-ride.md §1.2, RE-p2-wheelie-ride.md §14.5); unscoped it read the merged stick, so any pad steered it
+/// research/RE-p2-chocobo-ride.md, RE-p2-wheelie-ride.md); unscoped it reads the merged stick, so any pad steers it
 /// (seen live on the chocobo). Not counted as an engine tick; recorded as the ride tick (for every seat), which a
 /// seat's member tick and own ride run on. A follower's chocobo (its own AI controller) and a seat's own ride pass
 /// through.
@@ -226,7 +226,7 @@ void InstallDetectionScopes(const platform::GameImage& image) noexcept
                   installed, std::size(wraps));
 }
 
-/// The chocobo move state's slot 1, for a seat's own ride (RE-p2-chocobo-run-refresh.md §4, lever 1; logged).
+/// The chocobo move state's slot 1, for a seat's own ride (research/RE-p2-chocobo-run-refresh.md; logged).
 void InstallChocoboHandles(const platform::GameImage& image) noexcept
 {
     const auto live          = platform::FindFunction(image, facts::kChocoboMoveStateHandles.target);

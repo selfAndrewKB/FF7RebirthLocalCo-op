@@ -1,7 +1,7 @@
 #pragma once
 
-// A seat's player uses a shopkeeper's shop with the game's own field prompt and shop (RE-p2-shopkeeper-talk.md;
-// the user's ask: shopkeepers serve a seat's player as the vending machines do).
+// A seat's player uses a shopkeeper's shop with the game's own field prompt and shop (research/RE-p2-shopkeeper-talk.md;
+// shopkeepers serve a seat's player as the vending machines do).
 //
 // A shopkeeper is a CharaPop ObjectActor NPC with an ordinary field-action point (key = the CharaPop key, e.g.
 // oba2100_ShopWeapon01). Pressed, the game's DispatchKey fires the NPC's state trigger (StateTrigger_Request, no leader
@@ -9,7 +9,7 @@
 // "show menu" action (type 43; kind 1 FEndShowShopMenu, kind 7 FEndShowSkillTreeMenu), the same shop command vending
 // machines use.
 //   - Admit: a seat's field pass (world/field_pickup) leaves a point open when its key is a shopkeeper's, read
-//     from the game's own data with the game's accessors (§1.2, RE-statechange-row-layout.md: the GS object's talk state,
+//     from the game's own data with the game's accessors (research/RE-statechange-row-layout.md: the GS object's talk state,
 //     its next states and the states their swap rules may enter, their enter actions (an ActionGroup name standing for
 //     its actions), a type-43 action of kind 1 or 7). The walk runs in Tick, outside the field manager's lock
 //     (a key again after 5 s, a shop's after 60 s; all forgotten once no seat is in); the pass reads only the cached
@@ -19,7 +19,7 @@
 //     drives it, the leader-type scope for its camera preset).
 //   - The shop's AI event (ShopMenu_SendLeaderTargetAIEvent5, the NPC reacting to the leader) runs with the seat's
 //     member as the leader (LeaderScope) for the seat's shop, as it does with the leader in single player.
-//   - The greeting (§3 row 5): the NPC's look-at and the member's turn to face it are a PlannerEvent line whose
+//   - The greeting: the NPC's look-at and the member's turn to face it are a PlannerEvent line whose
 //     `LEADER_` the game resolves through ResolveNamedPoint_LEADER_BATTLELEADER, twice a frame from the press until
 //     the shop is up (seen in a log: 821 reads in two visits, all player 1's character while player 3 talked).
 //     The resolver runs with the pressing seat's member as the leader (LeaderScope) while that seat's press is

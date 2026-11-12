@@ -1,6 +1,6 @@
 #pragma once
 
-// The game's two party funnels, heard by the session (RE-p2-session-levers.md §3, §5):
+// The game's two party funnels, heard by the session (research/RE-p2-session-levers.md):
 //   leader   the one call of AEndPlayerController::SwitchLeaderInternal, inside OnLeaderTransition.
 //            Every leader change of the game's controller passes it (party switches, scripts, quests,
 //            vehicles, battle start and end, KO switches, party data applies). The listener hears it

@@ -19,9 +19,6 @@
 // a range to the slot's object as read before each call. No engine dependency: the host test exercises it on
 // plain memory. The reads and writes are guarded against a fault (an unreadable slot opens nothing). Not
 // thread-safe; one thread per context.
-//
-// Ported from the Remake mod's platform/byte_scope.h; the Keep kind, the fixed store and Retarget
-// are this mod's additions.
 
 #include <array>
 #include <cstddef>

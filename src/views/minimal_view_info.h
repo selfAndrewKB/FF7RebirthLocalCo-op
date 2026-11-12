@@ -1,8 +1,8 @@
 #pragma once
 
 // The FMinimalViewInfo fields the mod reads or writes, as ULocalPlayer::GetViewPoint fills the
-// struct in this build. Layout read from the FMinimalViewInfo constructor 0x140CC0C98 and
-// GetViewPoint's field-by-field copy (struct size 0x6A0); RE-local-player-viewpoint.md.
+// struct in this build. Layout read from the FMinimalViewInfo constructor and
+// GetViewPoint's field-by-field copy (struct size 0x6A0); research/RE-local-player-viewpoint.md.
 
 #include <cstddef>
 

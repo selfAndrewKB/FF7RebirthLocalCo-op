@@ -38,20 +38,20 @@ namespace {
 // 1.004 addresses (1.005 through replaced-traversal.json and replaced-chocobo-traversal.json). Every slot and entry was
 // read from both exes (tools/version_match/_traversal_check.py).
 
-// End2FieldActionActor OnTriggerEnter / OnTriggerLeave (facts/traversal.h; RE-p2-traversal.md §1.3): the first
+// End2FieldActionActor OnTriggerEnter / OnTriggerLeave (facts/traversal.h; research/RE-p2-traversal.md): the first
 // instruction, `mov [rsp+10h], rbx`, is 5 bytes.
 constexpr std::size_t    kFirstInstruction = 5;
 using TriggerFn = std::uintptr_t (*)(void* actor, void* key, void* other, void* fourth);
 
 // EndCharacter__Tick_Vt308's call of EndCharacter_FieldActionActorNotifyPass_Vt748(character, dt) (E8 at +0x5 of its
-// block in both builds). The pass walks the character's own controller's list (+0x618). RE-p2-traversal.md §1.3.
+// block in both builds). The pass walks the character's own controller's list (+0x618).
 constexpr std::uintptr_t kNotifyCall    = 0x14125B205;
 constexpr std::uint8_t   kNotifyBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x48, 0x89, 0x74,
                                            0x24, 0x18, 0x48, 0x89, 0x7C, 0x24, 0x20, 0x55};
 constexpr platform::FunctionFact kNotifyPass{L"EndCharacter_FieldActionActorNotifyPass_Vt748", 0x14125B3B0, kNotifyBytes};
 using NotifyFn = void (*)(void* character, float dt);
 
-// The field tick's trigger pass (FieldTick_StreamingThenLocationUpdate 0x140A55FCC; RE-p2-trigger-overlap.md §2.2):
+// The field tick's trigger pass (FieldTick_StreamingThenLocationUpdate; research/RE-p2-trigger-overlap.md):
 // the pending key PlayerTrigger is resolved to the PRIMARY controller's trigger (`call FWeakObjectPtr::Get(PM+0x140)`,
 // E8 inside one block in both builds). The tracker's dispatch call that follows belongs to world/seat_triggers,
 // which reports each pass here (NoteDispatch).
@@ -59,16 +59,16 @@ constexpr std::uintptr_t kTriggerResolveCall = 0x140A56428;
 using ResolveFn = void* (*)(const void* weak);
 
 // The ladder's per-frame offer: Ladder_Vt748_NotifyNear_AutoEngage(ladder, context), context +0x8 the character
-// (1.005 slot +0x750). It requests state 8 on that character when the approach and distance checks pass (§4.1).
+// (1.005 slot +0x750). It requests state 8 on that character when the approach and distance checks pass.
 constexpr std::uint8_t kLadderNotifyBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x18, 0x55, 0x56, 0x57,
                                                0x41, 0x56, 0x41, 0x57, 0x48, 0x8D, 0x6C, 0x24};
 constexpr platform::SlotFact kLadderNotifySlot{L"the ladder's notify slot (+0x748)", 0x145940E90,
                                                {L"Ladder_Vt748_NotifyNear_AutoEngage", 0x141643238, kLadderNotifyBytes}};
 using LadderNotifyFn = std::uintptr_t (*)(void* ladder, void* context);
 
-// The ladder executer (state 8's per-class executer; vtable 0x1458125C0): Start +0x10, End +0x18, UpdateInput +0x30
+// The ladder executer (state 8's per-class executer): Start +0x10, End +0x18, UpdateInput +0x30
 // (reached from move-state slot 16; it polls the climb move, which reads the stick). Executer +0x10: the character
-// (FWeakObjectPtr). §4.2.
+// (FWeakObjectPtr).
 constexpr std::uint8_t kExecStartBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x48, 0x89, 0x6C,
                                             0x24, 0x18, 0x56, 0x57, 0x41, 0x56, 0xB8, 0xC0};
 constexpr std::uint8_t kExecEndBytes[]   = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x48, 0x89, 0x74,
@@ -86,7 +86,7 @@ using ExecInputFn = std::uintptr_t (*)(void* executer, float dt);
 constexpr std::uint32_t kExecCharacter = 0x10;
 
 // The chocobo's glide (state 26) and water-jet (state 27) control states: enter +0x18 (state, param), exit +0x20
-// (state). State +0x8: the chocobo (FWeakObjectPtr). RE-p2-chocobo-traversal.md §3, §4.
+// (state). State +0x8: the chocobo (FWeakObjectPtr). research/RE-p2-chocobo-traversal.md.
 constexpr std::uint8_t kGlideEnterBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x74,
                                              0x24, 0x10, 0x48, 0x89, 0x7C, 0x24, 0x20, 0x55};
 constexpr std::uint8_t kGlideExitBytes[]  = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x48, 0x89, 0x74,
@@ -150,7 +150,7 @@ struct TriggerState
     bool operator==(const TriggerState&) const = default;
 };
 
-// The trigger's own overlap tracker (AEndPlayerTrigger+0x230; RE-p2-trigger-overlap.md §2.3).
+// The trigger's own overlap tracker (AEndPlayerTrigger+0x230; research/RE-p2-trigger-overlap.md).
 constexpr std::uint32_t kTriggerTracker      = 0x230;
 constexpr std::uint32_t kTriggerCapsule      = 0x228;
 constexpr std::uint32_t kTrackerPrevKeys     = 0x118;  // i32: keys of the previous pass

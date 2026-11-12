@@ -1,6 +1,6 @@
 #pragma once
 
-// Every player's camera follows the Options camera distance (RE-p2-battle-camera.md §6, pass S-CAMDIST1).
+// Every player's camera follows the Options camera distance (research/RE-p2-battle-camera.md).
 //
 // Each camera manager's field and battle operators take the distance level from the options once, at
 // their own first use; a later change reaches a camera manager only when the Options menu applies it,
@@ -12,7 +12,7 @@
 // it is given and starts the operators' own blend. The values come from the call's arguments: at both
 // sites the options data is written back only after the call.
 //
-// Split framing (roadmap 2b, RE-p2-framing.md §6.1): while a seat is in and the screen shows two or three
+// Split framing (research/RE-p2-framing.md): while a seat is in and the screen shows two or three
 // columns, each player's field operator is driven to the Options level plus a step offset for the layout (two
 // players top and bottom or side by side; three equal columns, each a full 16:9 view on its monitor, at the Options
 // level), through the same per-camera-manager setter, so a half's wider or taller view can sit further back. One step adds 10 % to the row's distance and height

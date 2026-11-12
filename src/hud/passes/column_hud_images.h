@@ -2,7 +2,7 @@
 
 // The further columns' HUD images: the game's own overlay rendered once more each frame per further column with a
 // pass, each into a layer entry of its own in the same pool-2 slot, and each view family drawing only its own column's
-// entry (RE-p2-hud-second-image.md; the mechanism is §5 there; per column as Remake's hud/second_image). The engine
+// entry (research/RE-p2-hud-second-image.md; per column). The engine
 // keeps one image per slot, so no game path makes a second one: the slot reuse, the skipped submits and the draw filter
 // are the mod's, around the game's own render.
 //
@@ -18,13 +18,13 @@
 // hit-test grid, the window size) is player 1's, as with every seat out.
 //
 // Render thread, per view family: the family's view names its player (FSceneView::PlayerIndex, the controller id, a
-// seat's or a mirror's; read at the call that adds the composite passes, 0x140FDE3C1), whose column this frame's
+// seat's or a mirror's; read at the call that adds the composite passes), whose column this frame's
 // columns map gives (published at column 0's pass). A further column with an entry this frame draws its own (which
 // holds player 1's HUD while the column shows player 1's picture on a monitor of another shape); every other view
 // (column 0's, a column with no entry) draws column 0's. The consume loop then gives each further column's entry its
 // own vertex/index buffers and draws only the family's own entry (hud/passes/entry_filter_code.h).
 //
-// Each seat's own content in its pass comes from the levers of RE-p2-hud.md P8.6 (hud/passes/seat_hud_content.h).
+// Each seat's own content in its pass comes from the levers of research/RE-p2-hud.md (hud/passes/seat_hud_content.h).
 #include "platform/dev_switch.h"
 
 #include <cstdint>

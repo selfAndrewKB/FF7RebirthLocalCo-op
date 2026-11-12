@@ -49,7 +49,7 @@ namespace pass_opacity {
 
 /// Before an overlay pass: only the seat's rows, markers, pins, command menu and window (0 player 1's) stay shown. In
 /// a copy of player 1's picture (`copy`: a mirror's column, or a seat's on player 1's camera) player 1's rows, markers,
-/// pins and command menu, and no player's window (a window belongs to its player's own view, as in Remake).
+/// pins and command menu, and no player's window (a window belongs to its player's own view).
 void ShowOnly(int seat, bool copy = false) noexcept;
 
 /// After the passes: every widget the participants made transparent gets its own opacity back.

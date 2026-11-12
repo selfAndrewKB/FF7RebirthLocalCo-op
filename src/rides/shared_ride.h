@@ -1,7 +1,7 @@
 #pragma once
 
 // The buggy and the Tiny Bronco are each one vehicle for the whole party: while player 1 rides one, the players take
-// turns at it (the user's rule: one picture for a shared vehicle, no mirror images; the same for the bronco, whose
+// turns at it (one picture for a shared vehicle, no mirror images; the same for the bronco, whose
 // crossing the other players sit out; plan, "Buggy: single view" and "Airboat").
 //
 // The signal is the game's own: player 1's AEndPlayerController::ActiveVehicleCoordinator (`PC+0x5B8`) is the buggy's

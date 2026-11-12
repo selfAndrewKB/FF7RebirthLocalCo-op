@@ -1,7 +1,7 @@
 #pragma once
 
 // The machine code that gives each further column's HUD entry its own buffers and lets each view family draw only its
-// own column's entry (RE-p2-hud-second-image.md §3 and §5; per column as Remake's hud/image_entries).
+// own column's entry (research/RE-p2-hud-second-image.md; per column).
 //
 // With the further columns' images, one pool-2 slot holds one layer entry per further column with an image, then
 // column 0's: [column 3's, column 2's, player 1's], the columns highest first (hud/passes/overlay_pass.h). The render
@@ -11,17 +11,17 @@
 // other column's entry. Two sites in the consume loop do that, each one whole instruction replaced through
 // platform/code_redirect.h:
 //
-// Buffers (0x140FC8501, `mov rax,[rdi+90h]`, loading pool 2's vertex buffer for DrawLayerEntry;
+// Buffers (`mov rax,[rdi+90h]`, loading pool 2's vertex buffer for DrawLayerEntry;
 // r9 = the entry, whose FName is its first 8 bytes; the index buffer and the SRM slot are already
 // stored at [rsp+28h] and [rsp+30h]): for a further column's entry, that column's vertex buffer, index buffer and SRM
 // slot are passed instead (the columns' table, walked in order). Only rax, the two argument slots and the flags change;
 // nothing after it reads the flags before the call.
 //
-// Draw gate (0x140FC8E05, `cmp dword [r9+8],0` before `jle` past the draw; rbx = the entry): when a family entry
+// Draw gate (`cmp dword [r9+8],0` before `jle` past the draw; rbx = the entry): when a family entry
 // name is set and this entry is an overlay entry (column 0's or any further column's) other than the family's own, ZF is forced
 // so the stock jle skips the draw. The entry has already uploaded, so a later re-use by another family still finds
 // its geometry. rax is dead at this point on both paths.
-// The gate is in DrawLayerEntry, which every pool's consume calls (pool 0's at 0x140FC7C9D draws the
+// The gate is in DrawLayerEntry, which every pool's consume calls (pool 0's draws the
 // minimap's map into its own target, before the frame's families), so only the overlay entries
 // are ever filtered; every other entry is drawn as the game draws it.
 //
@@ -63,14 +63,14 @@ struct EntryFilterFields
 
 /// The instruction each site replaces, as the research read it.
 inline constexpr std::uint8_t kLoadVertexBufferBytes[] = {0x48, 0x8B, 0x87, 0x90, 0x00, 0x00, 0x00};  // mov rax,[rdi+90h]
-// The same load in pool 0's consume (0x140FC7C91, FEndMenuRenderer__OnRenderToTexture_ConsumePool0; r13 = the
-// renderer, r9 = the entry, the index buffer and SRM slot already at [rsp+28h]/[rsp+30h]; RE-p2-own-minimap.md §8):
+// The same load in pool 0's consume (FEndMenuRenderer__OnRenderToTexture_ConsumePool0; r13 = the
+// renderer, r9 = the entry, the index buffer and SRM slot already at [rsp+28h]/[rsp+30h]; research/RE-p2-own-minimap.md):
 // the minimap's map entries, so each further column's minimap entry gets its own buffers the same way.
 inline constexpr std::uint8_t kLoadPoolZeroVertexBufferBytes[] = {0x49, 0x8B, 0x85, 0x80, 0x00, 0x00, 0x00};  // mov rax,[r13+80h]
 inline constexpr std::uint8_t kDrawGateBytes[]         = {0x41, 0x83, 0x79, 0x08, 0x00};              // cmp dword [r9+8],0
-// Game version 1.005 (RE-1005-hud-2.md): pool 0's load (0x140A460ED) crosses a 16-byte block, so the site is the
-// next instruction, the store of the vertex-buffer argument (0x140A460F4, `mov [rsp+20h],rax`, one block; the call of
-// DrawLayerEntry follows at 0x140A460F9). rax already holds pool 0's vertex buffer there, r9 the entry.
+// Game version 1.005 (research/RE-1005-hud-2.md): pool 0's load crosses a 16-byte block, so the site is the
+// next instruction, the store of the vertex-buffer argument (`mov [rsp+20h],rax`, one block; the call of
+// DrawLayerEntry follows). rax already holds pool 0's vertex buffer there, r9 the entry.
 inline constexpr std::uint8_t kStoreVertexBufferArgBytes1005[] = {0x48, 0x89, 0x44, 0x24, 0x20};  // mov [rsp+20h],rax
 
 // One column's test and loads, the same length in both buffer builders (74 bytes), then the replaced instruction.

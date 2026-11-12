@@ -41,14 +41,14 @@ namespace lss::world::shop_talk {
 
 namespace {
 
-// 1.004 addresses (1.005 through replaced-shop-talk.json). RE-p2-shopkeeper-talk.md §1.2, §7.2.
+// 1.004 addresses (1.005 through replaced-shop-talk.json). research/RE-p2-shopkeeper-talk.md.
 constexpr std::uint8_t kRequestBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x74,
                                           0x24, 0x10, 0x57, 0xB8, 0x50, 0x00, 0x00, 0x00};
 constexpr platform::FunctionFact kRequest{L"StateTrigger_Request", 0x140F7AA58, kRequestBytes};
 constexpr std::uint8_t kAiEventBytes[] = {0x48, 0x89, 0x54, 0x24, 0x10, 0x48, 0x89, 0x4C, 0x24, 0x08, 0x55,
                                           0x53, 0x56, 0x57, 0x41, 0x56, 0x48, 0x8D, 0x6C, 0x24, 0xC9};
 constexpr platform::FunctionFact kAiEvent{L"ShopMenu_SendLeaderTargetAIEvent5", 0x14353E9C0, kAiEventBytes};
-// The LEADER_ resolver (§3 row 5; 'LEADER_' = the party manager's leader at +0x148), redirected to run with the talking
+// The LEADER_ resolver ('LEADER_' = the party manager's leader at +0x148), redirected to run with the talking
 // seat's member as the leader: the greeting's look-at, twice a frame from the press until the shop is up.
 constexpr std::uint8_t kLeaderNameBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x18, 0x48, 0x89, 0x74, 0x24, 0x20,
                                              0x57, 0x41, 0x54, 0x41, 0x55, 0x41, 0x56, 0x41, 0x57};
@@ -57,10 +57,10 @@ constexpr std::uint8_t kAccessorBytes[] = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0
 constexpr platform::FunctionFact kActionRow{L"DataAcc_Action_Ctor", 0x1407BEB9C, kAccessorBytes};
 constexpr platform::FunctionFact kGroupRow{L"DataAcc_ActionGroup_Ctor", 0x1411CB32C, kAccessorBytes};
 constexpr std::size_t kFirstInstruction = 5;  // each redirected entry starts with a 5-byte mov [rsp+n], reg
-// DispatchKey's return address after its StateTrigger_Request call (the object branch, §2.1 step 6).
+// DispatchKey's return address after its StateTrigger_Request call (the object branch).
 constexpr std::uintptr_t kDispatchReturn = 0x1414A8FB3;
 
-// bool-ish(FName trigger, FName sender, float delay, u8 flags), all by value (§7 step 2).
+// bool-ish(FName trigger, FName sender, float delay, u8 flags), all by value.
 using RequestFn  = std::uint64_t (*)(std::uint64_t trigger, std::uint64_t sender, float delay, std::uint8_t flags);
 using Fn4        = std::uint64_t (*)(std::uint64_t, std::uint64_t, std::uint64_t, std::uint64_t);
 using FindFn     = void* (*)(void* gs, std::uint64_t key, std::int32_t attribute);
@@ -71,7 +71,7 @@ using data_rows::MappedNames;
 using data_rows::MappedText;
 using data_rows::Row;
 
-// The GS (root+0x170), the talk attribute DispatchKey asks for, and the object's current StateChange name (§2.1).
+// The GS (root+0x170), the talk attribute DispatchKey asks for, and the object's current StateChange name.
 constexpr std::uint32_t kRootGs        = 0x170;
 constexpr std::int32_t  kTalkAttribute = 5;
 constexpr std::uint32_t kObjectState   = 0x10;
@@ -101,7 +101,7 @@ enum class Verdict : std::uint8_t
     NoObject,    // no talk object (most points)
     NotShop,     // its rows read, no shop action
     Shop,        // a type-43 action of kind 1 or 7
-    ByName,      // the rows could not be read; its name contains "Shop" (the interim test, §1.2)
+    ByName,      // the rows could not be read; its name contains "Shop" (the interim test)
     Unreadable,  // the rows could not be read, no "Shop" in its name
 };
 
@@ -163,7 +163,7 @@ void* Gs() noexcept
     return ReadPointer(reinterpret_cast<const void*>(root), kRootGs);
 }
 
-/// The game's data for `key` (§1.2), with what was read for the log.
+/// The game's data for `key`, with what was read for the log.
 Verdict Walk(std::uint64_t key, std::wstring& seen)
 {
     void* gs     = Gs();

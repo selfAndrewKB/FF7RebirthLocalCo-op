@@ -3,7 +3,7 @@
 // The bytes the mod writes near the game (hud/battle/enemy_gauges_code.h) are EXECUTED here, installed
 // through platform::CodeRedirect over a stand-in laid out like EndUI__MF8_ProjectEntryByWidget's
 // entry: its first instruction ends at a 16-byte boundary and `mov [rsp+18h], r8` starts 1 byte into
-// the next block (0x14176201C / 0x141762021 in the game).
+// the next block (as at the game's site).
 
 #include "hud/battle/enemy_gauges_code.h"
 #include "platform/code_redirect.h"

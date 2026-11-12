@@ -32,9 +32,9 @@ namespace lss::renderer {
 
 namespace {
 
-// Facts read from the database (RE-p2-distant-lod-swap.md §9.4, §9.9; this build). Each function's first
+// Facts read from the database (research/RE-p2-distant-lod-swap.md; this build). Each function's first
 // bytes are checked before anything is redirected; the entry redirects replace one register save.
-constexpr std::uintptr_t kRenderEntry = 0x1457A6720;  // the scene renderer's vtable 0x1457A66F8, slot 5
+constexpr std::uintptr_t kRenderEntry = 0x1457A6720;  // slot 5 of the scene renderer's vtable
 constexpr std::uint8_t   kRenderMainBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x18, 0x55, 0x56, 0x57,
                                                0x41, 0x54, 0x41, 0x55, 0x41, 0x56, 0x41, 0x57};
 // SceneRenderer_Render_Main(renderer, RHI command list)
@@ -46,7 +46,7 @@ constexpr std::uint8_t   kProcessBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 
                                             0x24, 0x10, 0x48, 0x89, 0x74, 0x24, 0x18, 0x57};
 constexpr platform::FunctionFact kProcess{L"ME_Group_ProcessStreamingFeedbackReadbacks", 0x1409156B4, kProcessBytes};
 
-// ME_MainPass_CopyStreamingFeedbackToReadback(builder, scene): its one call (0x14157B30C) crosses a
+// ME_MainPass_CopyStreamingFeedbackToReadback(builder, scene): its one call crosses a
 // 16-byte block, so its entry is redirected; first instruction `mov [rsp+10h],rdx`.
 constexpr std::uint8_t   kCopyBytes[] = {0x48, 0x89, 0x54, 0x24, 0x10, 0x48, 0x89, 0x4C,
                                          0x24, 0x08, 0x55, 0x53, 0x56, 0x57, 0x41, 0x54};
@@ -60,18 +60,18 @@ constexpr std::uint8_t   kHiddenBytes[] = {0x4C, 0x89, 0x44, 0x24, 0x18, 0x48, 0
 constexpr platform::FunctionFact kHidden{L"ME_Scene_ComputeRequestedMips_HiddenComponents", 0x140CF05F8, kHiddenBytes};
 constexpr std::size_t    kHiddenFirst   = 5;
 
-// Game version 1.005 (RE-1005-hud-2.md): the process call (0x140BC0ECC there) and both entries (0x14199FE6C,
-// 0x14078389C, now `mov [rsp+10h],rdx` and `mov [rsp+10h],rbx`) cross a 16-byte block. Each of the three functions has
+// Game version 1.005 (research/RE-1005-hud-2.md): the process call and both entries (now `mov [rsp+10h],rdx` and
+// `mov [rsp+10h],rbx`) cross a 16-byte block. Each of the three functions has
 // one caller, all on the render thread inside Render_Main, so their calls are redirected instead: the hidden pass's
 // (inside one block) at install, the process and copy calls (crossing) from the render thread itself, at the first
 // Render (InstallOnRenderThread), and those two are never restored from another thread.
 constexpr std::uintptr_t kCopyCall   = 0x14157B30C;  // ME_RenderChunkDispatch_ViewLoop's call of the copy
 constexpr std::uintptr_t kHiddenCall = 0x140FDD6EE;  // Render_Main's call of the hidden pass
 
-// Phase 8 of MassiveEnvironment_RenderPass (RE-perf-family-duplication.md §3.1): its sync call of
+// Phase 8 of MassiveEnvironment_RenderPass (research/RE-perf-family-duplication.md): its sync call of
 // ME_DispatchComputeRequestedMeshAndTextureMips(command list, ?, group, chunk, byte stack arguments), once per loaded
 // chunk: the slave frustums' mip requests, whose marks (entry+0x48, set from the returned bool) only the main pass's
-// copy reads. The call lies inside one 16-byte block in both builds (1.005 0x140C8B5D4 -> 0x140CD1594). The async
+// copy reads. The call lies inside one 16-byte block in both builds. The async
 // variant's call (only with async compute and r.MassiveEnvironment.UsingAsyncComputeForMainPass) is not covered.
 constexpr std::uintptr_t kMipRequestsCall    = 0x140F10D4A;
 constexpr std::uint8_t   kMipRequestsBytes[] = {0x40, 0x55, 0x53, 0x56, 0x57, 0x41, 0x54, 0x41,
@@ -81,7 +81,7 @@ constexpr platform::FunctionFact kMipRequests{L"ME_DispatchComputeRequestedMeshA
 
 // Option D of RE-perf-me-shadows.md (Phase 3): the shadow pass's streaming-feedback writes, skipped in an additional
 // family by machine code at one instruction of ME_ChunkDraw_FullPipeline_cand (renderer/me_shadow_feedback_code.h).
-// Research build; 1.005 0x140C882B7 (site), 0x140C882BD, 0x140C883D9 and 0x140C88A01.
+// Research build; the 1.005 twins through the build table.
 constexpr std::uintptr_t kShadowSite   = 0x140F0DC3A;  // jbe over the pre-transition loop (count 0)
 constexpr std::uintptr_t kShadowResume = 0x140F0DC40;  // the instruction after it
 constexpr std::uintptr_t kShadowEmpty  = 0x140F0DD5C;  // the jbe's target
@@ -94,8 +94,8 @@ constexpr std::uint32_t kRendererAdditionalFamily = 0x84;  // the family copy's 
 // streaming manager at +0x50, the render thread's copy of the state at +0xA1 (2 or more: no slave requests).
 constexpr std::uintptr_t kStreamingManagers = 0x149117AF8;
 constexpr std::uint32_t  kMeManager         = 0x50;
-// 1.005: the ME streaming manager's state pair moved 8 down: cmp byte [rax+99h],2 after [collection+50h] at
-// 0x140CD1645 (1.004 0x140C9D379 [rcx+0A1h]); its constructor clears +0x98/+0x99 at 0x144FC53C9.
+// 1.005: the ME streaming manager's state pair moved 8 down: `cmp byte [rax+99h],2` after [collection+50h] (1.004
+// [rcx+0A1h]); its constructor clears +0x98/+0x99.
 constexpr platform::PerBuild<std::uint32_t> kBudgetStateRender = {0xA1, 0x99};
 
 constexpr ULONGLONG kLogPeriodMs = 10'000;

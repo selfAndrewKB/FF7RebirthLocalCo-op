@@ -56,13 +56,13 @@ constexpr Addr kL1HintSingle{0x140D00A9F, 0x140AE351A};   // RHISubmitCommandsHi
 constexpr Addr kL1HintMerged{0x140D00B5A, 0x140AE35C7};
 constexpr Addr kL1Batch{0x14090D336, 0x140AE0A02};        // SubmitAndFreeContextContainer
 // A single list on the second copy manager (device +0x170), closed then submitted with wait: the return address inside
-// 1.005 0x140ADFC4C, which 0x140ADDE0C calls (found live, up to once per frame). Not identified in 1.004
+// 1.005: found live (called up to once per frame; the build table has it). Not identified in 1.004
 // (0: logged as unknown there).
 constexpr Addr kL1CopyWait{0, 0x140ADFCBD};
 
 // L2 under RHISubmitCommandsHint.
 // Every hint node (Execute tail-jumps), from either of the walker's node calls: the whole walker's range (1.005 also
-// calls nodes at 0x140874B5A, a cached `call r9`; found live).
+// calls nodes through a cached `call r9`; found live).
 constexpr Addr kWalkerBegin{0x140812430, 0x140873400};
 constexpr Addr kWalkerEnd{0x1408127C1, 0x140874BCF};
 constexpr Addr kL2BeginTransitions{0x1428EE3FA, 0x14252A0F6};

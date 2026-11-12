@@ -2,7 +2,7 @@
 
 // Each seat's content in its HUD image: around the seat's overlay pass (hud/passes/column_hud_images.h), the game's
 // own answers to "which player" are switched to the seat, and the game's own view-dependent HUD updates are run again
-// for it (RE-p2-hud.md P8.6, pass 9 and pass 12). After the pass everything is switched back and the same updates run
+// for it (research/RE-p2-hud.md). After the pass everything is switched back and the same updates run
 // again for player 1, whose render follows in the same frame; between two seats' passes the roots' contexts and player
 // 1's re-run are left to the last one (hud/context_owners.h). Each column keeps its own marker host set between frames.
 //
@@ -16,7 +16,7 @@
 //       camera-manager helpers and the compass heading read;
 //   L6  the game mode's HUD time step (AEndGameMode+0x5D8), 0 during the re-runs, so timers do not
 //       advance twice (the overlay's own DeltaTime is L5, in hud/passes/column_hud_images.cpp).
-// The updates run again (pass 9's re-runnable set, in the game's order): the lists at
+// The updates run again (the research's re-runnable set, in the game's order): the lists at
 // EndUISystem+0x98, +0xB0, +0x150 (markers), +0x188, +0x170, +0x180, and the leader-target icon at
 // +0x140, and the compass holder's update (its heading follows L3). The marker math reads the
 // overlay's marker host set (facts/hud.h: the UI rect, the view rect, the host scale), which each render writes for

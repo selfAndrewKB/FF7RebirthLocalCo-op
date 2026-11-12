@@ -28,7 +28,7 @@ struct ScreenSignals
     // For the log only (candidates the open log is to settle, RE-p2-menu-census.md E6, RE-p2-vr-menu.md):
     bool          miniGameMenu  = false;  // on/off 92 SoundCallEventMiniGameMenuInOut
     std::int8_t   chadleyState  = -1;     // Chadley's manager state (0 idle, 1 greeting, 2 shop, 3 VR, 4 farewell, 5 end)
-    // The minigame inputs (RE-p2-minigames.md §7.6):
+    // The minigame inputs (research/RE-p2-minigames.md):
     std::uint32_t exclusion   = 0;      // the field-exclusion mask (bit 21 minigame read; the rest logged)
     bool          minigamePlaying = false;  // on/off 36 MiniGamePlaying
     bool          fieldMinigame   = false;  // 36's setter is a field use (the chicken lure, the chocobo capture's
@@ -48,7 +48,7 @@ inline constexpr std::uint32_t kExclusionSecond   = 1u << 1;   // DisableControl
                                                                 // play); named for the tests of the uses that keep split
 
 /// Whether a VR or colosseum session shows its menu or result screen: on/off 153 with the minigame bit, outside a battle
-/// (RE-p2-minigames.md §7.2: the bit is on in the session's menu, intro and result states, off in the fight; the
+/// (research/RE-p2-minigames.md: the bit is on in the session's menu, intro and result states, off in the fight; the
 /// intro runs inside the battle).
 bool ArenaMenu(const ScreenSignals& signals) noexcept;
 
@@ -94,12 +94,12 @@ enum class WholeScreenReason : std::uint8_t
     Title,
 };
 
-/// EndGameState states (the transition table, RE-p2-retry-reload.md §2 and RE-p2-single-view.md §2.1).
+/// EndGameState states (the transition table, research/RE-p2-retry-reload.md and RE-p2-single-view.md).
 inline constexpr std::uint8_t kStateCinemaPause = 7;
 inline constexpr std::uint8_t kStatePauseMenu   = 8;
 inline constexpr std::uint8_t kStateChapterPause = 10;  // PAUSE_IDLE_STARTCHAPTER: the cinema pause at a chapter start
 
-/// Whether a pause-family menu owns the game's input, by the game's own tests (RE-pause-menu-any-pad.md §3): one of
+/// Whether a pause-family menu owns the game's input, by the game's own tests (research/RE-pause-menu-any-pad.md): one of
 /// the three pause states, or a pause-family widget alive (IsPauseMenuClosed false: the Blueprint-opened pause menus,
 /// the libra from the main menu). Every pad is the game's pad then, as in an unmodded game (input/pad_buttons.h).
 constexpr bool MenuOwnsInput(std::uint8_t gameState, bool pauseWidget) noexcept

@@ -1,6 +1,6 @@
 #pragma once
 
-// A seat's player inside CharaPop switch volumes (research/RE-p2-shop-npcs-near-p2.md §2, §6, §10).
+// A seat's player inside CharaPop switch volumes (research/RE-p2-shop-npcs-near-p2.md).
 //
 // Some town NPCs (Costa del Sol's and Under Junon's shopkeepers) are on the show list of an AEndCharaPopSwitchVolume:
 // CharaPop's spawn score excludes them (-999999) unless one of their volumes is "inside". The volume's own trigger enter

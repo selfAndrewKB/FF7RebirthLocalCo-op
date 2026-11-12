@@ -4,10 +4,9 @@
 //
 // Every "run this engine call as a seat's player" site opens the same ladder of scopes: the UI focus context
 // first, then the seat's pad's sticks, the seat's player as the primary controller, the pad's buttons, the seat's
-// target fields, the party leader and its type, and last the rules the call runs under. Each site used to
-// write the ladder out by hand (the 2026-10 audit's D-3, E1-3 and C-10: seven copies and three
-// bundles), each with its own order and refusal text. A Ladder opens the parts chosen by `which` in
-// the order its parameter pack gives; at the first required part that does not hold it closes the
+// target fields, the party leader and its type, and last the rules the call runs under. Written out by hand at
+// each site, the ladders drift apart in order and refusal text; here the order is one. A Ladder opens the parts
+// chosen by `which` in the order its parameter pack gives; at the first required part that does not hold it closes the
 // parts opened before it, in reverse, and opens nothing after it (all or nothing: not held means
 // nothing of it is open). A part may be optional: it is opened, and a refusal leaves it out without
 // stopping the ladder, which is still held. The refused part names itself, with its own words when it

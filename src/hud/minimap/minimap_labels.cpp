@@ -35,7 +35,7 @@ using label_states::LabelBook;
 using label_states::LabelCounts;
 using label_states::Parked;
 
-// RE-p2-minimap-cost.md §7 (this build). SEndMapIcon::SetLabelText's one call into the text block's SetText:
+// research/RE-p2-minimap-cost.md (this build). SEndMapIcon::SetLabelText's one call into the text block's SetText:
 // `mov rdx,rbp` (the FString*), `mov rcx,rdi` (the SEndTextBlock, never null here), the call, then only rsi/rbp/rdi and
 // the stack are read (rax unread).
 constexpr std::uint8_t   kSetLabelTextBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x6C, 0x24, 0x10, 0x48, 0x89,
@@ -44,7 +44,7 @@ constexpr std::uint8_t   kSetLabelTextBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0
 constexpr platform::FunctionFact kSetLabelText{L"SEndMapIcon__SetLabelText", 0x14098EB7C, kSetLabelTextBytes};
 constexpr std::uint8_t   kSetTextArgsBytes[]  = {0x48, 0x8B, 0xD5, 0x48, 0x8B, 0xCF};
 constexpr platform::FunctionFact kSetTextArgs{L"the SetText call's arguments", 0x14098EBAB, kSetTextArgsBytes};
-constexpr std::uintptr_t kSetTextCall         = 0x14098EBB1;  // E8 rel32, inside the block at 0x14098EBB0
+constexpr std::uintptr_t kSetTextCall         = 0x14098EBB1;  // E8 rel32, inside one 16-byte block
 constexpr std::uint8_t   kSetTextAfterBytes[] = {0x80, 0xBE, 0x3C, 0x04, 0x00, 0x00, 0x00};
 constexpr platform::FunctionFact kSetTextAfter{L"after the SetText call", 0x14098EBB6, kSetTextAfterBytes};
 // SEndTextBlock_SetText_RelayoutIfChanged: the game's own compare (≤ 20 characters) in front of its relayout.
@@ -93,7 +93,7 @@ constexpr std::uint32_t  kPaintInterface   = 0x2B0;
 constexpr std::uint32_t  kGcObject         = 0x2B8;
 constexpr std::uint32_t  kGetterBound      = 0x2E8;  // the text attribute's getter (0: unbound)
 constexpr std::uint32_t  kRelayoutLock     = 0x564;
-constexpr std::uint32_t  kLanguageStamp    = 0x568;  // FName copied from a global (the language, §7.12)
+constexpr std::uint32_t  kLanguageStamp    = 0x568;  // FName copied from a global (the language)
 constexpr std::uint32_t  kFont             = 0x2F0;  // the main and button font UObjects
 constexpr std::uint32_t  kButtonFont       = 0x2F8;
 constexpr std::uint32_t  kFastPathProxy    = 0x18;   // logged once (an invalidation root above the label)
@@ -106,7 +106,7 @@ using ReleaseFn    = void (*)(void* controller);
 using InvalidateFn = void (*)(void* widget, std::uint32_t reason);
 
 platform::CallRedirect g_call;
-// Game version 1.005 (RE-1005-hud-2.md): the call (0x1411A7E3D there) crosses a 16-byte block, so it is placed from
+// Game version 1.005 (research/RE-1005-hud-2.md): the call crosses a 16-byte block, so it is placed from
 // the game thread, which alone runs it, outside the holder update (platform/deferred_sites.h: the session's tick),
 // and only restored from there.
 platform::DeferredSites g_placement;

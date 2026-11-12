@@ -18,12 +18,11 @@
 // data write into the engine's layout table, not a recreation of the layout: the research's one lever for columns of
 // unequal widths.]
 //
-// Taken from Remake's views/column_layout, with the screen order and the one-window layouts. Changed: the engine has the
-// three-column entry (UE 4.26), so the stock records compared are the equal thirds, the setting held names that entry
-// through Rebirth's held-setting rule, and the one-window layouts are written into it; the two-player choice (the
-// setting held) stays players/split_layout's, side by side on a span; mod.cpp passes the span's monitors' sizes and each
-// list place's seat each tick. Reading `column-layout.state`. Game thread only. Logged at Info on each write and restore, at
-// Debug for the status.
+// The engine has the three-column entry (UE 4.26), so the stock records compared are the equal thirds, the setting held
+// names that entry through the held-setting rule, and the one-window layouts are written into it; the two-player
+// choice (the setting held) stays players/split_layout's, side by side on a span; mod.cpp passes the span's monitors'
+// sizes and each list place's seat each tick. Reading `column-layout.state`. Game thread only. Logged at Info on each
+// write and restore, at Debug for the status.
 
 #include "platform/dev_switch.h"
 #include "views/column_rules.h"

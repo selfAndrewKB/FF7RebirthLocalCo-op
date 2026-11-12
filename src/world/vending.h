@@ -1,22 +1,21 @@
 #pragma once
 
-// A seat's player uses vending machines with the game's own field action and shop (RE-p2-field-interact.md §15; plan,
-// "Player 2 triggers field prompts").
+// A seat's player uses vending machines with the game's own field action and shop (research/RE-p2-field-interact.md).
 //
 // A seat's field pass (world/field_pickup) admits a vending machine's point (its point-side preset is the FName
-// rpaVendingMachine, §15.5) while no shop is up. Pressed there, the game's End2 listener asks the leader, which the pass's
+// rpaVendingMachine) while no shop is up. Pressed there, the game's End2 listener asks the leader, which the pass's
 // scope makes the seat's member, for the game's FieldActionCommon state: the member turns to the machine and the machine
 // posts its ShopActionID to the level script, which opens the one whole-screen shop on its next tick (FEndShowShopMenu).
 // That shop runs outside the pass. Its script passes the machine's own name as the camera's target (the machine's Tags[0];
 // seen in the live log), so the camera already aims at the machine used. For a shop a seat's press opened (the shop
 // camera activated within 60 frames of the press, naming the pressed machine), this module, at the shop camera's entry
 // (every shop path: FEndShowShopMenu's and the others, such as the book vendor's):
-//   - skips the activation (the user's rule: no scripted camera zoom on player 1's view for a seat's shop;
+//   - skips the activation (no scripted camera zoom on player 1's view for a seat's shop;
 //     RE-p2-shop-camera-skip.md): on player 1's camera manager, the one the whole-screen view
 //     renders, it framed player 1's character and left player 1's camera at the shop's angle on close. Nothing in the
 //     shop waits on it; the deactivation at the close still runs and does nothing. Chadley's shop keeps it (its VR return
 //     activates the camera again outside the hook), run in the leader-type scope (the default preset by the seat's
-//     member's type, §15.3);
+//     member's type);
 //   - from the activation to the camera's deactivation (every close), makes the seat's pad the menu pad
 //     (input/pad_buttons SetMenuPlayer): the pad of whoever opened the shop drives it.
 // Logged (Info: a press, a shop open and close are rare): each End2 press (whose run, the leader), whose shop opened with

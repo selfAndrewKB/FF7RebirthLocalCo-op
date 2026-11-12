@@ -7,9 +7,9 @@
 // Addresses are as IDA shows them in ff7rebirth_.exe (image base 0x140000000); each function's prologue is checked
 // (platform/verified_code.h) by the module that installs on it, and that module alone stands aside when it differs.
 //
-// Research: Rebirth/Documentation/research/RE-p2-hud.md (passes 1-3, 5, 7; P6.1), RE-p2-hud-view-levers.md §1, §2,
-// RE-p2-field-prompts.md §1.2, §4, RE-p2-field-interact.md §12.14, RE-p2-command-menu-input.md §2, §10,
-// RE-p2-enemy-markers.md §7, RE-p2-own-minimap.md §8.1. The layer facts' bytes were read from the running game.
+// Research: Rebirth/Documentation/research/RE-p2-hud.md, RE-p2-hud-view-levers.md, RE-p2-field-prompts.md,
+// RE-p2-field-interact.md, RE-p2-command-menu-input.md, RE-p2-enemy-markers.md, RE-p2-own-minimap.md. The layer
+// facts' bytes were read from the running game.
 
 #include "platform/build_value.h"
 #include "platform/verified_code.h"
@@ -44,8 +44,8 @@ inline constexpr std::uint32_t kUIActionRows         = 0x208;  // -> the field-a
 inline constexpr platform::PerBuild<std::uint32_t> kUISetupDeferred = {0x2D1, 0x2D9};
 
 /// UWidget's render transform applied from its fields (+0x90/+0x94 the translation, +0x98/+0x9C the scale, +0xA8 the
-/// angle): the game's own call after it writes them (the enemy gauges' scale, RE-p2-enemy-markers.md §3.3; the chocobo
-/// wrangle's targets, RE-chocobo-wrangle-targets.md §2). Its 1.005 prologue differs (the translation table carries
+/// angle): the game's own call after it writes them (the enemy gauges' scale, RE-p2-enemy-markers.md; the chocobo
+/// wrangle's targets, RE-chocobo-wrangle-targets.md). Its 1.005 prologue differs (the translation table carries
 /// that build's bytes).
 inline constexpr std::uint8_t kApplyRenderTransformBytes[] = {0x48, 0x8B, 0xC4, 0x48, 0x89, 0x58, 0x10, 0x48,
                                                               0x89, 0x70, 0x18, 0x48, 0x89, 0x78, 0x20, 0x55,
@@ -86,7 +86,7 @@ inline constexpr std::uint32_t kEntryMatrixScaleY     = 0x64;  // row 1 y
 inline constexpr std::uint32_t kEntryMatrixTranslateX = 0x80;  // row 3 x
 inline constexpr std::uint32_t kEntryMatrixTranslateY = 0x84;  // row 3 y
 
-// The entry's list of per-child view-projections (pass 5): widgets SEndCanvas paints in 3D push a
+// The entry's list of per-child view-projections: widgets SEndCanvas paints in 3D push a
 // matrix each (FEndElementList__PushViewProjection 0x142B36284), and their elements are drawn with
 // it instead of the entry matrix. A TArray<FMatrix>: data at +224, count at +232. It is emptied as
 // the entry is reused each frame (0x140FC9120) and copied to the render batch when the slot is
@@ -117,7 +117,7 @@ inline constexpr FunctionFact kAcquireLayerSlot{L"FEndMenuRenderer::AcquireLayer
 // SEndNaviMapCircle__OnPaint_Pool0's pool-0 block: the acquire (rcx renderer, dl 0; its call
 // crosses a 16-byte block, so it is installed from the game thread while that thread is outside the paint) and the
 // submit (rcx renderer, dl 0, r8 slot). hud/minimap redirects them; hud/minimap_once skips the block
-// (RE-p2-own-minimap.md §8.1).
+// (RE-p2-own-minimap.md).
 inline constexpr std::uint8_t kNaviMapCircleAcquireCallBytes[] = {0xE8, 0xE1, 0x19, 0x00, 0x00};  // call Acquire
 inline constexpr platform::FunctionFact kNaviMapCircleAcquireCall{L"the navi-map circle's acquire call", 0x140FC6CAE,
                                                                   kNaviMapCircleAcquireCallBytes};
@@ -135,8 +135,8 @@ inline constexpr std::uint8_t   kBeginInitResourcePrologue[] = {0x48, 0x89, 0x5C
 inline constexpr FunctionFact   kBeginInitResource{L"BeginInitResource", 0x1409E7EF8,  // void (FRenderResource*)
                                                  kBeginInitResourcePrologue};
 
-// EndUI__ContainScaleFor1920x1080: the UI scale of a rect relative to 1920x1080 (RE-p2-hud-view-levers.md
-// §2). float(FVector2D) with the size packed in rcx (X low, Y high), the result in xmm0; a leaf that
+// EndUI__ContainScaleFor1920x1080: the UI scale of a rect relative to 1920x1080 (RE-p2-hud-view-levers.md).
+// float(FVector2D) with the size packed in rcx (X low, Y high), the result in xmm0; a leaf that
 // reads only its argument and .rdata constants, so any thread may call it.
 inline constexpr std::uint8_t kContainScaleBytes[] = {
     0xC5, 0xFA, 0x6F, 0x1D, 0x48, 0xD4, 0x6A, 0x05,  // vmovdqu xmm3, [abs mask]
@@ -147,7 +147,7 @@ inline constexpr FunctionFact kContainScale{L"EndUI::ContainScaleFor1920x1080", 
 
 // The overlay singleton (SEndRootOverlay__GetOrCreate 0x1410EAB8C) and its marker host set: the block each overlay render
 // writes for the view it renders, and the marker projection reads (EndUI__ProjectWorldToRootOverlay and its twin are its
-// only readers found; RE-p2-hud.md P2.5, the projection's formula). Same offsets in 1.005 (RE-1005-offsets-A.md).
+// only readers found; RE-p2-hud.md, the projection's formula). Same offsets in 1.005 (RE-1005-offsets-A.md).
 inline constexpr std::uintptr_t kRootOverlaySingleton = 0x1491D1948;
 inline constexpr std::uint32_t  kOverlayLayoutMin     = 0x310;  // float x, y: the UI rect's Min (stored, not read)
 inline constexpr std::uint32_t  kOverlayViewOrigin    = 0x318;  // float x, y: player 0's view rect's Min (0x140C95F2C)
@@ -161,7 +161,7 @@ inline constexpr std::uint32_t  kOverlayHostScale     = 0x330;  // float: the ho
 // ---------------------------------------------------------------------------------------------
 
 // Its viewport layout (the stock ViewportAnchors, ViewportOffsets, ViewportAlignment),
-// bound to each HUD root's SEndCanvas (RE-p2-hud.md P6.1; read live in pass 7). Read only: changes
+// bound to each HUD root's SEndCanvas (RE-p2-hud.md; read live). Read only: changes
 // go through the reflected Set*InViewport setters.
 inline constexpr std::uint32_t kUserWidgetViewportAnchors   = 0x210;  // FAnchors, 16 bytes
 inline constexpr std::uint32_t kUserWidgetViewportOffsets   = 0x220;  // FMargin, 16 bytes
@@ -175,7 +175,7 @@ inline constexpr FunctionFact kSetPositionInViewport{L"UUserWidget::SetPositionI
                                                      kSetPositionInViewportPrologue};
 
 /// FieldActionIconList__SortAndLayout(TArray<FWeakObjectPtr>* list, UObject* placeNow): sorts the given array by
-/// priority and gives each live row the next slot in it (RE-p2-field-prompts.md §4). Called by the game only when a
+/// priority and gives each live row the next slot in it (RE-p2-field-prompts.md). Called by the game only when a
 /// row is added or removed.
 inline constexpr std::uint8_t kSortAndLayoutBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x20, 0x48, 0x89, 0x54, 0x24, 0x10, 0x55,
                                                        0x56, 0x57, 0x41, 0x54, 0x41, 0x55, 0x41, 0x56, 0x41, 0x57, 0xB8,
@@ -191,7 +191,7 @@ inline constexpr FunctionFact kSortAndLayout{L"FieldActionIconList::SortAndLayou
 inline constexpr std::uint32_t kMessageWindowRemoveAfterOut = 0x3D1;
 
 // ---------------------------------------------------------------------------------------------
-// A Slate widget's visibility, as the game sets it (RE-p2-hud-icon-manager.md §8.3, RE-lead-mark.md §3.3)
+// A Slate widget's visibility, as the game sets it (RE-p2-hud-icon-manager.md, RE-lead-mark.md)
 // ---------------------------------------------------------------------------------------------
 
 /// SWidget::SetVisibility(widget, TAttribute<EVisibility>*): a widget's vtable slot 59; the game also calls it directly.
@@ -204,7 +204,7 @@ inline constexpr std::uint8_t  kVisibilityHidden               = 0x02;
 inline constexpr std::uint8_t  kVisibilitySelfHitTestInvisible = 0x11;
 
 // ---------------------------------------------------------------------------------------------
-// The map icons' shared store (RE-lead-mark.md §2, RE-walk-keep.md §4)
+// The map icons' shared store (RE-lead-mark.md, RE-walk-keep.md)
 // ---------------------------------------------------------------------------------------------
 
 /// EndUI_AddMapIcon(FName key, u8 kind, const FVector* position, const FString* text, const MapIconParams* params):

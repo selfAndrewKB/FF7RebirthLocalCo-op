@@ -23,11 +23,11 @@ namespace lss::session::party_events {
 
 namespace {
 
-// Facts read from the database (RE-p2-session-levers.md §3.1, §3.2, §5; this build).
+// Facts read from the database (research/RE-p2-session-levers.md; this build).
 // OnLeaderTransition's one call of SwitchLeaderInternal: rcx = the party manager's controller (+0x140),
 // rdx = the new leader, r8b = input-triggered, r9b = force.
 constexpr std::uintptr_t kLeaderCall = 0x141204E09;
-// 1.005 (RE-1005-field-2.md §3): that call is at 0x140F8B28D, %16 = 13, so it crosses a 16-byte block. There it is
+// 1.005 (research/RE-1005-field-2.md): that call sits at %16 = 13, so it crosses a 16-byte block. There it is
 // heard at SwitchLeaderInternal's entry instead (first instruction `mov [rsp+18h], rbx`, 5 bytes at %16 = 4; its only
 // code caller is that call), by its return address; other calls (the mod's own, from party_member) pass through.
 constexpr std::size_t kSwitchLeaderFirstInstruction = 5;

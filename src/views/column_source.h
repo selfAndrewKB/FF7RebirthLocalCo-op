@@ -1,7 +1,6 @@
 #pragma once
 
-// Where each column's view comes from, decided in one place each tick (plan/seats.md step 6a; the user's word:
-// the one-monitor and multi-monitor code laid out logically). Pure rules over this tick's facts,
+// Where each column's view comes from, decided in one place each tick. Pure rules over this tick's facts,
 // host-tested (tests/column_source_test.cpp); the entry point (mod.cpp) applies the result and nothing else decides.
 //
 // A column (views/columns.h) shows one of three things, one mechanism each:
@@ -22,14 +21,14 @@
 //   - a seat's player is in without their member while the game has it (players/seat_state.h Handed: waiting for a
 //     party member, or standing aside for the ride) — that player's column alone (a player whose member a script
 //     took rides along: they keep their member and their view, session's RidesAlong); while every seat in the game is
-//     handed, nobody but player 1 plays, so one monitor shows the engine's single view (the user's
-//     decision). On one monitor a player waiting for their member leaves the game after a short grace and waits
-//     outside (session/session_rules.h WaitOutside; the user's decision), so their column goes
+//     handed, nobody but player 1 plays, so one monitor shows the engine's single view. On one
+//     monitor a player waiting for their member leaves the game after a short grace and waits outside
+//     (session/session_rules.h WaitOutside), so their column goes
 //     with them and the others' views fill the screen; with columns held they stay, their column on player 1's picture;
 //   - the console's `single-view on` (always player 1's) and `single-view off` (never: the development overrides).
 // A column no seat fills (a mirror, a local player the mod does not know) shows player 1's by its nature.
 //
-// The table moment x surface is in the plan (plan/topics/multi-monitor.md, "What each column shows"); the tests hold
+// The table moment x surface is in the documentation (plan/topics/multi-monitor.md); the tests hold
 // every row of it.
 
 #include "platform/dev_switch.h"

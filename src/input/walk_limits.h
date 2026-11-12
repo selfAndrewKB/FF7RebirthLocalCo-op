@@ -1,6 +1,6 @@
 #pragma once
 
-// Each seat's walk and run limits come from its own surroundings (players/seats.h; RE-p2-walk-mode.md §4.2, §4.3).
+// Each seat's walk and run limits come from its own surroundings (players/seats.h; research/RE-p2-walk-mode.md).
 //
 // A character's speed is capped by move-type layers on "the" primary player controller. Two of them depend on
 // where the character stands:
@@ -13,7 +13,7 @@
 //   party leader, and written through its listener to the primary controller. When a seat's player takes a member,
 //   the game's party switch copies the leader's layer 7 onto that controller, and nothing ever clears it there.
 //   The manager has no per-player test and also drives BGM, names and flags, so it cannot run for a seat; this is
-//   a documented recreation of its bookkeeping only (plan, RE-p2-walk-mode.md §4.3). Each tick the mod tests each
+//   a documented recreation of its bookkeeping only (research/RE-p2-walk-mode.md). Each tick the mod tests each
 //   seat's member against the game's move-type volumes with the game's own containment test and rules (strictly inside
 //   to enter, the volume's UntouchMargin to stay, bForce and bDisabled honoured, leaves before enters), keeps the
 //   game's refcounted move-type stack for that seat, and when the seat's controller's layer 7 differs from the stack's

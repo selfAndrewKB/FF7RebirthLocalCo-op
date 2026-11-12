@@ -34,7 +34,7 @@ using Clock = std::chrono::steady_clock;
 using RC::Unreal::UFunction;
 using RC::Unreal::UObject;
 
-// RE-p2-rumble.md §9 (this build).
+// research/RE-p2-rumble.md (this build).
 // SquareInput__NoteLastActiveDevice(owner, userIndex): the input layer's "last active device" for player 1. Entry:
 // mov [rsp+8], rbx (the 5 bytes replaced), position-independent; no branch into +1..+4.
 constexpr std::uint8_t   kNoteLastDeviceBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x74,

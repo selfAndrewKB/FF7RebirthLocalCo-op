@@ -1,7 +1,7 @@
 #pragma once
 
-// Logs, read-only, the game's chocobo and buggy rides while a seat's player is in (RE-p2-chocobo-ride.md §5; plan §3,
-// "Player 2 rides their own chocobo" and "Buggy: single view"). Logging first: nothing here changes the ride.
+// Logs, read-only, the game's chocobo and buggy rides while a seat's player is in (research/RE-p2-chocobo-ride.md).
+// Logging first: nothing here changes the ride.
 //
 // Every 5 ticks, for each seat whose player is in: player 1's active vehicle coordinator
 // (AEndPlayerController::ActiveVehicleCoordinator, `PC+0x5B8`; its kind by vtable and its state), the seat's (expected

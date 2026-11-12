@@ -1,7 +1,7 @@
 #pragma once
 
 // Each view's own linger timer for the off-screen enemy arrows (OutOfScreenTarget_C;
-// RE-p2-enemy-markers.md §7.5 and §7.7 B).
+// research/RE-p2-enemy-markers.md).
 //
 // The arrows belong to the marker list (EndUISystem+0x150), which each seat's pass already runs again
 // with the seat's levers (hud/passes/seat_hud_content.h). One function places each arrow from its view, and

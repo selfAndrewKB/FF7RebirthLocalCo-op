@@ -47,16 +47,16 @@ using Clock = std::chrono::steady_clock;
 // CharaPop_SetOverrideCenter(bool enable, const FVector* centre): writes M+0x119C and, when enabling,
 // M+0x11A0..+0x11A8 (a leaf; game thread only). Entry: mov rax,[rip+...] (g_EndGameRoot); mov r8,[rax+180h];
 // mov [r8+119Ch],cl. The first instruction's displacement is within the image. Disabling writes the zero vector,
-// the resting state (RE-p2-charapop-two-centres.md §1).
+// the resting state (research/RE-p2-charapop-two-centres.md).
 constexpr std::uint8_t kSetCentreBytes[] = {0x48, 0x8B, 0x05, 0xE1, 0xBE, 0x84, 0x07, 0x4C,
                                             0x8B, 0x80, 0x80, 0x01, 0x00, 0x00, 0x41, 0x88};
 constexpr platform::FunctionFact kSetCentre{L"CharaPop_SetOverrideCenter", 0x1418B2F00, kSetCentreBytes};
 using SetCentreFn = void (*)(bool enable, const float* centre);
 
-// CharaPopEntry_EvalSpawnScore_ByCenter(entry) -> int32 (1.005 0x1408AFC14; the same first 21 bytes): the distance part
+// CharaPopEntry_EvalSpawnScore_ByCenter(entry) -> int32 (the same first 21 bytes in 1.005): the distance part
 // of an entry's spawn score, from the override centre when set, else the leader's. Its first instruction crosses a
 // 16-byte block in 1.004, so the redirect sits at the second there (both are home-area stores; the second has no other
-// xref, §1).
+// xref).
 constexpr std::uint8_t kScoreBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10,  // mov [rsp+10h],rbx
                                         0x48, 0x89, 0x7C, 0x24, 0x18,  // mov [rsp+18h],rdi
                                         0x55, 0x48, 0x8D, 0x6C, 0x24, 0xA9, 0xB8, 0xE0, 0x00, 0x00, 0x00};
@@ -65,7 +65,7 @@ constexpr std::size_t kFirstInstruction  = 5;
 constexpr std::size_t kSecondInstruction = 5;
 using ScoreFn = std::int32_t (*)(void* entry);
 
-// The manager M (the entry's +0: its manager) as the score reads it, and the pop object's selection (§1, §5).
+// The manager M (the entry's +0: its manager) as the score reads it, and the pop object's selection.
 constexpr std::uint32_t  kOverrideOn     = 0x119C;  // u8
 constexpr std::uint32_t  kOverrideCentre = 0x11A0;  // FVector
 constexpr std::uint32_t  kLeaderOn       = 0x11AE;  // u8 (the score's own test)
@@ -94,7 +94,7 @@ ScoreFn              g_score     = nullptr;
 bool                 g_installed = false;
 std::atomic<bool>    g_enabled{true};
 
-// Game thread (the score runs only there; §3). By seat (players/seats.h); index 0, player 1's, unused: player 1's
+// Game thread (the score runs only there). By seat (players/seats.h); index 0, player 1's, unused: player 1's
 // centre is the game's own.
 bool              g_active     = false;  // split shown, a seat plays, switched on: the seats' calls run
 float             g_seatAt[players::kMaxPlayers][3] = {};  // each playing seat's member's location, each kEvery ticks

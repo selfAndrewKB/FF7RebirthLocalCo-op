@@ -1,12 +1,12 @@
 #pragma once
 
 // The game's own way to put a character beside another on the field, as its battle gather calls it
-// (research/RE-member-story-boxes.md §9):
+// (research/RE-member-story-boxes.md):
 //   - a navmesh point at a distance from an origin along a direction: the game's `around` query (the point projected to
 //     the navmesh and reached by a navmesh raycast from the origin, with the querier's own nav agent);
 //   - the game's battle-warp move on a character there: a queued warp request (the movement applies it as a one-frame
 //     move) and a short fade-in. Nothing battle-only runs inside it.
-// The character's own trigger tracker sweeps the whole path of the move on its next pass (§9.1): a caller that must not
+// The character's own trigger tracker sweeps the whole path of the move on its next pass: a caller that must not
 // see a box on the way fire keeps its own hold in force over that pass.
 // Found and verified once at install; callers check Installed(). Game thread.
 

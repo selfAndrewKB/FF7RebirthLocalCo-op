@@ -1,7 +1,7 @@
 #pragma once
 
-// How enemies choose whom to attack, and how often they choose each player (RE-p2-enemy-target-bias.md §6, hook
-// facts §8, S-TGTCENSUS). A dev tool: dev/dev_tools.h installs it; a player's build has the stubs below.
+// How enemies choose whom to attack, and how often they choose each player (research/RE-p2-enemy-target-bias.md).
+// A dev tool: dev/dev_tools.h installs it; a player's build has the stubs below.
 //
 // Every enemy's target selector (Square Enix End code) is followed through the game's own calls. The census changes
 // nothing: its own hooks pass every call on, and the two decisions it once hosted have their owners now (the

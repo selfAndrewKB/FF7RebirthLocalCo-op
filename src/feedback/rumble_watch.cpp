@@ -26,12 +26,12 @@ namespace {
 
 using Clock = std::chrono::steady_clock;
 
-// RE-p2-rumble.md §2.2, §5 (this build).
-// AEndPlayerController vt+0xC90 (vtable 0x1467C85A0): SendFFValuesToInputInterface(PC, IInputInterface*, id), stock.
+// research/RE-p2-rumble.md (this build).
+// AEndPlayerController vt+0xC90: SendFFValuesToInputInterface(PC, IInputInterface*, id), stock.
 constexpr std::uint8_t kSendBytes[] = {0xB8, 0x68, 0x00, 0x00, 0x00};  // mov eax, 68h (then the stack probe)
 constexpr platform::SlotFact kSendSlot{L"the controller's SendFFValuesToInputInterface slot", 0x1467C9230,
                                        {L"SendFFValuesToInputInterface", 0x1407BF920, kSendBytes}};
-// The XInput device's SetChannelValues (its vtable 0x146959448, slot 6): (device, id, const FForceFeedbackValues*).
+// The XInput device's SetChannelValues (its vtable's slot 6): (device, id, const FForceFeedbackValues*).
 constexpr std::uint8_t kPadSetBytes[] = {0x40, 0x53, 0x55, 0x56, 0x57, 0x41, 0x56, 0xB8, 0x60, 0x00, 0x00, 0x00};
 constexpr platform::SlotFact kPadSlot{L"the XInput device's SetChannelValues slot", 0x146959478,
                                       {L"XInputDevice_SetChannelValues", 0x1407BF308, kPadSetBytes}};

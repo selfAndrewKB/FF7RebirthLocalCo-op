@@ -44,7 +44,7 @@ constexpr int kListeners = kSeats + 1;                    // 0: player 1's (SEAD
 constexpr int kColumns   = views::columns::kMaxColumns;   // the engine listeners read: one per column
 
 // 1.004 addresses (1.005 through replaced-audio-listener.json and replaced-sound-listeners.json; the slot table and
-// the gate C measure from research/RE-listener-per-seat.md §2.3 and §4.3, each read in both exes).
+// the gate C measure from research/RE-listener-per-seat.md, each read in both exes).
 constexpr std::uintptr_t kPushSlot          = 0x1465E6058;  // SEAD audio device vt+0x1B8
 constexpr std::uintptr_t kPush              = 0x14082ECE4;  // SeadAudioDevice_PushListener0ToSead(device)
 constexpr std::uintptr_t kDynamicTestSlot   = 0x1457DA960;  // SQEX::Sd::Lay::DynamicSound vt+0x160
@@ -101,7 +101,7 @@ using ConvertFn    = const float* (*)(float* out, const float* in);  // 12-byte 
 using LodFn        = std::uint64_t (*)(void* callback, void* character);
 using PcListenerFn = void (*)(void* controller, void* location, void* front, void* right);
 
-// Fields (RE-p2-audio-listener.md §2-§3, RE-listener-per-seat.md; the same in both builds).
+// Fields (research/RE-p2-audio-listener.md, RE-listener-per-seat.md; the same in both builds).
 constexpr std::uint32_t kGameListeners       = 0x80;   // FAudioDevice ListenerTransforms (game thread): data, then num
 constexpr std::uint32_t kGameListenerStride  = 0x40;
 constexpr std::uint32_t kAudioListeners      = 0x130;  // FAudioDevice Listeners (audio thread): data, then num

@@ -5,7 +5,7 @@
 // The HUD roots are the UUserWidgets that sit on the overlay itself (no slot) and belong to the
 // game instance. Each carries a player context (UUserWidget+0x248: weak local player, weak world),
 // which the marker list and the world-anchored widgets read to choose the controller they project
-// with. All roots are player 1's (RE-p2-hud.md P8.10). UUserWidget::SetPlayerContext (stock UE4)
+// with. All roots are player 1's (research/RE-p2-hud.md). UUserWidget::SetPlayerContext (stock UE4)
 // sets it, and walks the widget's child user widgets; it sends no events. The command menu and the party status never
 // read it while they tick or paint (RE-hud-context-readers.md), so they are left on player 1's (hud-context-skip).
 //
@@ -54,7 +54,7 @@ void Adopt(RC::Unreal::UObject* widget);
 /// from its context's projection (the field-target markers, EndUI__M98_ProjectEntry). A seat's
 /// SetContexts gives it the seat's context even while collapsed, else a marker collapsed by player 1's
 /// projection would be projected through player 1 again in the seat's run and never come back
-/// (RE-p2-field-interact.md §12.14). True if it is a root. Game thread, before a seat's SetContexts.
+/// (research/RE-p2-field-interact.md). True if it is a root. Game thread, before a seat's SetContexts.
 bool AdoptSelfPlacing(RC::Unreal::UObject* widget);
 
 /// Gives a further column's context to every live root shown in its pass and to the self-placing ones that do not

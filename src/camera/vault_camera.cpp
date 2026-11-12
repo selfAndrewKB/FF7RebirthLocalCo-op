@@ -28,14 +28,14 @@ namespace lss::camera::vault_camera {
 
 namespace {
 
-// FEndBehaviorVaultExtraAction::Begin (vtable +0x98; 1.004 0x1416E8E50, 1.005 0x1415B9E84): `call IsUCPC_Core` at
-// +0x102, E8 at +0x2 of its block (1.005 0x1415B9F86, +0x6). RE-p2-chocobo-jump-camera.md §8.
+// FEndBehaviorVaultExtraAction::Begin (vtable +0x98): `call IsUCPC_Core` at +0x102, E8 at +0x2 of its block (1.005:
+// +0x6). research/RE-p2-chocobo-jump-camera.md.
 constexpr std::uintptr_t kCoreCall = 0x1416E8F52;
 using CoreFn = std::uint8_t (*)(const void* character);
 
-// FEndBehaviorVaultExtraAction::End (vtable +0x120; 1.004 0x1416EA120, 1.005 0x1415BBD8C), on the animation worker:
+// FEndBehaviorVaultExtraAction::End (vtable +0x120), on the animation worker:
 // `mov cl, 0Fh; call PrimaryPCM_FieldOp_DeactivateModule`, the action in rbx (mov rbx, rcx at entry). One block in
-// both builds (1.005 0x1415BBF4A). RE-p2-chocobo-jump-camera.md §7 L2.
+// both builds. research/RE-p2-chocobo-jump-camera.md.
 constexpr std::uintptr_t kEndDeactivateCall = 0x1416EA304;
 constexpr std::uint32_t  kActionCharacter   = 0x450;   // the action's character, an FWeakObjectPtr {index, serial}
 constexpr std::uint32_t  kFieldOperator     = 0x2CB0;  // a camera manager's Field operator (a pointer to it)

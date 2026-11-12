@@ -1,7 +1,6 @@
 #pragma once
 
-// Each player's minimap keeps the icons another player's minimap needs (RE-p2-minimap-cost.md §9, §10; per seat since
-// plan/seats.md step 4).
+// Each player's minimap keeps the icons another player's minimap needs (research/RE-p2-minimap-cost.md).
 //
 // The navimap holder update walks every source icon in each run and tests its distance from that run's centre (the
 // leader, a seat's member in the mod's run for that seat): in range, AreaMapIcon_Update (which creates the icon widget

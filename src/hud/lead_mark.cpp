@@ -42,7 +42,7 @@ struct EmptyText
     std::int32_t   max  = 0;
 };
 
-/// MapIconParams (RE-lead-mark.md §2.1), 96 bytes: a plain objective mark at a world point.
+/// MapIconParams (research/RE-lead-mark.md), 96 bytes: a plain objective mark at a world point.
 struct alignas(8) IconParams
 {
     float        lineLength   = kLineLength;    // +0

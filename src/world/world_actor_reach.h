@@ -1,7 +1,7 @@
 #pragma once
 
 // The game's world actors (chests and the other WorldActorMgr items) pop in around a seat's player too
-// (RE-p2-world-streaming.md §9.12; plan, "Chest render distance").
+// (research/RE-p2-world-streaming.md).
 //
 // Square Enix's WorldActorMgr (*(root+0x190)) holds one item per world actor TreasurePointMgr and others registered, each
 // with a pop radius R (+0x18; 90 m for this field's chests, from DataTableWorldActorInfo) and an octree half-extent E

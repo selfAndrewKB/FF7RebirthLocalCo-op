@@ -30,7 +30,7 @@ namespace {
 
 using Kind = platform::ByteContext::Kind;
 
-// Facts read from the database (RE-p2-party-list-views.md §8.1; this build).
+// Facts read from the database (research/RE-p2-party-list-views.md; this build).
 constexpr std::uint8_t kCellTickBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x48, 0x89, 0x6C, 0x24, 0x18, 0x56, 0x57,
                                            0x41, 0x55, 0x41, 0x56, 0x41, 0x57, 0xB8, 0x80, 0x00, 0x00, 0x00, 0xE8};
 constexpr platform::SlotFact kCellTick{L"the party-list cell's NativeTick slot (102)", 0x146748958,

@@ -3,7 +3,7 @@
 // Which player a merged button belongs to (pure logic, tested on the host).
 //
 // Each action in Square's tables keeps the merged held byte and a mask of the sources holding it
-// (RE-p2-per-pad-buttons.md §1.2; confirmed live: pad 1 is bit 0, pad 2 bit 1). A player's view of
+// (research/RE-p2-per-pad-buttons.md; confirmed live: pad 1 is bit 0, pad 2 bit 1). A player's view of
 // the action is "held, and held by one of that player's sources". A seat's sources are its own pad's
 // (players/seats.h: seat s plays pad s, XInput bit s and DirectInput bit 21+s); player 1 has every
 // other source: pad 1, the keyboard, the mouse, the game's own synthetic keys, and the pad of any seat

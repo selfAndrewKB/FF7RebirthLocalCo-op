@@ -1,7 +1,7 @@
 #pragma once
 
-// A seat's camera with a non-finite pose gets the game's own player-warp camera reset (RE-p2-chocobo-warp-camera.md
-// §5; RE-p2-party-warp.md §11.4).
+// A seat's camera with a non-finite pose gets the game's own player-warp camera reset
+// (research/RE-p2-chocobo-warp-camera.md, RE-p2-party-warp.md).
 //
 // After a follow warp the Field operator's pose pitch can become NaN (on foot and riding). The stick
 // rotation adds to last frame's pitch and its clamp keeps a NaN, so the camera never recovers: it stays at the old

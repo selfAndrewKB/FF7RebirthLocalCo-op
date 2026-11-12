@@ -1,7 +1,7 @@
 #pragma once
 
 // Each seat's member's own battle camera effects on that seat's camera (players/seats.h;
-// research/RE-p2-attack-cameras.md §2, §9.4-§9.6).
+// research/RE-p2-attack-cameras.md).
 //
 // Three game paths play a camera effect for "the leader" on "the primary camera" (GetEndPlayerCameraManager, the
 // party manager's primary controller). For a seat's member they ran with player 1 as both, so:

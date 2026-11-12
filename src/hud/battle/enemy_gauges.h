@@ -1,7 +1,7 @@
 #pragma once
 
 // The enemy name and life gauges (EnemyStatus_C) placed in each player's view (Stage B3b;
-// RE-p2-enemy-markers.md §7.3, §7.4 and §7.7 A; RE-p2-bar-targeted.md).
+// research/RE-p2-enemy-markers.md, RE-p2-bar-targeted.md).
 //
 // The game's enemy-status manager (EndUISystem+0xF8) places each gauge once per tick, projecting through
 // the gauge's own player context and the overlay's view rect: player 1's. Its whole tick cannot run

@@ -35,7 +35,7 @@ namespace lss::feedback::traversal_rumble {
 
 namespace {
 
-// The rumble sources that run outside the seats' scopes (RE-p2-rumble-owner-chocobo.md §9; slots and code read from
+// The rumble sources that run outside the seats' scopes (research/RE-p2-rumble-owner-chocobo.md; slots and code read from
 // both exes). Each names a seat as the owner of its adds while it runs for the seat's scooter or chocobo.
 constexpr std::uintptr_t kScooterTickSlot = 0x1466B9D90;  // SBScooterMoveState slot 1: hit and loop rumble (actor tick)
 constexpr std::uintptr_t kScooterTick     = 0x14344F38C;
@@ -115,7 +115,7 @@ void NoteSource(int seat, std::atomic<unsigned> Counts::*count) noexcept
 }
 
 /// Drift and brake are expected on the anim worker: the per-thread leader answer is then the worker's alone. Counted
-/// when one runs on the game thread instead (RE-p2-rumble-owner-chocobo.md §9.5, thread ASSUMPTION).
+/// when one runs on the game thread instead (research/RE-p2-rumble-owner-chocobo.md; thread ASSUMPTION).
 void NoteAction(int seat) noexcept
 {
     if (players::generation::OnGameThread())
@@ -214,7 +214,7 @@ void GlideRun(void* instance) noexcept
 /// (the code there takes the list of the slot naming its thread). Claimed under the game's lock, so the list it names
 /// is live (a list's drop clears it from every slot under the same lock); its list is cleared before its thread is
 /// released. One slot per seat, so two landings on two animation workers at once each have theirs
-/// (RE-seats-step6-camera-rumble.md §2). A landing inside another on the same thread takes over that thread's slot for
+/// (research/RE-seats-step6-camera-rumble.md). A landing inside another on the same thread takes over that thread's slot for
 /// its length and gives the outer one's list back after (the code reads the first slot naming the thread). With no
 /// slot free (not expected) the landing's rumble goes to the game's list, logged.
 class JumpRoute
@@ -360,7 +360,7 @@ std::uint64_t BrakeTwo(void* move, std::uint64_t event, double xmm2, double xmm3
 /// id at gs:[48h]), the list it named for that thread's seat when it is set (traversal_rumble_code.h). It runs under
 /// the game's lock, which DropList also takes to clear the route's list, so the list it takes is live for the whole
 /// add. rax, rcx and the flags are dead at that
-/// point (overwritten before any read: 0x1422AD988, 0x1422AD997, 0x1422AD99B). The code reads this DLL's globals,
+/// point (each overwritten before any read by the instructions that follow the site). The code reads this DLL's globals,
 /// which stay mapped: the DLL is pinned (platform/module_pin.h).
 bool PlaceJumpListLoad(const platform::GameImage& image) noexcept
 {

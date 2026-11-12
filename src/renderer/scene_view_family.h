@@ -3,8 +3,8 @@
 // The few FSceneViewFamily and FSceneView fields the mod reads or writes, with the evidence for
 // each. Everything else about these engine structs is left alone.
 //
-// Layout: RE-onefamily-feasibility.md §Q1 (the FSceneViewFamily table), read from the FF7R
-// constructor 0x140CC42D0 and matched to stock SceneView.h field order.
+// Layout: research/RE-onefamily-feasibility.md (the FSceneViewFamily table), read from the FF7R
+// constructor and matched to stock SceneView.h field order.
 
 
 #include <cstddef>
@@ -25,7 +25,7 @@ inline constexpr std::size_t kSkipFrameNumberIncrement = 0x70;
 /// `bool bAdditionalViewFamily` (a whole byte). When set, the final output loads the render
 /// target instead of clearing it, so an earlier family's output in another part of the screen
 /// survives. The shipped game never reads it; renderer/additional_family_output.h restores the
-/// stock reader (ScreenPass.inl:87), which reads the scene renderer's copy (copied at 0x140BEE082).
+/// stock reader (ScreenPass.inl:87), which reads the scene renderer's copy.
 /// [CONFIRMED position: facts::kAdditionalFamilyStore; RE-additional-view-family-reader.md]
 inline constexpr std::size_t kAdditionalViewFamily = 0x74;
 
@@ -35,13 +35,13 @@ namespace lss::renderer::view {
 
 /// `FIntRect UnscaledViewRect` of FSceneView: the view's area of the final output, in pixels
 /// (Min.X, Min.Y, Max.X, Max.Y). Read only, for the log.
-/// [CONFIRMED: FSceneView constructor 0x140CCD22A — RE-multiview-rect-sources.md]
+/// [CONFIRMED: the FSceneView constructor; research/RE-multiview-rect-sources.md]
 inline constexpr std::size_t kUnscaledViewRect = 0x238;
 
 /// `UTexture*` the view's final composite pass draws over its picture: the movie's media texture during a movie
 /// and on the title (the screen-effect registry writes it into every view while the views are built), null
 /// otherwise. Read only, for the log (why the mirror columns show it black is open).
-/// [CONFIRMED: RE-movie-view.md §2, both builds]
+/// [CONFIRMED: research/RE-movie-view.md, both builds]
 inline constexpr std::size_t kCompositeTexture = 0xF48;
 
 }  // namespace lss::renderer::view

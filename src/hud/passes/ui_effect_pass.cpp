@@ -28,7 +28,7 @@ namespace lss::hud::ui_effect_pass {
 namespace {
 
 // CompositeSDRForeground_UpdateViewUB_SetViewport_ForTarget(RHICmdList, scene, view, const int32 extent[2], out): the
-// composite-foreground pass's per-draw setup (research/RE-ui-particle-pass.md §12.2): the view's uniform buffer
+// composite-foreground pass's per-draw setup (research/RE-ui-particle-pass.md): the view's uniform buffer
 // rewritten for the target's extent, then an FRHICommandSetViewport (0,0)-(W,H) appended to the command list. Called
 // once per view by the pass's execute, right before the draw.
 constexpr std::uint8_t kSetupPrologue[] = {0x40, 0x55, 0x53, 0x56, 0x57, 0x41, 0x56, 0x41, 0x57,

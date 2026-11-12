@@ -90,7 +90,7 @@ void TableConsistent()
 void JudgeFile()
 {
     std::puts("settings: a file's text is judged");
-    // A word of the option's, as written and with the case, the spaces and the ends the user may add.
+    // A word of the option's, as written and with the case, the spaces and the ends a player may add.
     EXPECT(Judge(kMultiMonitor, L"on").source == Source::File);
     EXPECT(Judge(kMultiMonitor, L"on").word == L"on");
     EXPECT(Judge(kMultiMonitor, L"  On \t").word == L"on");

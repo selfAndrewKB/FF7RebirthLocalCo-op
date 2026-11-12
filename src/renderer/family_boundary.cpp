@@ -16,7 +16,7 @@ namespace lss::renderer {
 
 namespace {
 
-// Facts read from the database (RE-p2-main-menu-crash.md, pass S-CRASH3 §S3.1, §S3.4; this build).
+// Facts read from the database (research/RE-p2-main-menu-crash.md; this build).
 // The entry bytes hold rel32 calls only, which read the same at any load address.
 constexpr std::uint8_t kQueueTaskBytes[] = {0x44, 0x88, 0x4C, 0x24, 0x20, 0x44, 0x89, 0x44,
                                             0x24, 0x18, 0x48, 0x89, 0x4C, 0x24, 0x08, 0x55};
@@ -44,7 +44,7 @@ constexpr std::uint64_t kLogPeriod = 30'000;      // ms between the summary line
 using QueueTaskFn  = void (*)(void* task, const void* prerequisites, std::uint32_t currentThread, bool unlock);
 using ContextFn    = void (*)(void* context);
 
-/// A render-thread task laid out as the game's render commands (TGraphTask<...>, S-CRASH3 §S3.1):
+/// A render-thread task laid out as the game's render commands (TGraphTask<...>):
 /// FBaseGraphTask's vtable, thread and prerequisite count, the task storage, TaskConstructed and the
 /// Subsequents event (none: fire and forget).
 struct BoundaryTask

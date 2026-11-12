@@ -11,12 +11,12 @@
 // shadow request merges into player 1's next copy (player 1's own request decides there instead, as in solo).
 //
 // One whole instruction is replaced through platform/code_redirect.h: the `jbe` (count 0) after
-// `cmp dword [r14+18h],<zero register>` that enters the pre-transition loop (research 0x140F0DC3A, 1.005 0x140C882B7;
-// one 16-byte block in both). While the switch byte is set and the view's family is an additional one (FViewInfo+0 is
-// the renderer's family copy, +0x74 its bAdditionalViewFamily, the byte me_feedback_once reads at renderer+0x84), the
-// code jumps to the free of the transition array (research 0x140F0E345, 1.005 0x140C88A01), past the whole region. The
-// research build's code after it needs r12 = 0 and r13 = the view, both already true, and r15d = 0x30 (the command
-// list's allocator offset, set inside the region at 0x140F0DE14 and read by `mov [rsi+r15],rax` at 0x140F0EA02; before
+// `cmp dword [r14+18h],<zero register>` that enters the pre-transition loop (the site; one 16-byte block in both
+// builds). While the switch byte is set and the view's family is an additional one (FViewInfo+0 is the renderer's
+// family copy, +0x74 its bAdditionalViewFamily, the byte me_feedback_once reads at renderer+0x84), the code jumps to
+// the free of the transition array (site + 0x70B in the research build, site + 0x74A in 1.005), past the whole region.
+// The research build's code after it needs r12 = 0 and r13 = the view, both already true, and r15d = 0x30 (the command
+// list's allocator offset, set inside the region at site + 0x1DA and read by `mov [rsi+r15],rax` at site + 0xDC8; before
 // it r15 is rsi+0x30); 1.005's frees rbx (the array, [rbp-68h]) and needs edi = 0. Otherwise it redoes the compare
 // (the zero register reads 0) and takes the `jbe` or resumes. rax and the flags are dead at the site. Each path counts
 // itself in the fields (lock inc).

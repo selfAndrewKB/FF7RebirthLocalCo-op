@@ -29,10 +29,10 @@ namespace lss::world::seat_switch_volumes {
 
 namespace {
 
-// 1.004 addresses (1.005 through replaced-shop-volumes.json). RE-p2-shop-npcs-near-p2.md §2.1, §10.1.
-constexpr std::uintptr_t kVolumeVtable  = 0x145888590;  // AEndCharaPopSwitchVolume (1.005 0x1456F2240)
-constexpr std::uintptr_t kEnterOverride = 0x1417FD038;  // ..._OnTriggerEnter_SetInside (1.005 0x14189CA14)
-constexpr std::uintptr_t kLeaveOverride = 0x1409DD160;  // ..._OnTriggerLeave_ClearInside (1.005 0x14189E758)
+// 1.004 addresses (1.005 through replaced-shop-volumes.json). research/RE-p2-shop-npcs-near-p2.md.
+constexpr std::uintptr_t kVolumeVtable  = 0x145888590;  // AEndCharaPopSwitchVolume
+constexpr std::uintptr_t kEnterOverride = 0x1417FD038;  // ..._OnTriggerEnter_SetInside
+constexpr std::uintptr_t kLeaveOverride = 0x1409DD160;  // ..._OnTriggerLeave_ClearInside
 inline constexpr platform::PerBuild<std::uint32_t> kEnterSlot{0x668, 0x670};
 inline constexpr platform::PerBuild<std::uint32_t> kLeaveSlot{0x670, 0x678};
 inline constexpr platform::PerBuild<std::uint32_t> kInside{0x3B0, 0x3D0};  // u8, CharaPop's only reader of it
@@ -40,7 +40,7 @@ constexpr std::uint32_t kCounts = 0x270;  // u8: the parent counts entries per k
 // bool(volume, FName entrant by value); the result in al.
 using OverrideFn = std::uint8_t (*)(void* volume, std::uint64_t entrant);
 
-// The on/off counters the filter tests (§10.2): [[game root]+0x170], two int32 counts per id, on while their sum is not
+// The on/off counters the filter tests: [[game root]+0x170], two int32 counts per id, on while their sum is not
 // zero (as views/whole_screen.cpp reads them).
 constexpr std::uint32_t kStateManager    = 0x170;
 constexpr std::uint32_t kOnOffCountA     = 0x1A1238C;
@@ -48,7 +48,7 @@ constexpr std::uint32_t kOnOffCountB     = 0x1A1263C;
 constexpr std::int32_t  kDisableBox      = 18;   // DisableTriggerBox: the filter skips the enter
 constexpr std::int32_t  kDisableBoxInOut = 110;  // DisableTriggerBox_InOut: the filter skips the enter and the leave
 
-// CharaPop's switch-volume records (§2.3): TArray at P+0x6248 (count +0x6250), 48 bytes each: the volume (weak) +0x00,
+// CharaPop's switch-volume records: TArray at P+0x6248 (count +0x6250), 48 bytes each: the volume (weak) +0x00,
 // its show list (TArray<FName>) +0x10, its hide list +0x20. P = [[game root]+0x180]+0x10.
 constexpr std::uint32_t kRecords      = 0x6248;
 constexpr std::uint32_t kRecordCount  = 0x6250;

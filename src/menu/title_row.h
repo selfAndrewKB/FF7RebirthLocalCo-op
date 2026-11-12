@@ -13,9 +13,9 @@
 // of the pause menu's row: a failed check here leaves the title as it was and logs why. Each insert logged at Debug,
 // each failure at Warning. Game thread.
 //
-// Taken from Remake's menu/title_row. Changed: kind 9 (Remake's spare kind is built here), four base rows (Remake five),
-// the list found on the start menu by its own name lookup (Remake: on its widget tree), the press taken at the switch's
-// one call of the kind's handler (1.005's handler entry crosses a block).
+// The row takes kind 9, a kind the game builds but leaves spare; the title has four base rows; the list is found on the
+// start menu by its own name lookup; the press is taken at the switch's one call of the kind's handler (1.005's handler
+// entry crosses a block).
 
 #include <string>
 

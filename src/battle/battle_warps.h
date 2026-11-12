@@ -1,7 +1,6 @@
 #pragma once
 
-// Which party members the game warps at a battle's start and end (RE-p2-battle-gather-warp.md, S-BTLWARP and
-// S-BTLWARP2).
+// Which party members the game warps at a battle's start and end (research/RE-p2-battle-gather-warp.md).
 //
 // At battle start the game's PartyBattleAIMgr queues a fade-in warp next to the field leader for every battle
 // member but the leader; at battle end it warps each member farther than 8 m from the leader (or not nav-reachable)
@@ -18,7 +17,7 @@
 //                 the game controls walks in by its AI (unplayed);
 //   game          the game's warps for everyone.
 // A member stays in the battle wherever it is: membership, the AI's in-battle flag and the enemy target lists come
-// from other code, and escape tests only the field leader (RE §S-BTLWARP2).
+// from other code, and escape tests only the field leader (research/RE-p2-battle-gather-warp.md).
 // Logged: the setting (Info); each member the start or end keeps (Info, with its distance from player 1's
 // character); each member it leaves to the game (Debug). Game thread only; any other thread passes through. 1.005: the start's call crosses a 16-byte block, so
 // the sites are placed from the game thread.

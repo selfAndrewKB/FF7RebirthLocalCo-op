@@ -3,7 +3,7 @@
 // The bytes the mod writes near the game (hud/layout/centered_frame_code.h) are EXECUTED here, installed
 // through platform::CodeRedirect over a stand-in that ends like EndUI__GetCentered1920x1080Frame:
 // rbx = out, xmm4/xmm5 = the layout size, Min and Max.Y already stored, and the last store
-// `vmovss [rbx+8], xmm0` 4 bytes into a 16-byte block (0x140F5FC54 in the game).
+// `vmovss [rbx+8], xmm0` 4 bytes into a 16-byte block (as at the game's site).
 
 #include "hud/layout/centered_frame_code.h"
 #include "platform/code_redirect.h"

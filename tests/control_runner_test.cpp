@@ -1,6 +1,5 @@
 // Host-side tests for control::Runner, run without the game, against a registry and holds of its own.
-// Taken from Remake's tests/control_runner_test.cpp; added: a query waits its turn behind its client's queue, Busy per
-// client, the structured replies.
+// A query waits its turn behind its client's queue, Busy per client, the structured replies.
 
 #include "control/runner.h"
 

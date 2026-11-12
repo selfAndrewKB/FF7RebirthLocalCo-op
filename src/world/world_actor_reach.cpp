@@ -31,7 +31,7 @@ namespace {
 
 using Clock = std::chrono::steady_clock;
 
-// RE-p2-world-streaming.md §9.12.3 (this build). mgr = *(root+0x190).
+// research/RE-p2-world-streaming.md (this build). mgr = *(root+0x190).
 constexpr std::uint32_t  kRootWorldActors = 0x190;
 constexpr std::uint32_t  kItemsData       = 0x20;   // mgr: the item TSet's sparse array: data
 constexpr std::uint32_t  kItemsNum        = 0x28;   // mgr: i32 ArrayNum

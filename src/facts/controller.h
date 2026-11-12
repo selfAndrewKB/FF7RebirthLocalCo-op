@@ -9,7 +9,7 @@
 // instruction that uses it.
 //
 // Research: Rebirth/Documentation/research/RE-p2-own-controller-ida.md, RE-p2-build-facts-ida.md,
-// RE-p2-sticks-tags-ida.md, RE-p2-terrain-action-conflict.md §7.
+// RE-p2-sticks-tags-ida.md, RE-p2-terrain-action-conflict.md.
 
 #include "platform/verified_code.h"
 
@@ -78,13 +78,13 @@ inline constexpr std::uintptr_t kKeyAttack        = 0x1491E44D8;
 inline constexpr std::uintptr_t kKeyUniqueAbility = 0x1491E4520;
 inline constexpr std::uintptr_t kKeyGuard         = 0x1491E4598;
 inline constexpr std::uintptr_t kKeyDodge         = 0x1491E45E0;
-/// The menu-opening actions the game's one pause poll reads on the merged tables (RE-pause-menu-any-pad.md §1.3):
+/// The menu-opening actions the game's one pause poll reads on the merged tables (RE-pause-menu-any-pad.md):
 /// PauseMenu (Start; the field-action poll also needs it not held), MapMenu (the touch pad) and EnemyIntel.
 inline constexpr std::uintptr_t kPauseMenuKey     = 0x1491E44C0;
 inline constexpr std::uintptr_t kMapMenuKey       = 0x1491E45B0;
 inline constexpr std::uintptr_t kEnemyIntelKey    = 0x1491E45C8;
 /// The engine key L3 sends (EKeys::Gamepad_LeftThumbstick, an FKey: the FName first), keying its own raw-table element
-/// with each pad's source bit, whatever action the key assignment binds to it (RE-pad-slots.md §2.9).
+/// with each pad's source bit, whatever action the key assignment binds to it (RE-pad-slots.md).
 inline constexpr std::uintptr_t kLeftThumbstickKey = 0x149245C08;
 /// InputKey24_CopyAddRef(out, key): copies a key, taking a reference on its name.
 inline constexpr std::uint8_t kInputKeyCopyBytes[] = {0x48, 0x8B, 0x02, 0x48, 0x89, 0x01, 0x48, 0x8B,

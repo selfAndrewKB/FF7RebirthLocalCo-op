@@ -40,7 +40,7 @@ static_assert(kModeWords.size() == 3 && std::wstring_view(kModeWords[static_cast
 // Game thread (the console and the page set it there; the redirects read it there).
 Mode g_mode = Mode::PlayersStay;
 
-// Facts read from the database (RE-p2-battle-gather-warp.md §S-BTLWARP2; this build).
+// Facts read from the database (research/RE-p2-battle-gather-warp.md; this build).
 // The exclusion set's test, bool(InlineActorArray16* set, AActor** element): a pure linear search with 16 callers, so
 // only its loop-1 call in PartyBattleAIMgr_QueueBattleInTeleports is redirected (rdx = &the battle member).
 constexpr std::uint8_t kContainsBytes[] = {0x48, 0x8B, 0x81, 0x80, 0x00, 0x00, 0x00, 0x4C, 0x8B, 0xC1, 0x48, 0x85,

@@ -26,7 +26,7 @@ namespace lss::battle::equal_targeting {
 
 namespace {
 
-// Facts read from the database (RE-p2-enemy-target-bias.md §10; this build). 1.005: replaced-equal-targeting.json.
+// Facts read from the database (research/RE-p2-enemy-target-bias.md; this build). 1.005: replaced-equal-targeting.json.
 
 // The Condition select's one read of the leader type: BuildCandidates' call of UEndPartyAPI_GetPartyLeaderType
 // (PM ? PM[+0x150] : 16), once before its per-type loop; only al is used. On this build the call's five bytes cross a
@@ -35,7 +35,7 @@ constexpr std::uintptr_t kLeaderTypeCall = 0x140FA5E1F;
 using facts::kGetPartyLeaderType;
 
 // The Condition select, bool(selector, u8 reason, UObject** out), in its vtable's slot +0x88 (the out is written on
-// every path; 0 keeps the current target). RE §8, S-TGTCENSUS; 1.005 through replaced-target-census.json.
+// every path; 0 keeps the current target). 1.005 through replaced-target-census.json.
 using facts::kCondTargetSelect;
 
 // Called, not hooked: the game's own rule for a candidate, as BuildCandidates applies it to each player type.

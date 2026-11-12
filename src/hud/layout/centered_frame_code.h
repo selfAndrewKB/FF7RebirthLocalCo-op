@@ -1,16 +1,16 @@
 #pragma once
 
 // The machine code that makes the HUD's "centred 1920x1080 frame" the whole layout while the HUD is
-// laid out in a split half (RE-p2-overlay-ui-size.md §3.2 and §3.3).
+// laid out in a split half (research/RE-p2-overlay-ui-size.md).
 //
-// EndUI__GetCentered1920x1080Frame(FBox2D* out) (0x140F5FBBC) returns a 1920x1080 box centred in the
+// EndUI__GetCentered1920x1080Frame(FBox2D* out) returns a 1920x1080 box centred in the
 // overlay's layout (L = UI size / UI scale). The lock-on target's name bar, the popups and ~30 other
 // placements clamp into it. For a 16:9 image (every single-player case) the box is the whole layout;
 // in a 32:9 or 8:9 split half it is a 16:9 strip in the middle, so an off-screen target's name pins
 // partway across the half. While the mod's band lays the HUD out in the half, the box is made the
 // whole layout, as a 16:9 image gives it.
 //
-// The function's last store, `vmovss [rbx+8], xmm0` (Max.X, 5 bytes at 0x140F5FC54, inside one
+// The function's last store, `vmovss [rbx+8], xmm0` (Max.X, 5 bytes at kCenteredFrameSite, inside one
 // block), is replaced. There rbx = out, xmm4 = L.X and xmm5 = L.Y (the whole function up to it is
 // checked byte for byte before install). While the flag is set the code writes Min = (0,0) and
 // Max = L; otherwise it runs the replaced store. rax (set again by the next instruction) and the

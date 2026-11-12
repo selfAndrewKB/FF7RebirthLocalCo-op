@@ -1,6 +1,6 @@
 #pragma once
 
-// Which pass of the overlay render is running, by the column whose view it draws (as Remake's hud/overlay_pass): first
+// Which pass of the overlay render is running, by the column whose view it draws: first
 // one extra render per further column with an image this frame, highest column first (the mod's,
 // hud/passes/column_hud_images.h), then the game's own, column 0 (player 1's), last; kNone outside the render. A column
 // is a view's place in the engine's list (views/columns.h): a seat's view, or a mirror's (views/mirror_player.h).

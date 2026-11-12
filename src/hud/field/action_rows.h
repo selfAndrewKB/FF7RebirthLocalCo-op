@@ -4,8 +4,8 @@
 // hud/field/action_icon_base.h: the rows' base in a split half). Every prompt row the game shows is a widget in one
 // global list (EndUISystem+0x208: a pointer to {FWeakObjectPtr* data, int32 num}), laid out by the game's own
 // FieldActionIconList__SortAndLayout(list, placeNow): slot i gets the point `_BasePosY + i * _PaddingY`, the row named
-// by `placeNow` goes to its slot at once, the others slide there (RE-p2-field-prompts.md §1.2, §4;
-// RE-p2-hud-view-levers.md §1). A row whose current place is outside the layout it is laid out for is not painted
+// by `placeNow` goes to its slot at once, the others slide there (research/RE-p2-field-prompts.md,
+// RE-p2-hud-view-levers.md). A row whose current place is outside the layout it is laid out for is not painted
 // there, so it is not ticked and would never slide: it is named in a call of its own. Game thread only.
 
 #include "hud/layout/viewport_placement.h"

@@ -1,8 +1,8 @@
 #pragma once
 
-// Combat rumble on a seat's own pad (RE-p2-rumble.md §10; plan, "per-pad rumble: combat and other sources").
+// Combat rumble on a seat's own pad (research/RE-p2-rumble.md).
 //
-// Two combat paths never reach a seat's player (static IDA, §10.4):
+// Two combat paths never reach a seat's player (static IDA):
 //   - battle hits rumble only when the party leader is involved: the gate BattleHitFx_ShouldPlay_LeaderInvolved tests
 //     attacker or target against the party manager's leader type (+0x150). Hits by or on a seat's member fail it,
 //     so nothing plays. When it passes the controller is the attacker's own, else the primary (+0x140): player 1's;
@@ -14,7 +14,7 @@
 //     controller fallback inside scopes::primary_controller::Scope (the seat's camera manager and controller);
 //   - a notify on a seat's member's mesh (or the seat's ridden pawn) runs inside the same leader scopes and the
 //     primary scope, and its GetFirstPlayerController calls answer the seat's controller. That last part is a
-//     documented exception (§10.7): no game path picks a second controller there; the rule is the game's own one for
+//     documented exception: no game path picks a second controller there; the rule is the game's own one for
 //     its owner-based sources (the character's own controller).
 // Owner-based sources (guard, ATB gain, Materia ATB, field hits) already pick a seat's controller: unchanged.
 // Logged: every hit and notify that involves any player's character, every force-feedback play with its source

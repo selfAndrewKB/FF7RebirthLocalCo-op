@@ -1,7 +1,7 @@
 // Host-side tests for platform::CallRedirect, run without the game.
 //
 // A small executable page stands in for the game's code: a function whose `call rel32` sits 7 bytes
-// into its 16-byte block, as the overlay's call to EndUI__GetCompositeLayerRect does (0x140C95F57).
+// into its 16-byte block, as the overlay's call to EndUI__GetCompositeLayerRect does.
 // The redirected call is EXECUTED: the replacement must run, see the game's return address, be able
 // to call the original, and the original must come back after Restore.
 
@@ -120,7 +120,7 @@ void TestRedirectRefusesWhatItDoesNotRecognise()
 
 /// page+0x00: sub rsp, 28h ; nop x9 ; call target (at +0x0D, crossing into the block at +0x10) ;
 /// add rsp, 28h ; ret.  page+0x40: target: mov eax, 1 ; ret. As the input dispatcher's extra-key calls
-/// sit (0x140E7468D, 0x140E7477E).
+/// sit.
 class CrossingCode
 {
 public:
@@ -178,7 +178,7 @@ void TestCrossingCallFromOwnThread()
 /// page+0x00: caller: sub rsp, 28h ; call middle (at +0x04) ; add rsp, 28h ; ret
 /// page+0x20: middle: sub rsp, 28h ; add rsp, 28h ; jmp target (at +0x28, a tail call)
 /// page+0x40: target: mov eax, 1 ; ret
-/// As EndUI__AreaMapIcon_EnableOrHideByCount tail-jumps to its events (0x143544CB0, 0x143544CB9).
+/// As EndUI__AreaMapIcon_EnableOrHideByCount tail-jumps to its events.
 class TailJumpCode
 {
 public:

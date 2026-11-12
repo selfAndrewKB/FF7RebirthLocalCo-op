@@ -5,7 +5,7 @@
 // pass over the registry) and world/interact_watch (its hooks and log). Each offset was read in IDA at an
 // instruction that uses it.
 //
-// Research: Rebirth/Documentation/research/RE-p2-field-interact.md §1.2, §1.3, §10.B, §10.D, §12.
+// Research: Rebirth/Documentation/research/RE-p2-field-interact.md.
 
 #include <cstdint>
 

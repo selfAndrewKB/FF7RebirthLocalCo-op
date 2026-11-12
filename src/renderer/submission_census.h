@@ -1,6 +1,6 @@
 #pragma once
 
-// Diagnosis: a census of the game's GPU submissions (RE-perf-submission-census.md; the parent doc's §7). A dev tool
+// Diagnosis: a census of the game's GPU submissions (research/RE-perf-submission-census.md). A dev tool
 // (dev/dev_tools.h; a player's build has the empty stubs below).
 //
 // The GPU idles ~5 % of a split frame with work queued, and removing submissions is what has paid (the gap recorder,

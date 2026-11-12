@@ -1,16 +1,16 @@
 #pragma once
 
 // The machine code that lets a seat's overlay pass ask "the first game player" and get the
-// seat's player (lever L2 of RE-p2-hud.md P8.6; facts in pass 12).
+// seat's player (research/RE-p2-hud.md).
 //
 // SEndRootOverlay__RenderToCompositeLayer asks GEngine__GetFirstGamePlayerForGameViewport
-// (0x140CCF8E4) once per render for the local player whose view rect it lays the HUD out in and
+// once per render for the local player whose view rect it lays the HUD out in and
 // caches (+0x318..+0x32C, which the marker math reads). The call site crosses a 16-byte block, so
 // the function's first instruction is replaced instead (`mov eax,28h`, the size for its stack
 // probe, 5 bytes inside one block): while the field names a local player, the function returns it
 // at once, before it has touched the stack or any state; otherwise the replaced instruction runs
 // and the function continues as the game's. The field is set only during a seat's pass on the
-// game thread; none of the function's other callers runs then (pass 12).
+// game thread; none of the function's other callers runs then.
 //
 // Only rax and the flags change on the early path (rax is the return value; flags are not kept
 // across a call). Kept apart from the installer so the host tests can execute exactly these bytes.
@@ -23,7 +23,7 @@ namespace lss::hud {
 
 inline constexpr std::size_t kFirstPlayerCodeSize = 24;
 
-/// The instruction replaced at 0x140CCF8E4, as the research read it.
+/// The instruction replaced at the function's entry, as the research read it.
 inline constexpr std::uint8_t kFirstPlayerEntryBytes[] = {0xB8, 0x28, 0x00, 0x00, 0x00};  // mov eax, 28h
 
 /// `answer` is an aligned 8-byte field: a ULocalPlayer* to return, or 0 for the game's own answer.

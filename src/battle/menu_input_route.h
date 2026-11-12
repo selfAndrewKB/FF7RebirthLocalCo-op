@@ -1,6 +1,6 @@
 #pragma once
 
-// A seat's pad's presses and releases to the seat's menu in battle (RE-p2-command-menu-input.md §3.3, §10 Stage 3d). A
+// A seat's pad's presses and releases to the seat's menu in battle (research/RE-p2-command-menu-input.md). A
 // press runs through the game's own dispatcher in the seat's UI (its focus context and scopes, the pass in flight
 // marked 3), so its route, list and command-menu handler act on the seat's menu; only in battle, with the seat's
 // menu layer in place and player 1's top layer the command menu's own. A release follows its press (the capture

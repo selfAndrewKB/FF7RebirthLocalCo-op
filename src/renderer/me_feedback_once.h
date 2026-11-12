@@ -1,7 +1,7 @@
 #pragma once
 
 // One streaming-feedback hand-in per frame for the game's scenery ("ME") streaming, as with one player
-// (RE-p2-distant-lod-swap.md §9).
+// (research/RE-p2-distant-lod-swap.md).
 //
 // ME keeps one set of detail requests per scenery chunk. Each scene render processes the last readback
 // and copies its own requests for the next one. The game renders one family per frame and so alternates
@@ -11,7 +11,7 @@
 // show flag turns off all ME work, picture included), so while an additional family renders (the scene
 // renderer's copy of bAdditionalViewFamily, renderer+0x84, set by the mod on later families only) this
 // skips four game calls: the readback processing in the visibility gate, the main pass's copy, the
-// hidden-component pass, and (performance, RE-perf-family-duplication.md §3.1) phase 8's per-chunk mip-request
+// hidden-component pass, and (performance, research/RE-perf-family-duplication.md) phase 8's per-chunk mip-request
 // dispatches for the slave frustums, whose marks only the skipped copy reads; and (RE-perf-me-shadows.md Phase 3,
 // option D) the shadow pass's streaming-feedback writes, through machine code. An additional family still draws ME and
 // its shadows; its player's detail requests reach player 1's family through that player's slave view

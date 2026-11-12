@@ -22,7 +22,7 @@ namespace lss::views::screen_widgets {
 
 namespace {
 
-// RE-p2-menu-census.md E5 (S-MENUEDGE, both builds): UEndUserWidget__AddToRootOverlay_ZOrderPlus10(widget rcx, z edx),
+// research/RE-p2-menu-census.md (both builds): UEndUserWidget__AddToRootOverlay_ZOrderPlus10(widget rcx, z edx),
 // returning a byte; it stores z at +0x2A8. First instruction mov [rsp+18h], rbx (5 bytes, position-independent, inside
 // one 16-byte block in both builds; 1.004's block also holds SetZOrder's tail jump to this entry).
 constexpr std::uint8_t   kAddFirst[]    = {0x48, 0x89, 0x5C, 0x24, 0x18};

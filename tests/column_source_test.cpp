@@ -1,5 +1,5 @@
 // Host-side tests for views/column_source.h: where each column's view comes from, per moment and per surface (the
-// table in plan/topics/multi-monitor.md, "What each column shows"). Surfaces: one monitor with two or three players,
+// table in plan/topics/multi-monitor.md). Surfaces: one monitor with two or three players,
 // the held columns (the three-player monitor mode, or `view-columns` on one monitor). Moments: field play, the game
 // taking the whole screen, a shared ride, a seat's player waiting for a member (one, or every one), the console's
 // override.
@@ -194,7 +194,7 @@ void TestWaiting()
     }
     {
         // Three players, player 3 waits while player 2 plays, one monitor: the split stays, player 3's column shows
-        // player 1's (the gap closed by step 6a: before it, player 3 kept their own camera).
+        // player 1's.
         const Shown s = Decide(At(kThreePlayers, SeatState::Playing, SeatState::Handed));
         EXPECT(!s.Single() && s.SplitShown() && s.ViewsSplit());
         EXPECT(s.seats[1] == kSelf && !s.OnPlayerOne(1));
@@ -209,8 +209,7 @@ void TestWaiting()
         EXPECT(s.OwnColumn(1) == -1 && s.OwnColumn(2) == 2);
     }
     {
-        // Columns held, one waits while the other plays: the waiting one's column on player 1's too (before step 6a
-        // every seat needed a reason for any to show it).
+        // Columns held, one waits while the other plays: the waiting one's column on player 1's too.
         const Shown s = Decide(At(kThreePlayers, SeatState::Playing, SeatState::Handed, kHeld));
         EXPECT(!s.Single() && !s.OnPlayerOne(1) && s.OnPlayerOne(2) && s.SplitShown() && s.OwnColumn(1) == 1);
         EXPECT(s.OwnColumn(2) == -1);

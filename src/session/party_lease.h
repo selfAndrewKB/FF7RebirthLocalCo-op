@@ -52,7 +52,7 @@ Eligibility Assess(const MemberSnapshot& member) noexcept;
 
 const wchar_t* Describe(Eligibility eligibility) noexcept;
 
-// ---- the member a seat plays: its slot of the party order (RE-p2-party-order.md §5) ----
+// ---- the member a seat plays: its slot of the party order (research/RE-p2-party-order.md) ----
 //
 // A seat's row is its place in the battle-member list after the field leader's row, whoever holds the rows before
 // it: player 2 the 2nd slot, player 3 the 3rd. Player 1 is on the field leader in the field; in a fight the game
@@ -60,8 +60,7 @@ const wchar_t* Describe(Eligibility eligibility) noexcept;
 // still counts as its seat's, and that seat plays the field leader's character player 1 left (RowOrFieldLeader).
 // A seat whose member the game's leader change took also remembers the character player 1 came from (the
 // stand-in mark, StandInFor) and plays it while it is deployed and not player 1's, so one leader change moves
-// one seat; the mark ends when the game's leader goes home to the field leader (a fight's end). Both taken from
-// Remake's players/party_member (its FreeRows and standIn).
+// one seat; the mark ends when the game's leader goes home to the field leader (a fight's end).
 
 /// No stand-in: the roster's "none" type (facts::kNoPlayerType; asserted in party_lease.cpp).
 inline constexpr std::uint8_t kNoStandIn = 0x10;
@@ -91,7 +90,7 @@ constexpr std::int32_t OrdinalAfter(std::int32_t anchor, std::int32_t step, std:
 
 /// The ordinal of seat `seat`'s row: of the rows below `anchor` (wrapping, never the anchor's own), those `empty`
 /// does not pass over, the `seat`-th. Player 2 (seat 1) plays the first, the 2nd slot of the order; player 3
-/// (seat 2) the second, the 3rd slot (the user's rule; plan/seats.md). Player 1's character is not passed over:
+/// (seat 2) the second, the 3rd slot. Player 1's character is not passed over:
 /// its row stays its seat's (RowOrFieldLeader). -1 if the party has no such row. `empty` is asked once per row,
 /// in order.
 template <class Empty>
@@ -130,7 +129,7 @@ constexpr std::uint8_t StandInFor(bool home, std::uint8_t was, std::uint8_t own)
     return !home && was < kNoStandIn && was != own ? was : kNoStandIn;
 }
 
-// ---- the member's AI at the hand-over (RE-p2-member-handover.md §3) ----
+// ---- the member's AI at the hand-over (research/RE-p2-member-handover.md) ----
 
 /// A member's AI as the hand-over needs it: its active brain (0 is the base brain; a story script
 /// pushes others) and that brain's state (EEndAIState, facts::AiState).
@@ -158,7 +157,7 @@ const wchar_t* Describe(AiReadiness readiness) noexcept;
 /// What a held member's AI says about its player's hold (session/field_hold.h, by the active brain and its state):
 /// Free while it may stay; otherwise the script that needs it (a level's walk or lead, an event's walk, an
 /// animation), which runs only under its AI. Free when unread, and on the base brain (the follow's: the level's
-/// settings are written on brain 2 or 8, research/RE-held-member-scripts.md §2.2).
+/// settings are written on brain 2 or 8, research/RE-held-member-scripts.md).
 field_hold::Hold HoldOf(const AiSnapshot& ai) noexcept;
 
 /// The fields that show whether the seat's controller holds the member.
@@ -177,7 +176,7 @@ bool Acquired(const LeaseState& state, const void* member, const void* seatContr
 /// The member is back with its own AI, and the seat's controller names nothing.
 bool Released(const LeaseState& state, const void* member) noexcept;
 
-// ---- a synergy partner the game has not given back yet (RE-p2-synergy-skills.md S-SYNTAKE §3, §5) ----
+// ---- a synergy partner the game has not given back yet (research/RE-p2-synergy-skills.md) ----
 //
 // The game hands a synergy partner to its AI for the approach and gives it back only in
 // LinkMember_End (the sync start, the record end, or a mode-2 partner's own command end). No leader
@@ -199,9 +198,9 @@ struct LinkRecordView
     std::uint8_t ended[3]{};      // +0x103+idx
     std::uint8_t mode = 0;        // the ability's +0x8F ExecuteConditionType0 (1-4; 0 without an ability)
     std::uint8_t kind = 0xFF;     // the ability's +0x8B CombinationCategory (1 ATB synergy ability, 0 synergy skill)
-    std::uint8_t noLink = 0;      // +0x3A the halves run without the link flag (logged only; S-SYNSTUCK2 §4)
+    std::uint8_t noLink = 0;      // +0x3A the halves run without the link flag (logged only)
     std::uint8_t window = 0;      // +0x50 the combination window: the initiator's animation notify holds it open while
-                                  // the game may ask for a mode-2 partner (S-SYNCOUNTER Q2)
+                                  // the game may ask for a mode-2 partner
     std::uint32_t actions[3]{};   // +0x2C+4*idx the members' command serials (logged only; not skill ids)
 };
 

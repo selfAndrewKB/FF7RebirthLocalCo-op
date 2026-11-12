@@ -1,7 +1,7 @@
 #pragma once
 
 // Each seat's targeting: the game's own targeting tick run again, for that seat
-// (RE-p2-targeting-scoped-tick.md, pass S-TGT5; the fields in RE-p2-lock-on.md, S-TGT2).
+// (research/RE-p2-targeting-scoped-tick.md; the fields in RE-p2-lock-on.md).
 //
 // The game keeps one set of target fields in the battle system: the target cursor (+0x68), the
 // displayed target (+0x70/+0x78, a TWeakPtr), the trace handle (+0x80), the lock byte (+0x8C), the
@@ -33,7 +33,7 @@
 // Per seat: every seat has its own copy of the target fields and the targeted key
 // (indexed by the seat; index 0 unused, player 1's are the game's own), its own TargetScope and its own lock's end.
 // One TargetScope at a time, whichever seat's (the seats swap in turn). After the game's run, one run per seat in seat
-// order (a third run is as safe as the second: RE-seats-step6-battle.md §1).
+// order (a third run is as safe as the second: research/RE-seats-step6-battle.md).
 
 #include "platform/byte_scope.h"
 #include "platform/dev_switch.h"

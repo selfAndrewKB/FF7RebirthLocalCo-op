@@ -19,10 +19,8 @@
 //   note <text>                          write a marker line to the log
 //   abort                                stop every queue now: queued commands dropped, holds released
 //
-// Parsing is pure and tested on the host (tests/control_script_test.cpp).
-//
-// Taken from Remake's control/script. Changed: `hold` names its player (the seats), the numbers
-// read with from_chars as the registry reads them.
+// Parsing is pure and tested on the host (tests/control_script_test.cpp). `hold` names its player; numbers are read
+// with from_chars, as the registry reads them.
 
 #include "platform/command_registry.h"
 

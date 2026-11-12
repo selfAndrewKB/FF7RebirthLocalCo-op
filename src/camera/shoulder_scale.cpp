@@ -29,7 +29,7 @@ namespace lss::camera::shoulder_scale {
 namespace {
 
 // FEndModularCameraOperator__UpdateModules_Vt30: `mov rcx,rbx (op) ; lea rdx,[rbp+67h] ; vmovaps xmm2,xmm10 (dt) ;
-// call FEndModularCameraOperator__FinalizePose` at 0x140A61C20 (bytes E8 37 B0 03 00, one 16-byte block), after
+// call FEndModularCameraOperator__FinalizePose` (bytes E8 37 B0 03 00, one 16-byte block), after
 // the modules' ApplyToPose. FinalizePose(op, stick, dt) applies the stick and computes the location from the pose
 // at op+0x40 (checked by disassembly).
 constexpr std::uintptr_t kFinalizeCall = 0x140A61C20;
@@ -38,14 +38,14 @@ constexpr std::uint8_t   kFinalizePoseBytes[] = {0x40, 0x53, 0xB8, 0x20, 0x00, 0
 constexpr platform::FunctionFact kFinalizePose{L"the camera operator's FinalizePose", 0x140A9CC5C, kFinalizePoseBytes};
 constexpr std::uint32_t  kPoseAimY        = 0x88;  // op+0x40 pose, +0x48 AimOffset Y (lateral)
 constexpr float          kMinRatio = 0.25f, kMaxRatio = 4.0f;  // a ratio outside this is not trusted
-constexpr float          kMaxScale = 1.0f;  // only ever softened: a wider half keeps the game's offset (the user)
+constexpr float          kMaxScale = 1.0f;  // only ever softened: a wider half keeps the game's offset
 
 using FinalizeFn = void (*)(void* op, void* stick, float deltaTime);
 
 platform::CallRedirect g_call;
 bool                   g_installed = false;
 std::atomic<bool>      g_on{true};
-std::atomic<float>     g_minimum{0.7f};  // the user's pick (side by side ×0.7 rather than the width's ×0.5)
+std::atomic<float>     g_minimum{0.7f};  // side by side ×0.7 rather than the width's ×0.5
 std::atomic<bool>      g_shown{false};
 std::array<float, players::kMaxPlayers>              g_logged{};  // by seat (players/seats.h)
 static_assert(players::kMaxPlayers == 3, "one ratio per player below");

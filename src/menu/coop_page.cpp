@@ -386,7 +386,7 @@ const wchar_t* FillPageRaw(void* page)
         }
         const GameArray help = SourceString(category.text.help);
         g.assign(At(infos, facts::kOptionInfosHelp), &help);
-        // The game's construct only appends rows and finds categories by key (research/RE-coop-page-facts.md §2), so
+        // The game's construct only appends rows and finds categories by key (research/RE-coop-page-facts.md), so
         // after a re-add it adds its rows behind the mod's: every row goes, then the mod's are added.
         GameArray empty{};
         g.emptyInfos(At(infos, facts::kOptionInfosRows), &empty);

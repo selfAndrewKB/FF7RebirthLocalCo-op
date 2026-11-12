@@ -4,8 +4,8 @@
 // the animation world manager. Each pointer global is read live (a null means the world is not up); each offset was
 // read in IDA at an instruction that uses it.
 //
-// Research: Rebirth/Documentation/research/RE-p2-field-interact.md §1.1, §12, RE-p2-battle-start-triggers.md,
-// RE-p2-charapop-per-view.md §1.1, RE-p2-framing.md, RE-p2-anim-optimisation-two-views.md, RE-p2-lod-draw-distance.md §1.
+// Research: Rebirth/Documentation/research/RE-p2-field-interact.md, RE-p2-battle-start-triggers.md,
+// RE-p2-charapop-per-view.md, RE-p2-framing.md, RE-p2-anim-optimisation-two-views.md, RE-p2-lod-draw-distance.md.
 
 #include "platform/verified_code.h"
 
@@ -21,7 +21,7 @@ inline constexpr std::uint32_t  kRootGameState  = 0x170;  // the game state: the
 inline constexpr std::uint32_t  kRootCharaPop   = 0x180;  // the CharaPop manager (world/charapop_facts.h)
 inline constexpr std::uint32_t  kRootModeHolder = 0x1B8;  // the mode holder (the encounter manager; +0x3D558 its state)
 inline constexpr std::uint32_t  kRootWorldItems = 0x288;  // the WorldItemMgr
-/// WorldItemMgr's map of items (RE-p2-field-interact.md §10.5): a stock TMap keyed by the item's FName at element +0
+/// WorldItemMgr's map of items (RE-p2-field-interact.md): a stock TMap keyed by the item's FName at element +0
 /// (platform/tset_find.h): where the map sits in the manager, its element's size and the chain index in it.
 inline constexpr std::uint32_t  kWorldItemMapElements = 0x90;
 inline constexpr std::uint32_t  kWorldItemMapStride   = 0xD0;
@@ -29,7 +29,7 @@ inline constexpr std::uint32_t  kWorldItemMapHashNext = 0xC0;  // i32
 // +0x1A0 is the FieldActionMgr (world/field_pickup), +0x270 the chocobo ride manager (facts/vehicles.h).
 
 /// g_LocationVolumeManager (a pointer): the AEndLocationVolumes and the game's own containment test,
-/// LocationVolume_ContainsPoint(volume, &position, margin), a pure read (RE-p2-framing.md; walk_limits §4.3.1).
+/// LocationVolume_ContainsPoint(volume, &position, margin), a pure read (RE-p2-framing.md).
 inline constexpr std::uintptr_t kLocationVolumeManager = 0x14939BCA0;
 inline constexpr std::uint8_t   kLocationVolumeContainsPointBytes[] = {0x40, 0x53, 0xB8, 0x50, 0x00, 0x00, 0x00, 0xE8, 0xE4,
                                                                        0xF6, 0x60, 0x01, 0x48, 0x2B, 0xE0, 0x33, 0xDB};
@@ -39,7 +39,7 @@ inline constexpr FunctionFact   kLocationVolumeContainsPoint{L"LocationVolume_Co
 /// g_AnimWorldManager (a pointer): the SE world manager the animation budget and CharaPop read (0xE00 bytes).
 inline constexpr std::uintptr_t kAnimWorldManager = 0x14939BC48;
 
-/// The game's catch-up move, as its battle gather calls it (RE-member-story-boxes.md §9):
+/// The game's catch-up move, as its battle gather calls it (RE-member-story-boxes.md):
 /// Nav_FindPointAround_AnglesDistances(unused, querier, const FTransform* origin, const FNavAgentProperties* agent,
 /// const TArray<float, TInlineAllocator<4>>* distances, const TArray<float, TInlineAllocator<4>>* anglesRad, int unused,
 /// FVector* out) -> bool: for each angle, each distance, a point from the origin projected to the navmesh and reached by
@@ -56,7 +56,7 @@ inline constexpr std::uint8_t kBattleTeleportFadeInBytes[] = {0x48, 0x85, 0xC9, 
 inline constexpr FunctionFact kBattleTeleportFadeIn{L"EndCharacter_BattleTeleport_FadeIn", 0x1407B5334,
                                                     kBattleTeleportFadeInBytes};
 
-/// The fight's own state and area (RE-arena-warp.md §2, §3): the encounter's state in the mode holder (3 in battle, 4
+/// The fight's own state and area (RE-arena-warp.md): the encounter's state in the mode holder (3 in battle, 4
 /// while player 1 escapes); the game's "inside any battle area" (spheres around the engaged enemies) for a character;
 /// and the game state's two event counters the leader switch refuses on (an event holding the party).
 inline constexpr std::uint32_t kEncounterState         = 0x3D558;  // [[g_EndGameRoot]+0x1B8]+0x3D558, u8

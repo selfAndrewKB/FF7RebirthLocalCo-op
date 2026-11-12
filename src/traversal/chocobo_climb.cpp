@@ -43,7 +43,7 @@ using IsRiddenFn    = bool (*)(const void* character);
 using HolderStateFn = std::uint8_t (*)(const void* holder);
 #endif
 
-// Fields (RE-p2-chocobo-climb.md §1.3-1.4; both builds unless per build).
+// Fields (research/RE-p2-chocobo-climb.md; both builds unless per build).
 constexpr std::uint32_t kExecuterChocobo      = 0x74;   // FWeakObjectPtr: the climbing chocobo, as the camera setup reads it
 constexpr std::uint32_t kControlHolder        = 0x638;  // the character's control holder (state 8: a field action)
 constexpr std::uint32_t kFieldActionCharacter = 0x5A0;  // AEndPlayerController: the character its field actions test

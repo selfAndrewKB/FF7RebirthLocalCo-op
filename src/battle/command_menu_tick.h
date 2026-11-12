@@ -1,10 +1,10 @@
 #pragma once
 
 // Each seat's command controller ticked at the game's own spot, and that seat's battle actions driven
-// through it (RE-p2-command-menu-tick.md §13, pass S-CMD3; RE-p2-command-menu.md §5.1).
+// through it (research/RE-p2-command-menu-tick.md, RE-p2-command-menu.md).
 //
 // The game ticks its one command controller once per frame, from the game mode's phase-0 global tick
-// (call 0x140C92978). That call is redirected: the game's controller ticks as before, then, in
+// (one call). That call is redirected: the game's controller ticks as before, then, in
 // battle, each seat's controller (battle/command_menu.h) ticks inside that seat's scopes: its
 // focus context and the UI system's controller slot, the primary controller, the party leader
 // (weak pointer and type) answering the seat's member, the seat's target fields, and the seat's pad's sticks
@@ -23,7 +23,7 @@
 //   - the leader-switch requests: the seat's own, as its pad's d-pad sets them; the tick's switch step then runs the
 //     game's cycle for the seat, every leader read answering the seat (session/party_switch.h keeps it off player
 //     1's and the other players' characters, and the session plays the member it moves to);
-//   - the battle HUD mode: the game's own call on its controller (its setter's entry redirected, as Remake)
+//   - the battle HUD mode: the game's own call on its controller (its setter's entry redirected)
 //     is made again on each seat's controller at once, inside that seat's focus and leader scopes; a seat
 //     that could not take it (its player out) is caught up at its next pass;
 //   - battle input, party-list input and the menu's focus layer, which the game sets with no call to

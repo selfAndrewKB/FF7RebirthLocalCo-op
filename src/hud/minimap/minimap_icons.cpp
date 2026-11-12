@@ -29,7 +29,7 @@ namespace {
 
 namespace generation = players::generation;
 
-// The holder update's icon loop (RE-p2-minimap-cost.md §10.2). Both calls take `mov rdx,[r15+r12]` (the source's
+// The holder update's icon loop (research/RE-p2-minimap-cost.md). Both calls take `mov rdx,[r15+r12]` (the source's
 // FName key, a qword) and `mov rcx,rdi` (the holder); neither result is read. Each call's five bytes cross a 16-byte
 // block.
 constexpr std::uintptr_t kUpdateCall          = 0x1408447BF;  // in range: AreaMapIcon_Update(holder, key, source)
@@ -49,7 +49,7 @@ constexpr platform::FunctionFact kRemoveArgs{L"the remove call's arguments", 0x1
 constexpr std::uint8_t   kRemoveAfterBytes[]  = {0x8A, 0x9C, 0x24, 0x81, 0x00, 0x00, 0x00};
 constexpr platform::FunctionFact kRemoveAfter{L"after the remove call", 0x1408446D1, kRemoveAfterBytes};
 
-// The holder's entries (§7.5): a TSet at holder+0xE8 of 160-byte elements, the FName key at +0, the entry after it:
+// The holder's entries: a TSet at holder+0xE8 of 160-byte elements, the FName key at +0, the entry after it:
 // entry+0x8 the SEndMapIcon, entry+0x1C the icon kind. The widget's Slate visibility byte at +0x1B0 (stock 4.26
 // EVisibility: bit 0 = painted).
 constexpr std::uint32_t kHolderEntries  = 0xE8;
@@ -172,8 +172,8 @@ void RemoveIcon(void* holder, std::uint64_t key) noexcept
     original(holder, key);
 }
 
-/// After a mod run: a kept icon this run's render loop left painted (the range hide does not cover every kind,
-/// §10.5) would show the other player's icon on this player's map. Logged once per key.
+/// After a mod run: a kept icon this run's render loop left painted (the range hide does not cover every kind)
+/// would show the other player's icon on this player's map. Logged once per key.
 void CheckShown(const void* holder) noexcept
 {
     if (g_skippedThisRun.empty() || holder == nullptr)

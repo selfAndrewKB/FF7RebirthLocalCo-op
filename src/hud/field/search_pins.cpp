@@ -26,7 +26,7 @@ namespace lss::hud::search_pins {
 
 namespace {
 
-// RE-p2-ranged-reticle.md §2.3 (this build). EndUISystem[55] points to the pin manager: +0x00 the compass (weak),
+// research/RE-p2-ranged-reticle.md (this build). EndUISystem[55] points to the pin manager: +0x00 the compass (weak),
 // +0x30 the pins, a TSparseArray of 40-byte entries: +0x00 the pin (weak), +0x08 its world location (FVector), +0x18
 // the hook icon (weak).
 constexpr std::uint32_t  kPinManager  = 0x1B8;
@@ -36,7 +36,7 @@ constexpr std::uint32_t  kPinEntry    = 40;
 constexpr std::uint32_t  kPinWidget   = 0x00;
 constexpr std::uint32_t  kPinLocation = 0x08;
 constexpr std::uint32_t  kPinHook     = 0x18;
-// The leader-action component (PC+0x598) and its interact points (§2.2, §2.3; the same offsets in 1.005): +0x1490
+// The leader-action component (PC+0x598) and its interact points (the same offsets in 1.005): +0x1490
 // data, +0x1498 count, 624-byte points, the point's pin (weak) at +0x1C; +0x14A0 "a point is active" (the byte its
 // update compares before opening or closing the compass); +0x4E0 the ranged selection's published state (logged).
 constexpr std::uint32_t kLeaderActions = 0x598;
@@ -49,7 +49,7 @@ constexpr std::uint32_t kShooting      = 0x4E0;
 constexpr std::size_t   kMaxPoints     = 32;
 constexpr std::size_t   kMaxHidden     = 64;
 
-// The per-entry placement the list's tick runs (§2.3): stateless.
+// The per-entry placement the list's tick runs: stateless.
 constexpr std::uint8_t kPlacePinBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x74, 0x24, 0x18, 0x55,
                                            0x57, 0x41, 0x56, 0x48, 0x8B, 0xEC, 0xB8, 0x40, 0x00, 0x00, 0x00};
 constexpr platform::FunctionFact kPlacePin{L"EndUI__M1B8_PlacePin_OwnerPC_EdgeFade", 0x143A0CFDC, kPlacePinBytes};
@@ -161,7 +161,7 @@ void LogIfChanged(int mine, const Logged& now, std::uintptr_t manager) noexcept
     g_loggedOnce[mine] = true;
     try
     {
-        // The first few pins by name, so the reticle the user sees can be named.
+        // The first few pins by name, so the reticle a player sees can be named.
         std::wstring names;
         int          named = 0;
         platform::ForEachSparseElement(manager + kPins, kPinEntry, [&names, &named](std::uintptr_t entry) {

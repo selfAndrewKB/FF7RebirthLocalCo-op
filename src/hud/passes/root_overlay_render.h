@@ -3,9 +3,9 @@
 // The moment just before the HUD overlay renders, each frame.
 //
 // UGameEngine::Tick calls FSlateApplication__ExecuteDelegate1000_RenderRootOverlay once per
-// frame (0x1410A0156), after the world tick in which the game updates its HUD (MasterHUD_Tick) and
-// moves its widgets, and before the overlay lays the HUD out and draws it (RE-p2-hud.md P8.9,
-// P8.10). That call is redirected here (platform/call_redirect.h). Before passing it through, on
+// frame, after the world tick in which the game updates its HUD (MasterHUD_Tick) and
+// moves its widgets, and before the overlay lays the HUD out and draws it (research/RE-p2-hud.md).
+// That call is redirected here (platform/call_redirect.h). Before passing it through, on
 // the game thread:
 //   - the HUD placement places again any widget the game moved in this frame's world tick
 //     (hud/layout/hud_placement.h), so the frame draws it placed rather than at its single-player point;

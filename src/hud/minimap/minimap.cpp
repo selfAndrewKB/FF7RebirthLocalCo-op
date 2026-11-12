@@ -51,7 +51,7 @@ namespace {
 namespace generation   = players::generation;
 namespace party_member = session::party_member;
 
-// RE-p2-own-minimap.md §1, §3 and §8 (this build). Every function's entry bytes are checked before use.
+// research/RE-p2-own-minimap.md (this build). Every function's entry bytes are checked before use.
 
 // The widget, through the navimap holder: g_EndUISystem (the object itself) +0x108 area-map manager, +0x340 holder,
 // +0x20 the widget's native interface (UEndNaviMapCircle +0x108), the Slate widget at +0x138 (a TSharedPtr, object
@@ -71,13 +71,13 @@ constexpr std::uint8_t   kHolderUpdateBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0
                                                  0x41, 0x55, 0x41, 0x56, 0x41, 0x57, 0xB8, 0x90, 0x03, 0x00, 0x00, 0xE8};
 constexpr platform::FunctionFact kHolderUpdate{L"MasterIconPaint_NaviMapHolder_FrameUpdate", 0x140843F10,
                                                kHolderUpdateBytes};
-// Its one leader read: call UEndPartyAPI_GetPartyLeaderType (u8 in al) at 0x140844016; location, range, arrow yaw
-// and the party-icon skip all follow that answer (no sub-function reads the leader itself, §8.5).
+// Its one leader read: call UEndPartyAPI_GetPartyLeaderType (u8 in al); location, range, arrow yaw
+// and the party-icon skip all follow that answer (no sub-function reads the leader itself).
 constexpr std::uintptr_t kLeaderTypeCall    = 0x140844016;
 using facts::kGetPartyLeaderType;
 
-// The holder update's map pieces (RE-p2-minimap-tiles.md §2, §4): a piece in state 2 (shown) is dropped when the run's
-// centre is out of its rectangle + margin + 5 m, asked at 0x140844905 (`lea rdx,[rsp+90h]` = the centre; `mov rcx,rbx`
+// The holder update's map pieces (research/RE-p2-minimap-tiles.md): a piece in state 2 (shown) is dropped when the run's
+// centre is out of its rectangle + margin + 5 m, asked where `lea rdx,[rsp+90h]` loads the centre (`mov rcx,rbx`
 // = the piece; only al is read after). The pieces' states are shared, so with one centre per run each player's run
 // dropped the other's pieces (CONFIRMED live: ~17 load/drop cycles a second, the flicker).
 constexpr std::uintptr_t kPieceUnloadCall      = 0x140844905;
@@ -88,7 +88,7 @@ constexpr platform::FunctionFact kPieceUnloadArgs{L"the piece-unload call's argu
 constexpr std::uint8_t   kPieceUnloadAfterBytes[] = {0x84, 0xC0};
 constexpr platform::FunctionFact kPieceUnloadAfter{L"after the piece-unload call", 0x14084490A, kPieceUnloadAfterBytes};
 
-// SEndNaviMapCircle__OnPaint_Pool0's pool-0 block (§8.1): the acquire (rcx renderer, dl 0; its call crosses a
+// SEndNaviMapCircle__OnPaint_Pool0's pool-0 block: the acquire (rcx renderer, dl 0; its call crosses a
 // 16-byte block, so it is installed from the game thread while that thread is outside the paint), FindOrAdd (rcx
 // slot, rdx the FName value from the static below, r8 rect), and the submit (rcx renderer, dl 0, r8 slot).
 constexpr std::uintptr_t kFindOrAddCall    = 0x140FC6CE9;
@@ -102,12 +102,12 @@ constexpr std::uintptr_t kConsumeLoadResume = 0x140FC7C98;
 constexpr std::uintptr_t kConsumeStoreSite   = 0x140FC7C98;
 constexpr std::uintptr_t kConsumeStoreResume = 0x140FC7C9D;
 
-// Pool 0's buffers (renderer +0x80 vertex, +0x98 index): the same kind and capacities as every pool's (§8.3; uploads
+// Pool 0's buffers (renderer +0x80 vertex, +0x98 index): the same kind and capacities as every pool's (uploads
 // grow past them on the render thread).
 constexpr std::uint32_t  kPoolZeroVertexBuffer = 0x80;
 constexpr std::uint32_t  kPoolZeroIndexBuffer  = 0x98;
 
-// The widget's own target recipe (SEndNaviMapCircle__Construct_CreatesRT, §8.4): NewObject in GObjTransientPkg, SRGB
+// The widget's own target recipe (SEndNaviMapCircle__Construct_CreatesRT): NewObject in GObjTransientPkg, SRGB
 // (+0x91 bit 0), TargetGamma 1, ClearColor 0, InitCustomFormat(X, Y, PF_B8G8R8A8, linear), UpdateResourceImmediate.
 constexpr std::uintptr_t kTransientPackage = 0x149115C28;
 constexpr std::uint8_t   kNewRenderTargetBytes[] = {0x40, 0x53, 0xB8, 0x60, 0x00, 0x00, 0x00, 0xE8,

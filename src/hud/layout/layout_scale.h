@@ -3,9 +3,9 @@
 // The HUD overlay's layout scale by the game's own contain rule.
 //
 // SEndRootOverlay__RenderToCompositeLayer lays the overlay out at scale height/1080 of its rect
-// (0x140C95FC6), while every conversion from UI pixels to layout units uses the contain scale of
+// (hud/layout/layout_scale_code.h kSite), while every conversion from UI pixels to layout units uses the contain scale of
 // the same rect, EndUI__ContainScaleFor1920x1080: height/1080 for 16:9 and wider, width/1920 for
-// narrower (RE-p2-hud.md passes 4-5). The game only makes 16:9 images, where the two are equal. A
+// narrower (research/RE-p2-hud.md). The game only makes 16:9 images, where the two are equal. A
 // split half narrower than 16:9 (side by side) is laid out in a band narrower than 16:9, and the
 // two part: markers land doubled, and widgets the game keeps in its centred 16:9 frame fall off
 // screen.

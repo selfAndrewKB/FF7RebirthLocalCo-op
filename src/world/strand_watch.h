@@ -1,6 +1,6 @@
 #pragma once
 
-// When player 2's member counts as stranded off the loaded navmesh (RE-p2-party-leash.md §2.1).
+// When player 2's member counts as stranded off the loaded navmesh (research/RE-p2-party-leash.md).
 //
 // The input is the game's own decision, not the member's speed or animation: each tick says whether
 // the game refused (zeroed) at least one of the member's moves because the navmesh under her is not
@@ -9,10 +9,10 @@
 //
 // A strand begins with the first refused move and ends once no move has been refused for longer than
 // the grace (the stick let go, or the navmesh came back). Refused falls arrive in bursts about 0.3 s
-// apart at some edges (RE-p2-party-leash.md §6c), so the grace spans those gaps; since a refusal only
+// apart at some edges (research/RE-p2-party-leash.md), so the grace spans those gaps; since a refusal only
 // happens where her world is not loaded, a longer grace never joins a push she could have walked out
 // of. The grace is the mod's; the default hold and cooldown are the game's
-// own follow-teleport timings (RE-p2-party-warp.md §2); a caller may shorten the hold. A strand held for
+// own follow-teleport timings (research/RE-p2-party-warp.md); a caller may shorten the hold. A strand held for
 // the hold asks for one warp, and no warp is asked for within the cooldown of the last one. Pure logic;
 // the caller supplies the time.
 
@@ -36,7 +36,7 @@ struct StrandRules
 };
 
 /// The failed safe-transform checks that count as a strand: only while the game holds the character parked (short of
-/// the park, the game return-warps it to its safe spot itself; RE-p2-party-leash.md §6b, §6d).
+/// the park, the game return-warps it to its safe spot itself; research/RE-p2-party-leash.md).
 constexpr std::uint32_t ParkChecks(std::uint32_t failedChecks, bool parked) noexcept
 {
     return parked ? failedChecks : 0;

@@ -7,8 +7,8 @@
 // Nothing here drives a seat's battle: attack, the unique ability, guard and dodge go through the seat's
 // own command controller and the game's own handler (battle/command_menu_tick.h); the soft
 // target, lock, lock camera, switching and cursor come from the game's own targeting tick run for
-// the seat (battle/lock_on.h). The direct calls and the mod's own targeting this module once ran
-// (RE-p2-battle-input.md §5.1) were recreations and are retired.
+// the seat (battle/lock_on.h). None of that is done by the mod itself: direct calls or a targeting of the mod's own
+// would be recreations (research/RE-p2-battle-input.md).
 //
 // Logged on change: player 1's command controller's gates and requests, both characters' battle preconditions and
 // move-state bytes, the target fields. Game thread only.

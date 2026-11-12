@@ -1,7 +1,7 @@
 #pragma once
 
-// Synergy skills and synergy abilities with a human's character as the partner (research/RE-p2-synergy-skills.md §4-§6,
-// S-SYNSKILL; research/RE-p2-synergy-abilities.md §4-§6, S-SYNABIL).
+// Synergy skills and synergy abilities with a human's character as the partner (research/RE-p2-synergy-skills.md,
+// research/RE-p2-synergy-abilities.md).
 //
 // A synergy partner walks into place through its own AI's behaviour tree, so the game first hands "the player's
 // character" to its AI (AEndCharacter::SwitchAIControl_Async(partner, 1, nullptr)) and gives it back to the primary
@@ -27,7 +27,7 @@
 //     another human drives it: the game's own test decides). A seat's member is always given back to that seat's
 //     controller.
 // A parry-window skill (Counterfire: its initiator's ability row has kind 26, the window that ends the link when the
-// parry fails; RE S-SYNCOUNTER) keeps a human's partner with its player at the start: the game asks for that partner
+// parry fails) keeps a human's partner with its player at the start: the game asks for that partner
 // only when the counter animation opens the record's combination window, through the AI request, whose test then hands
 // it over as above; after a failed parry it never asks (confirmed live).
 // Nothing else reads a changed leader: only those four calls inside the three functions are answered. Classic mode
@@ -36,11 +36,11 @@
 //
 // Threads: the hand-over runs on the game thread (other threads pass through). A mode-2 partner's own command end calls
 // LinkMember_End wherever its command executor finishes, which the game writes for worker threads
-// (RE-p2-synergy-skills.md S-SYNSTUCK2). There the member end is only noted (T3 fails for a seat's member and passes
+// (research/RE-p2-synergy-skills.md). There the member end is only noted (T3 fails for a seat's member and passes
 // through otherwise; P never names a seat's controller), so nothing the game queues is ever possessed by a seat,
 // and the next tick gives a remembered character back on the game thread with the game's own call,
 // SwitchAIControl_Async(member, 1, its player's controller), after the same ownership tests as T3, read live. Answering T3/P on the worker instead would let the game queue that possession with raw pointers
-// that nothing checks when it runs (S-SYNANYTHREAD Q1): it could outlive the player's ownership or controller. The tick
+// that nothing checks when it runs: it could outlive the player's ownership or controller. The tick
 // also watches each remembered partner's live link record and logs one that vanished with it still not given back.
 //
 // Per seat: every built seat's player is a human (its member, its

@@ -203,7 +203,7 @@ Choice Choose(std::span<const Monitor> monitors, std::size_t gameMonitor, std::i
     }
     if (best == nullptr)
     {
-        // Every monitor that stopped a row, each named once, the easiest change first: the user reads what to do.
+        // Every monitor that stopped a row, each named once, the easiest change first: the player reads what to do.
         std::int32_t      longest = 0;
         std::vector<Stop> stops;
         for (const auto& row : rows)

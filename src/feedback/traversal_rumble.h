@@ -1,6 +1,6 @@
 #pragma once
 
-// Each player's traversal rumble plays on their own pad (research/RE-p2-zipline-rumble-hook-who.md §4).
+// Each player's traversal rumble plays on their own pad (research/RE-p2-zipline-rumble-hook-who.md).
 //
 // The game keeps one global rumble list (zip line, chocobo, hookshot, ropes, doors, valves, vehicles, swimming: 48 add
 // sites). An add carries no owner. Each controller's leader-action component ticks the list once per frame and plays
@@ -16,14 +16,14 @@
 // seat as the primary player; player 1's component ticks the global list as the game does (never inside a seat's
 // primary scope). The zip line's rumble gate answers yes for a seat's member, as it does for player 1's character.
 //
-// The game's stop by name follows the add (RE-p2-rumble-owner-chocobo.md §3.2): on the game thread while a seat is the
+// The game's stop by name follows the add (research/RE-p2-rumble-owner-chocobo.md): on the game thread while a seat is the
 // primary player, the list's owner names the seat's list for the length of the game's stop, under the game's lock. The
 // footsteps of the chocobo a seat's player rides (the chocobo's own virtual, called outside every scope) run inside
 // that seat's primary scope, as the game runs the chocobo player 1 rides, so the game's gate asks the seat's
 // coordinator and the add goes to the seat's list.
 //
 // Sources that run outside the seats' scopes name a seat as the owner of their adds and stops while they run for
-// the seat's scooter or chocobo (a per-thread owner; RE-p2-rumble-owner-chocobo.md §9): the scooter move state's slot 1
+// the seat's scooter or chocobo (a per-thread owner; research/RE-p2-rumble-owner-chocobo.md): the scooter move state's slot 1
 // (hit and loop) and slot 8 (the loop's stop), the sky glide's rumble delegate, the jump box's OnEnded, and the drift
 // and brake actions. The last three often run on the anim worker. There the add goes to the seat's list under the game's
 // lock. The drift and brake gates ask whether the chocobo's rider is the player, and the leader test answers yes for
@@ -49,7 +49,7 @@
 // find the seat from their character, chocobo or scooter; the owner's list pointer is swapped to one seat's list at a
 // time. The shared ride's copy goes to each seat with its own force-feedback manager. 1.004's jump box names a thread
 // and that seat's list per landing in flight, one route slot per seat: two chocobos' landings run on
-// different animation workers at once (RE-seats-step6-camera-rumble.md §2), each taking its own slot.
+// different animation workers at once (research/RE-seats-step6-camera-rumble.md), each taking its own slot.
 
 #include "players/seats.h"
 

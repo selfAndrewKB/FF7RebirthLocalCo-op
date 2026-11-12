@@ -491,7 +491,7 @@ std::uint64_t ArrivalOf(const Move& move, const std::byte* self) noexcept
 /// The member's walk step moves on at a trigger (other than its arrival) that a member-only story box of the member's
 /// own sends, and the box is armed: the level expects the walk to carry the member into that box, on the clock of
 /// whatever else runs meanwhile; held by its player, it may come too late and the step stalls. A box's sending state
-/// lists the trigger it sends and its Status names it (RE-member-story-boxes.md §5); world/story_boxes checks the box's
+/// lists the trigger it sends and its Status names it (research/RE-member-story-boxes.md); world/story_boxes checks the box's
 /// group and that it is switched on. 0 when none.
 std::uint64_t OwnBoxAhead(const std::vector<Slot>& slots, const std::byte* self, std::uint64_t selfObject,
                           std::uint64_t arrival, const void* member)

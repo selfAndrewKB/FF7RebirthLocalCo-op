@@ -1,7 +1,6 @@
 #pragma once
 
-// Each seat's player rides a Wheelie (SB scooter) of their own (plan §3, "Wheelie"; RE-p2-wheelie-ride.md §13, §14,
-// option A).
+// Each seat's player rides a Wheelie (SB scooter) of their own (research/RE-p2-wheelie-ride.md, option A).
 //
 // The game boards by walking: the on-foot move state's field-summon step asks the primary controller's scooter
 // coordinator whether the stick points the leader into its marked scooter (the free one nearest the leader), and on
@@ -14,7 +13,7 @@
 // scooter coordinator (the game's creator, the game's dispatch with its SetOn pair), then the coordinator's begin with
 // the seat's member as the rider (TryBeginRide's scripted branch: the game's resolver answers player 1's field leader,
 // read from the party data, which no scope changes) and the game's flush, so the boarding enter (the possession swap,
-// the camera module on the seat's camera) runs inside the seat's scopes with the mount animation kept (§14.0).
+// the camera module on the seat's camera) runs inside the seat's scopes with the mount animation kept.
 //
 // While a seat rides, the scooter's move state is ticked with the game's per-character tick in the seat's scopes,
 // as the field ticker does for the leader's ride body (it never selects a seat's). The seat's own getoff button
@@ -23,7 +22,7 @@
 // game's forced getoffs (fast travel, events, level commands, interactions, the field step) reach the primary
 // controller's ride only: each call is followed by the same call for a seat's coordinator inside the seat's scope
 // (call redirects at the callers). A seat's getoff is made instant only when player 1's leader is more than 50 m from
-// the scooter: the game's rental-return rule would otherwise warp it home during the dismount (§13.2 row 6).
+// the scooter: the game's rental-return rule would otherwise warp it home during the dismount.
 //
 // The mod's parts are the question asked of player 1's coordinator for a seat, the rider passed to the begin, the
 // scooter's tick, and the re-issued getoffs; every call is the game's own. Everything is logged. Game thread only.
@@ -32,7 +31,7 @@
 // seat, index 0 unused); the seat comes from the controller the member's tick hands in, the coordinator the swap back
 // is called for, the mesh owner of a detach notify, or the primary controller at the getoff button. A forced getoff is
 // followed for each riding seat in turn, in seat order. Every seat asks player 1's coordinator the walk-in question
-// about its one marked scooter (the question changes nothing; RE-seats-step6-world-rides.md §2); a scooter one seat
+// about its one marked scooter (the question changes nothing; research/RE-seats-step6-world-rides.md); a scooter one seat
 // is boarding is refused to the others. The install, the slots and call redirects are shared.
 
 #include "input/move_state.h"

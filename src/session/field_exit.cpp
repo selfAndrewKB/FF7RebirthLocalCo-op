@@ -17,7 +17,7 @@ namespace lss::session::field_exit {
 
 namespace {
 
-// Facts read from the database (RE-p2-retry-reload.md §2.1, §2.3, recipe; RE-p2-session-levers.md §4, §5;
+// Facts read from the database (research/RE-p2-retry-reload.md, RE-p2-session-levers.md;
 // this build). Its three callers: the game state's "leave the field" state entry (every retry, reload and
 // load), the jump actor's repeat, and the Blueprint ExitLoation native's tail jump. The entry redirect
 // replaces its first instruction, `mov eax, 28h` (5 bytes, no RIP-relative operand, no branch lands

@@ -79,7 +79,7 @@ void TestTheStockRule()
 }
 
 /// A stand-in for the game's code around the site, with the same instructions and the store at the
-/// same offset in its 16-byte block (0x14111A377 is 7 bytes into the block at 0x14111A370):
+/// same offset in its 16-byte block (the store is 7 bytes into its block):
 ///     nop x8 ; sub rsp, 618h ; cmp rdx, r8 ; setz al ; add al, 1 ;
 ///     mov [rsp+610h], al   <- the redirected instruction, at page+0x17
 ///     movzx eax, byte [rsp+610h] ; add rsp, 618h ; ret
@@ -162,7 +162,7 @@ void TestRedirectRefusesWhatItDoesNotRecognise()
 
 /// Game version 1.005's surroundings (RE-1005-core-facts.md): an rbp frame, r14 = the view whose first field is the
 /// family, rcx live across the store (the game passes it to a call right after), the store `mov [rbp+0E0h], al` one
-/// byte into its 16-byte block (0x14118C6B1 in the block at 0x14118C6B0):
+/// byte into its 16-byte block (as the 1.005 store is):
 ///     push rbp ; push r14 ; sub rsp, 108h ; mov rbp, rsp ; mov r14, r9 ; cmp rdx, r8 ; setz al ; add al, 1 ; nop x9 ;
 ///     mov [rbp+0E0h], al   <- the redirected instruction, at page+0x21
 ///     mov [r14+8], rcx     (hands rcx back, to prove the redirect left it alone)

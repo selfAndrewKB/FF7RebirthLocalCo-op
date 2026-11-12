@@ -1,7 +1,7 @@
 #pragma once
 
 // Opening and closing the Co-op page over the pause main menu, as the game shows and closes its own windows
-// (research/RE-coop-page-menus.md, research/RE-coop-rows-facts.md, research/RE-coop-page-facts.md §5; the page:
+// (research/RE-coop-page-menus.md, research/RE-coop-rows-facts.md, research/RE-coop-page-facts.md; the page:
 // menu/coop_page; the row that opens it: menu/coop_menu).
 //
 // An open runs the game's window opener's prelude (its tutorial and flag), then hides the main menu's first page the
@@ -17,8 +17,7 @@
 // whatever has focus) takes it down the way the page's own no-animation Back does: its focus layer popped, out of the
 // overlay. Each open and close logged at Info. Game thread.
 //
-// Taken from Remake's menu/coop_page_open. Changed: the tutorial's busy states are a set; the page opens with no start
-// category.
+// The opener's tutorial check reads a set of busy states, not one value; the page is opened without a start category.
 
 #include <cstdint>
 #include <string>

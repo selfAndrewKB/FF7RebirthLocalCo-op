@@ -1,5 +1,5 @@
 // Host-side tests for the view columns (views/columns.h): how many columns a frame shows, the mirrors' controller ids,
-// and the engine's list read as columns. Taken from Remake's tests/column_rules_test.cpp (Wanted); the map is Rebirth's.
+// and the engine's list read as columns.
 
 #include "views/columns.h"
 
@@ -69,7 +69,7 @@ void TestMap()
         EXPECT(map.seatAt[1] == kMirror && map.seatAt[2] == kMirror);
     }
     {
-        // Player 3 in with player 2 out (step 6): seat 2 in column 1, the mirror after it.
+        // Player 3 in with player 2 out: seat 2 in column 1, the mirror after it.
         const std::array<std::int32_t, 3> ids{0, 2, kFirstMirrorId};
         const Map map = MapOf(ids);
         EXPECT(map.columnOf[2] == 1 && map.columnOf[1] == -1 && map.seatAt[2] == kMirror && map.mirrors == 1);

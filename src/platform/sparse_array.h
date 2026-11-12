@@ -3,8 +3,8 @@
 // Walks the allocated elements of an Unreal TSparseArray (the element array of a TSet or TMap) by
 // reading memory only.
 //
-// Stock UE4 4.26 layout, x64 (read in the game's own walks, TConstSetBitIterator 0x140831580, and the
-// RE-p2-enemy-markers.md §7.1 / RE-p2-battle-popups.md §1.1 sets):
+// Stock UE4 4.26 layout, x64 (read in the game's own walks, TConstSetBitIterator, and the sets of
+// research/RE-p2-enemy-markers.md and RE-p2-battle-popups.md):
 //   +0x00 Data (element pointer), +0x08 ArrayNum,
 //   +0x10 allocation bits, inline (4 dwords), +0x20 their heap pointer (used when non-null),
 //   +0x28 NumBits.

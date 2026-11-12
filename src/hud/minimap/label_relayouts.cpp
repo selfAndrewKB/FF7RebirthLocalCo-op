@@ -32,7 +32,7 @@ namespace {
 
 namespace generation = players::generation;
 
-// SEndTextBlock (RE-p2-minimap-cost.md §7.1). Tick, slot 1 of vtable 0x1457936F0: writes the allotted size to +0x558;
+// SEndTextBlock (research/RE-p2-minimap-cost.md). Tick, slot 1 of its vtable: writes the allotted size to +0x558;
 // with wrap (+0x408), +0x498 or justification on and that width ≠ +0x560, stores it in +0x560 and sets +0x565; then, if
 // +0x565 is set, clears it and relayouts. The entry bytes run up to its `vmovsd [rcx+558h], xmm0`.
 constexpr std::uint8_t kTickBytes[] = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0xA4, 0xEA, 0x22, 0x01, 0x48, 0x2B,

@@ -36,7 +36,7 @@ namespace lss::hud {
 
 namespace {
 
-// Facts read from the database (RE-p2-hud-second-image.md §1.3, §3.3 and §9; RE-p2-hud.md P2.5).
+// Facts read from the database (research/RE-p2-hud-second-image.md, RE-p2-hud.md).
 // Each function's prologue up to its stack probe call is checked before it is called or redirected.
 
 // SEndRootOverlay__RenderToCompositeLayer(overlay): returns at once while the overlay has no
@@ -66,7 +66,7 @@ constexpr std::uint32_t  kViewUnscaledViewRect = 0x238;  // FIntRect in FSceneVi
 // view's player whatever its place on screen (RE-scene-view-player-index.md). Its column comes from the columns map
 // this frame published (g_viewColumns).
 constexpr std::uint32_t  kViewPlayerIndex      = 0x228;
-// Game version 1.005 (RE-1005-hud-2.md): the call (0x140C1481D there) crosses a 16-byte block on the render thread, so
+// Game version 1.005 (research/RE-1005-hud-2.md): the call crosses a 16-byte block on the render thread, so
 // the function's entry is redirected instead; Render_Main's call is its only caller, so every call is still that one.
 // First instruction `mov [rsp+8],rbx`.
 constexpr std::size_t    kAddCompositePassesFirst = 5;
@@ -88,7 +88,7 @@ constexpr int            kFamilyLogLines     = 6;
 using RenderToCompositeLayerFn = void (*)(void* overlay);
 using AddCompositePassesFn     = void* (*)(void* module, void* builder, const void* views, void* texture, void* context);
 
-constexpr std::uintptr_t kPoolTwo = 2;  // the root overlay's pool (the dl argument at 0x140C960A2 and 0x140C96258)
+constexpr std::uintptr_t kPoolTwo = 2;  // the root overlay's pool (the dl argument of the two consume calls)
 
 // Installed once, then read.
 platform::CallRedirect g_acquireCall;
@@ -416,7 +416,7 @@ double HoldFrame() noexcept
     const double still = 0.0;
     std::memcpy(reinterpret_cast<void*>(g_deltaTime), &still, sizeof(still));
     g_deltaTimeSaved = deltaTime;
-    // The frame number one back for the pass (RE-damage-numbers-per-view.md §5): every battle popup stamps the frame
+    // The frame number one back for the pass (research/RE-damage-numbers-per-view.md): every battle popup stamps the frame
     // it was painted or caught up in, and the overlay's post-paint catch-up advances only the widgets whose stamp is
     // not this frame's. A seat's pass stamping this frame would hide from player 1's catch-up (the real frame time,
     // last) every number player 1 did not paint, which then neither rises nor expires while player 1 looks away. A

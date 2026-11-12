@@ -1,7 +1,7 @@
 #pragma once
 
-// The party-leader test answered for a seat (RE-p2-enemy-target-bias.md §10.3, RE-p2-chocobo-ride.md §7.0 item 2,
-// RE-p2-chocobo-run-refresh.md §4). The game's one test of "is this component the player's character" (the IsUCPC
+// The party-leader test answered for a seat (research/RE-p2-enemy-target-bias.md, RE-p2-chocobo-ride.md,
+// RE-p2-chocobo-run-refresh.md). The game's one test of "is this component the player's character" (the IsUCPC
 // slot, facts::kIsPartyLeader) compares a component's player type with the party leader's; a seat's member is never
 // the leader, so the slot holds this module's test, which answers from five sources, in priority order:
 //   1. one type counts as the player on this thread and every other as not (ExchangeThreadOnly: an enemy's target

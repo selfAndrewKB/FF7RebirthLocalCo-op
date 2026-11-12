@@ -15,7 +15,7 @@
 // destroyed camera actor, which its update reads without a null check, if the removal then failed.
 //
 // The controller's PlayerInput (+0x350) is not an actor but is left behind too, and it keeps the
-// controller alive (RE-p2-controller-after-leave.md, S-PC2LEAK2): APlayerController::Destroyed only
+// controller alive (research/RE-p2-controller-after-leave.md): APlayerController::Destroyed only
 // nulls the field, while the key-map cache of every level script's input component (stock UE4) still
 // names it, and its outer is the controller. Destroy marks it PendingKill, as DestroyActor marks the
 // controller's own components; the collector then nulls the cache entries, the input components drop

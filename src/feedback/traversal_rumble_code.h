@@ -3,7 +3,7 @@
 // The bytes feedback/traversal_rumble_sources.cpp places at the 1.004 jump box's inline list load
 // (PlaceJumpListLoad): after the game's own load, on a thread a jump route named, the rumble list the route named with
 // it (the seat's whose chocobo landed) replaces the leader's. Two routes, one per seat: two chocobos' landings
-// run on different animation workers at once (RE-seats-step6-camera-rumble.md §2), so each landing names its own slot.
+// run on different animation workers at once (research/RE-seats-step6-camera-rumble.md), so each landing names its own slot.
 // Pure data, so it is executed on the host (tests/traversal_rumble_code_test.cpp).
 
 #include <array>

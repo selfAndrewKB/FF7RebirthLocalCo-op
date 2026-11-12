@@ -42,7 +42,7 @@ namespace {
 using RC::Unreal::UObject;
 using Clock = std::chrono::steady_clock;
 
-// The AI controller's brain stack and state (RE-p2-member-handover.md §3; this build).
+// The AI controller's brain stack and state (research/RE-p2-member-handover.md; this build).
 constexpr std::uint32_t kAiDefaultState = 0x340;  // u8, EEndAIState
 // The pause mask: facts::kAiPauseMask, read without the animation budget's every-other-frame bit.
 constexpr std::uint32_t kAiBrains       = 0x478;  // 20 pointers; index 0 is the base brain
@@ -54,7 +54,7 @@ constexpr std::uint32_t kBrainIndex     = 0x19;   // u8; 0 is the base brain
 constexpr std::uint32_t kBrainState     = 0x20;
 constexpr std::uint32_t kStateType      = 0x18;   // u8, EEndAIState
 
-// The states' catch-up fields (§1.2, §1.3).
+// The states' catch-up fields.
 constexpr std::uint32_t kFollowRate      = 0x6D0;  // float
 constexpr std::uint32_t kFollowMode      = 0x39E;  // u8
 constexpr std::uint32_t kLeadTarget      = 0x3B0;  // FWeakObjectPtr
@@ -62,9 +62,9 @@ constexpr std::uint32_t kLeadArrived     = 0x3C1;  // u8: within 8 m of the dest
 constexpr std::uint32_t kLeadDestination = 0x3E8;  // three floats
 
 // The character's movement object (embedded at +0x1400; its flags at +0x1408) and its anim instance, a
-// weak pointer at +0x160 of it (§1.1).
-constexpr platform::PerBuild<std::uint32_t> kCharacterMove = {0x1400, 0x1420};  // 1.005: AIState_ApplyStateParams 0x14123E573 / RevertStateParams, FollowState reset 0x140EB0350 mov rcx,[rsi+1420h]
-constexpr platform::PerBuild<std::uint32_t> kCharacterFlags = {0x1408, 0x1428};  // u8; bit 2 set by LEAD's and FOLLOW's Enter; 1.005: the +0x4B8 interface's vt+0xB8 flag setter 0x140ED3830 reads [rcx+0F70h] (1.004 0x140AEA668 [rcx+0F50h])
+// weak pointer at +0x160 of it.
+constexpr platform::PerBuild<std::uint32_t> kCharacterMove = {0x1400, 0x1420};  // 1.005: AIState_ApplyStateParams / RevertStateParams, the FollowState reset's mov rcx,[rsi+1420h]
+constexpr platform::PerBuild<std::uint32_t> kCharacterFlags = {0x1408, 0x1428};  // u8; bit 2 set by LEAD's and FOLLOW's Enter; the +0x4B8 interface's vt+0xB8 flag setter reads [rcx+0F70h] (1.004 [rcx+0F50h])
 constexpr std::uint32_t kMoveAnimInstance = 0x160;
 
 // UEndCharacterAnimInstance: the root-motion and rotation-rate products and their TMap<u8, float>

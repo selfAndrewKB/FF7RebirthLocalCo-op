@@ -1,7 +1,7 @@
 #pragma once
 
 // The RHI command-list and context layout the family boundary relies on (family_boundary.h;
-// RE-p2-main-menu-crash.md, pass S-CRASH3 §S3.1, §S3.4). Pure logic over the game's memory, with no
+// research/RE-p2-main-menu-crash.md). Pure logic over the game's memory, with no
 // engine or UE4SS dependency, so it is tested on the host (tests/family_boundary_list_test.cpp).
 //
 // FRHICommandListBase (stock 4.26 roles, this build's offsets):
@@ -15,7 +15,7 @@
 //
 // The game appends a node inline in every command (there is no callable "append"); AppendNode is
 // that sequence, written out once, byte for byte as the game's own 16-byte SubmitCommandsHint append
-// (TRDGLambdaPass_SubmitCommandsHint 0x1425138B0): align the cursor to 8, grow the arena through the
+// (TRDGLambdaPass_SubmitCommandsHint): align the cursor to 8, grow the arena through the
 // game's ME_CmdBuf_GrowAlloc when the node does not fit (it is passed the node size + 8, as the game
 // passes it), then advance the cursor, count the command, link the node and fill it.
 
@@ -39,8 +39,8 @@ namespace context {
 inline constexpr std::size_t kIsAsyncCompute = 0x146;  // bIsAsyncComputeContext (byte)
 inline constexpr std::size_t kDevice         = 0x148;  // FD3D12Device*
 // device: the direct contexts' array; [0] is the default.
-// 1.005: FD3D12Device grew; ME_RenderDevice_EndFrame 0x140A4974C reads [device+13D8h] at 0x140A4980A, then
-// [[..]] -> ClearState (1.004 0x140D0126F [rsi+0F70h]); the async array moved 0xFB8 -> 0x1420 likewise.
+// 1.005: FD3D12Device grew; ME_RenderDevice_EndFrame reads [device+13D8h], then [[..]] -> ClearState (1.004
+// [rsi+0F70h]); the async array moved 0xFB8 -> 0x1420 likewise.
 inline constexpr platform::PerBuild<std::size_t> kDeviceDirect = {0xF70, 0x13D8};
 }  // namespace context
 

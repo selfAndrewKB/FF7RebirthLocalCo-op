@@ -40,7 +40,7 @@ namespace {
 
 using namespace synergy_rules;
 
-// RE-p2-synergy-skills.md §6 and its S-SYNVERIFY section, RE-p2-synergy-abilities.md §6 (S-SYNSKILL, S-SYNABIL; every
+// research/RE-p2-synergy-skills.md, RE-p2-synergy-abilities.md (every
 // site read in both exes).
 // S: the three calls of LinkPartner_Start_HandLeaderToAI(link manager, record, partner, initiator, 4 stack args) -> al
 // (LinkMgr_Request's two command branches, LinkPartner_StartForType; its only callers; 1.005: the first crosses a
@@ -82,10 +82,10 @@ constexpr std::uint8_t kClassicBytes[] = {0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8, 0x
                                           0xE0, 0x48, 0x8B, 0x05, 0xDC, 0x89, 0xA3, 0x08, 0x48, 0x8B, 0x88, 0x00};
 constexpr platform::FunctionFact kClassic{L"Option_IsClassicMode_AutoPlayOn_NotHard", 0x140963368, kClassicBytes};
 // G: the give-back LinkMember_End calls, AEndCharacter::SwitchAIControl_Async(member, 1, controller); on the game thread
-// it possesses at once (S-SYNANYTHREAD Q1; also chocobo_ride, wheelie_ride).
+// it possesses at once (also chocobo_ride, wheelie_ride).
 using facts::kSwitchAiControlAsync;
 
-// W: a parry-window skill (S-SYNCOUNTER). LinkPartner_Start's 7th argument is the initiator's BattleAbility handle
+// W: a parry-window skill. LinkPartner_Start's 7th argument is the initiator's BattleAbility handle
 // (this vtable; +8 its row). The row's AnimationSelectType_Array (+0x90 data, +0x98 count; u8 kinds; a data word with
 // its low bit set is an offset from the field) holds kind 26, the window that ends the link when the parry fails, in
 // Counterfire's eight rows only (ChainCounter_PC0000_*). The game asks for such a skill's partner only when the counter
@@ -645,12 +645,12 @@ std::uint8_t RequestLeaderType() noexcept
 // The game runs LinkMember_End on the game thread (the sync start, the record end, the battle teardown) and from a
 // member's own command end, wherever that member's command executor finishes. A mode-2 synergy skill's partner plays
 // its own half and is given back only there, and the executor's finish is written for worker threads
-// (RE-p2-synergy-skills.md S-SYNSTUCK, S-SYNSTUCK2). On the game thread T3 and P answer for a remembered character.
+// (research/RE-p2-synergy-skills.md). On the game thread T3 and P answer for a remembered character.
 // Off it T3 fails for a seat's member and P never names a seat's controller, and the member end is noted: the next
 // tick gives a remembered character back on the game thread with the game's own call, SwitchAIControl_Async(member, 1,
 // its player's controller), after checking that its player still owns it and plays nothing else. The game's own
-// off-thread give-back would queue that possession with raw pointers and check nothing when it runs (S-SYNANYTHREAD
-// Q1), so it could outlive the player's ownership or controller (a leave, a party change in between); the tick's call
+// off-thread give-back would queue that possession with raw pointers and check nothing when it runs, so it
+// could outlive the player's ownership or controller (a leave, a party change in between); the tick's call
 // runs at once and only on what is true then.
 
 /// Any thread: the member end and the record at the member's index, before the member end.
@@ -991,7 +991,7 @@ bool Confirm(const Held& held, Clock::time_point now) noexcept
 
 /// Game thread: follows the link record that names `held` as the partner. True once that record is gone: silently
 /// when its player drives it again; logged when the character is still not given back after kGoneAfter, since nothing
-/// in the game gives it back after that (S-SYNSTUCK causes 2 and 3).
+/// in the game gives it back after that.
 bool WatchRecord(Held& held, Clock::time_point now) noexcept
 {
     session::LinkRecordView record;

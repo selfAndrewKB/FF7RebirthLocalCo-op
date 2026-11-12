@@ -9,7 +9,7 @@
 // instruction that uses it.
 //
 // Research: Rebirth/Documentation/research/RE-p2-viewtarget-movestate-ida.md, RE-p2-camera-movement-ida.md,
-// RE-p2-field-action-row.md, RE-p2-terrain-action-conflict.md §7; the move-state vtable was read live
+// RE-p2-field-action-row.md, RE-p2-terrain-action-conflict.md; the move-state vtable was read live
 // (RE-p2-first-run-ce.md).
 
 #include "platform/verified_code.h"
@@ -88,7 +88,7 @@ inline constexpr SlotFact kMoveStateTickInput{
     L"the base move state's Tick slot (11)", 0x145CE71B0,
     {L"PlayerMoveState::TickInput", 0x1407BCAF0, kMoveStateTickInputBytes}};
 // Slot 16 of both move-state vtables (the input update: slot 11, then the terrain detection) and
-// the leader-action component's tick (the merged stick's history), RE-p2-terrain-action-conflict.md §7.
+// the leader-action component's tick (the merged stick's history), RE-p2-terrain-action-conflict.md.
 inline constexpr std::uint8_t kMoveStateUpdateInputBytes[] = {
     0x48, 0x8B, 0xC4, 0x48, 0x89, 0x58, 0x08, 0x48, 0x89, 0x68, 0x10, 0x48,
     0x89, 0x70, 0x18, 0x48, 0x89, 0x78, 0x20, 0x41, 0x56, 0xB8, 0x30, 0x00};

@@ -1,6 +1,6 @@
 #pragma once
 
-// The party leader answering a seat's member for one engine call (RE-p2-targeting.md §5.2, §5.3).
+// The party leader answering a seat's member for one engine call (research/RE-p2-targeting.md).
 //
 // ResolvePartyLeaderWeakPtr reads the party manager's leader, an FWeakObjectPtr {index, serial} at
 // +0x148. While a LeaderScope lives it holds the seat's member (built and checked with the game's

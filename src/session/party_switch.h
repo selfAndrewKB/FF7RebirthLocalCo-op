@@ -1,8 +1,8 @@
 #pragma once
 
 // No player switches onto a party member another player plays; a player's own switch takes any member no human holds
-// (RE-p2-party-switch.md, pass S-SW1; RE-p2-own-battle-switch.md, pass S-OWNSW; every seat's member since
-// plan/seats.md step 6; the turned rule inside a seat's tick as Remake's battle/party_switch).
+// (research/RE-p2-party-switch.md, RE-p2-own-battle-switch.md; every seat's member; the turned rule inside a seat's
+// tick).
 //
 // The game's battle switch (BattleLeader_CycleSwitch) walks the deployed members from the leader,
 // one step either way with wrap-around, and takes the first that has its battle component and is
@@ -24,7 +24,7 @@
 // (CanSwitch), which a two-player party never passes. So the request's jump into the cycle is redirected: in co-op,
 // for a leader that cannot act, the cycle runs without that gate, as the game's own forced switch runs it; the press
 // is the player's. In a seat's pass the request never asks for the targeted hand-over (Guard held): its executor runs
-// outside every pass and would move player 1 (a written exception; the native route is in the research, §2.3).
+// outside every pass and would move player 1 (a written exception; the native route is in the research).
 // Refusals and requests are logged on change. Game thread only.
 
 namespace lss::platform {

@@ -1,14 +1,13 @@
 #pragma once
 
-// Each seat's player rides their own chocobo (plan §3, "Player 2 rides their own chocobo"; RE-p2-chocobo-ride.md §7,
-// Lever 1).
+// Each seat's player rides their own chocobo (research/RE-p2-chocobo-ride.md).
 //
 // When player 1 mounts, the game mounts the whole party: player 1's chocobo is boarded through player 1's own
 // chocobo coordinator (possessed by player 1's controller, the ride camera module on player 1's camera, the ride
 // state that lets it run and dash); the others' chocobos appear by them, they are seated, and the chocobos follow
 // player 1 under their own AI. The game never boards a member. On the first tick the game has seated a seat's
 // member, this gives the seat's controller its own chocobo coordinator with the game's creator and runs the game's
-// own boarding on it for her, instant (RE-p2-chocobo-ride.md §9, Lever 2): the seat's controller possesses the
+// own boarding on it for her, instant: the seat's controller possesses the
 // chocobo, the chocobo camera module goes on the seat's camera, and the ride status the gait reads is the seat's.
 // Each frame the game's field ticker runs player 1's ride; the seat's chocobo's move state is ticked with the game's
 // own per-character tick inside the seat's scopes (input/member_movement.h; the seat's controller's input pass
@@ -68,7 +67,7 @@ bool RunAsRider(const void* chocobo, void (*call)(void* context), void* context)
 /// From input/move_state's wrapper of the chocobo move state's slot 1 (every chocobo's, run by its own actor tick):
 /// when `state` is the move state of the chocobo a seat's player rides, runs `engine` (the game's slot 1) inside its
 /// primary scope and leader answer, as the game runs the chocobo player 1 rides, so the game's anim sync leaves the
-/// gait, speed and run timer to the seat's input (RE-p2-chocobo-run-refresh.md §4, lever 1). False, calling nothing,
+/// gait, speed and run timer to the seat's input (research/RE-p2-chocobo-run-refresh.md). False, calling nothing,
 /// for any other state or when a scope is refused: the caller runs `engine` as the game would. `returned` gets the
 /// engine's rax. Logged. Game thread.
 bool TickHandles(void* state, float deltaTime, std::uintptr_t (*engine)(void* state, float deltaTime),

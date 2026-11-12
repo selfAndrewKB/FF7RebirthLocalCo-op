@@ -1,7 +1,6 @@
 #pragma once
 
-// Logging only: what becomes of a seat's controller after a leave (RE-p2-controller-after-leave.md, S-PC2LEAK,
-// "Logging step").
+// Logging only: what becomes of a seat's controller after a leave (research/RE-p2-controller-after-leave.md).
 //
 // The leave destroys a seat's controller by the engine's own path (RemoveLocalPlayer, stock UE 4.26), and the garbage
 // collector should then free it; whatever still holds it keeps it alive (the game's force-feedback registry grew by
@@ -15,7 +14,7 @@
 //   C. once the leftover actors are gone and the controller is not: its internal flags (RootSet, ClusterRoot...)
 //      and one walk of the object array listing every live object whose outer chain holds the controller (the
 //      outer reference is the kind the collector never clears), and every input component whose key-map cache still
-//      names the controller's PlayerInput (S-PC2LEAK2: the never-unloaded level scripts' components are the
+//      names the controller's PlayerInput (the never-unloaded level scripts' components are the
 //      expected holders). The walk costs ~20-25 ms, once per leave.
 // Every line is Info: a few per leave.
 

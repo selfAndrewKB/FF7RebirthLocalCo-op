@@ -5,7 +5,7 @@
 // Each camera manager's Field operator holds 8 camera-setting layers (rows of the game's CameraSetting
 // table), blends the active ones into one state (FOV, Distance, Height, AimOffset), scales Distance,
 // Height and FOV by the Camera Distance level (`1 + (level - 1) * k`, k from three EndParam values) and
-// builds the pose from it (RE-p2-framing.md §1-§2); modules then adjust the pose. A line per player is written
+// builds the pose from it (research/RE-p2-framing.md); modules then adjust the pose. A line per player is written
 // when the active rows, the level, the active modules or the pose's aim offset (the shoulder, 5 cm steps) change,
 // at most 4 a second, and every 30 s; the three k values once. Nothing is written to the game.
 // Game thread.

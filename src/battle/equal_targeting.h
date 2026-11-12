@@ -1,6 +1,6 @@
 #pragma once
 
-// Condition enemies favour every player equally (RE-p2-enemy-target-bias.md §5.1, §9, §10).
+// Condition enemies favour every player equally (research/RE-p2-enemy-target-bias.md).
 //
 // The story bosses, summon fights and VR Sephiroth choose targets with the Condition selector, whose lists weight "the
 // UCPC" (the user-controlled player character) 2:1 to 8:2 over the AI members. The game's UCPC is the party leader's
@@ -18,7 +18,7 @@
 // word Tick writes on the game thread; the selects read it on any thread.
 //
 // Not touched: Hate and None enemies (no player term), lock groups, the opening target at battle start, and the
-// other player-1 terms listed in RE §10.11.
+// other player-1 terms listed in the research.
 //
 // The Condition select's vtable slot is replaced here: the wrapper runs the game's select with the answer held for
 // that call, then tells the one observer (battle/target_census, a dev tool) what it answered.

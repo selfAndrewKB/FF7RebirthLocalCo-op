@@ -37,16 +37,16 @@ namespace lss::hud {
 
 namespace {
 
-// UGameEngine__Tick's call to the overlay render (RE-p2-hud.md P8.9; bytes read from the
-// database): E8 rel32 at 0x1410A0156, inside the block at 0x1410A0150. Its target's prologue up
+// UGameEngine__Tick's call to the overlay render (research/RE-p2-hud.md; bytes read from the
+// database): E8 rel32, inside one 16-byte block. Its target's prologue up
 // to the stack probe call is checked before the call is redirected.
 constexpr std::uintptr_t kRenderRootOverlayCall = 0x1410A0156;
 constexpr std::uint8_t   kRenderRootOverlayPrologue[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x57, 0xB8, 0x20, 0x00, 0x00, 0x00};
 constexpr platform::FunctionFact kRenderRootOverlay{L"SlateApp_RenderRootOverlay", 0x141627E98,
                                                     kRenderRootOverlayPrologue};  // void (FSlateApplication*)
 
-// Game version 1.005 (RE-1005-hud-2.md): the call (0x1409F205E there) crosses a 16-byte block, so the target's entry is
-// redirected instead (0x14167E258, first instruction `mov [rsp+8],rbx`, one block); UGameEngine::Tick's call is its only
+// Game version 1.005 (research/RE-1005-hud-2.md): the call crosses a 16-byte block, so the target's entry is
+// redirected instead (first instruction `mov [rsp+8],rbx`, one block); UGameEngine::Tick's call is its only
 // caller, so every call is still that one.
 constexpr std::size_t kRenderRootOverlayFirst = 5;
 

@@ -1,9 +1,9 @@
 #pragma once
 
-// A logging probe on how HUD widgets place themselves from Blueprints (RE-p2-hud.md pass 4): the
+// A logging probe on how HUD widgets place themselves from Blueprints (research/RE-p2-hud.md): the
 // field command menu and its party switcher are children of the HUD overlay, but no native code
 // sets their position, so their Blueprints do. Their only native way in is
-// UUserWidget::execSetPositionInViewport, whose one call to SetPositionInViewport (0x144CED910)
+// UUserWidget::execSetPositionInViewport, whose one call to SetPositionInViewport
 // is redirected here (platform/call_redirect.h) to log, with the probe on, each widget's class,
 // the position and DPI flag it asked for, and its viewport-slot anchors, offsets and alignment.
 // It changes nothing: the call goes through exactly as it came. A dev tool, installed on the first `hud-probe on`
