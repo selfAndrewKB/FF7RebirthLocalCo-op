@@ -573,13 +573,17 @@ void FreshCopy(Pickup& p, void* mgr) noexcept
 
 /// Drops the seat's copy; its rows go the game's way (the field-exit clear) when `clear`, and its marker widgets
 /// through the game's destroy (only those still in the marker list: after a new manager, the old points are gone).
-/// The seat's component's box selection as the pass saw it, logged on change: the start flag, the published state,
-/// the shooting point's key and whether the live list held a point with that key.
+/// The seat's component's box selection as the pass saw it, logged on change: the tick latch, the start flag, the
+/// candidates copied, the published state, the shooting point's key and whether the live list held a point with that
+/// key, and the controller's two fields the start gate wants at or below zero.
 struct Selection
 {
-    std::uint8_t  start = 0, state = 0;
-    std::uint64_t key   = 0;
-    bool          seen  = false;
+    std::uint8_t  latch = 0, start = 0, state = 0;
+    std::int32_t  candidates = 0;
+    std::uint64_t key        = 0;
+    bool          seen       = false;
+    float         delay      = 0.0f;
+    std::int32_t  blocks     = 0;
     bool operator==(const Selection&) const = default;
 };
 std::array<Selection, players::kMaxPlayers> g_selection{};
@@ -749,9 +753,16 @@ void LogSelection(int seat, std::uint64_t key, bool seen) noexcept
     {
         return;
     }
-    const void*     component = LeaderActionsOf(players::generation::ControllerOf(seat));
-    const Selection now{ReadField<std::uint8_t>(component, facts::kLeaderActionStartFlag),
-                        ReadField<std::uint8_t>(component, facts::kLeaderActionShootingState), key, seen && key != 0};
+    const void*     controller = players::generation::ControllerOf(seat);
+    const void*     component  = LeaderActionsOf(controller);
+    const Selection now{ReadField<std::uint8_t>(component, facts::kLeaderActionTickLatch),
+                        ReadField<std::uint8_t>(component, facts::kLeaderActionStartFlag),
+                        ReadField<std::uint8_t>(component, facts::kLeaderActionShootingState),
+                        ReadField<std::int32_t>(component, facts::kLeaderActionCandidates),
+                        key,
+                        seen && key != 0,
+                        ReadField<float>(controller, facts::kControllerActionDelay),
+                        ReadField<std::int32_t>(controller, facts::kControllerActionBlocks)};
     const auto      index = static_cast<std::size_t>(seat);
     if (g_selectionLogged[index] && now == g_selection[index])
     {
@@ -761,9 +772,11 @@ void LogSelection(int seat, std::uint64_t key, bool seen) noexcept
     g_selectionLogged[index] = true;
     try
     {
-        platform::LogDebug(L"field pickup: {}'s box selection: start flag {:#04x}, state {:#04x}, shooting point {}{}",
-                           players::SeatName(seat), now.start, now.state, Name(key),
-                           key == 0 ? L"" : seen ? L" (in the live list: left open)" : L" (NOT in the live list)");
+        platform::LogDebug(L"field pickup: {}'s box selection: tick latch {:#04x}, start flag {:#04x}, {} candidate(s), state "
+                           L"{:#04x}, shooting point {}{}; their controller's delay {:.2f}, blocks {}",
+                           players::SeatName(seat), now.latch, now.start, now.candidates, now.state, Name(key),
+                           key == 0 ? L"" : seen ? L" (in the live list: left open)" : L" (NOT in the live list)", now.delay,
+                           now.blocks);
     }
     catch (...)
     {
