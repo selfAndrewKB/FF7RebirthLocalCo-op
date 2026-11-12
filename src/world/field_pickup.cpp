@@ -4,11 +4,13 @@
 #include "facts/controller.h"
 #include "facts/field_action.h"
 #include "facts/hud.h"
+#include "facts/party.h"
 #include "facts/world.h"
 #include "input/pad_buttons.h"
 #include "input/pad_sticks.h"
 #include "platform/byte_scope.h"
 #include "platform/call_redirect.h"
+#include "platform/entry_install.h"
 #include "platform/entry_redirect.h"
 #include "platform/every.h"
 #include "platform/guarded.h"
@@ -289,6 +291,7 @@ HookObserver            g_observer;     // set before any field exists; read by 
 platform::CallRedirect g_enterCall;
 platform::CallRedirect g_exitCall;
 platform::EntryRedirect g_request;
+platform::EntryRedirect g_throwRequest;  // the field attack's request, logged (a pass-through)
 bool           g_ready       = false;
 
 using Kind = platform::ByteContext::Kind;
@@ -1312,8 +1315,34 @@ struct ThrowGate
     std::uint64_t point    = 0;      // the component's shooting point key
     std::uint64_t target   = 0;      // the seat's slot-0 target held for the tick
     bool          written  = false;  // the game wrote the slot-0 target inside the tick (put back)
+    bool          reset    = false;  // the key records were reset this frame (the character may not start a field action)
     bool operator==(const ThrowGate&) const = default;
 };
+
+/// The field attack's request (the throw gate's call, or the plain attack's), logged per call with the character,
+/// the player and the answer: a pass-through.
+std::uint8_t ThrowRequest(void* ctrl, std::uint8_t hold, std::uint8_t throwFlag) noexcept
+{
+    const auto         original = reinterpret_cast<std::uint8_t (*)(void*, std::uint8_t, std::uint8_t)>(g_throwRequest.Original());
+    const std::uint8_t result   = original(ctrl, hold, throwFlag);
+    if (!platform::Enabled(platform::Level::Debug))
+    {
+        return result;
+    }
+    try
+    {
+        const void* character = players::weak_object::ObjectIn(ReadPointer(ctrl, facts::kCharActionCtrlHolder),
+                                                                 facts::kCharCtrlHolderCharacter);
+        const int   seat      = character != nullptr ? players::generation::SeatOfMember(character) : -1;
+        platform::LogDebug(L"field pickup: the field attack requested on {} ({}; hold {}, throw {}): {}", players::NameOf(character),
+                           players::SeatBuilt(seat) ? players::SeatName(seat) : L"not a seat's member", hold, throwFlag,
+                           result != 0 ? L"requested" : L"REFUSED (a behaviour action runs)");
+    }
+    catch (...)
+    {
+    }
+    return result;
+}
 std::array<ThrowGate, players::kMaxPlayers> g_throwGate{};
 std::array<bool, players::kMaxPlayers>      g_throwGateLogged{};
 std::array<bool, players::kMaxPlayers>      g_keyRecordsLogged{};
@@ -1343,16 +1372,19 @@ void LogThrowGate(int seat, const void* controller, std::uint64_t target, bool w
         }
         const std::uint8_t state = ReadField<std::uint8_t>(component, facts::kLeaderActionShootingState);
         const ThrowGate    now{(state & facts::kShootingStateShown) != 0, (state & facts::kShootingStateCanShoot) != 0,
-                            ShootingKeyOf(controller), target, written};
+                            ShootingKeyOf(controller), target, written,
+                            ReadField<std::int64_t>(component, facts::kLeaderActionThrowPressStamp) == -1};
         if (g_throwGateLogged[index] && now == g_throwGate[index])
         {
             return;
         }
         g_throwGate[index]       = now;
         g_throwGateLogged[index] = true;
-        platform::LogDebug(L"field pickup: {}'s throw gate: a box {}, can shoot {}; their point {} {} their slot-0 target {}{}",
+        platform::LogDebug(L"field pickup: {}'s throw gate: a box {}, can shoot {}; their point {} {} their slot-0 target {}; the "
+                           L"key records {}{}",
                            players::SeatName(seat), now.shown ? L"shown" : L"not shown", players::YesNo(now.canShoot),
                            Name(now.point), now.point != 0 && now.point == now.target ? L"is" : L"is not", Name(now.target),
+                           now.reset ? L"RESET (the character may not start a field action)" : L"kept",
                            written ? L"; the game wrote the target inside the tick (put back)" : L"");
     }
     catch (...)
@@ -1430,6 +1462,10 @@ void Install(const platform::GameImage& image) noexcept
                                    image.EntryInstruction(kRequest.address, kRequest.entryBytes.first(kRequestFirst)),
                                    reinterpret_cast<std::uintptr_t>(&RequestVisibility));
     }
+    // The field attack's request, logged: a pass-through (the throw's live checks).
+    const bool request = platform::InstallAtEntryOrSecond(g_throwRequest, image, facts::kCharActionCtrlBeginFieldAttack,
+                                                          reinterpret_cast<std::uintptr_t>(&ThrowRequest));
+    platform::LogDebug(L"field pickup: the field attack's request {}", request ? L"is logged per call" : L"is NOT watched");
     platform::Log(L"field pickup: {}; the screen test {}; marker widgets {}",
                   g_ready ? L"ready (player 2 or 3 picks up collectibles and materials, opens chests, uses vending machines and shopkeepers "
                             L"through the game's own field prompts, a second pass of its selection and press)"
@@ -1623,9 +1659,9 @@ void Remove() noexcept
 {
     g_ready       = false;  // the pass runs no more
     bool restored = true;
-    for (platform::EntryRedirect* entry : {&g_request, &g_markByKey})
+    for (platform::EntryRedirect* entry : {&g_request, &g_markByKey, &g_throwRequest})
     {
-        restored = entry->Restore() && restored;
+        restored = (!entry->IsInstalled() || entry->Restore()) && restored;
     }
     for (platform::CallRedirect* call : {&g_acquireCall, &g_updateCall, &g_exitCall, &g_enterCall})
     {

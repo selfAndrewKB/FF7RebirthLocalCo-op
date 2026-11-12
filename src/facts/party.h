@@ -100,6 +100,16 @@ inline constexpr std::uint32_t kCharacterPlayerControlled    = 0x625;
 // vt+0x48 the BattlePlayer component (BattlePlayerControllerComp, whose vtable's +0x70 is the leader test above).
 inline constexpr std::uint32_t  kCharacterControlHolder      = 0x638;
 inline constexpr std::uintptr_t kBattlePlayerComponentVTable = 0x145795ED8;
+/// The holder's character (a weak) and the action controller the holder makes on demand (its +8 is the holder). The
+/// field attack's request on that controller: (ctrl, hold, throw) -> 1 requested, 0 refused while the move owner runs
+/// a behaviour action that refuses it; the request switches the character's control state synchronously
+/// (RE-yuffie-box-throw.md).
+inline constexpr std::uint32_t kCharCtrlHolderCharacter = 0x8;
+inline constexpr std::uint32_t kCharActionCtrlHolder    = 0x8;
+inline constexpr std::uint8_t  kCharActionCtrlBeginFieldAttackBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x74,
+                                                                         0x24, 0x10, 0x57, 0xB8, 0x70, 0x00, 0x00, 0x00};
+inline constexpr FunctionFact kCharActionCtrlBeginFieldAttack{L"CharActionCtrl_Vt70_BeginFieldAttack_SetsThrow21", 0x14188E978,
+                                                              kCharActionCtrlBeginFieldAttackBytes};
 // 1.005: EndCharacter tick 0x140E8A44A mov rcx,[rdi+1770h] (1.004 0x14125B20A [rdi+1750h]); GetMoveState
 // 0x141985320.
 inline constexpr platform::PerBuild<std::uint32_t> kCharacterMoveState = {0x1750, 0x1770};

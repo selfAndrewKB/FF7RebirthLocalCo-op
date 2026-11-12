@@ -92,9 +92,10 @@ int                           g_lastScreens    = 0;  // the views as last shown
 unsigned long long            g_gameClosedSeen = 0;  // view_window's count of windows the game closed
 std::uint32_t                 g_opens = 0, g_joinsAsked = 0, g_leavesAsked = 0, g_titlePresses = 0;
 std::array<const void*, kSeats> g_drawnCharacters{};  // by seat: the character its window names (another redraws it)
-bool                          g_titleUp     = false;  // the title screen showed on the last tick
-std::int64_t                  g_noticeUntil = 0;      // the title notice is up until then (0: none)
-hud::view_prompt::Prompt      g_notice;               // ... and says this (shown again after a redraw)
+bool                          g_titleUp      = false;  // the title screen showed on the last tick
+std::int64_t                  g_noticeUntil  = 0;      // the title notice is up until then (0: none)
+hud::view_prompt::Prompt      g_notice;                // ... and says this (shown again after a redraw)
+bool                          g_noticeWindow = false;  // ... in the game's message window (else the prompt)
 
 std::int64_t NowMs() noexcept
 {
@@ -187,7 +188,10 @@ void ShowWindows()
         const SeatNote& note = g_notes[static_cast<std::size_t>(seat)];
         if (!Plays(seat) || (!g_open[static_cast<std::size_t>(seat)] && note.note == text::Note::None))
         {
-            hud::view_window::Close(seat);
+            if (seat != 0 || g_noticeUntil == 0)
+            {
+                hud::view_window::Close(seat);  // player 1's window carries the notice while it is up
+            }
             continue;
         }
         if (CharacterOf(seat) == nullptr)
@@ -322,13 +326,31 @@ void HoldLeave(int seat, int user)
     }
 }
 
-/// A notice in player 1's view (the title screen's: no window of the game's can show there) for `ms`.
+/// The notice as it stands, drawn in player 1's view: the game's own message window where it can be shown, else the
+/// engine-font prompt (the title screen draws no HUD prompt).
+void DrawNotice()
+{
+    std::wstring markup;
+    for (const std::wstring& line : g_notice.lines)
+    {
+        markup += line.empty() ? L"" : (markup.empty() ? L"" : L"\r\n") + line;
+    }
+    g_noticeWindow = hud::view_window::Show(0, markup);
+    if (!g_noticeWindow)
+    {
+        hud::view_prompt::Show(0, g_notice);
+    }
+}
+
+/// A notice in player 1's view (the title screen's) for `ms`.
 void ShowNotice(const std::array<std::wstring, text::kLines>& lines, std::int64_t ms)
 {
     g_notice.lines     = lines;
     g_notice.highlight = 0;
     g_noticeUntil      = NowMs() + ms;
-    hud::view_prompt::Show(0, g_notice);
+    DrawNotice();
+    platform::Log(L"player window: the notice \"{}\" is up for {} s in {}", lines[1], ms / 1000,
+                  g_noticeWindow ? L"the game's message window" : L"the engine-font prompt");
 }
 
 void ClearNotice()
@@ -336,7 +358,12 @@ void ClearNotice()
     if (g_noticeUntil != 0)
     {
         g_noticeUntil = 0;
-        g_redraw      = true;  // the redraw rebuilds every prompt without it
+        if (g_noticeWindow)
+        {
+            hud::view_window::Close(0);
+            g_noticeWindow = false;
+        }
+        g_redraw = true;  // the redraw rebuilds every prompt without it
     }
 }
 
@@ -521,6 +548,7 @@ void Remove() noexcept
     g_waiting        = {};
     g_bSeen          = {};
     g_noticeUntil    = 0;
+    g_noticeWindow   = false;
     g_titleUp        = false;
     g_installed      = false;
 }
@@ -681,17 +709,18 @@ try
         ShowWindows();
         if (g_noticeUntil != 0)
         {
-            hud::view_prompt::Show(0, g_notice);  // the redraw cleared every prompt; the notice is still due
+            DrawNotice();  // the redraw cleared every prompt and may have taken player 1's window; the notice is still due
         }
     }
 }
 catch (...)
 {
     platform::Log(L"player window: an exception; every window closes");
-    g_open        = {};
-    g_notes       = {};
-    g_noticeUntil = 0;
-    g_titleUp     = false;
+    g_open         = {};
+    g_notes        = {};
+    g_noticeUntil  = 0;
+    g_noticeWindow = false;
+    g_titleUp      = false;
     hud::view_window::CloseAll();
     hud::view_prompt::ClearAll();
     input::pad_table::SetIdleUsers(0, L"the player windows' exception");

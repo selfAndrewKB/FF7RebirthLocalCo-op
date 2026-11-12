@@ -69,6 +69,9 @@ inline constexpr std::uint32_t kLeaderActionOwner = 0xA0;
 /// its box. The throw fires when that key is the field-action manager's slot-0 target.
 inline constexpr std::uint32_t kLeaderActionKeyRecords    = 0x370;
 inline constexpr std::uint32_t kLeaderActionKeyRecordSize = 64;
+/// Key record 0's press stamp (i64, the component's millisecond clock at the press; -1 while the character may not
+/// start a field action: the records are reset every frame then). The throw fires on a stamp of this frame.
+inline constexpr std::uint32_t kLeaderActionThrowPressStamp = 0x390;
 inline constexpr std::uint32_t kLeaderActionStartFlag     = 0x1E8;  // u8: bit 0 the selection starts this frame, bit 1 it consumed the start, bit 2 a target found, bit 6 Yuffie
 inline constexpr std::uint32_t kLeaderActionCandidates    = 0x1F8;  // i32: the shooting targets copied for the selection
 inline constexpr std::uint32_t kLeaderActionShootingState = 0x4E0;

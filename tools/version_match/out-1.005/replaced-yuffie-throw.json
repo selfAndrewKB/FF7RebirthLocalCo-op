@@ -1,0 +1,17 @@
+{
+  "build": "1.005",
+  "research_build": "1.004",
+  "date": "2026-11-12",
+  "doc": "Rebirth/Documentation/research/RE-yuffie-box-throw.md (section 8.8, both databases)",
+  "facts": [
+    {
+      "name": "CharActionCtrl_Vt70_BeginFieldAttack_SetsThrow21(ctrl, hold, throw)",
+      "old": "0x14188E978",
+      "new": "0x14150F718",
+      "bytes": "48895c2408488974241057b870000000",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "The field attack's request from the leader-action component's throw gate: refused (0) while the move owner runs a behaviour action that says so, else the request built and the state switched synchronously (1). Entry %16=8 in both builds, the first instruction five bytes."
+    }
+  ]
+}
