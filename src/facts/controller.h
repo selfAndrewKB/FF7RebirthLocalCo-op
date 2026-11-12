@@ -63,6 +63,16 @@ inline constexpr SlotFact kProcessPlayerInput{
 // The leader-action component (EndPlayerLeaderActionParamComponent)
 /// The leader-action component's owning controller (0x14125C16C reads comp+0xA0 as the PC).
 inline constexpr std::uint32_t kLeaderActionOwner = 0xA0;
+/// Its ranged selection (RE-p2-ranged-reticle.md, RE-yuffie-box-throw.md; the same in both builds [CONFIRMED]): five
+/// key records of 64 bytes (the key's name first; record 0 the throw's key, record 1 the hold's), the published state
+/// (bit 1 a box shown, bit 7 can shoot) and the shooting point's key, the key of the point the component adds for
+/// its box. The throw fires when that key is the field-action manager's slot-0 target.
+inline constexpr std::uint32_t kLeaderActionKeyRecords    = 0x370;
+inline constexpr std::uint32_t kLeaderActionKeyRecordSize = 64;
+inline constexpr std::uint32_t kLeaderActionShootingState = 0x4E0;
+inline constexpr std::uint32_t kLeaderActionShootingKey   = 0x514;
+inline constexpr std::uint8_t  kShootingStateShown        = 0x02;
+inline constexpr std::uint8_t  kShootingStateCanShoot     = 0x80;
 inline constexpr std::uint8_t kLeaderActionTickBytes[] = {
     0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x7C, 0x24, 0x10, 0x55, 0x48,
     0x8D, 0x6C, 0x24, 0xA9, 0xB8, 0xB0, 0x00, 0x00, 0x00, 0xE8, 0xAA, 0x2D};

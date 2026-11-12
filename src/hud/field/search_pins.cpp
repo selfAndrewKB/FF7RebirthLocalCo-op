@@ -1,5 +1,6 @@
 #include "hud/field/search_pins.h"
 
+#include "facts/controller.h"
 #include "facts/hud.h"
 #include "hud/hud_roots.h"
 #include "hud/hud_rules.h"
@@ -36,16 +37,16 @@ constexpr std::uint32_t  kPinEntry    = 40;
 constexpr std::uint32_t  kPinWidget   = 0x00;
 constexpr std::uint32_t  kPinLocation = 0x08;
 constexpr std::uint32_t  kPinHook     = 0x18;
-// The leader-action component (PC+0x598) and its interact points (the same offsets in 1.005): +0x1490
+// The leader-action component (facts/controller.h) and its interact points (the same offsets in 1.005): +0x1490
 // data, +0x1498 count, 624-byte points, the point's pin (weak) at +0x1C; +0x14A0 "a point is active" (the byte its
-// update compares before opening or closing the compass); +0x4E0 the ranged selection's published state (logged).
-constexpr std::uint32_t kLeaderActions = 0x598;
+// update compares before opening or closing the compass); the ranged selection's published state (logged).
+constexpr std::uint32_t kLeaderActions = facts::kControllerLeaderActions;
 constexpr std::uint32_t kPoints        = 0x1490;
 constexpr std::uint32_t kPointCount    = 0x1498;
 constexpr std::uint32_t kPointSize     = 624;
 constexpr std::uint32_t kPointPin      = 0x1C;
 constexpr std::uint32_t kAnyActive     = 0x14A0;
-constexpr std::uint32_t kShooting      = 0x4E0;
+constexpr std::uint32_t kShooting      = facts::kLeaderActionShootingState;
 constexpr std::size_t   kMaxPoints     = 32;
 constexpr std::size_t   kMaxHidden     = 64;
 

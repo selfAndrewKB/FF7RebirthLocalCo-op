@@ -17,6 +17,7 @@
 #include "platform/sparse_array.h"
 #include "platform/tset_find.h"
 #include "platform/verified_code.h"
+#include "players/describe.h"
 #include "players/first_player_scope.h"
 #include "players/generation.h"
 #include "players/object_fields.h"
@@ -142,6 +143,7 @@ constexpr MapShape      kChestMap{0x10, 0x70, 0x60};
 // TreasurePointMgr's second map, CharaPop key -> treasure key (24-byte elements; the spawn handler's own lookup).
 constexpr MapShape      kChestByPopKeyMap{0x60, 0x18, 0x10};
 constexpr std::uint32_t kRootChests      = 0x298;  // TreasurePointMgr (not TreasureManager +0x280, the opened state)
+constexpr std::uint32_t kRootFieldAction = 0x1A0;  // the live FieldActionMgr (the update call's argument)
 constexpr int           kHashChecks     = 2000;  // lookups also checked against a walk of the map, then trusted
 
 // The game's functions, each checked by its first bytes.
@@ -319,8 +321,8 @@ struct Doomed
 // The status line's counts since the last line, per seat.
 struct Counts
 {
-    std::uint32_t passes = 0, polled = 0, filtered = 0, worldItems = 0, chests = 0, vending = 0, shopkeepers = 0, executed = 0,
-                  fieldResets = 0;
+    std::uint32_t passes = 0, polled = 0, filtered = 0, worldItems = 0, chests = 0, vending = 0, shopkeepers = 0, boxes = 0,
+                  executed = 0, fieldResets = 0;
     std::uint32_t requests = 0, requestsSeatFirst = 0;  // visibility requests in the pass; those with the seat first
     std::uint32_t markersMade = 0, markersGone = 0, markersDestroyed = 0;  // the seat's made; gone by the game; the mod's
     std::array<std::uint32_t, kSkipCount> skips{};
@@ -714,9 +716,18 @@ void DestroySeatMarkers(Pickup& p, Why why) noexcept
     DestroyDoomed();
 }
 
+/// The key of the shooting point `controller`'s leader-action component holds (the breakable box Yuffie's throw
+/// selects), or 0.
+std::uint64_t ShootingKeyOf(const void* controller) noexcept
+{
+    const void* component = ReadPointer(controller, facts::kControllerLeaderActions);
+    return ReadField<std::uint64_t>(component, facts::kLeaderActionShootingKey);
+}
+
 /// Before the calls: each point's target bits and marker widget become the seat's (on every live point: the far-marker
-/// sweep walks them all). With `filter`, every point that is neither a WorldItem nor a chest gets the disabled
-/// bit (only where it is clear). Player 1's are kept for After. The seat's widgets whose point left since are doomed.
+/// sweep walks them all). With `filter`, every point that is neither a WorldItem, a chest, a vending machine, a
+/// shopkeeper nor the seat's own box gets the disabled bit (only where it is clear). Player 1's are kept for After. The
+/// seat's widgets whose point left since are doomed.
 void Before(Pickup& p, void* mgr, const std::uint8_t* items, const std::uint8_t* chests, bool filter) noexcept
 {
     g_saved.clear();
@@ -724,6 +735,7 @@ void Before(Pickup& p, void* mgr, const std::uint8_t* items, const std::uint8_t*
     {
         marker.placed = false;
     }
+    const std::uint64_t boxKey = filter ? ShootingKeyOf(players::generation::ControllerOf(p.seat)) : 0;
     {
         const SharedLock lock(mgr);
         const auto*      node = PointerAt(mgr, kFieldActionPointList);
@@ -738,7 +750,9 @@ void Before(Pickup& p, void* mgr, const std::uint8_t* items, const std::uint8_t*
             const bool     machine    = filter && !worldItem && !chest &&
                                         vending::Admits(ReadField<std::uint64_t>(point, kFieldActionPointPreset));
             const bool     keeper     = filter && !worldItem && !chest && !machine && shop_talk::Admits(key);
-            const bool     disable    = filter && !worldItem && !chest && !machine && !keeper && (flags & kDisabledBit) == 0;
+            const bool     box        = filter && boxKey != 0 && key == boxKey && !worldItem && !chest && !machine && !keeper;
+            const bool     disable    = filter && !worldItem && !chest && !machine && !keeper && !box &&
+                                        (flags & kDisabledBit) == 0;
             std::uintptr_t oneMarker  = 0;
             std::uintptr_t seatMarker = 0;
             if (g_destroy != nullptr)
@@ -758,6 +772,7 @@ void Before(Pickup& p, void* mgr, const std::uint8_t* items, const std::uint8_t*
             p.counts.chests += chest ? 1 : 0;
             p.counts.vending += machine ? 1 : 0;
             p.counts.shopkeepers += keeper ? 1 : 0;
+            p.counts.boxes += box ? 1 : 0;
             p.counts.filtered += disable ? 1 : 0;
             flags = static_cast<std::uint8_t>((flags & ~kTargetBits) | (carried != p.bits.end() ? carried->second : 0) |
                                               (disable ? kDisabledBit : 0));
@@ -1043,7 +1058,7 @@ void LogStatus() noexcept
         {
             platform::LogDebug(L"field pickup (60 s): {} pass(es) (poll open in {}), {} pickup(s) by {}, {} field reset(s) "
                           L"of {}'s copy; {} visibility request(s), {} with {} as the first local player; per "
-                          L"pass on average {} WorldItem point(s), {} chest point(s), {} vending machine(s) and {} shopkeeper(s) left open, {} other point(s) disabled for the pass; "
+                          L"pass on average {} WorldItem point(s), {} chest point(s), {} vending machine(s), {} shopkeeper(s) and {} own box point(s) left open, {} other point(s) disabled for the pass; "
                           L"skipped: scopes {}, member {}; WorldItem and chest lookups by {} ({} checked, {} mismatch(es)); {}'s "
                           L"marker widgets: {} now, {} made and {} destroyed by the game's own code, {} by the mod's call of "
                           L"its destroy; player 1's point markers now {}",
@@ -1052,6 +1067,7 @@ void LogStatus() noexcept
                           c.passes != 0 ? c.chests / c.passes : 0,
                           c.passes != 0 ? c.vending / c.passes : 0,
                           c.passes != 0 ? c.shopkeepers / c.passes : 0,
+                          c.passes != 0 ? c.boxes / c.passes : 0,
                           c.passes != 0 ? c.filtered / c.passes : 0, c.skips[kSkipScopes],
                           c.skips[kSkipMember], g_hashTrusted ? L"the map's hash" : L"a walk of the map", g_hashChecked,
                           g_hashMismatches, who, p.markers.size(), c.markersMade, c.markersGone,
@@ -1219,6 +1235,62 @@ void FieldExit(void* mgr) noexcept
     AfterFieldReset(mgr, g_fieldExit, seen);
 }
 
+/// The throw's gate as a seat's member tick left it, logged on change; the component's key records' names once.
+struct ThrowGate
+{
+    bool          shown    = false;  // a box is shown to the seat's player
+    bool          canShoot = false;
+    std::uint64_t point    = 0;      // the component's shooting point key
+    std::uint64_t target   = 0;      // the seat's slot-0 target held for the tick
+    bool          written  = false;  // the game wrote the slot-0 target inside the tick (put back)
+    bool operator==(const ThrowGate&) const = default;
+};
+std::array<ThrowGate, players::kMaxPlayers> g_throwGate{};
+std::array<bool, players::kMaxPlayers>      g_throwGateLogged{};
+std::array<bool, players::kMaxPlayers>      g_keyRecordsLogged{};
+
+void LogThrowGate(int seat, const void* controller, std::uint64_t target, bool written) noexcept
+{
+    if (!platform::Enabled(platform::Level::Debug))
+    {
+        return;
+    }
+    const auto  index     = static_cast<std::size_t>(seat);
+    const void* component = ReadPointer(controller, facts::kControllerLeaderActions);
+    if (component == nullptr)
+    {
+        return;
+    }
+    try
+    {
+        if (!g_keyRecordsLogged[index])
+        {
+            g_keyRecordsLogged[index] = true;
+            const auto record = [component](std::uint32_t i) {
+                return Name(ReadField<std::uint64_t>(component, facts::kLeaderActionKeyRecords + facts::kLeaderActionKeyRecordSize * i));
+            };
+            platform::LogDebug(L"field pickup: {}'s leader-action key records: 0 {} (the throw's), 1 {} (the hold's)",
+                               players::SeatName(seat), record(0), record(1));
+        }
+        const std::uint8_t state = ReadField<std::uint8_t>(component, facts::kLeaderActionShootingState);
+        const ThrowGate    now{(state & facts::kShootingStateShown) != 0, (state & facts::kShootingStateCanShoot) != 0,
+                            ShootingKeyOf(controller), target, written};
+        if (g_throwGateLogged[index] && now == g_throwGate[index])
+        {
+            return;
+        }
+        g_throwGate[index]       = now;
+        g_throwGateLogged[index] = true;
+        platform::LogDebug(L"field pickup: {}'s throw gate: a box {}, can shoot {}; their point {} {} their slot-0 target {}{}",
+                           players::SeatName(seat), now.shown ? L"shown" : L"not shown", players::YesNo(now.canShoot),
+                           Name(now.point), now.point != 0 && now.point == now.target ? L"is" : L"is not", Name(now.target),
+                           written ? L"; the game wrote the target inside the tick (put back)" : L"");
+    }
+    catch (...)
+    {
+    }
+}
+
 }  // namespace
 
 void Install(const platform::GameImage& image) noexcept
@@ -1376,6 +1448,38 @@ void RowWeaks(int seat, Weaks& out) noexcept
 bool InPass() noexcept
 {
     return g_passSeat >= 0;
+}
+
+SlotTargetHold::SlotTargetHold(int seat, const void* controller) noexcept : seat_(seat), controller_(controller)
+{
+    if (!players::generation::OnGameThread() || !players::SeatBuilt(seat) || g_passSeat >= 0 ||
+        ShootingKeyOf(controller) == 0)  // no box selected: no throw to gate, the live target left alone
+    {
+        return;
+    }
+    Pickup& p = PickupOf(seat);
+    if (p.copyOf == nullptr || p.broken || p.copyOf != PointerAt(Root(), kRootFieldAction))  // the copy's manager is gone
+    {
+        return;
+    }
+    target_ = TakeFromCopy<std::uint64_t>(p, kFieldActionSlotTargets);
+    const platform::ByteContext::Range range[] = {
+        {reinterpret_cast<std::uintptr_t>(static_cast<std::byte*>(p.copyOf) + kFieldActionSlotTargets), sizeof(target_),
+         Kind::Hold}};
+    if (!context_.Define(range))
+    {
+        return;
+    }
+    std::memcpy(context_.Value(0).data(), &target_, sizeof(target_));
+    held_ = context_.Open();
+}
+
+SlotTargetHold::~SlotTargetHold()
+{
+    if (held_)
+    {
+        LogThrowGate(seat_, controller_, target_, context_.Close() != 0);
+    }
 }
 
 int PassSeat() noexcept

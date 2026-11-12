@@ -13,12 +13,15 @@
 //     and of each point's carried target bits (+0x104 bits 1 and 2), kept by point key;
 //   - with the game's own "point disabled" bit (+0x104 bit 4, which the candidate query skips) set on every
 //     point that is neither one of WorldItemMgr's items, one of TreasurePointMgr's chests (the chest listener's
-//     own test), a vending machine (its point preset rpaVendingMachine; world/vending) nor a shopkeeper
-//     (the game's data names a shop action for its key; world/shop_talk), and cleared again after: the seat's player
-//     is offered collectibles, materials, chests, vending machines and shopkeepers; talk, doors, scripts and menus
-//     stay player 1's. A chest or machine the seat's player uses runs the game's own state (treasure, field action) on
-//     the seat's member (the listener asks for the leader, which the scope makes the seat's); a shopkeeper's press
-//     fires the NPC's own state trigger;
+//     own test), a vending machine (its point preset rpaVendingMachine; world/vending), a shopkeeper (the game's
+//     data names a shop action for its key; world/shop_talk) nor the seat's own box point (the point the seat's
+//     leader-action component adds for the breakable box Yuffie's throw selects, by the key that component holds;
+//     research/RE-yuffie-box-throw.md), and cleared again after: the seat's player is offered collectibles,
+//     materials, chests, vending machines, shopkeepers and their own box; talk, doors, scripts and menus stay player
+//     1's. A chest or machine the seat's player uses runs the game's own state (treasure, field action) on the seat's
+//     member (the listener asks for the leader, which the scope makes the seat's); a shopkeeper's press fires the
+//     NPC's own state trigger; the box gets the seat's own marker and prompt row from the game's code, and its key
+//     becomes the seat's slot-0 target, which the throw's gate in the member tick compares with (SlotTargetHold);
 //   - the input step's FieldAction part in the game's order (its gate, the slot poll into the mod's own
 //     buffers, the latch, the press/execute tick), then the selection update;
 //   - with the seat's controller first in the world's controller list for each visibility request the pass
@@ -47,6 +50,7 @@
 // controller (never by its position). Shared: the scratch of a pass, player 1's markers as the last pass left them
 // and the doomed widgets.
 
+#include "platform/byte_scope.h"
 #include "players/seats.h"
 
 #include <array>
@@ -109,5 +113,28 @@ int TakeMarked(std::uint64_t key) noexcept;
 /// player 1's, a seat (1..) that seat's, -1 neither (another owner's marker, or no seat has a copy). For
 /// hud/field_markers, which shows each half only its own player's.
 int MarkerOwner(const void* widget) noexcept;
+
+/// The seat's slot-0 target (its copy's) in the live manager for the length of a call, player 1's back after (a Hold
+/// range of platform/byte_scope.h): the member tick, where the seat's leader-action component compares its shooting
+/// point's key with the manager's slot-0 target before Yuffie's throw fires. Opens only while the component holds a
+/// shooting point (a box selected), the seat has a copy of the live manager and no pass runs. At its end, the throw's
+/// gate as the tick left it (the box shown, can shoot, the point's key against the held target, a write of the game's
+/// put back) at Debug on change, and the component's key records' names once per seat. `controller` is the seat's.
+/// Game thread.
+class SlotTargetHold
+{
+public:
+    SlotTargetHold(int seat, const void* controller) noexcept;
+    ~SlotTargetHold();
+    SlotTargetHold(const SlotTargetHold&)            = delete;
+    SlotTargetHold& operator=(const SlotTargetHold&) = delete;
+
+private:
+    platform::ByteStore<1, sizeof(std::uint64_t)> context_;
+    int                                           seat_       = 0;
+    const void*                                   controller_ = nullptr;
+    std::uint64_t                                 target_     = 0;  // the seat's slot-0 target held
+    bool                                          held_       = false;
+};
 
 }  // namespace lss::world::field_pickup

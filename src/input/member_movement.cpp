@@ -30,6 +30,7 @@
 #include "scopes/scope_leaks.h"
 #include "scopes/seat_ladder.h"
 #include "session/party_member.h"
+#include "world/field_pickup.h"
 
 #include <array>
 #include <cstddef>
@@ -159,6 +160,9 @@ void TickInScopes(int seat, void* controller, void* member, void* state, int typ
     const scopes::leader_answer::Scope       leader(type);
     const move_state::OwnTick        own;
     const scopes::scope_leaks::MemberTickScope leaks(state, controller, deltaTime);
+    // The seat's own slot-0 target in the field-action manager: the throw's gate in this tick compares the seat's
+    // box with it (world/field_pickup.h).
+    const world::field_pickup::SlotTargetHold slotTarget(seat, controller);
     counters.Act();
     // Before the tick, inside every scope (the seat's camera manager is the primary one here):
     camera::camera_override::Tick(seat, member);   // the member's animation camera overrides reach the seat's camera
