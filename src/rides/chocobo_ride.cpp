@@ -753,6 +753,16 @@ bool RunAsRider(const void* chocobo, void (*call)(void* context), void* context)
     return seat >= 1 && input::member_movement::InPrimaryScope(seat, g_seats[seat].ride.member, call, context);
 }
 
+bool RunAsRiderWithButtons(const void* chocobo, void (*call)(void* context), void* context) noexcept
+{
+    if (!players::generation::OnGameThread() || chocobo == nullptr)
+    {
+        return false;
+    }
+    const int seat = SeatRiding(chocobo);
+    return seat >= 1 && input::member_movement::InPrimaryScopeWithButtons(seat, g_seats[seat].ride.member, call, context);
+}
+
 bool TickHandles(void* state, float deltaTime, std::uintptr_t (*engine)(void* state, float deltaTime),
                  std::uintptr_t& returned) noexcept
 {

@@ -239,6 +239,8 @@ src/
     console_access          The game's console through UKismetSystemLibrary's reflected functions: a console variable's
                             value, a variable set, a command run
     describe                Short descriptions of engine objects for log lines
+    first_player_scope.h    A seat's controller first in the world's player controller list for one call, so "the first
+                            local player" the game asks for is the seat's; player 1's order put back after
     generation              The seats' players, as every wrapper sees them: one generation per seat (players/seats.h)
     held_setting            A game setting held at the mod's value for a while, then put back: the console settings
                             two-player rendering needs (split_screen_settings.h), the two-player layout (split_layout.h)
@@ -491,6 +493,8 @@ src/
     widget_owner            Each seat's widgets tick in their owner's view (research/RE-p2-party-list-views.md)
   traversal/                climbing, vaulting and the rest of traversal
     chocobo_climb           A seat's player climbs chocobo walls with their own chocobo
+    chocobo_spots           A seat's chocobo launches from the launch pads, jumps the jump boxes and takes the sliders
+                            with its own rider
     traversal_camera        The seats' traversal cameras (research/RE-p2-traversal-L3-ladder-camera.md,
                             RE-p2-traversal-cameras.md)
     traversal_collision     Logging only (Debug): every player's traversal camera's collision, frame by frame while a
@@ -559,6 +563,8 @@ src/
                             world_actor_reach, seat_switch_volumes, camera_repair, party_warp, traversal_camera,
                             camera_distance, shoulder_scale), tested on the host
   rides/                    chocobos, the wheelie and the shared rides
+    chocobo_exits           A seat's chocobo leaves its glide or water jet in the seat's scope, whoever ends it
+                            (research/RE-chocobo-exits-pads.md)
     chocobo_ride            Each seat's player rides their own chocobo (research/RE-p2-chocobo-ride.md)
     own_ride                The lease layer the two own rides share (rides/chocobo_ride.h, rides/wheelie_ride.h): a
                             seat's controller holds a vehicle through the seat's own coordinator, the member is her AI's
@@ -659,6 +665,8 @@ src/
                             base in a split half)
     field/field_markers     Each view shows only its own player's field markers: the field-action point markers and the
                             scooter coordinators' auto-ride icons
+    field/jet_gauges        The chocobo's water-jet gauge in each view: a seat's chocobo's gauge placed from the seat's
+                            view and shown there only (research/RE-chocobo-exits-pads.md)
     field/marker_timers     Each view's own linger timer for the off-screen enemy arrows (OutOfScreenTarget_C;
                             research/RE-p2-enemy-markers.md)
     field/prompt_rows       The field prompt rows (FieldAction_Command_C): each player sees their own, in their own view
@@ -731,7 +739,7 @@ src/
                             hud/passes/column_hud_images.h), then the game's …
     passes/pass_opacity     Widgets taken out of one overlay pass's image: the other players' prompt rows
                             (hud/field/prompt_rows.h), point markers (hud/field/field_markers.h), search pins
-                            (hud/field/search_pins.h), target marks (hud/battle/target_views.h), …
+                            (hud/field/search_pins.h), chocobo jet gauges …
     passes/root_overlay_render
                             The moment just before the HUD overlay renders, each frame
     passes/seat_hud_content Each seat's content in its HUD image: around the seat's overlay pass

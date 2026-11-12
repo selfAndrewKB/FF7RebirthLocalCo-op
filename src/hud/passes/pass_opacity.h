@@ -1,8 +1,9 @@
 #pragma once
 
 // Widgets taken out of one overlay pass's image: the other players' prompt rows (hud/field/prompt_rows.h), point
-// markers (hud/field/field_markers.h), search pins (hud/field/search_pins.h), target marks (hud/battle/target_views.h),
-// command menu (battle/command_menu_view.h) and windows (hud/view_window.h) are made transparent through the game's
+// markers (hud/field/field_markers.h), search pins (hud/field/search_pins.h), chocobo jet gauges (hud/field/jet_gauges.h),
+// target marks (hud/battle/target_views.h), command menu (battle/command_menu_view.h) and windows (hud/view_window.h)
+// are made transparent through the game's
 // own setter (players/widget_opacity.h) and given their own opacity back after the pass. Not Hidden: a UMG widget is
 // ticked only while it is painted, and a seat's pass runs with DeltaTime 0, so a row hidden in player 1's pass would
 // never advance its timers (seen in play). Each module keeps what it hid in a HiddenSet and decides whose each widget is;

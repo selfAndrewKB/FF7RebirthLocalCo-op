@@ -261,6 +261,14 @@ inline constexpr FunctionFact   kWindowsWindowGetOSWindowHandle{L"FWindowsWindow
 
 // UObject
 inline constexpr std::uint32_t kObjectInternalIndex = 0x0C;  // UObjectBase::InternalIndex: its GUObjectArray slot
+inline constexpr std::uint32_t kObjectOuter         = 0x20;  // UObjectBase::OuterPrivate (an actor's level, a level's world)
+// UActorComponent
+inline constexpr std::uint32_t kActorComponentOwner = 0xA0;  // UActorComponent::OwnerPrivate
+// UWorld
+/// PlayerControllerList, a TArray of weak controllers (the data, then the count): its first entry whose player is
+/// local is "the first local player" (UWorld::GetFirstLocalPlayerFromControllers), player 1's (RE-p2-hud.md).
+inline constexpr std::uint32_t kWorldPlayerControllers     = 0x1F0;
+inline constexpr std::uint32_t kWorldPlayerControllerCount = 0x1F8;
 // AActor
 inline constexpr std::uint32_t kActorOwner     = 0xE8;   // AActor::SetOwner stores it
 inline constexpr std::uint32_t kActorTagsData  = 0x178;  // Tags.GetData()

@@ -138,7 +138,10 @@ add_library(LocalSplitScreen SHARED
     src/world/charapop_centre.cpp
     src/world/world_actor_reach.cpp
     src/rides/chocobo_ride.cpp
+    src/rides/chocobo_exits.cpp
     src/traversal/chocobo_climb.cpp
+    src/traversal/chocobo_spots.cpp
+    src/hud/field/jet_gauges.cpp
     src/rides/shared_ride.cpp
     src/rides/wheelie_ride.cpp
     src/hud/minimap/minimap.cpp

@@ -1,0 +1,143 @@
+{
+  "build": "1.005",
+  "research_build": "1.004",
+  "date": "2026-11-12",
+  "doc": "Rebirth/Documentation/research/RE-chocobo-exits-pads.md (sections 2 and 3; both databases read by the CHOCOEXITS pass; slots and bytes in research/.ida-mcp/chocobo-exits/1005_sites_and_bytes.asm.txt; the entry bytes read from both exes)",
+  "facts": [
+    {
+      "name": "vt_AEndFieldActionChocoboJumpBoxActor",
+      "old": "0x1466F6400",
+      "new": "0x146583E50",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Found by the callers of FieldActionActor_RegisterWithCharacterPC618 and the register's data xref (vtable +0x738); the slots sit +8 from 1.004."
+    },
+    {
+      "name": "vt_AEndFieldActionChocoboSliderActor",
+      "old": "0x1466F5950",
+      "new": "0x146582748",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "The same way; the slider's register (0x143397064) computes the direction byte +0x768 from the leader in both builds."
+    },
+    {
+      "name": "ChocoboJumpStandActor_OnTriggerEnd_Unregister (1.004 vt+0x738, 1.005 vt+0x740)",
+      "old": "0x143661B94",
+      "new": "0x143397324",
+      "bytes": "4889 5c24 08 57 b8 20 00 00 00",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Unregisters the stored weak +0x734 from the character's controller list and clears it; size 0x70 both builds."
+    },
+    {
+      "name": "ChocoboJumpBoxActor_OnTriggerEnd_Unregister (1.004 vt+0x738, 1.005 vt+0x740)",
+      "old": "0x143661B18",
+      "new": "0x1433972A8",
+      "bytes": "4889 5c24 08 57 b8 20 00 00 00",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Unregisters the stored weak +0x7A0, clears it and the combo frame +0x7A8; size 0x7b both builds."
+    },
+    {
+      "name": "ChocoboSliderActor_OnTriggerEnd_Unregister (1.004 vt+0x738, 1.005 vt+0x740)",
+      "old": "0x143661C04",
+      "new": "0x143397394",
+      "bytes": "4889 5c24 08 57 b8 20 00 00 00",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Unregisters the stored weak +0x760 and clears it; size 0x70 both builds."
+    },
+    {
+      "name": "slot: launch pad try-begin (1.004 vt+0x740, 1.005 vt+0x748)",
+      "old": "0x1466F5508",
+      "new": "0x146583C38",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Holds ChocoboJumpStandActor_TryLaunchGlide (1.004 0x1436663C0, 1.005 0x14339BAD0: replaced-chocobo-traversal.json) in both exes."
+    },
+    {
+      "name": "slot: jump box try-begin (1.004 vt+0x740, 1.005 vt+0x748)",
+      "old": "0x1466F6B40",
+      "new": "0x146584598",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Holds ChocoboJumpBoxActor_TryBegin (below) in both exes."
+    },
+    {
+      "name": "ChocoboJumpBoxActor_TryBegin",
+      "old": "0x143665FE8",
+      "new": "0x14339B6F8",
+      "bytes": "488bc4488958084889701048897818",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "(actor, dt xmm1, pawn r8): enabled, a chocobo, CanStartFieldAction_Ex, PrimaryPCMode_Vt2A8ForActor == 2, then the combo window or grounded + idle + distance + facing; requests state 8. Size 0x3d5 both builds."
+    },
+    {
+      "name": "slot: slider try-begin (1.004 vt+0x740, 1.005 vt+0x748)",
+      "old": "0x1466F6090",
+      "new": "0x146582E90",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Holds ChocoboSliderActor_TryBegin (below) in both exes."
+    },
+    {
+      "name": "ChocoboSliderActor_TryBegin",
+      "old": "0x14366664C",
+      "new": "0x14339BD5C",
+      "bytes": "48895c2410 48897c2420 55",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "(actor, dt xmm1, pawn r8): the same gates, grounded, idle, speed and the spline's heading; requests state 8. Size 0x493 both builds."
+    },
+    {
+      "name": "slot: jump box per-frame update (1.004 vt+0x748, 1.005 vt+0x750)",
+      "old": "0x1466F6B48",
+      "new": "0x1465845A0",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Holds ChocoboJumpBoxActor_Update_ComboJumpFrame (below) in both exes."
+    },
+    {
+      "name": "ChocoboJumpBoxActor_Update_ComboJumpFrame",
+      "old": "0x143662B60",
+      "new": "0x1433981B4",
+      "bytes": "48895c2408 48896c2410 48897424 18 57",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "(actor, context; the pawn at context+8): when the pawn is the stored leader or its ride body (through the primary controller's coordinator) and its executer belongs to another jump box, the combo frame +0x7A8 = GFrameCounter. Size 0xaf both builds."
+    },
+    {
+      "name": "slot: UEndChocoboJetGaugeComponent BeginPlay (1.004 vt+0x350, 1.005 vt+0x358)",
+      "old": "0x1467ED6D0",
+      "new": "0x146679650",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Holds ChocoboJetGaugeComp_BeginPlay_CreatesWidget (below) in both exes; the component vtable is 0x1467ED380 / 0x1466792F8."
+    },
+    {
+      "name": "ChocoboJetGaugeComp_BeginPlay_CreatesWidget",
+      "old": "0x143DB7EC0",
+      "new": "0x143B274A8",
+      "bytes": "4053b820000000e8",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "(component): creates the gauge widget on the root overlay (ChocoboJetGauge_CreateWidget_RootOverlay, replaced-chocobo-traversal.json). Size 0x38 both builds."
+    },
+    {
+      "name": "ChocoboJetGaugeComp_PlaceWidget_FirstLocalPlayerView",
+      "old": "0x143DCE570",
+      "new": "0x143B3D8B8",
+      "bytes": "4053b850000000e8",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "(component): when the widget exists and the gauge shows, the owner's socket position projected through UWorld's first local player, SetPositionInViewport, the show/hide animations and the fill. Called by the component's tick each frame; stateless beyond the cached position. Same shape in both builds (the 1.005 exe's bytes: 40 53 B8 50 00 00 00 E8 BC E2 62 FE 48 2B E0 48 83 B9 C0 00 00 00 00 48)."
+    }
+  ]
+}

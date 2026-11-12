@@ -65,6 +65,10 @@ std::uint8_t WithoutChocoboAnswer(std::uint8_t (*test)(const void* character), c
 /// runs the game's ride swap there). False, calling nothing, when the scope could not be held. Game thread.
 bool InPrimaryScope(int seat, const void* member, void (*call)(void* context), void* context) noexcept;
 
+/// The same with the seat's pad's buttons too, for a game call that also reads the merged pads' held keys (a chocobo
+/// launch pad's Accel). False, calling nothing, when a scope could not be held. Game thread.
+bool InPrimaryScopeWithButtons(int seat, const void* member, void (*call)(void* context), void* context) noexcept;
+
 /// Removes the rows of a seat's ridden chocobo's own prompt handles with the game's handle clear (as the chocobo
 /// state's own deactivate does), at the end of the seat's ride. Game thread.
 void ClearRideRows(void* chocoboState) noexcept;

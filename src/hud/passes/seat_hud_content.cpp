@@ -8,6 +8,7 @@
 #include "facts/hud.h"
 #include "hud/battle/enemy_gauges.h"
 #include "hud/battle/popups.h"
+#include "hud/field/jet_gauges.h"
 #include "hud/field/marker_timers.h"
 #include "hud/field/search_pins.h"
 #include "hud/field/wrangle_targets.h"
@@ -650,6 +651,10 @@ bool EnterSeatLevers(int column, int seat, bool copy) noexcept
                 }
             }
             wrangle_targets::Place(seat);
+        }
+        if (!copy)
+        {
+            jet_gauges::Place(seat);  // the seat's chocobo's jet gauge from the seat's view (hud/field/jet_gauges.h)
         }
         Charge(kTicksSeat, start);
         if (!runs)

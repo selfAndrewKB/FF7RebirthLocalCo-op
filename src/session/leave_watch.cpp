@@ -26,7 +26,7 @@ constexpr std::uint32_t kObjectFlags   = 0x08;  // UObject::ObjectFlags
 using facts::kObjectInternalIndex;
 constexpr std::uint32_t kObjectClass   = 0x10;
 constexpr std::uint32_t kObjectName    = 0x18;  // FName (8 bytes)
-constexpr std::uint32_t kObjectOuter   = 0x20;
+using facts::kObjectOuter;
 constexpr std::uint32_t kItemFlags     = 0x08;  // FUObjectItem: internal flags, ClusterRootIndex, SerialNumber
 constexpr std::uint32_t kItemCluster   = 0x0C;
 constexpr std::uint32_t kItemSerial    = 0x10;

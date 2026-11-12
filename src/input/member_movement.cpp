@@ -281,21 +281,39 @@ std::uint8_t WithoutChocoboAnswer(std::uint8_t (*test)(const void* character), c
     return test(character);
 }
 
-bool InPrimaryScope(int seat, const void* member, void (*call)(void* context), void* context) noexcept
+namespace {
+
+/// Runs `call` inside the seat's ladder parts `which` (Primary among them) and the member's leader answer, or not at
+/// all.
+bool InSeatScopes(int seat, unsigned which, const void* member, void (*call)(void* context), void* context) noexcept
 {
     const int type = MemberType(member);
     if (!players::generation::OnGameThread() || type == kNoType)
     {
         return false;
     }
-    const scopes::primary_controller::Scope primary(seat);
-    if (!primary.Held())
+    seat_ladder::Args args;
+    args.seat = seat;
+    const seat_ladder::SeatScopes scopes(which, args);
+    if (!scopes.Held())
     {
         return false;
     }
     const scopes::leader_answer::Scope leader(type);
     call(context);
     return true;
+}
+
+}  // namespace
+
+bool InPrimaryScope(int seat, const void* member, void (*call)(void* context), void* context) noexcept
+{
+    return InSeatScopes(seat, seat_ladder::Primary, member, call, context);
+}
+
+bool InPrimaryScopeWithButtons(int seat, const void* member, void (*call)(void* context), void* context) noexcept
+{
+    return InSeatScopes(seat, seat_ladder::Primary | seat_ladder::Buttons, member, call, context);
 }
 
 void ClearRideRows(void* chocoboState) noexcept

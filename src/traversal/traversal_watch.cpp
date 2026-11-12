@@ -85,29 +85,6 @@ using ExecFn      = std::uintptr_t (*)(void* executer);
 using ExecInputFn = std::uintptr_t (*)(void* executer, float dt);
 constexpr std::uint32_t kExecCharacter = 0x10;
 
-// The chocobo's glide (state 26) and water-jet (state 27) control states: enter +0x18 (state, param), exit +0x20
-// (state). State +0x8: the chocobo (FWeakObjectPtr). research/RE-p2-chocobo-traversal.md.
-constexpr std::uint8_t kGlideEnterBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x74,
-                                             0x24, 0x10, 0x48, 0x89, 0x7C, 0x24, 0x20, 0x55};
-constexpr std::uint8_t kGlideExitBytes[]  = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x48, 0x89, 0x74,
-                                             0x24, 0x18, 0x48, 0x89, 0x7C, 0x24, 0x20, 0x41};
-constexpr std::uint8_t kJetEnterBytes[]   = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x48, 0x89, 0x74,
-                                             0x24, 0x18, 0x55, 0x57, 0x41, 0x57, 0x48, 0x8D};
-constexpr std::uint8_t kJetExitBytes[]    = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x48, 0x89, 0x74,
-                                             0x24, 0x18, 0x57, 0x41, 0x56, 0x41, 0x57, 0xB8};
-constexpr platform::SlotFact kGlideEnterSlot{L"the chocobo glide state's enter slot (+0x18)", 0x145795408,
-                                             {L"CharCtrlStateChocoboGlide_OnEnter_Vt18", 0x143427234, kGlideEnterBytes}};
-constexpr platform::SlotFact kGlideExitSlot{L"the chocobo glide state's exit slot (+0x20)", 0x145795410,
-                                            {L"CharCtrlStateChocoboGlide_OnExit_Vt20", 0x14342810C, kGlideExitBytes}};
-constexpr platform::SlotFact kJetEnterSlot{L"the chocobo jet state's enter slot (+0x18)", 0x1457C5958,
-                                           {L"CharCtrlStateChocoboJet_OnEnter_Vt18", 0x143432B04, kJetEnterBytes}};
-constexpr platform::SlotFact kJetExitSlot{L"the chocobo jet state's exit slot (+0x20)", 0x1457C5960,
-                                          {L"CharCtrlStateChocoboJet_OnExit_Vt20", 0x143433BE4, kJetExitBytes}};
-using StateEnterFn = std::uintptr_t (*)(void* state, void* param);
-using StateExitFn  = std::uintptr_t (*)(void* state);
-constexpr std::uint32_t kStateCharacter = 0x8;
-
-
 constexpr std::uint32_t kControllerActorList = 0x618;  // TArray<FWeakObjectPtr>: data, then the count at +0x8
 constexpr std::uint32_t kActorEnteredFlag    = 0x2A1;  // u8, one per actor (not per player)
 constexpr std::uint32_t kContextCharacter    = 0x8;
@@ -181,7 +158,6 @@ struct TrackerPasses
 platform::EntryRedirect            g_enter, g_leave;
 platform::CallRedirect             g_notifyCall;
 platform::VTableEntry              g_ladderNotify, g_execStart, g_execEnd, g_execInput;
-platform::VTableEntry              g_glideEnter, g_glideExit, g_jetEnter, g_jetExit;
 std::optional<platform::GameImage> g_image;
 std::uintptr_t                     g_ladderVt = 0, g_doorVt = 0, g_climbVt = 0, g_jumpPadVt = 0;
 
@@ -453,22 +429,6 @@ const wchar_t* ScopeText() noexcept
                      : players::BySeat(seat, L"in player 2's primary scope", L"in player 3's primary scope");
 }
 
-/// Which player's camera manager GetEndPlayerCameraManager() would give now: the primary controller's. Game thread.
-const wchar_t* PrimaryCameraText() noexcept
-{
-    if (!players::generation::OnGameThread())
-    {
-        return L"? (off the game thread)";
-    }
-    const void* primary = scopes::primary_controller::Current();
-    if (primary == players::generation::PlayerOneController())
-    {
-        return L"player 1's";
-    }
-    const int seat = players::generation::SeatOfController(primary);
-    return players::SeatIndex(seat) ? players::BySeat(seat, L"player 2's", L"player 3's") : L"another controller's";
-}
-
 bool Watching() noexcept
 {
     return players::generation::AnyActive() && players::generation::OnGameThread();
@@ -699,52 +659,6 @@ std::uintptr_t ExecInput(void* executer, float dt) noexcept
     return traversal_camera::LadderInput(reinterpret_cast<ExecInputFn>(g_execInput.Original()), executer, dt);
 }
 
-// --- the chocobo's glide and jet states ---
-
-void LogState(const wchar_t* state, const wchar_t* step, void* object) noexcept
-{
-    if (!players::generation::AnyActive())
-    {
-        return;
-    }
-    try
-    {
-        const std::wstring chocobo =
-            players::generation::OnGameThread()
-                ? Whom(scopes::leader_scope::ObjectAt(static_cast<const std::byte*>(object) + kStateCharacter))
-                : std::wstring(L"? (off the game thread)");
-        platform::LogDebug(L"traversal: the {} state {} for {} ({}; the primary camera is {})", state, step, chocobo,
-                           ScopeText(), PrimaryCameraText());
-    }
-    catch (...)
-    {
-    }
-}
-
-std::uintptr_t GlideEnter(void* state, void* param) noexcept
-{
-    LogState(L"glide", L"enters", state);
-    return reinterpret_cast<StateEnterFn>(g_glideEnter.Original())(state, param);
-}
-
-std::uintptr_t GlideExit(void* state) noexcept
-{
-    LogState(L"glide", L"exits", state);
-    return reinterpret_cast<StateExitFn>(g_glideExit.Original())(state);
-}
-
-std::uintptr_t JetEnter(void* state, void* param) noexcept
-{
-    LogState(L"water-jet", L"enters", state);
-    return reinterpret_cast<StateEnterFn>(g_jetEnter.Original())(state, param);
-}
-
-std::uintptr_t JetExit(void* state) noexcept
-{
-    LogState(L"water-jet", L"exits", state);
-    return reinterpret_cast<StateExitFn>(g_jetExit.Original())(state);
-}
-
 bool Entry(const platform::GameImage& image, platform::EntryRedirect& redirect, const platform::FunctionFact& fact,
            std::uintptr_t replacement) noexcept
 {
@@ -785,29 +699,23 @@ void Install(const platform::GameImage& image) noexcept
     const bool climb  = Slot(image, kExecStartSlot, reinterpret_cast<std::uintptr_t>(&ExecStart), g_execStart) &
                        Slot(image, kExecEndSlot, reinterpret_cast<std::uintptr_t>(&ExecEnd), g_execEnd) &
                        Slot(image, kExecInputSlot, reinterpret_cast<std::uintptr_t>(&ExecInput), g_execInput);
-    const bool glide = Slot(image, kGlideEnterSlot, reinterpret_cast<std::uintptr_t>(&GlideEnter), g_glideEnter) &
-                       Slot(image, kGlideExitSlot, reinterpret_cast<std::uintptr_t>(&GlideExit), g_glideExit);
-    const bool jet   = Slot(image, kJetEnterSlot, reinterpret_cast<std::uintptr_t>(&JetEnter), g_jetEnter) &
-                     Slot(image, kJetExitSlot, reinterpret_cast<std::uintptr_t>(&JetExit), g_jetExit);
     const auto resolveSite  = image.Rebase(kTriggerResolveCall, 5);
     const auto weakGet      = platform::FindFunction(image, facts::kWeakObjectGet);
     const bool resolve      = resolveSite && weakGet &&
                          g_resolveCall.Install(*resolveSite, *weakGet, reinterpret_cast<std::uintptr_t>(&TriggerResolve));
     platform::Log(L"traversal watch (logging only, Debug): trigger enters {}, leaves {}; notify passes {}; ladder offers {}; "
-                  L"ladder climbs {}; chocobo glide {}, water jet {}; the field tick's trigger key {} (its tracker passes come "
-                  L"from the triggers module); "
+                  L"ladder climbs {}; the field tick's trigger key {} (its tracker passes come from the triggers module); "
                   L"every player's controller's list and trigger tracker on change; actor names: ladder {}, door {}, chocobo "
                   L"climb {}, launch pad {}",
-                  Outcome(enter), Outcome(leave), Outcome(notify), Outcome(ladder), Outcome(climb), Outcome(glide),
-                  Outcome(jet), Outcome(resolve), g_ladderVt != 0 ? L"yes" : L"no",
-                  g_doorVt != 0 ? L"yes" : L"no", g_climbVt != 0 ? L"yes" : L"no", g_jumpPadVt != 0 ? L"yes" : L"no");
+                  Outcome(enter), Outcome(leave), Outcome(notify), Outcome(ladder), Outcome(climb), Outcome(resolve),
+                  g_ladderVt != 0 ? L"yes" : L"no", g_doorVt != 0 ? L"yes" : L"no", g_climbVt != 0 ? L"yes" : L"no",
+                  g_jumpPadVt != 0 ? L"yes" : L"no");
 }
 
 void Remove() noexcept
 {
     const bool entries = g_enter.Restore() & g_leave.Restore() & g_notifyCall.Restore() & g_resolveCall.Restore();
-    const bool slots   = g_ladderNotify.Restore() & g_execStart.Restore() & g_execEnd.Restore() & g_execInput.Restore() &
-                       g_glideEnter.Restore() & g_glideExit.Restore() & g_jetEnter.Restore() & g_jetExit.Restore();
+    const bool slots   = g_ladderNotify.Restore() & g_execStart.Restore() & g_execEnd.Restore() & g_execInput.Restore();
     if (!entries || !slots)
     {
         platform::Log(L"traversal watch: a hook was changed after us and left in place (it passes through)");

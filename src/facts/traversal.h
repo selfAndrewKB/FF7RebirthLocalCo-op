@@ -2,12 +2,13 @@
 
 // The field-action actors (End2FieldActionActorBase and its classes, the traversal: ladders, squeezes, crawls, pole
 // slides, lifting ropes, one-shot moves, climbing walls, monkey bars, spider walls, zip lines, beams, wall runs, doors,
-// the chocobo climb and jump pad): their native vtables (data; Blueprint subclasses keep them) and the trigger enter
-// and leave every one of them shares.
+// the chocobo climb, launch pad, jump box and slider): their native vtables (data; Blueprint subclasses keep them), the
+// trigger enter and leave every one of them shares, and the chocobo spots' unregisters.
 //
-// Research: Rebirth/Documentation/research/RE-p2-traversal.md, RE-p2-traversal-cameras.md, RE-p2-chocobo-climb.md;
-// 1.005 through replaced-traversal.json, replaced-traversal-classes.json, replaced-chocobo-traversal.json
-// (every slot and entry read from both exes, tools/version_match/_traversal_check.py).
+// Research: Rebirth/Documentation/research/RE-p2-traversal.md, RE-p2-traversal-cameras.md, RE-p2-chocobo-climb.md,
+// RE-chocobo-exits-pads.md; 1.005 through replaced-traversal.json, replaced-traversal-classes.json,
+// replaced-chocobo-traversal.json, replaced-chocobo-spots.json (every slot and entry read from both exes,
+// tools/version_match/_traversal_check.py).
 
 #include "platform/verified_code.h"
 
@@ -32,6 +33,14 @@ inline constexpr std::uintptr_t kWallRunVTable        = 0x146707D88;
 inline constexpr std::uintptr_t kDoorVTable           = 0x1459434F0;
 inline constexpr std::uintptr_t kChocoboClimbVTable   = 0x1466F6F58;
 inline constexpr std::uintptr_t kChocoboJumpPadVTable = 0x1466F4DC8;
+inline constexpr std::uintptr_t kChocoboJumpBoxVTable = 0x1466F6400;
+inline constexpr std::uintptr_t kChocoboSliderVTable  = 0x1466F5950;
+
+/// The chocobo spots' unregister overrides (the slot after the register's; RE-chocobo-exits-pads.md), each clearing
+/// the character the register stored: the launch pad's at +0x734, the jump box's at +0x7A0, the slider's at +0x760.
+inline constexpr std::uintptr_t kChocoboJumpPadUnregister = 0x143661B94;
+inline constexpr std::uintptr_t kChocoboJumpBoxUnregister = 0x143661B18;
+inline constexpr std::uintptr_t kChocoboSliderUnregister  = 0x143661C04;
 
 /// End2FieldActionActor OnTriggerEnter / OnTriggerLeave (actor vt+0x710 / +0x718; 1.005 +0x718 / +0x720), shared by every
 /// field-action actor: (actor, const FName* key, AActor* other), `other` being the overlapping actor whose first tag is

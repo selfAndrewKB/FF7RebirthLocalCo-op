@@ -17,6 +17,7 @@
 #include "platform/sparse_array.h"
 #include "platform/tset_find.h"
 #include "platform/verified_code.h"
+#include "players/first_player_scope.h"
 #include "players/generation.h"
 #include "players/object_fields.h"
 #include "players/seats.h"
@@ -204,12 +205,6 @@ constexpr std::uintptr_t kAcquire         = 0x140C07A3C;  // (wim, entry); the c
 using facts::kFieldActionEntryKeyBack;
 using MarkByKeyFn = std::uint8_t (*)(void* items, std::uint64_t key);
 using AcquireFn   = void (*)(void* items, void* entry);
-// UObjectBase's outer, and UWorld's PlayerControllerList at +0x1F0 (RE-p2-hud.md, GetFirstPlayerController reads
-// [0] there): TArray<TWeakObjectPtr<APlayerController>> (8-byte entries). Its order with three players is unsettled
-// [ASSUMPTION: player 1's, then the seats' in join order].
-constexpr std::uint32_t  kObjectOuter      = 0x20;
-constexpr std::uint32_t  kWorldControllers = 0x1F0;
-constexpr std::uint32_t  kWorldControllerCount = 0x1F8;
 // The marker list: EndUISystem+0x98 points to a TSparseArray of 140-byte elements, the marker's weak widget
 // at +0x00. The game's destroy, the call RemovePointByKey makes: it finds the element by the widget, releases
 // its parts, pools the Slate widget and removes the element, at once. Entry: push rbx; mov eax,20h; call (stack probe).
@@ -460,105 +455,7 @@ private:
     PSRWLOCK lock_;
 };
 
-/// The seat's controller first in the world's player controller list for one call, so "the first local player" the
-/// game asks for is the seat's; player 1's order put back after. The seat's entry is found by its controller, never by
-/// its position. Opens only when the list's first entry resolves to player 1's controller and a later one to the seat's
-/// (two Set ranges of platform/byte_scope.h, entry 0 and the seat's entry, each holding the other's), and restores only
-/// if the list is still where it was and names them swapped (a list the engine moved or changed in between is left
-/// alone). A join appends to the list and a leave closes it up in order, so a seat's place depends on who joined and
-/// left before it (player 1 always first); the call's one reader takes the first local player's entry and never looks
-/// further (research/RE-seats-step6-world-rides.md). Game thread.
-class FirstPlayerScope
-{
-public:
-    explicit FirstPlayerScope(int seat) noexcept
-    {
-        using Range = platform::ByteContext::Range;
-        void*         one        = players::generation::PlayerOneController();
-        void*         controller = players::generation::ControllerOf(seat);
-        auto*         entries    = Entries(controller);
-        const auto    at         = entries != nullptr ? EntryOf(controller, entries) : 0;
-        std::uint64_t first = 0, mine = 0;
-        if (one == nullptr || entries == nullptr || at <= 0 || scopes::leader_scope::ObjectAt(entries) != one ||
-            !platform::CopyGuarded(&first, entries, sizeof(first)) ||
-            !platform::CopyGuarded(&mine, entries + 8 * at, sizeof(mine)))
-        {
-            return;
-        }
-        const Range swapped[] = {{reinterpret_cast<std::uintptr_t>(entries), sizeof(mine), Kind::Set},
-                                 {reinterpret_cast<std::uintptr_t>(entries + 8 * at), sizeof(first), Kind::Set}};
-        if (!context_.Define(swapped))
-        {
-            return;
-        }
-        std::memcpy(context_.Value(0).data(), &mine, sizeof(mine));
-        std::memcpy(context_.Value(1).data(), &first, sizeof(first));
-        one_        = one;
-        controller_ = controller;
-        at_         = at;
-        held_       = context_.Open();
-    }
-    ~FirstPlayerScope()
-    {
-        if (!held_)
-        {
-            return;
-        }
-        // The list as it is now (the call may have changed it): put back only if it is the same list and still
-        // names them swapped; else forgotten (nothing of the old order written anywhere).
-        auto* entries = Entries(controller_);
-        if (reinterpret_cast<std::uintptr_t>(entries) == context_.RangeAt(0).live &&
-            scopes::leader_scope::ObjectAt(entries) == controller_ && scopes::leader_scope::ObjectAt(entries + 8 * at_) == one_)
-        {
-            context_.Close();
-        }
-        else
-        {
-            context_.Forget();
-        }
-    }
-    FirstPlayerScope(const FirstPlayerScope&)            = delete;
-    FirstPlayerScope& operator=(const FirstPlayerScope&) = delete;
-
-    bool Held() const noexcept { return held_; }
-
-private:
-    /// The most entries searched for a seat's controller (a bound on a list read from the game; it holds the player
-    /// controllers, RE-p2-hud.md [ASSUMPTION that nothing else is in it]).
-    static constexpr std::int32_t kMaxSearched = 16;
-
-    /// The world's controller list entries (controller -> level -> world), or null when it has fewer than two.
-    static std::uint8_t* Entries(const void* controller) noexcept
-    {
-        const auto* world = PointerAt(PointerAt(controller, kObjectOuter), kObjectOuter);
-        if (controller == nullptr || world == nullptr || ReadField<std::int32_t>(world, kWorldControllerCount) < 2)
-        {
-            return nullptr;
-        }
-        return const_cast<std::uint8_t*>(PointerAt(world, kWorldControllers));
-    }
-
-    /// The index of `controller`'s entry in the list (1.., never 0: that one must be player 1's), or 0 if not found.
-    static std::int32_t EntryOf(const void* controller, const std::uint8_t* entries) noexcept
-    {
-        const auto* world = PointerAt(PointerAt(controller, kObjectOuter), kObjectOuter);
-        const auto  count = std::min(ReadField<std::int32_t>(world, kWorldControllerCount), kMaxSearched);
-        for (std::int32_t i = 1; i < count; ++i)
-        {
-            if (scopes::leader_scope::ObjectAt(entries + 8 * i) == controller)
-            {
-                return i;
-            }
-        }
-        return 0;
-    }
-
-    platform::ByteStore<2, 2 * sizeof(std::uint64_t)> context_;
-    void*                                             one_        = nullptr;
-    void*                                             controller_ = nullptr;
-    std::int32_t                                      at_         = 0;  // the seat's entry
-    bool                                              held_       = false;
-};
+using players::FirstPlayerScope;  // the seat's controller first in the world's list, for the request's screen test
 
 /// The game's visibility request; inside a seat's pass its screen test sees that seat's view.
 std::uint64_t RequestVisibility(void* system, void* record) noexcept

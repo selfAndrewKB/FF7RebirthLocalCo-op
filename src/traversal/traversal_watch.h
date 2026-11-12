@@ -13,11 +13,9 @@
 //   - every player's controller's list, on change;
 //   - each player character's notify pass (its controller, how many actors it walks), on change;
 //   - the ladder's per-frame offer (Ladder vt+0x748) per character, on change;
-//   - a ladder climb's start and end, and whether its input update ran in a seat's scope;
-//   - the chocobo's glide and water-jet state enter and exit: the chocobo, the thread, whether a seat's scope is
-//     open, and the camera manager the primary controller resolves to (the exit hazard of
-//     RE-p2-chocobo-traversal.md).
-// Every hook passes the game's call through unchanged. Events at Debug, per-frame lines at Trace.
+//   - a ladder climb's start and end, and whether its input update ran in a seat's scope.
+// The chocobo's glide and water-jet states are rides/chocobo_exits'. Every hook passes the game's call through
+// unchanged. Events at Debug, per-frame lines at Trace.
 
 #include "platform/image.h"
 
@@ -25,8 +23,8 @@
 
 namespace lss::traversal::traversal_watch {
 
-/// Hooks the trigger enter/leave, the notify pass's call, the ladder and its executer slots, and the glide and jet
-/// state slots (checked bytes; each outcome logged).
+/// Hooks the trigger enter/leave, the notify pass's call, the ladder and its executer slots (checked bytes; each
+/// outcome logged).
 void Install(const platform::GameImage& image) noexcept;
 
 /// Puts every hook back.

@@ -36,6 +36,7 @@
 #include "hud/battle/target_views.h"
 #include "hud/field/action_icon_base.h"
 #include "hud/field/field_markers.h"
+#include "hud/field/jet_gauges.h"
 #include "hud/field/prompt_rows.h"
 #include "hud/field/search_pins.h"
 #include "hud/field/wrangle_targets.h"
@@ -71,6 +72,7 @@
 #include "renderer/family_boundary.h"
 #include "renderer/me_feedback_once.h"
 #include "renderer/submit_hints.h"
+#include "rides/chocobo_exits.h"
 #include "rides/chocobo_ride.h"
 #include "rides/shared_ride.h"
 #include "rides/wheelie_ride.h"
@@ -82,6 +84,7 @@
 #include "session/party_switch.h"
 #include "session/session.h"
 #include "traversal/chocobo_climb.h"
+#include "traversal/chocobo_spots.h"
 #include "traversal/traversal_camera.h"
 #include "traversal/traversal_watch.h"
 #include "views/column_layout.h"
@@ -217,7 +220,7 @@ constexpr std::array kModules{
     Module{Call<&world::nav_strand::Install>, &world::nav_strand::Remove},
     // a non-finite pose on a seat's camera: the game's camera reset
     Module{Call<&camera::camera_repair::Install>, nullptr},
-    // ladders, climb spots, glide and jet for player 2
+    // ladders and climb spots for players 2 and 3 (logging)
     Module{Call<&traversal::traversal_watch::Install>, &traversal::traversal_watch::Remove},
     // climbs on the anim worker read their own climber's input (W5); before traversal_camera, whose holders need
     // these Ticks
@@ -251,6 +254,10 @@ constexpr std::array kModules{
     Module{Call<&camera::vault_camera::Install>, &camera::vault_camera::Remove},
     // a seat's chocobo climbs walls, with its own climb camera
     Module{Call<&traversal::chocobo_climb::Install>, &traversal::chocobo_climb::Remove},
+    // a seat's chocobo takes the launch pads, jump boxes and sliders in the seat's scope
+    Module{Call<&traversal::chocobo_spots::Install>, &traversal::chocobo_spots::Remove},
+    // a seat's chocobo leaves its glide and water jet in the seat's scope, whoever ends them
+    Module{Call<&rides::chocobo_exits::Install>, &rides::chocobo_exits::Remove},
 
     // The HUD's layout in split views (hud/layout/overlay_layout.h). Optional like the view point: without it the HUD
     // keeps the game's full-screen layout, cropped to each half; the layout scale (the contain rule) needs it.
@@ -346,6 +353,8 @@ constexpr std::array kModules{
     Module{Call<&hud::search_pins::Install>, nullptr},
     // the chocobo wrangle's bubbles and reticle placed from each view's camera
     Module{Call<&hud::wrangle_targets::Install>, nullptr},
+    // each player's chocobo's jet gauge placed from their own view, shown there only
+    Module{Call<&hud::jet_gauges::Install>, &hud::jet_gauges::Remove},
     // the prompt rows keep their corner by their own base
     Module{Call<&hud::action_icon_base::Install>, nullptr},
     // each further column's own map icons and markers
@@ -412,6 +421,7 @@ static_assert(Ordered<&input::pad_table::Install, &session::player_window::Insta
 static_assert(Ordered<&players::widget_opacity::Install, &hud::prompt_rows::Install>() &&
                   Ordered<&players::widget_opacity::Install, &hud::field_markers::Install>() &&
                   Ordered<&players::widget_opacity::Install, &hud::search_pins::Install>() &&
+                  Ordered<&players::widget_opacity::Install, &hud::jet_gauges::Install>() &&
                   Ordered<&players::widget_opacity::Install, &hud::target_views::Install>(),
               "the opacity setter before the HUD modules that read it");
 
@@ -512,6 +522,7 @@ void TickAfterSession(const Frame& frame) noexcept
     input::seat_walk_cap::Tick();     // each seat's deferred walk-cap clear, the layer-2 watch
     camera::vault_camera::Tick();      // each seat's vault cameras end on its own camera (lever L2)
     traversal::chocobo_climb::Tick();     // each seat's climb camera's states and the summary (Debug)
+    traversal::chocobo_spots::Tick();     // the spots' summary (Debug)
     camera::camera_distance::TickFraming(frame.columns);  // per-layout distance steps (roadmap 2b)
     std::array<float, players::kMaxPlayers> ratios{};
     for (int seat = 0; seat < players::kMaxPlayers; ++seat)

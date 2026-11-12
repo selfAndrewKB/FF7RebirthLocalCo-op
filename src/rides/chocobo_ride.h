@@ -64,6 +64,10 @@ int SeatDriving(const void* chocobo) noexcept;
 /// chocobo or when a scope is refused. Game thread.
 bool RunAsRider(const void* chocobo, void (*call)(void* context), void* context) noexcept;
 
+/// The same with the seat's pad's buttons too, for a game call that reads the merged pads' held keys as well (a
+/// launch pad's Accel). Game thread.
+bool RunAsRiderWithButtons(const void* chocobo, void (*call)(void* context), void* context) noexcept;
+
 /// From input/move_state's wrapper of the chocobo move state's slot 1 (every chocobo's, run by its own actor tick):
 /// when `state` is the move state of the chocobo a seat's player rides, runs `engine` (the game's slot 1) inside its
 /// primary scope and leader answer, as the game runs the chocobo player 1 rides, so the game's anim sync leaves the

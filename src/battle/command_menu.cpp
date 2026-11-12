@@ -113,9 +113,9 @@ using facts::kCmdMembers;
 using facts::kCmdMenuWidget;
 constexpr std::uint32_t kWidgetCtrl = 0x4E0;
 using facts::kCmdLogBytes;
-// UObjectBase: the class and the outer.
+// UObjectBase: the class, and the outer (facts/engine.h).
 constexpr std::uint32_t kObjectClass = 0x10;
-constexpr std::uint32_t kObjectOuter = 0x20;
+using facts::kObjectOuter;
 // A refused join Setup (the seat's focus scope could not be entered) is a wait, never a give-up: the
 // first kSetupTries tries run on consecutive ticks, later ones every kWaitGap ticks, until one runs
 // (menu_rules::JoinTryDue).

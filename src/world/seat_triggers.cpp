@@ -97,9 +97,11 @@ struct AdmittedClass
     platform::PerBuild<std::uint32_t> unregisterSlot{0x728, 0x730};  // where `unregister` sits in the vtable
     bool           rides = false;  // chocobo climbs: delivered while the seat's player rides their own chocobo too
 };
-// The chocobo climb (research/RE-p2-chocobo-climb.md): a stored-character class whose unregister override sits one
-// slot past the others'. During a ride every player's member is possessed by its AI, so its register falls back to
-// the primary controller: the seat's inside the delivery's scope. 1.005 vtable through replaced-chocobo-traversal.json.
+// The chocobo climb (research/RE-p2-chocobo-climb.md), launch pad, jump box and slider (RE-chocobo-exits-pads.md):
+// stored-character classes whose unregister override sits one slot past the others'. During a ride every player's
+// member is possessed by its AI, so their register falls back to the primary controller: the seat's inside the
+// delivery's scope. The slider's register also sets its direction byte from the leader's position: one per actor, the
+// last entrant's. 1.005 vtables through replaced-chocobo-traversal.json and replaced-chocobo-spots.json.
 constexpr AdmittedClass kAdmitted[] = {
     {L"ladder", facts::kLadderVTable},
     {L"climbing wall", facts::kClimbingWallVTable},
@@ -114,6 +116,9 @@ constexpr AdmittedClass kAdmitted[] = {
     {L"one-shot move", facts::kOneShotMoveVTable, 0x840, 0x141812E50, false, true},
     {L"wall run", facts::kWallRunVTable},
     {L"chocobo climb", facts::kChocoboClimbVTable, 0x738, 0x143661AA8, false, false, {0x738, 0x740}, true},
+    {L"chocobo launch pad", facts::kChocoboJumpPadVTable, 0x734, facts::kChocoboJumpPadUnregister, false, false, {0x738, 0x740}, true},
+    {L"chocobo jump box", facts::kChocoboJumpBoxVTable, 0x7A0, facts::kChocoboJumpBoxUnregister, false, false, {0x738, 0x740}, true},
+    {L"chocobo slider", facts::kChocoboSliderVTable, 0x760, facts::kChocoboSliderUnregister, false, false, {0x738, 0x740}, true},
 };
 constexpr std::size_t   kClassCount     = std::size(kAdmitted);
 constexpr std::uint32_t kZiplineEnterEffect = 0x770;  // u8 bUseEnterEffect: set = starts on approach, else a button prompt
