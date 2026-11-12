@@ -2,6 +2,7 @@
 
 #include "facts/controller.h"
 #include "facts/world.h"
+#include "platform/entry_install.h"
 #include "platform/entry_redirect.h"
 #include "platform/every.h"
 #include "platform/guarded.h"
@@ -61,8 +62,6 @@ constexpr std::uint8_t kScoreBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10,  // mov [r
                                         0x48, 0x89, 0x7C, 0x24, 0x18,  // mov [rsp+18h],rdi
                                         0x55, 0x48, 0x8D, 0x6C, 0x24, 0xA9, 0xB8, 0xE0, 0x00, 0x00, 0x00};
 constexpr platform::FunctionFact kScore{L"CharaPopEntry_EvalSpawnScore_ByCenter", 0x1408B5B8C, kScoreBytes};
-constexpr std::size_t kFirstInstruction  = 5;
-constexpr std::size_t kSecondInstruction = 5;
 using ScoreFn = std::int32_t (*)(void* entry);
 
 // The manager M (the entry's +0: its manager) as the score reads it, and the pop object's selection.
@@ -364,12 +363,7 @@ bool Install(const platform::GameImage& image) noexcept
     bool placed       = false;
     if (g_gameRoot != 0 && g_setCentre != nullptr && score)
     {
-        const std::span<const std::uint8_t> bytes(kScoreBytes);
-        const auto replacement = reinterpret_cast<std::uintptr_t>(&ScoreEveryCentre);
-        placed = g_scoreEntry.Install(*score, image.EntryInstruction(kScore.address, bytes.first(kFirstInstruction)),
-                                      replacement) ||
-                 g_scoreEntry.InstallAtSecondInstruction(*score, bytes.first(kFirstInstruction),
-                                                         bytes.subspan(kFirstInstruction, kSecondInstruction), replacement);
+        placed = platform::InstallAtEntryOrSecond(g_scoreEntry, image, kScore, reinterpret_cast<std::uintptr_t>(&ScoreEveryCentre));
         if (placed)
         {
             g_score = reinterpret_cast<ScoreFn>(g_scoreEntry.Original());

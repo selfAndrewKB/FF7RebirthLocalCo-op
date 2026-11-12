@@ -2,6 +2,7 @@
 
 #include "facts/engine.h"
 #include "platform/call_redirect.h"
+#include "platform/entry_install.h"
 #include "platform/entry_redirect.h"
 #include "platform/image.h"
 #include "platform/log.h"
@@ -49,8 +50,6 @@ constexpr std::uint8_t   kEntryBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08,   // mov
 constexpr platform::FunctionFact kMuteAll{L"EndFFBMgr_MuteAll_PrimaryPC", 0x1411F6AA4, kEntryBytes};
 // EndFFBMgr_SetEnabled531(mgr, on): the Vibration option
 constexpr platform::FunctionFact kSetEnabled{L"EndFFBMgr_SetEnabled531", 0x1422DE548, kEntryBytes};
-constexpr std::size_t    kFirstInstruction  = 5;
-constexpr std::size_t    kSecondInstruction = 5;
 // The registry's TArray<component*> helpers, as BeginPlay (AddUnique, inline) and the component's destructor use them.
 constexpr std::uint8_t   kContainsBytes[] = {0x4C, 0x8B, 0x01, 0x48, 0x63, 0x41, 0x08, 0x49, 0x8D, 0x0C, 0xC0, 0x4C};
 // Contains(array, &element) -> bool
@@ -474,15 +473,7 @@ bool Find(const platform::GameImage& image, const platform::FunctionFact& fact, 
 bool Entry(const platform::GameImage& image, platform::EntryRedirect& redirect, const platform::FunctionFact& fact,
            std::uintptr_t replacement) noexcept
 {
-    const auto bytes = fact.entryBytes;
-    const auto at    = platform::FindFunction(image, fact);
-    if (!at)
-    {
-        return false;
-    }
-    return redirect.Install(*at, image.EntryInstruction(fact.address, bytes.first(kFirstInstruction)), replacement) ||
-           redirect.InstallAtSecondInstruction(*at, bytes.first(kFirstInstruction),
-                                               bytes.subspan(kFirstInstruction, kSecondInstruction), replacement);
+    return platform::InstallAtEntryOrSecond(redirect, image, fact, replacement);
 }
 
 void RemoveEntries() noexcept

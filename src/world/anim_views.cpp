@@ -6,6 +6,7 @@
 #include "platform/angles.h"
 #include "platform/build_value.h"
 #include "platform/call_redirect.h"
+#include "platform/entry_install.h"
 #include "platform/entry_redirect.h"
 #include "platform/every.h"
 #include "platform/guarded.h"
@@ -78,11 +79,7 @@ constexpr float kReach        = 33000.0f;
 constexpr auto  kSummaryEvery = std::chrono::seconds(10);
 
 // The tick-time measure (research/RE-p2-detail-drop-p1-facing.md). Its first instruction crosses a block in 1.004, so the
-// second is replaced there (both a store into the caller's home area).
-constexpr std::uint8_t   kMeasureFirstTwo[]  = {0x48, 0x89, 0x5C, 0x24, 0x10,   // mov [rsp+10h],rbx
-                                                0x48, 0x89, 0x74, 0x24, 0x18};  // mov [rsp+18h],rsi
-constexpr std::size_t    kFirstInstruction   = 5;
-constexpr std::size_t    kSecondInstruction  = 5;
+// second is replaced there (both a store into the caller's home area, five bytes each).
 constexpr std::uintptr_t kCameraDiffDegrees  = 0x1470B99A0;  // End.Animation.SignificanceCameraDiffDegrees (60)
 constexpr platform::PerBuild<std::uint32_t> kMeshMode = {0x122A, 0x121B};  // ShouldUpdateTransform's mode (1 = angle)
 constexpr std::uint32_t  kComponentOwner     = 0xA0;
@@ -551,13 +548,7 @@ void Install(const platform::GameImage& image) noexcept
     if (eval && diff)
     {
         g_cameraDiff = reinterpret_cast<const float*>(*diff);
-        const std::span<const std::uint8_t> bytes(kMeasureFirstTwo);
-        const auto replacement = reinterpret_cast<std::uintptr_t>(&MeasureEveryView);
-        tickTime = g_measureEntry.Install(*meas, image.EntryInstruction(kMeasure.address, bytes.first(kFirstInstruction)),
-                                          replacement) ||
-                   g_measureEntry.InstallAtSecondInstruction(*meas, bytes.first(kFirstInstruction),
-                                                             bytes.subspan(kFirstInstruction, kSecondInstruction),
-                                                             replacement);
+        tickTime = platform::InstallAtEntryOrSecond(g_measureEntry, image, kMeasure, reinterpret_cast<std::uintptr_t>(&MeasureEveryView));
         if (tickTime)
         {
             g_measure = reinterpret_cast<MeasureFn>(g_measureEntry.Original());

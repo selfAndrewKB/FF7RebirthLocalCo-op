@@ -4,6 +4,7 @@
 #include "feedback/traversal_rumble_shared.h"
 #include "platform/build_value.h"
 #include "platform/call_redirect.h"
+#include "platform/entry_install.h"
 #include "platform/entry_redirect.h"
 #include "platform/every.h"
 #include "platform/guarded.h"
@@ -41,8 +42,6 @@ constexpr std::uint8_t   kPlayNamedBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08,   //
                                               0x48, 0x89, 0x6C, 0x24, 0x10};  // mov [rsp+10h],rbp
 // VibrationList3B0_PlayNamed(key, params*, flag)
 constexpr platform::FunctionFact kPlayNamed{L"VibrationList3B0_PlayNamed", 0x141302F0C, kPlayNamedBytes};
-constexpr std::size_t    kFirstInstruction  = 5;
-constexpr std::size_t    kSecondInstruction = 5;
 constexpr std::uintptr_t kAddOrUpdate   = 0x141302E2C;  // VibrationList3B0_AddOrUpdate(list, key, params*, flag)
 constexpr std::uintptr_t kListTick      = 0x14125D324;  // Vibration_TickGlobalList_ApplyToPrimaryPC(dt xmm0)
 constexpr std::uintptr_t kBuildSet      = 0x14125CFD0;  // Vibration_TickList_BuildChannelSet(list, dt xmm1, set*) -> changed
@@ -637,17 +636,8 @@ void Install(const platform::GameImage& image) noexcept
                            Find(image, facts::kFree, g_free) && Find(image, kListCtor, g_ctor) &&
                            Find(image, facts::kMalloc, g_malloc);
     // The add's entry: its first instruction crosses a block in 1.004, so the second is replaced there.
-    bool       add    = false;
-    const auto bytes  = kPlayNamed.entryBytes;
-    const auto playAt = platform::FindFunction(image, kPlayNamed);
-    if (functions && playAt)
-    {
-        const auto replacement = reinterpret_cast<std::uintptr_t>(&PlayNamed);
-        add = g_playNamed.Install(*playAt, image.EntryInstruction(kPlayNamed.address, bytes.first(kFirstInstruction)),
-                                  replacement) ||
-              g_playNamed.InstallAtSecondInstruction(*playAt, bytes.first(kFirstInstruction),
-                                                     bytes.subspan(kFirstInstruction, kSecondInstruction), replacement);
-    }
+    const bool add = functions && platform::InstallAtEntryOrSecond(g_playNamed, image, kPlayNamed,
+                                                                   reinterpret_cast<std::uintptr_t>(&PlayNamed));
     const auto rowsAt = platform::FindFunction(image, kRows);
     const bool rows   = add && rowsAt &&
                       g_rows.Install(*rowsAt, image.EntryInstruction(kRows.address, kRows.entryBytes),
