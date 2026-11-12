@@ -10,8 +10,9 @@
 //     byte at +0x9A8+12*i and the row's weak widget at +0x9AC+12*i (hookshot/"Terrain Action",
 //     parkour, catch, memo...). A seat's component detects from the seat's own character, so its
 //     rows are the seat's;
-//   - a seat's driven chocobo's row handles, and the seat's copy of the field-prompt manager's slot
-//     rows (world/field_pickup.h: the pickup rows the seat's pass of the game's update made);
+//   - a seat's driven chocobo's row handles, the seat's ridden scooter's (the Wheelie's get off,
+//     accelerate and brake), and the seat's copy of the field-prompt manager's slot rows
+//     (world/field_pickup.h: the pickup rows the seat's pass of the game's update made);
 //   - everything else (the talk/examine manager, which follows the leader; the move-state summons;
 //     minigame and encounter registrars) is player 1's.
 // A row is a seat's while the seat's component names it, and stays so until it leaves the list

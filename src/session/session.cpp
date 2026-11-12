@@ -1235,7 +1235,7 @@ void Seat::Leave() noexcept
     {
         return;
     }
-    rides::own_ride::Release(seat_, L"the player leaves");  // before the withdraw: the swap back needs the seat's scopes
+    rides::own_ride::Leave(seat_, L"the player leaves");  // before the withdraw: the swap back needs the seat's scopes
     seat_out::LetGo(seat_);
     players::generation::Withdraw(seat_);  // every wrapper passes through from here on
     phase_ = Phase::Leaving;
@@ -1250,7 +1250,7 @@ bool Seat::LeaveNow() noexcept
         return true;
     }
     // The seat's hold on the old world's objects goes before it does, even if the removal below fails.
-    rides::own_ride::Release(seat_, L"a map load takes the player out");
+    rides::own_ride::Leave(seat_, L"a map load takes the player out");
     seat_out::LetGo(seat_);
     players::generation::Withdraw(seat_);
     if (HoldsMember())

@@ -678,6 +678,8 @@ src/
                             (research/RE-p2-field-prompts.md)
     field/search_pins       The field search pins in each view: placed from that view's camera, and only that view's
                             player's own (research/RE-p2-ranged-reticle.md, RE-p2-world-markers.md)
+    field/wheelie_tops      The Wheelie ride's distance counter in each rider's own view (research/RE-wheelie-polish.md,
+                            the mileage TopUI)
     field/wrangle_targets   The chocobo wrangle's targets in each view: placed from that view's camera
     hud_roots               The HUD's root widgets and whose they are (lever L1 of hud/passes/seat_hud_content.h)
     hud_rules.h             The HUD modules' pure decisions (hud_placement, search_pins, marker_timers, minimap,

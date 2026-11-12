@@ -1,0 +1,35 @@
+{
+  "build": "1.005",
+  "research_build": "1.004",
+  "date": "2026-11-12",
+  "doc": "Rebirth/Documentation/research/RE-wheelie-polish.md (the mileage TopUI section, pass WHEELIETOP, both databases; the bytes in its entry-byte tables and addenda)",
+  "facts": [
+    {
+      "name": "SBScooterCoordinator_RequestTopUIAssets(coord)",
+      "old": "0x1418B3940",
+      "new": "0x141935A24",
+      "bytes": "48895c242057b830000000e84c618300",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Once per latch (+0x1FD): the asset request for the Wheelie_Top package with a callback that creates the counter widget into coord+0x40, hidden. Reads nothing but the latch; safe outside the tick."
+    },
+    {
+      "name": "SBScooterCoordinator_CloseTopUI(coord)",
+      "old": "0x1414A732C",
+      "new": "0x1410DCB4C",
+      "bytes": "48895c242057b820000000e824f00801",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "RemoveFromParent, the weak cleared, the package released, the latch cleared. Called, never redirected in place (its entry crosses a block in both builds)."
+    },
+    {
+      "name": "SBScooterCoordinator_Tick_Vt280's CloseTopUI call (the list-empty branch)",
+      "old": "0x14125A7B2",
+      "new": "0x140E891D2",
+      "bytes": "e875392500",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "1.004 E8 75 CB 24 00 at %16=2, 1.005 E8 75 39 25 00 at %16=2, both inside one block; under `count <= 0 && +0x40 valid`, the only statement of that branch. The other caller is the Disable slot's tail jump (left to the game)."
+    }
+  ]
+}

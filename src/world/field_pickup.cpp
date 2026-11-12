@@ -573,6 +573,18 @@ void FreshCopy(Pickup& p, void* mgr) noexcept
 
 /// Drops the seat's copy; its rows go the game's way (the field-exit clear) when `clear`, and its marker widgets
 /// through the game's destroy (only those still in the marker list: after a new manager, the old points are gone).
+/// The seat's component's box selection as the pass saw it, logged on change: the start flag, the published state,
+/// the shooting point's key and whether the live list held a point with that key.
+struct Selection
+{
+    std::uint8_t  start = 0, state = 0;
+    std::uint64_t key   = 0;
+    bool          seen  = false;
+    bool operator==(const Selection&) const = default;
+};
+std::array<Selection, players::kMaxPlayers> g_selection{};
+std::array<bool, players::kMaxPlayers>      g_selectionLogged{};
+
 void DropCopy(Pickup& p, bool clear) noexcept
 {
     if (p.copyOf != nullptr && clear && !p.broken &&
@@ -585,6 +597,7 @@ void DropCopy(Pickup& p, bool clear) noexcept
     p.bits.clear();
     p.marked.clear();
     g_oneMarkers.clear();
+    g_selectionLogged[static_cast<std::size_t>(p.seat)] = false;  // the next copy's first selection is logged again
 }
 
 /// Whether `key` is in the map of `owner` (shaped as `shape`), by the map's own hash (platform/tset_find.h). The
@@ -719,10 +732,42 @@ void DestroySeatMarkers(Pickup& p, Why why) noexcept
 
 /// The key of the shooting point `controller`'s leader-action component holds (the breakable box Yuffie's throw
 /// selects), or 0.
+/// `controller`'s leader-action component (null for a null controller).
+const void* LeaderActionsOf(const void* controller) noexcept
+{
+    return ReadPointer(controller, facts::kControllerLeaderActions);
+}
+
 std::uint64_t ShootingKeyOf(const void* controller) noexcept
 {
-    const void* component = ReadPointer(controller, facts::kControllerLeaderActions);
-    return ReadField<std::uint64_t>(component, facts::kLeaderActionShootingKey);
+    return ReadField<std::uint64_t>(LeaderActionsOf(controller), facts::kLeaderActionShootingKey);
+}
+
+void LogSelection(int seat, std::uint64_t key, bool seen) noexcept
+{
+    if (!platform::Enabled(platform::Level::Debug))
+    {
+        return;
+    }
+    const void*     component = LeaderActionsOf(players::generation::ControllerOf(seat));
+    const Selection now{ReadField<std::uint8_t>(component, facts::kLeaderActionStartFlag),
+                        ReadField<std::uint8_t>(component, facts::kLeaderActionShootingState), key, seen && key != 0};
+    const auto      index = static_cast<std::size_t>(seat);
+    if (g_selectionLogged[index] && now == g_selection[index])
+    {
+        return;
+    }
+    g_selection[index]       = now;
+    g_selectionLogged[index] = true;
+    try
+    {
+        platform::LogDebug(L"field pickup: {}'s box selection: start flag {:#04x}, state {:#04x}, shooting point {}{}",
+                           players::SeatName(seat), now.start, now.state, Name(key),
+                           key == 0 ? L"" : seen ? L" (in the live list: left open)" : L" (NOT in the live list)");
+    }
+    catch (...)
+    {
+    }
 }
 
 /// Before the calls: each point's target bits and marker widget become the seat's (on every live point: the far-marker
@@ -736,7 +781,8 @@ void Before(Pickup& p, void* mgr, const std::uint8_t* items, const std::uint8_t*
     {
         marker.placed = false;
     }
-    const std::uint64_t boxKey = filter ? ShootingKeyOf(players::generation::ControllerOf(p.seat)) : 0;
+    const std::uint64_t boxKey  = filter ? ShootingKeyOf(players::generation::ControllerOf(p.seat)) : 0;
+    bool                boxSeen = false;
     {
         const SharedLock lock(mgr);
         const auto*      node = PointerAt(mgr, kFieldActionPointList);
@@ -777,11 +823,16 @@ void Before(Pickup& p, void* mgr, const std::uint8_t* items, const std::uint8_t*
             p.counts.shopkeepers += keeper ? 1 : 0;
             p.counts.boxes += box ? 1 : 0;
             p.counts.hooks += hook ? 1 : 0;
+            boxSeen = boxSeen || box;
             p.counts.filtered += disable ? 1 : 0;
             flags = static_cast<std::uint8_t>((flags & ~kTargetBits) | (carried != p.bits.end() ? carried->second : 0) |
                                               (disable ? kDisabledBit : 0));
             point[kFieldActionPointFlags] = flags;
         }
+    }
+    if (filter)
+    {
+        LogSelection(p.seat, boxKey, boxSeen);
     }
     for (const auto& [key, marker] : p.markers)
     {
@@ -1261,7 +1312,7 @@ void LogThrowGate(int seat, const void* controller, std::uint64_t target, bool w
         return;
     }
     const auto  index     = static_cast<std::size_t>(seat);
-    const void* component = ReadPointer(controller, facts::kControllerLeaderActions);
+    const void* component = LeaderActionsOf(controller);
     if (component == nullptr)
     {
         return;

@@ -143,6 +143,7 @@ add_library(LocalSplitScreen SHARED
     src/traversal/chocobo_spots.cpp
     src/traversal/hooks.cpp
     src/hud/field/jet_gauges.cpp
+    src/hud/field/wheelie_tops.cpp
     src/rides/shared_ride.cpp
     src/rides/wheelie_ride.cpp
     src/hud/minimap/minimap.cpp

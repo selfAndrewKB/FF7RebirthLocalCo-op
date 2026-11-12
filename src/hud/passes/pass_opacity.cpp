@@ -5,6 +5,7 @@
 #include "hud/field/jet_gauges.h"
 #include "hud/field/prompt_rows.h"
 #include "hud/field/search_pins.h"
+#include "hud/field/wheelie_tops.h"
 #include "hud/view_window.h"
 #include "players/weak_object.h"
 #include "players/widget_opacity.h"
@@ -79,6 +80,7 @@ void ShowOnly(int seat, bool copy) noexcept
     field_markers::ShowOnly(seat);
     search_pins::ShowOnly(seat);
     jet_gauges::ShowOnly(seat);
+    wheelie_tops::ShowOnly(seat);
     battle::command_menu_view::ShowOnly(seat);
     view_window::ShowOnly(copy ? view_window::kNoView : seat);
 }
@@ -89,6 +91,7 @@ void RestoreAll() noexcept
     field_markers::Restore();
     search_pins::Restore();
     jet_gauges::Restore();
+    wheelie_tops::Restore();
     battle::command_menu_view::Restore();
     view_window::RestoreAll();
 }

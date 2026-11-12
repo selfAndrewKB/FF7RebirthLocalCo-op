@@ -180,6 +180,12 @@ void Release(int seat, const wchar_t* why) noexcept
     wheelie_ride::Release(seat, why);
 }
 
+void Leave(int seat, const wchar_t* why) noexcept
+{
+    Release(seat, why);
+    wheelie_ride::CloseCounter(seat);
+}
+
 Forgotten Forget(int seat) noexcept
 {
     return {chocobo_ride::Forget(seat), wheelie_ride::Forget(seat)};

@@ -53,6 +53,24 @@ inline constexpr std::uint32_t kScooterCoordMarkerState  = 0x190;
 inline constexpr std::uint32_t kScooterCoordMarkerTarget = 0x194;
 inline constexpr std::uint32_t kScooterCoordMarkerWidget = 0x1E4;
 
+/// The scooter coordinator's distance counter, the Wheelie_Top widget (RE-wheelie-polish.md, the mileage TopUI; the
+/// same in both builds [CONFIRMED]): its weak at +0x40, and the disabled byte the tick's create gate reads with the
+/// list count. The game's request (once per coordinator: the asset load's callback makes the widget, hidden, on the
+/// root overlay; the riding tick shows it and writes the save's one mileage total) and its close.
+inline constexpr std::uint32_t kScooterCoordTopWidget = 0x40;
+inline constexpr std::uint32_t kScooterCoordDisabled  = 0x2A;
+inline constexpr std::uint32_t kScooterCoordTopLatch  = 0x1FD;  // u8: the request made (cleared by the close)
+inline constexpr std::uint8_t  kScooterRequestTopUIBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x20, 0x57, 0xB8, 0x30,
+                                                              0x00, 0x00, 0x00, 0xE8, 0xE0, 0xB5, 0x7F, 0x00};
+inline constexpr FunctionFact kScooterRequestTopUI{L"SBScooterCoordinator_RequestTopUIAssets", 0x1418B3940,
+                                                   kScooterRequestTopUIBytes};
+inline constexpr std::uint8_t kScooterCloseTopUIBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x20, 0x57, 0xB8, 0x20,
+                                                           0x00, 0x00, 0x00, 0xE8, 0xF4, 0x7B, 0xC0, 0x00};
+inline constexpr FunctionFact kScooterCloseTopUI{L"SBScooterCoordinator_CloseTopUI", 0x1414A732C, kScooterCloseTopUIBytes};
+/// The close's call in SBScooterCoordinator_Tick_Vt280, under "the list is empty and the counter exists" and nothing
+/// else (five bytes inside one block in both builds).
+inline constexpr std::uintptr_t kScooterTickCloseTopUICall = 0x14125A7B2;
+
 /// SBScooterShared_UpdateNearestTarget(shared): the one writer of a coordinator's target in the coordinator's own
 /// tick. It searches that coordinator's own list for the free scooter nearest the party leader and, on the way,
 /// warps any free scooter far from the leader and from its home back home (the rental return).
@@ -144,6 +162,9 @@ inline constexpr SlotFact kChocoboMoveStateHandles{
     {L"ChocoboMoveState_Slot1_TickHandles", 0x14344F218, kChocoboMoveStateHandlesBytes}};
 
 // The SB scooter (Wheelie) move state (vtable 0x1466B9D88)
+// Its own prompt handles (FieldActionIconHandle, 0x50 bytes: +0 the row's weak widget, +0x48 the request byte): Get
+// off, Accelerate, Brake (RE-p2-wheelie-ride.md).
+inline constexpr std::uint32_t kScooterMoveStateRowHandles[] = {0x218, 0x268, 0x2B8};
 // The SB scooter (Wheelie) move state's slot 16 (vtable 0x1466B9D88; RE-p2-wheelie-ride.md): the field tick runs
 // the ridden scooter's slot 16 (drive slot 11 inside it, then the trigger feedback and the getoff latch).
 inline constexpr std::uint8_t kScooterMoveStateUpdateInputBytes[] = {

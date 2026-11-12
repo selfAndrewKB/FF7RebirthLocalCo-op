@@ -96,6 +96,10 @@ bool Riding(int seat) noexcept;
 /// seat's scopes still hold. Logged by the ride.
 void Release(int seat, const wchar_t* why) noexcept;
 
+/// The seat leaves the game or a map load takes it out: Release, then what outlives a ride but not the seat's
+/// controller (the Wheelie's distance counter) closed.
+void Leave(int seat, const wchar_t* why) noexcept;
+
 /// The member was destroyed under `seat`'s player: both rides forgotten without calls. The vehicles the seat's
 /// controller possessed (null if none), so the session clears that controller field too.
 struct Forgotten

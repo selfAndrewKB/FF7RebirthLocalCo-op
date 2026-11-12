@@ -38,9 +38,16 @@
 // (call redirects at the callers). A seat's getoff is made instant only when player 1's leader is more than 50 m from
 // the scooter: the game's rental-return rule would otherwise warp it home during the dismount.
 //
+// The ride's distance counter (the Wheelie_Top widget, the save's one mileage total every rider's scooter adds to) is
+// one per coordinator, made by the game only while the coordinator's own scooter list is not empty: a seat's never is,
+// so the game's own request is made for the seat's coordinator once it exists, and the coordinator tick's close of an
+// empty list's counter is held off for a seat's (a call redirect). The seat's own riding tick then shows, writes and
+// hides it as player 1's does; each view shows its own player's (hud/field/wheelie_tops.h). The seat's leave closes it
+// with the game's own close.
+//
 // The mod's parts are the seat's coordinator's mark, the question asked of it for the seat, the rider passed to the
-// begin, the scooter's tick, and the re-issued getoffs; every other call is the game's own. Everything is logged. Game
-// thread only.
+// begin, the scooter's tick, the re-issued getoffs and the counter's request; every other call is the game's own.
+// Everything is logged. Game thread only.
 //
 // Per seat (players/seats.h): each seat's coordinator, walk-in answer, ride and "stopped for the session" are its own
 // (a record per seat, index 0 unused); the seat comes from the controller the member's tick hands in, the coordinator
@@ -81,6 +88,10 @@ bool Tick(void* controller, void* member, const input::move_state::EngineTicks& 
 /// `seat`'s coordinator has a ride (boarding, riding or getting off).
 bool Riding(int seat) noexcept;
 
+/// The move state of the scooter `seat`'s player rides (its prompt handles are the seat's rows; hud/field/prompt_rows.h),
+/// or null when not riding or it no longer checks out. Game thread.
+const void* DrivenMoveState(int seat) noexcept;
+
 /// Before the session gives `seat`'s member back, withdraws the seat or it leaves: the game's instant getoff for the
 /// seat's coordinator inside the seat's scopes, while they still hold. Logged. Does nothing when the seat's player
 /// does not ride.
@@ -90,17 +101,29 @@ void Release(int seat, const wchar_t* why) noexcept;
 /// seat's controller possessed (null if none), so the session clears that controller field too.
 void* Forget(int seat) noexcept;
 
-/// The scooter coordinators' markers (the auto-ride icons) as they are now: player 1's coordinator's widget at [0], each
-/// seat's own at [seat] (null where there is none), read once for a pass. Empty while the seats mark nothing of
-/// their own (every icon is then every view's). Game thread.
-struct MarkerWidgets
+/// One widget per player of the scooter coordinators': player 1's coordinator's at [0], each seat's own at [seat]
+/// (null where there is none), read once for a pass. Game thread.
+struct PlayerWidgets
 {
-    const void* widget[players::kMaxPlayers] = {};
+    void* widget[players::kMaxPlayers] = {};
 };
+
+/// The coordinators' markers (the auto-ride icons) as they are now. Empty while the seats mark nothing of their own
+/// (every icon is then every view's).
+using MarkerWidgets = PlayerWidgets;
 MarkerWidgets MarkerWidgetsNow() noexcept;
 
 /// Whose marker `widget` is by the snapshot: 0 player 1's, a seat's number for its own, -1 no coordinator's. For
 /// hud/field/field_markers, which shows each view only its own player's.
 int MarkerOwner(const MarkerWidgets& icons, const void* widget) noexcept;
+
+/// The coordinators' distance counters (the Wheelie_Top widgets) as they are now. Empty while the seats keep no
+/// counter of their own (hud/field/wheelie_tops.h).
+using TopWidgets = PlayerWidgets;
+TopWidgets TopWidgetsNow() noexcept;
+
+/// The seat leaves the game or a map load takes it out: its own distance counter closed with the game's close (the
+/// counter outlives a ride; it must not outlive the seat's controller). Game thread.
+void CloseCounter(int seat) noexcept;
 
 }  // namespace lss::rides::wheelie_ride

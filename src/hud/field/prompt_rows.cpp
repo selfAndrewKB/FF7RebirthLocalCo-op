@@ -24,6 +24,7 @@
 #include "players/weak_object.h"
 #include "players/widget_opacity.h"
 #include "rides/chocobo_ride.h"
+#include "rides/wheelie_ride.h"
 #include "world/field_pickup.h"
 
 #include <algorithm>
@@ -52,14 +53,15 @@ using action_rows::kMaxRows;
 
 struct Row
 {
-    const UObject* widget     = nullptr;
-    std::uint64_t  weak       = 0;  // the list's FWeakObjectPtr, as stored
-    int            seatRow    = -1; // the owning seat's component row naming it now, or -1
-    int            seatRide   = -1; // the handle of the owning seat's driven chocobo naming it now, or -1
-    int            seatPickup = -1; // the field-prompt slot of the owning seat's pass naming it now, or -1
-    int            owner      = 0;  // the seat whose row it is (0 player 1's)
-    std::int32_t   priority   = 0;
-    std::int32_t   remove     = 0;
+    const UObject* widget      = nullptr;
+    std::uint64_t  weak        = 0;   // the list's FWeakObjectPtr, as stored
+    int            seatRow     = -1;  // the owning seat's component row naming it now, or -1
+    int            seatRide    = -1;  // the handle of the owning seat's driven chocobo naming it now, or -1
+    int            seatScooter = -1;  // the handle of the owning seat's ridden scooter naming it now, or -1
+    int            seatPickup  = -1;  // the field-prompt slot of the owning seat's pass naming it now, or -1
+    int            owner       = 0;   // the seat whose row it is (0 player 1's)
+    std::int32_t   priority    = 0;
+    std::int32_t   remove      = 0;
     bool operator==(const Row&) const = default;
 };
 
@@ -68,6 +70,7 @@ struct SeatNames
 {
     std::array<const UObject*, kComponentRows>                                        component{};
     std::array<const UObject*, std::size(facts::kChocoboMoveStateRowHandles)>         ride{};
+    std::array<const UObject*, std::size(facts::kScooterMoveStateRowHandles)>         scooter{};
     std::array<const UObject*, std::tuple_size_v<world::field_pickup::Weaks>> pickup{};
 };
 
@@ -160,6 +163,7 @@ std::wstring Describe(const std::vector<Row>& rows)
         const wchar_t*     name  = players::SeatName(row.owner);
         const std::wstring owner = row.seatRow >= 0      ? std::format(L"{} row {}", name, row.seatRow)
                                    : row.seatRide >= 0   ? std::format(L"{}'s chocobo row {}", name, row.seatRide)
+                                   : row.seatScooter >= 0 ? std::format(L"{}'s Wheelie row {}", name, row.seatScooter)
                                    : row.seatPickup >= 0 ? std::format(L"{}'s field prompt slot {}", name, row.seatPickup)
                                    : row.owner != 0      ? std::format(L"{} (leaving)", name)
                                                          : std::wstring(L"player 1");
@@ -240,6 +244,13 @@ void ReadSeatNames(int seat, SeatNames& names, std::array<std::uint8_t, kCompone
         std::uint64_t weak = 0;
         names.ride[i] = Read(ride + facts::kChocoboMoveStateRowHandles[i], weak) ? Resolve(weak) : nullptr;
     }
+    // The seat's ridden scooter's own handles (Get off, Accelerate, Brake): the same shape.
+    const auto scooter = reinterpret_cast<std::uintptr_t>(rides::wheelie_ride::DrivenMoveState(seat));
+    for (std::size_t i = 0; scooter != 0 && i < names.scooter.size(); ++i)
+    {
+        std::uint64_t weak = 0;
+        names.scooter[i] = Read(scooter + facts::kScooterMoveStateRowHandles[i], weak) ? Resolve(weak) : nullptr;
+    }
     // The seat's field prompts (pickups): FieldActionMgr's slot rows in the seat's copy of its slot block, made by the
     // seat's pass of the game's own update (world/field_pickup.h).
     world::field_pickup::Weaks pickupWeaks{};
@@ -309,9 +320,10 @@ void Refresh() noexcept
                 const SeatNames& names = g_names[static_cast<std::size_t>(seat)];
                 row.seatRow            = IndexIn(names.component, row.widget);
                 row.seatRide           = IndexIn(names.ride, row.widget);
+                row.seatScooter        = IndexIn(names.scooter, row.widget);
                 row.seatPickup         = IndexIn(names.pickup, row.widget);
                 const auto& kept       = g_seatWidgets[static_cast<std::size_t>(seat)];
-                if (row.seatRow >= 0 || row.seatRide >= 0 || row.seatPickup >= 0 ||
+                if (row.seatRow >= 0 || row.seatRide >= 0 || row.seatScooter >= 0 || row.seatPickup >= 0 ||
                     std::find(kept.begin(), kept.end(), row.widget) != kept.end())
                 {
                     row.owner = seat;
