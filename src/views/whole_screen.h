@@ -63,6 +63,10 @@ bool WholeScreenShown() noexcept;
 /// Game thread, once per engine tick: this tick's signals (zeroed if not installed).
 ScreenSignals ReadScreenSignals() noexcept;
 
+/// Game thread, any time: whether the game's location is the title screen now (the location name read; its text is
+/// classified only when the name changes). False if not installed.
+bool AtTitleNow() noexcept;
+
 /// Game thread: whether the game's EndGameState exists now (its own getter, checked at install).
 /// False if not installed or the getter failed.
 bool GameStatePresent() noexcept;

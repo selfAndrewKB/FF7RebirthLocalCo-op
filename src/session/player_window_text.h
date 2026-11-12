@@ -96,6 +96,19 @@ inline std::wstring PlayerName(int seat)
     return L"PLAYER " + std::to_wstring(seat + 1);
 }
 
+/// The notice on the title screen, for a while: how player 1 is chosen, how the others join.
+inline std::array<std::wstring, kLines> TitleNotice()
+{
+    return {L"CO-OP", L"The first controller to press a button plays Player 1",
+            L"Start on another controller joins once the game is on"};
+}
+
+/// The notice after a press on the title screen: which controller plays player 1 (`user` the physical pad, 0-based).
+inline std::array<std::wstring, kLines> TitleClaimed(int user)
+{
+    return {L"CO-OP", L"Controller " + std::to_wstring(user + 1) + L" plays Player 1"};
+}
+
 inline ScreenText TextFor(const Window& w)
 {
     struct Line

@@ -431,6 +431,20 @@ bool AtTitle(std::uintptr_t gameState) noexcept
     return g_atTitle;
 }
 
+}  // namespace
+
+bool AtTitleNow() noexcept
+{
+    void* state = nullptr;
+    if (!g_installed || g_stateCallFailed || !platform::CallGuarded(g_getEndGameState, state) || state == nullptr)
+    {
+        return false;
+    }
+    return AtTitle(reinterpret_cast<std::uintptr_t>(state));
+}
+
+namespace {
+
 /// Each change of the signals, logged once (the edges the single view follows).
 void LogOnChange(const ScreenSignals& now) noexcept
 {

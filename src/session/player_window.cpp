@@ -65,7 +65,9 @@ struct SeatNote
     std::int64_t until = 0;
 };
 
-constexpr std::int64_t kNoteMs = 3000;
+constexpr std::int64_t kNoteMs         = 3000;
+constexpr std::int64_t kTitleNoticeMs  = 15000;  // the title screen's notice, from the title's arrival
+constexpr std::int64_t kTitleClaimedMs = 4000;   // after a press there: which controller plays player 1
 
 // Noted by the pad table's listener during the engine's pad poll, taken in Tick. Game thread both.
 constexpr std::size_t     kQueue = 32;
@@ -90,6 +92,9 @@ int                           g_lastScreens    = 0;  // the views as last shown
 unsigned long long            g_gameClosedSeen = 0;  // view_window's count of windows the game closed
 std::uint32_t                 g_opens = 0, g_joinsAsked = 0, g_leavesAsked = 0, g_titlePresses = 0;
 std::array<const void*, kSeats> g_drawnCharacters{};  // by seat: the character its window names (another redraws it)
+bool                          g_titleUp     = false;  // the title screen showed on the last tick
+std::int64_t                  g_noticeUntil = 0;      // the title notice is up until then (0: none)
+hud::view_prompt::Prompt      g_notice;               // ... and says this (shown again after a redraw)
 
 std::int64_t NowMs() noexcept
 {
@@ -317,16 +322,39 @@ void HoldLeave(int seat, int user)
     }
 }
 
-/// On the title screen: the pad that pressed becomes player 1's.
+/// A notice in player 1's view (the title screen's: no window of the game's can show there) for `ms`.
+void ShowNotice(const std::array<std::wstring, text::kLines>& lines, std::int64_t ms)
+{
+    g_notice.lines     = lines;
+    g_notice.highlight = 0;
+    g_noticeUntil      = NowMs() + ms;
+    hud::view_prompt::Show(0, g_notice);
+}
+
+void ClearNotice()
+{
+    if (g_noticeUntil != 0)
+    {
+        g_noticeUntil = 0;
+        g_redraw      = true;  // the redraw rebuilds every prompt without it
+    }
+}
+
+/// On the title screen: the pad that pressed becomes player 1's, said in the notice.
 void TitlePress(int user)
 {
     const auto table = input::pad_table::Table();
     if (pad::SlotOf(table, user) == 0)
     {
+        if (g_noticeUntil != 0)
+        {
+            ShowNotice(text::TitleClaimed(user), kTitleClaimedMs);  // the notice ends early: the answer is known
+        }
         return;
     }
     ++g_titlePresses;
     input::pad_table::Set(rules::WithPlayerOne(table, user), L"a pad pressed on the title screen: it plays player 1");
+    ShowNotice(text::TitleClaimed(user), kTitleClaimedMs);
 }
 
 /// Each screen's seat now (-1 for a copy's): the engine's list placed by the screen order, as the layout places it.
@@ -492,6 +520,8 @@ void Remove() noexcept
     g_queued         = 0;
     g_waiting        = {};
     g_bSeen          = {};
+    g_noticeUntil    = 0;
+    g_titleUp        = false;
     g_installed      = false;
 }
 
@@ -511,8 +541,18 @@ try
         g_dropped = 0;
     }
     g_playing = frame.seatIds | 1u;
-    // The title is read only when a press is to be told apart (the press there takes player 1).
-    const bool title = count > 0 && views::ReadScreenSignals().title;
+    // The title screen: its arrival shows the notice (how player 1 is chosen), a press there takes player 1.
+    const bool title = views::AtTitleNow();
+    if (title && !g_titleUp)
+    {
+        ShowNotice(text::TitleNotice(), kTitleNoticeMs);
+        platform::Log(L"player window: the title screen shows; the co-op notice is up for {} s", kTitleNoticeMs / 1000);
+    }
+    else if (!title && g_titleUp)
+    {
+        ClearNotice();
+    }
+    g_titleUp = title;
 
     // Players gone (a leave, Ctrl+F8, a field exit) take their windows; one view (a scene, a menu) closes them all.
     for (int seat = 1; seat < kSeats; ++seat)
@@ -621,7 +661,7 @@ try
         g_gameClosedSeen = hud::view_window::ClosedByGame();
         g_redraw         = true;
     }
-    // Notes run out.
+    // Notes and the title notice run out.
     const std::int64_t now = NowMs();
     for (SeatNote& n : g_notes)
     {
@@ -631,17 +671,27 @@ try
             g_redraw = true;
         }
     }
+    if (g_noticeUntil != 0 && now >= g_noticeUntil)
+    {
+        ClearNotice();
+    }
     SetIdlePads();
     if (std::exchange(g_redraw, false))
     {
         ShowWindows();
+        if (g_noticeUntil != 0)
+        {
+            hud::view_prompt::Show(0, g_notice);  // the redraw cleared every prompt; the notice is still due
+        }
     }
 }
 catch (...)
 {
     platform::Log(L"player window: an exception; every window closes");
-    g_open  = {};
-    g_notes = {};
+    g_open        = {};
+    g_notes       = {};
+    g_noticeUntil = 0;
+    g_titleUp     = false;
     hud::view_window::CloseAll();
     hud::view_prompt::ClearAll();
     input::pad_table::SetIdleUsers(0, L"the player windows' exception");
