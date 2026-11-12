@@ -87,6 +87,20 @@ bool Acts(unsigned fix) noexcept
     return (g_mask.load(std::memory_order_relaxed) & fix) != 0;
 }
 
+}  // namespace
+
+std::int64_t ClockMs() noexcept
+{
+    return g_ms != nullptr ? *g_ms : 0;
+}
+
+std::int64_t ClockFrames() noexcept
+{
+    return g_frames != nullptr ? *g_frames : 0;
+}
+
+namespace {
+
 /// The fixes whose facts did not hold at install, for the status line ("" if none).
 const wchar_t* Unavailable() noexcept;
 

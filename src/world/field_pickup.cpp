@@ -8,6 +8,7 @@
 #include "facts/world.h"
 #include "input/pad_buttons.h"
 #include "input/pad_sticks.h"
+#include "input/pad_table.h"
 #include "platform/byte_scope.h"
 #include "platform/call_redirect.h"
 #include "platform/entry_install.h"
@@ -27,6 +28,7 @@
 #include "players/unreal_access.h"
 #include "scopes/leader_scope.h"
 #include "scopes/primary_controller.h"
+#include "scopes/scope_leaks.h"
 #include "scopes/seat_ladder.h"
 #include "session/party_member.h"
 #include "traversal/hooks.h"
@@ -1315,9 +1317,29 @@ struct ThrowGate
     std::uint64_t point    = 0;      // the component's shooting point key
     std::uint64_t target   = 0;      // the seat's slot-0 target held for the tick
     bool          written  = false;  // the game wrote the slot-0 target inside the tick (put back)
-    bool          reset    = false;  // the key records were reset this frame (the character may not start a field action)
+    std::int64_t  stamp    = -1;     // the throw key's press stamp (the game's ms clock at the press; -1 none, or reset)
+    std::int64_t  frame    = -1;     // the frame count at that press
     bool operator==(const ThrowGate&) const = default;
 };
+
+/// "pad 1 0x8000 2.3 s ago, pad 2 ..." : each physical pad's last new press, for the gate line (which pad's press the
+/// seat's component stamped).
+std::wstring LastPresses()
+{
+    std::wstring text;
+    const auto   now = static_cast<std::int64_t>(GetTickCount64());
+    for (int user = 0; user < players::kXInputUsers; ++user)
+    {
+        const input::pad_table::Press press = input::pad_table::LastPressOf(user);
+        if (press.atMs == 0)
+        {
+            continue;
+        }
+        text += std::format(L"{}pad {} {:#06x} {:.1f} s ago", text.empty() ? L"" : L", ", user + 1, press.buttons,
+                            static_cast<double>(now - press.atMs) / 1000.0);
+    }
+    return text.empty() ? L"none yet" : text;
+}
 
 /// The field attack's request (the throw gate's call, or the plain attack's), logged per call with the character,
 /// the player and the answer: a pass-through.
@@ -1373,19 +1395,28 @@ void LogThrowGate(int seat, const void* controller, std::uint64_t target, bool w
         const std::uint8_t state = ReadField<std::uint8_t>(component, facts::kLeaderActionShootingState);
         const ThrowGate    now{(state & facts::kShootingStateShown) != 0, (state & facts::kShootingStateCanShoot) != 0,
                             ShootingKeyOf(controller), target, written,
-                            ReadField<std::int64_t>(component, facts::kLeaderActionThrowPressStamp) == -1};
+                            ReadField<std::int64_t>(component, facts::kLeaderActionThrowPressStamp),
+                            ReadField<std::int64_t>(component, facts::kLeaderActionThrowPressFrame)};
         if (g_throwGateLogged[index] && now == g_throwGate[index])
         {
             return;
         }
         g_throwGate[index]       = now;
         g_throwGateLogged[index] = true;
+        // The clock and frame as the seat's tick left them: a stamp equal to them is a press of this tick, the one the
+        // throw fires on; the pads' last presses say whose press it was.
+        const std::int64_t clock  = scopes::scope_leaks::ClockMs();
+        const std::int64_t frames = scopes::scope_leaks::ClockFrames();
         platform::LogDebug(L"field pickup: {}'s throw gate: a box {}, can shoot {}; their point {} {} their slot-0 target {}; the "
-                           L"key records {}{}",
+                           L"throw key's stamp {} (frame {}; the tick's clock {}, frame {}: {}); the pads' last presses: {}{}",
                            players::SeatName(seat), now.shown ? L"shown" : L"not shown", players::YesNo(now.canShoot),
                            Name(now.point), now.point != 0 && now.point == now.target ? L"is" : L"is not", Name(now.target),
-                           now.reset ? L"RESET (the character may not start a field action)" : L"kept",
-                           written ? L"; the game wrote the target inside the tick (put back)" : L"");
+                           now.stamp, now.frame, clock, frames,
+                           now.stamp == -1   ? L"none, or reset"
+                           : clock == 0      ? L"the clock is unread"
+                           : now.stamp == clock ? L"a press of this tick"
+                                                : L"an older press",
+                           LastPresses(), written ? L"; the game wrote the target inside the tick (put back)" : L"");
     }
     catch (...)
     {

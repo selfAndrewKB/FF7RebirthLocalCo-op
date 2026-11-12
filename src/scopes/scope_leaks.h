@@ -26,6 +26,8 @@
 
 #include "platform/dev_switch.h"
 
+#include <cstdint>
+
 namespace lss::platform {
 class GameImage;
 }
@@ -72,6 +74,11 @@ public:
 private:
     bool clockHeld_ = false;
 };
+
+/// The game's millisecond clock and frame count as they stand now (inside a seat's member tick: as that tick left
+/// them, the values its component's press stamps carry); 0 when the clock fix's facts did not hold. Game thread.
+std::int64_t ClockMs() noexcept;
+std::int64_t ClockFrames() noexcept;
 
 /// Writes one line of counts since the last call (with the players' periodic status lines).
 void LogStatus() noexcept;

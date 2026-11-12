@@ -43,6 +43,7 @@ struct Pad
     rules::Held     leave;     // B: a window's close (a tap) or its leave (a hold)
     rules::LetGo    letGo;     // idle to the game until it lets go of what it held at a change or its idle's end
     std::uint16_t   last = 0;  // the buttons on its last poll (the listener's presses)
+    Press           press;     // its last new press (LastPressOf)
 };
 
 platform::VTableEntry g_getEntry;
@@ -170,6 +171,10 @@ DWORD WINAPI GetStateFor(DWORD slot, XINPUT_STATE* state) noexcept
         pressed                   = static_cast<std::uint16_t>(raw & ~pad.last);
         const rules::Long b       = rules::Hold(pad.leave, (raw & rules::kB) != 0, now, rules::kLeaveHoldMs);
         pad.last                  = raw;
+        if (pressed != 0)
+        {
+            pad.press = Press{now, pressed};
+        }
         if (const Listener listener = g_listener.load(std::memory_order_relaxed);
             listener != nullptr && (pressed != 0 || gated.open || b != rules::Long::None))
         {
@@ -398,6 +403,11 @@ try
 }
 catch (...)
 {
+}
+
+Press LastPressOf(int user) noexcept
+{
+    return user >= 0 && user < kSlots ? g_pads[static_cast<std::size_t>(user)].press : Press{};
 }
 
 void Listen(Listener listener) noexcept

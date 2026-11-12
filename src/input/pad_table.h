@@ -62,6 +62,15 @@ void SetIdleUsers(std::uint32_t users, const wchar_t* why) noexcept;
 using Listener = void (*)(int user, std::uint16_t pressed, bool open, bool bTap, bool bHeld) noexcept;
 void Listen(Listener listener) noexcept;
 
+/// A physical pad's last new press as the poll read it: when (the tick count) and which buttons went down then. Zero
+/// before its first. Game thread.
+struct Press
+{
+    std::int64_t  atMs    = 0;
+    std::uint16_t buttons = 0;
+};
+Press LastPressOf(int user) noexcept;
+
 /// The slots a player holds (bit N: slot N, the controller id seat N plays; bit 0 always): the others' Start is held
 /// back from the game. Once per engine tick from the session's seats. Game thread.
 void SetPlaying(std::uint32_t slots) noexcept;

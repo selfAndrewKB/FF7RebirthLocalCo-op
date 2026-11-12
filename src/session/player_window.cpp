@@ -91,6 +91,7 @@ std::uint32_t                 g_idleUsers      = 0;  // the pads read idle now (
 int                           g_lastScreens    = 0;  // the views as last shown
 unsigned long long            g_gameClosedSeen = 0;  // view_window's count of windows the game closed
 std::uint32_t                 g_opens = 0, g_joinsAsked = 0, g_leavesAsked = 0, g_titlePresses = 0;
+int                           g_titleClaimedUser = -1;  // the pad the title's notice last named (-1: none since the title)
 std::array<const void*, kSeats> g_drawnCharacters{};  // by seat: the character its window names (another redraws it)
 
 std::int64_t NowMs() noexcept
@@ -320,7 +321,8 @@ void HoldLeave(int seat, int user)
 }
 
 /// On the title screen: the pad that pressed becomes player 1's, said on the game's save-data notice (the title's one
-/// notice) for a few seconds; a pad that is player 1's already is said the same way.
+/// notice) for a few seconds, once per pad that takes the place (its own later presses, the title menu's, say
+/// nothing more; another pad's press says that pad).
 void TitlePress(int user)
 {
     const auto table = input::pad_table::Table();
@@ -329,7 +331,11 @@ void TitlePress(int user)
         ++g_titlePresses;
         input::pad_table::Set(rules::WithPlayerOne(table, user), L"a pad pressed on the title screen: it plays player 1");
     }
-    hud::save_notice::Show(text::TitleClaimed(user), kTitleClaimedSeconds);
+    if (user != g_titleClaimedUser)
+    {
+        g_titleClaimedUser = user;
+        hud::save_notice::Show(text::TitleClaimed(user), kTitleClaimedSeconds);
+    }
 }
 
 /// Each screen's seat now (-1 for a copy's): the engine's list placed by the screen order, as the layout places it.
@@ -493,6 +499,7 @@ void Remove() noexcept
     g_startWhenField = -1;
     g_idleUsers      = 0;
     g_queued         = 0;
+    g_titleClaimedUser = -1;
     g_waiting        = {};
     g_bSeen          = {};
     g_installed      = false;
@@ -515,8 +522,13 @@ try
     }
     g_playing = frame.seatIds | 1u;
     hud::save_notice::Tick();  // the title's notice of which controller plays player 1, while it is due
-    // The title is read only when a press is to be told apart (the press there takes player 1).
+    // The title is read only when a press is to be told apart (the press there takes player 1). A press anywhere else
+    // ends the title's visit: the next one's first press is said again.
     const bool title = count > 0 && views::AtTitleNow();
+    if (count > 0 && !title)
+    {
+        g_titleClaimedUser = -1;
+    }
 
     // Players gone (a leave, Ctrl+F8, a field exit) take their windows; one view (a scene, a menu) closes them all.
     for (int seat = 1; seat < kSeats; ++seat)
