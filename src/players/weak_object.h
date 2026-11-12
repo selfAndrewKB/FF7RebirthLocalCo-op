@@ -31,6 +31,9 @@ void* ObjectAt(const void* field) noexcept;
 /// The same for a weak's 8 bytes by value.
 void* ObjectOf(std::uint64_t weak) noexcept;
 
+/// The object the weak `field` bytes into `object` names; null for a null `object`.
+void* ObjectIn(const void* object, std::uint32_t field) noexcept;
+
 /// `object` as a weak value {index, serial}, by the game's own assignment, checked to resolve back to it; 0 if
 /// it cannot be (or its serial would be 0).
 std::uint64_t WeakOf(void* object) noexcept;

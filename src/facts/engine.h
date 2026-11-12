@@ -270,7 +270,8 @@ inline constexpr std::uint32_t kActorComponentOwner = 0xA0;  // UActorComponent:
 inline constexpr std::uint32_t kWorldPlayerControllers     = 0x1F0;
 inline constexpr std::uint32_t kWorldPlayerControllerCount = 0x1F8;
 // AActor
-inline constexpr std::uint32_t kActorOwner     = 0xE8;   // AActor::SetOwner stores it
+inline constexpr std::uint32_t kActorOwner         = 0xE8;   // AActor::SetOwner stores it
+inline constexpr std::uint32_t kActorRootComponent = 0x138;  // AActor::RootComponent
 inline constexpr std::uint32_t kActorTagsData  = 0x178;  // Tags.GetData()
 inline constexpr std::uint32_t kActorTagsCount = 0x180;  // Tags.Num()
 inline constexpr std::uint32_t kPawnController = 0x260;  // APawn::Controller

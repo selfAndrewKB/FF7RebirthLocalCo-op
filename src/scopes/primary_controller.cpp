@@ -95,6 +95,18 @@ void* Current() noexcept
     return players::weak_object::ObjectAt(field);
 }
 
+int OpenSeat() noexcept
+{
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
+    {
+        if (players::generation::Active(seat) && Is(players::generation::ControllerOf(seat)))
+        {
+            return seat;
+        }
+    }
+    return 0;
+}
+
 Scope::Scope(int seat) noexcept
 {
     if (!players::SeatIndex(seat) || g_bound[seat].controller == nullptr)

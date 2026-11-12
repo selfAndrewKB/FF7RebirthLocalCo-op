@@ -78,4 +78,19 @@ void SeatOut(int seat) noexcept;
 /// force-feedback manager) or not. Turning it off stops on the seat's list what was copied and not yet stopped.
 void CopyPlayerOne(int seat, bool on) noexcept;
 
+/// Names `seat` as the owner of this thread's rumble adds and stops while it lives: a source of the seat's that runs
+/// outside the seat's scopes (the grappling gun's hit, the hookshot move's flight). Any thread; an inner scope's seat
+/// is the owner until that scope ends, then the outer's again.
+class OwnerScope
+{
+public:
+    explicit OwnerScope(int seat) noexcept;
+    ~OwnerScope();
+    OwnerScope(const OwnerScope&)            = delete;
+    OwnerScope& operator=(const OwnerScope&) = delete;
+
+private:
+    int saved_;
+};
+
 }  // namespace lss::feedback::traversal_rumble

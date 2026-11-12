@@ -1,6 +1,7 @@
 #include "input/climb_context.h"
 
 #include "facts/controller.h"
+#include "feedback/traversal_rumble.h"
 #include "input/pad_buttons.h"
 #include "input/pad_sticks.h"
 #include "platform/angles.h"
@@ -24,7 +25,9 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <cwchar>
 #include <format>
+#include <optional>
 #include <span>
 #include <string>
 #include <utility>
@@ -94,8 +97,15 @@ struct MoveClass
     platform::SlotFact finish;
     bool               holdSelect;  // its Tick calls the hold-select (its redirect is required)
     Kind               kind;
+    bool               rumbleOwner = false;  // its Tick adds rumble on the worker: the seat owns those adds
+    bool               holder      = true;   // a climb the seats' own climb holders depend on (TicksPlaced)
 };
-const MoveClass kMoves[] = {
+// The hookshot move's Tick slot holds the behaviour action's shared tick thunk; the rope's its own tick.
+constexpr std::uint8_t kHookShotTickBytes[] = {0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8, 0x86, 0x54, 0x85, 0x00, 0x48, 0x2B,
+                                               0xE0, 0x48, 0x83, 0xC4};
+constexpr std::uint8_t kRopeTickBytes[]     = {0x48, 0x89, 0x5C, 0x24, 0x18, 0x55, 0x56, 0x57, 0x41, 0x56, 0x41, 0x57,
+                                               0x48, 0x8B, 0xEC, 0xB8};
+constexpr MoveClass kMoves[] = {
     {L"climbing wall",
      {L"ClimbingMove's Tick slot (+0x10)", 0x145833778, {L"ClimbingMove_Tick_Vt10_CamRot", 0x141636878, kTickBytes}},
      {L"ClimbingMove's Finish slot (+0xA8)", 0x145833810,
@@ -127,12 +137,30 @@ const MoveClass kMoves[] = {
      {L"FieldDodgeMove's Finish slot (+0xA8)", 0x145CCB528,
       {L"FieldDodgeMove_Finish_VtA8", 0x1432959EC, kClimbFinishBytes}},
      false, Kind::Steered},
+    // The grappling gun's flight and the hook rope's swing (research/RE-hooks-for-seats.md): their phases read the
+    // player test, the merged stick and the primary camera manager on the worker, as the climbs do; the gun's flight
+    // adds its rumble there too. Their Begin and End slots are traversal/hooks', which asks whether these are placed
+    // (MovePlaced); the climb holders do not depend on them.
+    {L"hookshot",
+     {L"HookShotMove's Tick slot (+0x10)", 0x146694810, {L"EndBehaviorAction_Vt10_Thunk_Tick", 0x141859AA0, kHookShotTickBytes}},
+     {L"HookShotMove's Finish slot (+0xA8)", 0x1466948A8,
+      {L"EndBehaviorAction_Finish_CallsEndVt120", 0x1416E9604, kClimbFinishBytes}},
+     false, Kind::Climb, true, false},
+    {L"hook rope",
+     {L"HookRopeMove's Tick slot (+0x10)", 0x146694A90, {L"HookRopeMove_Tick_Vt10", 0x1432E1458, kRopeTickBytes}},
+     {L"HookRopeMove's Finish slot (+0xA8)", 0x146694B28,
+      {L"EndBehaviorAction_Finish_CallsEndVt120", 0x1416E9604, kClimbFinishBytes}},
+     false, Kind::Climb, false, false},
 };
 constexpr std::size_t kMoveCount  = std::size(kMoves);
-constexpr std::size_t kClimbCount = 3;  // the first three entries
-static_assert(kMoves[0].kind == Kind::Climb && kMoves[1].kind == Kind::Climb && kMoves[2].kind == Kind::Climb &&
-                  kMoves[3].kind != Kind::Climb,
-              "kClimbCount counts the climbs at the table's start");
+constexpr std::size_t kClimbCount = [] {
+    std::size_t climbs = 0;
+    for (const MoveClass& move : kMoves)
+    {
+        climbs += move.kind == Kind::Climb && move.holder ? 1 : 0;
+    }
+    return climbs;
+}();
 
 using TickFn           = std::uintptr_t (*)(void* move, void* arg);
 using FinishFn         = std::uintptr_t (*)(void* move);
@@ -159,12 +187,6 @@ thread_local Context t_climb;
 constexpr std::size_t IndexOfPlayer(int player) noexcept
 {
     return static_cast<std::size_t>(player - 1);
-}
-
-/// The seat of this thread's context while it names a seat's climber (a player number of 2 or more), else 0.
-int SeatHere() noexcept
-{
-    return t_climb.player >= 2 ? t_climb.player - 1 : 0;
 }
 
 class InContext
@@ -455,6 +477,12 @@ std::uintptr_t MoveTick(void* move, void* arg) noexcept
     g_climbFrame[IndexOfPlayer(player)].store(frame, std::memory_order_relaxed);
     g_counts.ticks[IndexOfPlayer(player)].fetch_add(1, std::memory_order_relaxed);
     const InContext context(player, true);
+    // A seat's flight adds its rumble from this Tick: the seat owns those adds (feedback/traversal_rumble).
+    std::optional<feedback::traversal_rumble::OwnerScope> owner;
+    if (kMoves[Index].rumbleOwner && player >= 2)
+    {
+        owner.emplace(player - 1);
+    }
     return original(move, arg);
 }
 
@@ -736,7 +764,7 @@ std::wstring PlaceMove(const platform::GameImage& image, bool holdSelect)
     {
         live.finish.Restore();
     }
-    g_ticksPlaced += tick && cls.kind == Kind::Climb ? 1u : 0u;
+    g_ticksPlaced += tick && cls.kind == Kind::Climb && cls.holder ? 1u : 0u;
     return std::wstring(cls.name) + (tick ? L" yes" : L" NO");
 }
 
@@ -931,9 +959,26 @@ int PlayerHere() noexcept
     return t_climb.climb ? t_climb.player : 0;
 }
 
+int SeatHere() noexcept
+{
+    return t_climb.player >= 2 ? t_climb.player - 1 : 0;
+}
+
 bool TicksPlaced() noexcept
 {
     return g_ticksPlaced == kClimbCount;
+}
+
+bool MovePlaced(const wchar_t* name) noexcept
+{
+    for (std::size_t i = 0; i < kMoveCount; ++i)
+    {
+        if (std::wcscmp(kMoves[i].name, name) == 0)
+        {
+            return g_moves[i].tick.Original() != 0;
+        }
+    }
+    return false;
 }
 
 bool WithSeatCamera(int seat, void (*call)(void*), void* context) noexcept

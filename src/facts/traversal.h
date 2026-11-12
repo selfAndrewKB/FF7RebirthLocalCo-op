@@ -42,6 +42,19 @@ inline constexpr std::uintptr_t kChocoboJumpPadUnregister = 0x143661B94;
 inline constexpr std::uintptr_t kChocoboJumpBoxUnregister = 0x143661B18;
 inline constexpr std::uintptr_t kChocoboSliderUnregister  = 0x143661C04;
 
+/// The grappling gun's points (AEndFieldActionActorHookShotChild) and the hook ropes (AEndFieldActionHookRopeActor;
+/// RE-hooks-for-seats.md, RE-p2-zipline-rumble-hook-who.md): their vtables, the two FName globals of the hookshot
+/// point's presets (rpaHookShot, rpaHookShotPlayer: the field-action manager's point for the gun), and the one global
+/// camera-module handle every rope's swing installs through (the module, then its weak reference controller).
+inline constexpr std::uintptr_t kHookShotVTable             = 0x1466F0F98;
+inline constexpr std::uintptr_t kHookRopeVTable             = 0x145884360;
+inline constexpr std::uintptr_t kHookShotPresetName         = 0x149452BE8;
+inline constexpr std::uintptr_t kHookShotPlayerPresetName   = 0x149452BF8;
+inline constexpr std::uintptr_t kHookRopeCameraModuleGlobal = 0x1491B0E00;
+/// A gun point actor's own camera-module handle (16 bytes: the module, then its weak reference controller), the
+/// per-actor twin of the rope's global.
+inline constexpr std::uint32_t kHookShotCameraHandle = 0x9E0;
+
 /// End2FieldActionActor OnTriggerEnter / OnTriggerLeave (actor vt+0x710 / +0x718; 1.005 +0x718 / +0x720), shared by every
 /// field-action actor: (actor, const FName* key, AActor* other), `other` being the overlapping actor whose first tag is
 /// the key (a controller's trigger actor). Both start `mov [rsp+10h], rbx` (5 bytes, inside one 16-byte block in both

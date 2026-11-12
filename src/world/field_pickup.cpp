@@ -27,6 +27,7 @@
 #include "scopes/primary_controller.h"
 #include "scopes/seat_ladder.h"
 #include "session/party_member.h"
+#include "traversal/hooks.h"
 #include "world/shop_talk.h"
 #include "world/vending.h"
 
@@ -322,7 +323,7 @@ struct Doomed
 struct Counts
 {
     std::uint32_t passes = 0, polled = 0, filtered = 0, worldItems = 0, chests = 0, vending = 0, shopkeepers = 0, boxes = 0,
-                  executed = 0, fieldResets = 0;
+                  hooks = 0, executed = 0, fieldResets = 0;
     std::uint32_t requests = 0, requestsSeatFirst = 0;  // visibility requests in the pass; those with the seat first
     std::uint32_t markersMade = 0, markersGone = 0, markersDestroyed = 0;  // the seat's made; gone by the game; the mod's
     std::array<std::uint32_t, kSkipCount> skips{};
@@ -751,7 +752,9 @@ void Before(Pickup& p, void* mgr, const std::uint8_t* items, const std::uint8_t*
                                         vending::Admits(ReadField<std::uint64_t>(point, kFieldActionPointPreset));
             const bool     keeper     = filter && !worldItem && !chest && !machine && shop_talk::Admits(key);
             const bool     box        = filter && boxKey != 0 && key == boxKey && !worldItem && !chest && !machine && !keeper;
-            const bool     disable    = filter && !worldItem && !chest && !machine && !keeper && !box &&
+            const bool     hook       = filter && !worldItem && !chest && !machine && !keeper && !box &&
+                                        traversal::hooks::AdmitsPoint(key, ReadField<std::uint64_t>(point, kFieldActionPointPreset));
+            const bool     disable    = filter && !worldItem && !chest && !machine && !keeper && !box && !hook &&
                                         (flags & kDisabledBit) == 0;
             std::uintptr_t oneMarker  = 0;
             std::uintptr_t seatMarker = 0;
@@ -773,6 +776,7 @@ void Before(Pickup& p, void* mgr, const std::uint8_t* items, const std::uint8_t*
             p.counts.vending += machine ? 1 : 0;
             p.counts.shopkeepers += keeper ? 1 : 0;
             p.counts.boxes += box ? 1 : 0;
+            p.counts.hooks += hook ? 1 : 0;
             p.counts.filtered += disable ? 1 : 0;
             flags = static_cast<std::uint8_t>((flags & ~kTargetBits) | (carried != p.bits.end() ? carried->second : 0) |
                                               (disable ? kDisabledBit : 0));
@@ -1058,7 +1062,7 @@ void LogStatus() noexcept
         {
             platform::LogDebug(L"field pickup (60 s): {} pass(es) (poll open in {}), {} pickup(s) by {}, {} field reset(s) "
                           L"of {}'s copy; {} visibility request(s), {} with {} as the first local player; per "
-                          L"pass on average {} WorldItem point(s), {} chest point(s), {} vending machine(s), {} shopkeeper(s) and {} own box point(s) left open, {} other point(s) disabled for the pass; "
+                          L"pass on average {} WorldItem point(s), {} chest point(s), {} vending machine(s), {} shopkeeper(s), {} own box point(s) and {} hook point(s) left open, {} other point(s) disabled for the pass; "
                           L"skipped: scopes {}, member {}; WorldItem and chest lookups by {} ({} checked, {} mismatch(es)); {}'s "
                           L"marker widgets: {} now, {} made and {} destroyed by the game's own code, {} by the mod's call of "
                           L"its destroy; player 1's point markers now {}",
@@ -1068,6 +1072,7 @@ void LogStatus() noexcept
                           c.passes != 0 ? c.vending / c.passes : 0,
                           c.passes != 0 ? c.shopkeepers / c.passes : 0,
                           c.passes != 0 ? c.boxes / c.passes : 0,
+                          c.passes != 0 ? c.hooks / c.passes : 0,
                           c.passes != 0 ? c.filtered / c.passes : 0, c.skips[kSkipScopes],
                           c.skips[kSkipMember], g_hashTrusted ? L"the map's hash" : L"a walk of the map", g_hashChecked,
                           g_hashMismatches, who, p.markers.size(), c.markersMade, c.markersGone,

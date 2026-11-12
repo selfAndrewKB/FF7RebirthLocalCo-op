@@ -85,6 +85,7 @@
 #include "session/session.h"
 #include "traversal/chocobo_climb.h"
 #include "traversal/chocobo_spots.h"
+#include "traversal/hooks.h"
 #include "traversal/traversal_camera.h"
 #include "traversal/traversal_watch.h"
 #include "views/column_layout.h"
@@ -258,6 +259,8 @@ constexpr std::array kModules{
     Module{Call<&traversal::chocobo_spots::Install>, &traversal::chocobo_spots::Remove},
     // a seat's chocobo leaves its glide and water jet in the seat's scope, whoever ends them
     Module{Call<&rides::chocobo_exits::Install>, &rides::chocobo_exits::Remove},
+    // the grappling gun's points and the hook ropes for the seats (their moves' ticks are the climb context's)
+    Module{Call<&traversal::hooks::Install>, &traversal::hooks::Remove},
 
     // The HUD's layout in split views (hud/layout/overlay_layout.h). Optional like the view point: without it the HUD
     // keeps the game's full-screen layout, cropped to each half; the layout scale (the contain rule) needs it.
@@ -411,6 +414,8 @@ static_assert(IndexOf<&scopes::leader_scope::Install>() == 0,
               "the leader scope first: the modules that check it at their own install come after it");
 static_assert(Ordered<&input::climb_context::Install, &traversal::traversal_camera::Install>(),
               "climb_context before traversal_camera: the camera holders need its Ticks");
+static_assert(Ordered<&input::climb_context::Install, &traversal::hooks::Install>(),
+              "climb_context before hooks: the gun and the ropes need their moves' Ticks placed");
 static_assert(Ordered<&views::InstallPlayerViewPoint, &views::InstallStreamViews>(),
               "the view point before the streaming views: they read whether it is installed");
 static_assert(Ordered<&hud::InstallOverlayLayout, &hud::InstallLayoutScale>(),

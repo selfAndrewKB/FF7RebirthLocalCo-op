@@ -46,6 +46,10 @@ std::uint64_t WeakValueOf(void* object) noexcept;
 /// True if the party manager's primary controller is `controller` right now.
 bool Is(const void* controller) noexcept;
 
+/// The built, active seat whose controller is the primary one right now (its scope is open), or 0: player 1's, or
+/// none. Game thread.
+int OpenSeat() noexcept;
+
 /// The primary controller as the engine resolves it (null if none).
 void* Current() noexcept;
 

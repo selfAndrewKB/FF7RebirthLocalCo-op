@@ -15,6 +15,7 @@
 #include "players/generation.h"
 #include "players/object_fields.h"
 #include "players/seats.h"
+#include "players/weak_object.h"
 #include "scopes/leader_scope.h"
 
 #include <cstddef>
@@ -38,9 +39,19 @@ struct Inside
 // a dev tool, reads player 2's).
 inline const void* g_ladderModule[players::kMaxPlayers] = {};
 
-inline void* ObjectIn(const void* object, std::uint32_t field) noexcept
+using players::weak_object::ObjectIn;
+
+/// The built active seat whose member is `character`, or -1 (game thread).
+inline int SeatOfCharacter(const void* character) noexcept
 {
-    return object != nullptr ? scopes::leader_scope::ObjectAt(static_cast<const std::byte*>(object) + field) : nullptr;
+    for (int seat = 1; character != nullptr && seat <= players::kSeatsBuilt; ++seat)
+    {
+        if (players::generation::Active(seat) && players::generation::MemberOf(seat) == character)
+        {
+            return seat;
+        }
+    }
+    return -1;
 }
 
 /// The built seat whose active member is the executer's character, or -1 (game thread; -1 on any other).
@@ -50,15 +61,7 @@ inline int SeatOfExecuter(void* executer) noexcept
     {
         return -1;
     }
-    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
-    {
-        void* member = players::generation::MemberOf(seat);
-        if (member != nullptr && players::generation::Active(seat) && ObjectIn(executer, kExecCharacter) == member)
-        {
-            return seat;
-        }
-    }
-    return -1;
+    return SeatOfCharacter(ObjectIn(executer, kExecCharacter));
 }
 
 inline std::wstring ActorName(const void* actor)

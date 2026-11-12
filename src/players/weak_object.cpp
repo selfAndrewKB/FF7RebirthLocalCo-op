@@ -47,6 +47,11 @@ void* ObjectAt(const void* field) noexcept
     return platform::Read(field, weak) ? ObjectOf(weak) : nullptr;
 }
 
+void* ObjectIn(const void* object, std::uint32_t field) noexcept
+{
+    return object != nullptr ? ObjectAt(static_cast<const std::byte*>(object) + field) : nullptr;
+}
+
 bool Assign(std::uint64_t* field, void* object) noexcept
 {
     const AssignFn assign = g_assign.load(std::memory_order_acquire);

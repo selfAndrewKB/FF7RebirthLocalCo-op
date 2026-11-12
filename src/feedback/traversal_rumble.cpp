@@ -29,7 +29,7 @@
 // The rumble list's core (feedback/traversal_rumble.h): the add and the stop by name, the component's list tick, the
 // zip line's gate and add, each seat's list's life, the chocobo's footsteps, the summary, and the module's install,
 // removal and tick. The shared-ride copy and the sources outside the seats' scopes are their own units. The seat of an
-// add or a stop is its source's (SeatOwner) or the primary player's (traversal_rumble_rules::SeatOfAdd); of a list
+// add or a stop is its source's (OwnerScope) or the primary player's (traversal_rumble_rules::SeatOfAdd); of a list
 // tick, its component's controller's; of the zip line, its move's character; of a footstep, the chocobo the seat rides.
 
 namespace lss::feedback::traversal_rumble {
@@ -115,19 +115,6 @@ std::atomic<std::uint64_t> g_seatLastKey[players::kMaxPlayers]{};
 std::uint64_t              g_seatLastStop[players::kMaxPlayers]{};
 platform::Every            g_summary{kSummaryEvery};
 
-/// The built active seat that is the primary player now, or 0 (player 1's, or none). Game thread.
-int PrimarySeat() noexcept
-{
-    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
-    {
-        if (players::generation::Active(seat) && scopes::primary_controller::Is(players::generation::ControllerOf(seat)))
-        {
-            return seat;
-        }
-    }
-    return 0;
-}
-
 /// The built seat that drives `chocobo` this tick (generation's), or 0. Any thread.
 int SeatOfChocobo(const void* chocobo) noexcept
 {
@@ -207,7 +194,7 @@ StopNamedFn StopNamedOriginal() noexcept
 
 namespace {
 
-/// The add by name: a seat's add goes to the seat's list. It is a seat's when its source names the seat (SeatOwner, any
+/// The add by name: a seat's add goes to the seat's list. It is a seat's when its source names the seat (OwnerScope, any
 /// thread), or on the game thread while the seat is the primary player (the seat's scopes). During a shared ride an
 /// add to the game's list is copied into each copying seat's list too.
 void PlayNamed(std::uint64_t key, const void* params, std::uint8_t flag) noexcept
@@ -215,7 +202,7 @@ void PlayNamed(std::uint64_t key, const void* params, std::uint8_t flag) noexcep
     const auto original = reinterpret_cast<PlayNamedFn>(g_playNamed.Original());
     const int  owner    = t_ownerSeat;
     const bool game     = owner == 0 && players::generation::OnGameThread();
-    const int  seat     = traversal_rumble_rules::SeatOfAdd(owner, game, game ? PrimarySeat() : 0);
+    const int  seat     = traversal_rumble_rules::SeatOfAdd(owner, game, game ? scopes::primary_controller::OpenSeat() : 0);
     const bool isSeat   = seat >= 1;
     const bool added    = isSeat && AddToSeat(seat, key, params, flag);
     const auto route    = traversal_rumble_rules::AddRouteOf(isSeat, added, AnyCopy());
@@ -295,7 +282,7 @@ void ListTick(float dt) noexcept
     {
         anyList = anyList || (players::generation::Active(seat) && g_seatList[seat].load(std::memory_order_acquire) != nullptr);
     }
-    const int primary = game ? PrimarySeat() : 0;
+    const int primary = game ? scopes::primary_controller::OpenSeat() : 0;
     switch (traversal_rumble_rules::ListTickFor(ownerSeat, ownerList != nullptr, anyList, primary >= 1))
     {
         case traversal_rumble_rules::ListTick::Game: original(dt); return;
@@ -360,7 +347,7 @@ void StopNamed(std::uint64_t key) noexcept
     const auto original = reinterpret_cast<StopNamedFn>(g_stopNamed.Original());
     const int  owner    = t_ownerSeat;
     const bool game     = players::generation::OnGameThread();
-    const int  seat     = traversal_rumble_rules::SeatOfAdd(owner, game, owner == 0 && game ? PrimarySeat() : 0);
+    const int  seat     = traversal_rumble_rules::SeatOfAdd(owner, game, owner == 0 && game ? scopes::primary_controller::OpenSeat() : 0);
     const bool isSeat   = seat >= 1;
     const bool hasList  = isSeat && g_seatList[seat].load(std::memory_order_acquire) != nullptr;
     const bool stopped  = isSeat && game && StopOnSeat(seat, original, key);

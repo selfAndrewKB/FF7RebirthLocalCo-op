@@ -26,12 +26,22 @@
 
 // The rumble sources that run outside the seats' scopes (feedback/traversal_rumble.h): the scooter move
 // state's slots, the sky glide's delegate, the jump box's OnEnded, the drift and brake actions. Each names a seat as
-// the owner of its adds and stops while it runs for the seat's scooter or chocobo (SeatOwner; the seat from the
+// the owner of its adds and stops while it runs for the seat's scooter or chocobo (OwnerScope; the seat from the
 // scooter's controller or the chocobo's weak pointer); the drift and brake also answer the leader test for the seat's
 // member on their thread. Their slots are placed from one table, a source's slots all or none; the jump box (an entry
 // redirect, and 1.004's inline list load) is placed on its own.
 
 namespace lss::feedback::traversal_rumble {
+
+OwnerScope::OwnerScope(int seat) noexcept : saved_(t_ownerSeat)
+{
+    t_ownerSeat = seat;
+}
+
+OwnerScope::~OwnerScope()
+{
+    t_ownerSeat = saved_;
+}
 
 namespace {
 
@@ -77,19 +87,6 @@ platform::CodeRedirect  g_jumpListLoad;  // 1.004 only
 platform::VTableEntry   g_driftSlot;
 platform::VTableEntry   g_brakeOneSlot;
 platform::VTableEntry   g_brakeTwoSlot;
-
-/// Names `seat` as the owner of this thread's adds and stops while it lives (nesting keeps the outer owner).
-class SeatOwner
-{
-public:
-    explicit SeatOwner(int seat) noexcept : saved_(t_ownerSeat) { t_ownerSeat = seat; }
-    ~SeatOwner() { t_ownerSeat = saved_; }
-    SeatOwner(const SeatOwner&)            = delete;
-    SeatOwner& operator=(const SeatOwner&) = delete;
-
-private:
-    int saved_;
-};
 
 /// The built seat with a list whose chocobo the game's weak pointer `weak` names (this tick's), or 0. Any thread.
 int SeatOfChocoboWeak(std::uint64_t weak) noexcept
@@ -156,7 +153,7 @@ std::uint64_t ScooterTick(void* state, float dt) noexcept
         return original(state, dt);
     }
     NoteSource(seat, &Counts::seatScooter);
-    const SeatOwner owner(seat);
+    const OwnerScope owner(seat);
     return original(state, dt);
 }
 
@@ -170,7 +167,7 @@ std::uint64_t ScooterOff(void* state) noexcept
         return original(state);
     }
     NoteSource(seat, &Counts::seatScooter);
-    const SeatOwner owner(seat);
+    const OwnerScope owner(seat);
     return original(state);
 }
 
@@ -192,7 +189,7 @@ bool GlideSafe(void* instance) noexcept
         return original(instance);
     }
     NoteSource(seat, &Counts::seatGlide);
-    const SeatOwner owner(seat);
+    const OwnerScope owner(seat);
     return original(instance);
 }
 
@@ -206,7 +203,7 @@ void GlideRun(void* instance) noexcept
         return;
     }
     NoteSource(seat, &Counts::seatGlide);
-    const SeatOwner owner(seat);
+    const OwnerScope owner(seat);
     original(instance);
 }
 
@@ -308,7 +305,7 @@ void JumpEnded(void* payload) noexcept
         return;
     }
     NoteSource(seat, &Counts::seatJump);
-    const SeatOwner owner(seat);
+    const OwnerScope owner(seat);
     const JumpRoute route(seat);
     original(payload);
 }
@@ -325,7 +322,7 @@ std::uint64_t Drift(void* action, double dt) noexcept
     }
     NoteSource(seat, &Counts::seatDrift);
     NoteAction(seat);
-    const SeatOwner                  owner(seat);
+    const OwnerScope                  owner(seat);
     const scopes::leader_answer::ThreadScope leader(g_memberType[seat].load(std::memory_order_relaxed));
     return original(action, dt);
 }
@@ -341,7 +338,7 @@ std::uint64_t Brake(platform::VTableEntry& slot, void* move, std::uint64_t event
     }
     NoteSource(seat, &Counts::seatBrake);
     NoteAction(seat);
-    const SeatOwner                  owner(seat);
+    const OwnerScope                  owner(seat);
     const scopes::leader_answer::ThreadScope leader(g_memberType[seat].load(std::memory_order_relaxed));
     return original(move, event, xmm2, xmm3);
 }

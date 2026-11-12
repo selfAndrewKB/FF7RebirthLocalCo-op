@@ -90,12 +90,11 @@ std::array<platform::CallRedirect, std::size(kHipCalls)> g_hipCalls;
 std::atomic<const void*>                                g_climbActor[players::kMaxPlayers]{};
 std::atomic<const void*>                                g_climbMember[players::kMaxPlayers]{};
 
-/// The seat whose climb this thread ticks now (climb_context's context), or -1. climb_context numbers its climbers as
-/// players (1 player 1, 2 player 2, 3 player 3, 0 outside every context): a seat's player number is its seat plus one.
+/// The built seat whose climb this thread ticks now (climb_context's context), or -1.
 int SeatHere() noexcept
 {
-    const int player = input::climb_context::PlayerHere();
-    return player >= 2 && players::SeatBuilt(player - 1) ? player - 1 : -1;
+    const int seat = input::climb_context::SeatHere();
+    return seat >= 1 && players::SeatBuilt(seat) ? seat : -1;
 }
 
 // --- moves ------------------------------------------------------------------------------------------------------------
@@ -279,19 +278,6 @@ std::uintptr_t HolderEndPlay(void* actor, std::uintptr_t reason) noexcept
         }
     }
     return original(actor, reason);
-}
-
-/// The built active seat whose member is `character`, or -1 (game thread).
-int SeatOfCharacter(const void* character) noexcept
-{
-    for (int seat = 1; character != nullptr && seat <= players::kSeatsBuilt; ++seat)
-    {
-        if (players::generation::Active(seat) && players::generation::MemberOf(seat) == character)
-        {
-            return seat;
-        }
-    }
-    return -1;
 }
 
 template <std::size_t Index>

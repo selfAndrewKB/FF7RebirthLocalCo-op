@@ -19,6 +19,7 @@
 #include "scopes/leader_scope.h"
 #include "scopes/primary_controller.h"
 #include "scopes/seat_ladder.h"
+#include "traversal/hooks.h"
 #include "traversal/traversal_watch.h"
 #include "world/field_rules.h"
 #include "world/seat_switch_volumes.h"
@@ -96,6 +97,8 @@ struct AdmittedClass
     bool           logsUseFields   = false;  // one-shot moves: the register's +0x848 / +0x86C, logged per delivery
     platform::PerBuild<std::uint32_t> unregisterSlot{0x728, 0x730};  // where `unregister` sits in the vtable
     bool           rides = false;  // chocobo climbs: delivered while the seat's player rides their own chocobo too
+    bool           notesKey = false;  // hook ropes: a delivered enter names the actor's point to the hooks module
+    bool (*ready)() noexcept = nullptr;  // the module holding the class's other levers is placed (else held back)
 };
 // The chocobo climb (research/RE-p2-chocobo-climb.md), launch pad, jump box and slider (RE-chocobo-exits-pads.md):
 // stored-character classes whose unregister override sits one slot past the others'. During a ride every player's
@@ -119,6 +122,11 @@ constexpr AdmittedClass kAdmitted[] = {
     {L"chocobo launch pad", facts::kChocoboJumpPadVTable, 0x734, facts::kChocoboJumpPadUnregister, false, false, {0x738, 0x740}, true},
     {L"chocobo jump box", facts::kChocoboJumpBoxVTable, 0x7A0, facts::kChocoboJumpBoxUnregister, false, false, {0x738, 0x740}, true},
     {L"chocobo slider", facts::kChocoboSliderVTable, 0x760, facts::kChocoboSliderUnregister, false, false, {0x738, 0x740}, true},
+    // The grappling gun's points and the hook ropes (research/RE-hooks-for-seats.md): the shared register, an
+    // unregister reading only the leader; the rest of their levers in traversal/hooks, delivered only while those are
+    // placed (a delivery without them would put the actor's one point under two players' notifies).
+    {L"hookshot", facts::kHookShotVTable, 0, 0, false, false, {0x728, 0x730}, false, false, &traversal::hooks::GunReady},
+    {L"hook rope", facts::kHookRopeVTable, 0, 0, false, false, {0x728, 0x730}, false, true, &traversal::hooks::RopeReady},
 };
 constexpr std::size_t   kClassCount     = std::size(kAdmitted);
 constexpr std::uint32_t kZiplineEnterEffect = 0x770;  // u8 bUseEnterEffect: set = starts on approach, else a button prompt
@@ -662,6 +670,10 @@ std::uintptr_t Deliver(int seat, bool enter, FilterFn original, void* manager, s
         }
     }
     ++(enter ? counts.deliveredEnters : counts.deliveredLeaves);
+    if (enter && alive && cls.notesKey)
+    {
+        traversal::hooks::NoteRope(actor);  // the seat's pass admits the rope's point by its key from here on
+    }
     try
     {
         KeepShadow(seat, actorWeak, after);
@@ -732,6 +744,11 @@ std::uintptr_t Filter(bool enter, void* manager, std::uint64_t key, void* owner,
             return 0;
         }
         const int  cls     = actor != nullptr ? ClassOf(actor) : -1;
+        if (cls >= 0 && kAdmitted[cls].ready != nullptr && !kAdmitted[cls].ready())
+        {
+            LogEvent(seat, enter, actor, passed, L"held back, the module its levers live in is not placed");
+            return 0;
+        }
         const auto verdict = field_rules::TriggerVerdictOf(
             cls, cls >= 0 && kAdmitted[cls].enterEffectOnly,
             cls >= 0 && kAdmitted[cls].enterEffectOnly ? ReadField<std::uint8_t>(actor, kZiplineEnterEffect) : 1);

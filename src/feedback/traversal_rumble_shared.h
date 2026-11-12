@@ -74,7 +74,7 @@ inline std::atomic<int> g_memberType[players::kMaxPlayers] = {-1, -1, -1};
 // own slot (research/RE-seats-step6-camera-rumble.md).
 inline traversal_rumble_code::JumpSlots g_jumpSlots{};
 
-// The seat one of whose rumble sources this thread runs (SeatOwner), or 0.
+// The seat one of whose rumble sources this thread runs (OwnerScope), or 0.
 inline thread_local int t_ownerSeat = 0;
 
 struct Counts
@@ -95,7 +95,7 @@ struct Counts
     std::atomic<unsigned> seatFootWorker{0};  // ... called on a worker (the game's gate drops worker calls)
     std::atomic<unsigned> footOther{0};    // every other chocobo's footsteps (game thread; [0])
     std::atomic<unsigned> footWorkerOther{0};  // ... on a worker ([0])
-    // The sources run as the seat's (SeatOwner), by source, and what their adds and stops did.
+    // The sources run as the seat's (OwnerScope), by source, and what their adds and stops did.
     std::atomic<unsigned> seatScooter{0};  // the seat's scooter's slot 1 or 8
     std::atomic<unsigned> seatGlide{0};    // the glide rumble of the seat's chocobo
     std::atomic<unsigned> seatJump{0};     // the jump box of the seat's chocobo

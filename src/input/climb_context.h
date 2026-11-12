@@ -64,11 +64,19 @@ void Tick() noexcept;
 int LeaderTypeHere() noexcept;
 
 /// Whose climb this thread is ticking now, by player number (1 player 1, 2 player 2, 3 player 3: a seat's number plus
-/// one), or 0 outside every context. Any thread. (traversal_holders reads a seat as PlayerHere() - 1.)
+/// one), or 0 outside every context. Any thread.
 int PlayerHere() noexcept;
 
-/// All three moves' Tick slots are placed (each climb's Tick names its player on its thread).
+/// The seat whose move this thread is ticking now (PlayerHere's player as a seat), or 0: player 1's, or none. Any
+/// thread.
+int SeatHere() noexcept;
+
+/// The climbs' Tick slots are placed (each climb's Tick names its player on its thread): what the seats' own climb
+/// holders need.
 bool TicksPlaced() noexcept;
+
+/// The named move's Tick slot is placed (a move another module's levers depend on: the hookshot's, the hook rope's).
+bool MovePlaced(const wchar_t* name) noexcept;
 
 /// Runs `call(context)` on this thread with the primary camera manager getter answering `seat`'s, and no other answer
 /// of the seat's (the context is suspended: the leader test and the buttons stay the game's). Any thread. False, and

@@ -140,6 +140,9 @@ src/
     deferred_sites          A module's call sites placed at install, or from the game thread when the build needs it
     dev_switch.h            The dev-tools switch (CMake option LSS_DEV_TOOLS, dev/dev_tools.h) as one macro for `#if`: 1
                             with the dev tools, 0 in a player's build
+    entry_install.h         An entry redirect placed where the build allows: at the function's entry when its first
+                            instruction sits inside one 16-byte block, else at its second instruction
+                            (platform/entry_redirect.h)
     entry_redirect          Sends every call of one game function through a function of ours, which may call the game's
                             function itself (Original()), and puts it back
     every.h                 A thing done at most once per period, and the counters it reports
@@ -495,6 +498,8 @@ src/
     chocobo_climb           A seat's player climbs chocobo walls with their own chocobo
     chocobo_spots           A seat's chocobo launches from the launch pads, jumps the jump boxes and takes the sliders
                             with its own rider
+    hooks                   The grappling gun's points and the hook ropes for players 2 and 3
+                            (research/RE-hooks-for-seats.md, RE-p2-zipline-rumble-hook-who.md)
     traversal_camera        The seats' traversal cameras (research/RE-p2-traversal-L3-ladder-camera.md,
                             RE-p2-traversal-cameras.md)
     traversal_collision     Logging only (Debug): every player's traversal camera's collision, frame by frame while a
