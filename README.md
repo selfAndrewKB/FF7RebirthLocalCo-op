@@ -760,6 +760,9 @@ src/
     position_probe          A logging probe on how HUD widgets place themselves from Blueprints: the field command menu
                             and its party switcher are children of the HUD overlay, but no native code sets their
                             position, so their Blueprints do
+    save_notice             A line of the mod's in the game's save-data notice, the box at the top right: the one notice
+                            the game draws on the title screen, where neither the HUD's prompt nor the message window
+                            shows
     user_widgets            The live UUserWidgets, kept current without walking every UObject
     view_prompt             A few lines of text in one player's own view: the player windows where the game's own window
                             cannot be shown

@@ -433,14 +433,20 @@ bool AtTitle(std::uintptr_t gameState) noexcept
 
 }  // namespace
 
-bool AtTitleNow() noexcept
+const void* GameStateNow() noexcept
 {
     void* state = nullptr;
-    if (!g_installed || g_stateCallFailed || !platform::CallGuarded(g_getEndGameState, state) || state == nullptr)
+    if (!g_installed || g_stateCallFailed || !platform::CallGuarded(g_getEndGameState, state))
     {
-        return false;
+        return nullptr;
     }
-    return AtTitle(reinterpret_cast<std::uintptr_t>(state));
+    return state;
+}
+
+bool AtTitleNow() noexcept
+{
+    const void* state = GameStateNow();
+    return state != nullptr && AtTitle(reinterpret_cast<std::uintptr_t>(state));
 }
 
 namespace {

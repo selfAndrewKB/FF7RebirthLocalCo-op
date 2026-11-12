@@ -1,0 +1,35 @@
+{
+  "build": "1.005",
+  "research_build": "1.004",
+  "date": "2026-11-12",
+  "doc": "Rebirth/Documentation/research/RE-title-notice.md (section 5, both databases)",
+  "facts": [
+    {
+      "name": "EndUI_ShowSaveIcon_Static(world, kind)",
+      "old": "0x1417ECCD0",
+      "new": "0x14186B240",
+      "bytes": "48895c240857b820000000e830099000",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "The save-data notice shown with the kind's text (0 the check's); a no-op while it is up. Entry %16=0 in both builds."
+    },
+    {
+      "name": "EndUI_HideSaveIcon_Static(nextKind)",
+      "old": "0x141858214",
+      "new": "0x140FE4168",
+      "bytes": "48895c2408488974241057b820000000",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Collapses the notice at once after two seconds up (or at two seconds through the tick); nextKind 0 nothing after. Entry %16=4 / 8."
+    },
+    {
+      "name": "UEndTextBlock_SetText_FStringPtr(block, FString*)",
+      "old": "0x14098EAF4",
+      "new": "0x140E8B948",
+      "bytes": "48895c2408488974241057b850000000",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "Copies the string into the block and frees the caller's buffer (ME_FreeResourceBindingArray). The 1.005 prologue differs from 1.004's (the table carries this build's bytes). Entry %16=4 / 8."
+    }
+  ]
+}

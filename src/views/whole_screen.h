@@ -67,6 +67,10 @@ ScreenSignals ReadScreenSignals() noexcept;
 /// classified only when the name changes). False if not installed.
 bool AtTitleNow() noexcept;
 
+/// Game thread, any time: the game's EndGameState object now (an actor: its outers lead to the world, on the title
+/// screen too), or null if not installed or the getter failed.
+const void* GameStateNow() noexcept;
+
 /// Game thread: whether the game's EndGameState exists now (its own getter, checked at install).
 /// False if not installed or the getter failed.
 bool GameStatePresent() noexcept;

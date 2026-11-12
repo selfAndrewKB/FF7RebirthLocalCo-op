@@ -55,6 +55,7 @@ add_library(LocalSplitScreen SHARED
     src/hud/field/marker_timers.cpp
     src/hud/battle/popups.cpp
     src/hud/user_widgets.cpp
+    src/hud/save_notice.cpp
     src/hud/view_prompt.cpp
     src/hud/view_window.cpp
     src/hud/layout/overlay_band.cpp

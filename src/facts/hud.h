@@ -24,8 +24,8 @@ using platform::FunctionFact;
 // The UI system
 // ---------------------------------------------------------------------------------------------
 
-/// g_EndUISystem (data): the pointer to the UI system object, the HUD's root. Its slots are 8-byte pointers to the
-/// managers and holders below (EndUISystem[n] = slot n).
+/// g_EndUISystem (data): the UI system object itself, the HUD's root, at this address. Its slots are 8-byte pointers
+/// to the managers and holders below (EndUISystem[n] = slot n, at the address plus 8n).
 inline constexpr std::uintptr_t kEndUISystem = 0x1493496E0;
 
 inline constexpr std::uint32_t kUIInput              = 0x10;   // EndUISystem[2]: Square's input object
@@ -38,6 +38,23 @@ inline constexpr std::uint32_t kUIFilterManager      = 0x148;  // EndUISystem[41
                                                                  // tactical tint's latch and count; menu_tint)
 inline constexpr std::uint32_t kUIKeyGuide           = 0x1A8;  // EndUISystem[53]: the key guide
 inline constexpr std::uint32_t kUIActionRows         = 0x208;  // -> the field-action icon list (TArray<FWeakObjectPtr>)
+/// The save-data notice, the game's top-right box ("Checking saved data..."; EndUISystem[35], RE-title-notice.md):
+/// the manager holds the widget's weak at +0 and a shown byte; the widget (SaveIcon_C) has one text block. The
+/// game's show takes a world and a kind (0: the check's look, no later text swap), its hide the next kind (0: none;
+/// an icon up for two seconds or more collapses at once), and the text block's setter takes an FString whose buffer
+/// it frees (FMemory's). 1.005 through replaced-title-notice.json.
+inline constexpr std::uint32_t kUISaveIcon    = 0x118;
+inline constexpr std::uint32_t kSaveIconShown = 16;
+inline constexpr std::uint32_t kSaveIconText  = 0x430;
+inline constexpr std::uint8_t  kShowSaveIconBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x57, 0xB8, 0x20,
+                                                       0x00, 0x00, 0x00, 0xE8, 0x50, 0x22, 0x8C, 0x00};
+inline constexpr FunctionFact  kShowSaveIcon{L"EndUI_ShowSaveIcon_Static", 0x1417ECCD0, kShowSaveIconBytes};
+inline constexpr std::uint8_t  kHideSaveIconBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x74,
+                                                       0x24, 0x10, 0x57, 0xB8, 0x20, 0x00, 0x00, 0x00};
+inline constexpr FunctionFact  kHideSaveIcon{L"EndUI_HideSaveIcon_Static", 0x141858214, kHideSaveIconBytes};
+inline constexpr std::uint8_t  kTextBlockSetTextBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x57, 0xB8, 0x50,
+                                                           0x00, 0x00, 0x00, 0xE8, 0x2C, 0x04, 0x72, 0x01};
+inline constexpr FunctionFact  kTextBlockSetText{L"UEndTextBlock_SetText_FStringPtr", 0x14098EAF4, kTextBlockSetTextBytes};
 /// Its byte marking a command-controller Setup deferred behind a fade. 1.005: MasterHUD_Tick 0x140F75A05 cmp byte
 /// [rbx+2D9h],0 (1.004 0x140F37E5D [rbx+2D1h]); EndUISystem__ClearFieldCommandSetupPending 0x1413FBB7A and
 /// SetupFieldCommandOrDefer 0x1413FBBE2 mov byte [..+2D9h],0 (a member was inserted after +0x2A8).

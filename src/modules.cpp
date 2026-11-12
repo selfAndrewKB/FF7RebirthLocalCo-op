@@ -56,6 +56,7 @@
 #include "input/climb_context.h"
 #include "input/pad_presence.h"
 #include "input/pad_table.h"
+#include "hud/save_notice.h"
 #include "hud/view_prompt.h"
 #include "hud/view_window.h"
 #include "session/player_window.h"
@@ -362,6 +363,8 @@ constexpr std::array kModules{
     Module{Call<&hud::action_icon_base::Install>, nullptr},
     // each further column's own map icons and markers
     Module{Call<&hud::column_area_icons::Install>, &hud::column_area_icons::Remove},
+    // a line of the mod's on the game's save-data notice (the title screen's one notice: which controller plays player 1)
+    Module{Call<&hud::save_notice::Install>, &hud::save_notice::Remove},
     // a few lines in one player's own view, in the engine's font (the player windows)
     Module{Call<&hud::view_prompt::Install>, &hud::view_prompt::Remove},
     // each player's own window by pad: Start on a spare pad joins, View held opens it, B held leaves

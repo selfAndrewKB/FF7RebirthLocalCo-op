@@ -26,6 +26,12 @@
 
 namespace lss::players {
 
+/// The world `controller` lives in (controller -> level -> world), or null.
+inline const void* WorldOf(const void* controller) noexcept
+{
+    return ReadPointer(ReadPointer(controller, facts::kObjectOuter), facts::kObjectOuter);
+}
+
 class FirstPlayerScope
 {
 public:
@@ -87,11 +93,7 @@ private:
     /// controllers [ASSUMPTION that nothing else is in it]).
     static constexpr std::int32_t kMaxSearched = 16;
 
-    /// The world the controller lives in (controller -> level -> world), or null.
-    static const void* WorldOf(const void* controller) noexcept
-    {
-        return ReadPointer(ReadPointer(controller, facts::kObjectOuter), facts::kObjectOuter);
-    }
+    static const void* WorldOf(const void* controller) noexcept { return players::WorldOf(controller); }
 
     /// The world's controller list entries, or null when it has fewer than two.
     static std::uint8_t* Entries(const void* controller) noexcept

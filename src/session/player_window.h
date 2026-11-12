@@ -16,9 +16,8 @@
 // a second takes player 2 or 3 out of the game (player 1 is refused, said on its window).
 // The views becoming one (a scene, a menu) close every window.
 // On the title screen a pad that presses a button becomes player 1's (its pad moved onto slot 0), so the person who
-// starts the game plays player 1 on their own pad; a notice there says so for a while (the game's message window
-// where it can be shown, else the engine-font prompt, which the title draws no HUD for), and which controller it was
-// after the press.
+// starts the game plays player 1 on their own pad; the game's save-data notice at the top right, the title's one
+// notice, says which controller it was for a few seconds (hud/save_notice).
 // Input comes from the pad table's listener, noted during the engine's pad poll and acted on in Tick. Every step is
 // logged at Info. Ctrl+F7/F8 stay. Game thread.
 
