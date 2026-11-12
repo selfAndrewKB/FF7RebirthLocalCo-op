@@ -9,6 +9,7 @@
 #include "players/seats.h"
 #include "players/weak_object.h"
 #include "players/widget_opacity.h"
+#include "rides/wheelie_ride.h"
 #include "scopes/leader_scope.h"
 #include "world/field_pickup.h"
 
@@ -53,7 +54,7 @@ void LogIfChanged(int seat, const Hidden& now) noexcept
     g_logged[static_cast<std::size_t>(seat)] = now;
     try
     {
-        platform::LogDebug(L"field markers: {}'s view hides {} of the other players' point marker(s) ({} widget(s))",
+        platform::LogDebug(L"field markers: {}'s view hides {} of the other players' marker(s) ({} widget(s))",
                            players::SeatName(seat), now.markers, now.widgets);
     }
     catch (...)
@@ -85,27 +86,32 @@ void ShowOnly(int seat) noexcept
     {
         return;
     }
-    Hidden hidden;
+    Hidden     hidden;
+    const auto icons = rides::wheelie_ride::MarkerWidgetsNow();  // the scooter coordinators' auto-ride icons, once a pass
     try
     {
-        platform::ForEachSparseElement(list, facts::kFieldMarkerEntry, [seat, &hidden](std::uintptr_t entry) {
-            const int owner = world::field_pickup::MarkerOwner(
-                players::weak_object::ObjectAt(reinterpret_cast<const void*>(entry)));
+        platform::ForEachSparseElement(list, facts::kFieldMarkerEntry, [seat, &hidden, &icons](std::uintptr_t entry) {
+            const void* marker = players::weak_object::ObjectAt(reinterpret_cast<const void*>(entry));
+            int         owner  = world::field_pickup::MarkerOwner(marker);
+            if (owner < 0)
+            {
+                owner = rides::wheelie_ride::MarkerOwner(icons, marker);
+            }
             if (owner < 0 || owner == seat)
             {
-                return true;  // this view's own, or not a point's marker
+                return true;  // this view's own, or no player's marker
             }
             ++hidden.markers;
             for (const std::uint32_t at : kMarkerWidgets)
             {
-                std::uint64_t weak   = 0;
-                void*         widget = nullptr;
+                std::uint64_t weak = 0;
+                void*         part = nullptr;
                 if (!platform::CopyGuarded(&weak, reinterpret_cast<const void*>(entry + at), sizeof(weak)) || weak == 0 ||
-                    (widget = players::weak_object::ObjectAt(reinterpret_cast<const void*>(entry + at))) == nullptr)
+                    (part = players::weak_object::ObjectAt(reinterpret_cast<const void*>(entry + at))) == nullptr)
                 {
                     continue;
                 }
-                if (g_hidden.Hide(widget, weak))
+                if (g_hidden.Hide(part, weak))
                 {
                     ++hidden.widgets;
                 }

@@ -21,6 +21,7 @@
 #include "players/object_fields.h"
 #include "players/seats.h"
 #include "players/unreal_access.h"
+#include "players/weak_object.h"
 #include "rides/own_ride.h"
 #include "rides/ride_rules.h"
 #include "scopes/leader_scope.h"
@@ -30,6 +31,7 @@
 
 #include <intrin.h>
 
+#include <algorithm>
 #include <array>
 #include <chrono>
 #include <cmath>
@@ -37,6 +39,7 @@
 #include <cstdint>
 #include <cstring>
 #include <format>
+#include <span>
 #include <string>
 
 namespace lss::rides::wheelie_ride {
@@ -107,6 +110,7 @@ constexpr std::uintptr_t kDetachLeaderSite = 0x14331A814;  // its field-leader t
 constexpr std::uintptr_t kResolveLeader    = 0x140A6085C;  // PartyManager_ResolveFieldLeaderCharOrLeader(selector)
 
 using facts::kSwitchAiControlAsync;
+using facts::kScooterUpdateTarget;
 
 // The key-4 "should ride" request FieldSummonBody builds, zeroed: type, character, world stick, FName out.
 struct alignas(16) RideAsk
@@ -150,6 +154,7 @@ using SwapBackFn      = std::uintptr_t (*)(void* coordinator, void* a2, void* a3
 using SwitchAiFn      = void (*)(void* character, std::uint8_t toPlayer, void* controller);
 using NotifyFn        = void (*)(void* notify, void* mesh, void* a3, void* a4);  // rcx, rdx; the rest passed on
 using ResolveLeaderFn = void* (*)(std::uint8_t selector);
+using UpdateTargetFn  = void (*)(void* shared);
 
 // Objects and fields (this build).
 constexpr std::uint8_t   kScooterKey        = 4;
@@ -158,7 +163,14 @@ using facts::kScooterCharacterVTable;
 constexpr std::uintptr_t kScooterMoveVt     = 0x1466B9D88;  // SBScooterMoveState
 using facts::kControllerActiveVehicle;
 using facts::kCoordinatorBody;
-constexpr std::uint32_t  kCoordShared       = 0x48;         // TSharedPtr object: +0 target (weak), +8 list, +0x10 num
+using facts::kScooterCoordShared;
+using facts::kScooterSharedTarget;
+using facts::kScooterSharedList;
+using facts::kScooterSharedListCount;
+using facts::kScooterCoordMarkerState;
+using facts::kScooterCoordMarkerTarget;
+using facts::kScooterCoordMarkerWidget;
+using facts::kScooterListCap;
 constexpr std::uint32_t  kCoordInstant      = 0x11C;        // u8, from the request
 constexpr std::uint32_t  kCoordApplyNow     = 0x11E;        // u8, from the request
 constexpr std::uint32_t  kCoordScripted     = 0x1F8;        // u8: a ride latched for TryBeginRide
@@ -166,7 +178,6 @@ constexpr std::uint32_t  kCoordDisabled     = 0x2A;         // u8
 constexpr std::uint32_t  kCoordStateMachine = 0x218;
 constexpr std::uint32_t  kCoordStatePtr     = 0x230;        // -> u32 state id
 constexpr std::uint32_t  kCoordPending      = 0x238;        // pending row (null when none)
-constexpr std::uint32_t  kSharedTarget      = 0x0;
 constexpr std::int32_t   kStateIdle = 0, kStateBoarding = 2, kStateRiding = 3, kStateGettingOff = 4;
 // 1.005 moved these scooter fields by +0x20 (research/RE-1005-offsets-C.md): SetRider writes +0x2338 (1.004 +0x2318);
 // FindNearestFreeScooter reads +0x233A (1.004 +0x231A); ShouldRideAuto_Vt2F8 loads MovementSetting from +0x1890
@@ -231,6 +242,7 @@ struct Functions
     GetOffPrimaryFn getOffPrimary = nullptr;
     CoordTickFn     coordTick     = nullptr;
     SwitchAiFn      switchAi      = nullptr;
+    UpdateTargetFn  updateTarget  = nullptr;  // the coordinator's target search (null: the seats mark nothing of their own)
 };
 
 Functions             g_fn;
@@ -251,7 +263,12 @@ platform::CallRedirect                                 g_ownCall;
 std::uintptr_t                                         g_ownSite   = 0;
 platform::CallRedirect                                 g_detachLeaderCall;  // the detach notify's field-leader test
 std::uintptr_t                                         g_detachLeaderSite = 0;
+platform::CallRedirect                                 g_updateTargetCall;  // the coordinator tick's target search
+std::uintptr_t                                         g_updateTargetSite = 0;
+platform::CallRedirect                                 g_markerLeaderCall;  // the idle tick's field-leader resolve
+std::uintptr_t                                         g_markerLeaderSite = 0;
 bool                                                   g_sitesTried = false;
+bool                                                   g_ownMark    = false;  // both placed: a seat's coordinator marks its own scooter
 
 // Game thread. Per seat, in the seat's record below.
 struct Asked
@@ -273,6 +290,14 @@ struct AskLog  // the ask's last Debug line: logged when this changes
 };
 const void* g_settingsLogged = nullptr;  // the scooter whose direct-ride settings were last logged (any seat's ask)
 
+struct MarkLog  // a seat's coordinator's mark and marker as last logged: logged when this changes
+{
+    const void*  pick   = nullptr;  // the target the mod picked for it
+    const void*  marked = nullptr;  // the scooter its marker is on
+    std::uint8_t state  = 0;        // the marker's state
+    bool operator==(const MarkLog&) const = default;
+};
+
 // The lease (the seat's controller, member, the scooter as `vehicle`, the seat's own scooter coordinator) is
 // rides/own_ride's; the rest is this ride's.
 struct Ride : own_ride::Lease
@@ -287,6 +312,12 @@ struct SeatRide
 {
     Asked           asked;
     AskLog          askLog;
+    MarkLog         markLog;
+    bool            markLogged         = false;
+    const void*     coordinatorLogged  = nullptr;  // its own coordinator as last logged (made, or found again)
+    bool            markFaulted        = false;    // its target could not be written; logged once
+    bool            listCapLogged      = false;    // player 1's list is longer than the cap; logged once
+    std::uint32_t   markerAnswers      = 0;        // its coordinator's marker computed for the seat's member
     const void*     heldLogged = nullptr;  // the scooter last refused as still on a player's controller
     bool            active     = false;
     Ride            ride{};
@@ -344,11 +375,35 @@ void* Coordinator(void* controller) noexcept
                : nullptr;
 }
 
+/// The object the weak at `object` + `offset` names, or null (for no object).
+void* WeakAt(const void* object, std::uint32_t offset) noexcept
+{
+    return object != nullptr ? scopes::leader_scope::ObjectAt(static_cast<const std::byte*>(object) + offset) : nullptr;
+}
+
 void* TargetOf(const void* coordinator) noexcept
 {
-    const void* shared = ReadPointer(coordinator, kCoordShared);
-    void*       target = shared != nullptr ? scopes::leader_scope::ObjectAt(static_cast<const std::byte*>(shared) + kSharedTarget) : nullptr;
+    void* target = WeakAt(ReadPointer(coordinator, kScooterCoordShared), kScooterSharedTarget);
     return VTableOf(target) == g_scooterVt ? target : nullptr;
+}
+
+/// The entries of a coordinator's scooter list (player 1's is the one the game fills).
+std::int32_t ListCount(const void* coordinator) noexcept
+{
+    const void* shared = ReadPointer(coordinator, kScooterCoordShared);
+    return shared != nullptr ? ReadField<std::int32_t>(shared, kScooterSharedListCount) : 0;
+}
+
+/// The scooter the coordinator's marker is on, or null.
+void* MarkedOf(const void* coordinator) noexcept
+{
+    return WeakAt(coordinator, kScooterCoordMarkerTarget);
+}
+
+/// The coordinator's marker widget, or null.
+void* MarkerWidgetOf(const void* coordinator) noexcept
+{
+    return WeakAt(coordinator, kScooterCoordMarkerWidget);
 }
 
 bool Free(const void* scooter) noexcept
@@ -465,7 +520,7 @@ void LogSettings(void* scooter) noexcept
     const void* setting   = ReadPointer(scooter, kScooterSetting);
     try
     {
-        platform::Log(L"wheelie ride: player 1's marked scooter is {}; its walk-in settings: within {:.0f} cm, at most {:.1f}° "
+        platform::Log(L"wheelie ride: the marked scooter {}; its walk-in settings: within {:.0f} cm, at most {:.1f}° "
                       L"off, stick above {:.2f}",
                       players::NameOf(scooter), ReadField<float>(setting, kSettingDistance), ReadField<float>(setting, kSettingMaxYaw),
                       ReadField<float>(setting, kSettingMinPower));
@@ -473,6 +528,12 @@ void LogSettings(void* scooter) noexcept
     catch (...)
     {
     }
+}
+
+/// Whose coordinator the walk-in question goes to, for the log.
+const wchar_t* AskedOf() noexcept
+{
+    return g_ownMark ? L"their own coordinator's mark" : L"player 1's coordinator's mark";
 }
 
 void LogAsk(SeatRide& s, int seat, const void* target, float distance, bool yes) noexcept
@@ -485,14 +546,185 @@ void LogAsk(SeatRide& s, int seat, const void* target, float distance, bool yes)
     s.askLog = now;
     try
     {
-        platform::LogDebug(L"wheelie ride: the walk-in question for {} (player 1's coordinator, its mark {}): {}{}",
-                           players::SeatName(seat), target != nullptr ? players::NameOf(target) : std::wstring{L"none"},
-                           yes ? L"yes" : L"no",
+        platform::LogDebug(L"wheelie ride: the walk-in question for {} ({} {}): {}{}", players::SeatName(seat), AskedOf(),
+                           target != nullptr ? players::NameOf(target) : std::wstring{L"none"}, yes ? L"yes" : L"no",
                            now.close ? std::format(L" ({}'s member within 3 m of the mark)", players::SeatName(seat))
                                      : std::wstring{});
     }
     catch (...)
     {
+    }
+}
+
+// ---- The seat's own mark ----
+
+/// The seat whose own coordinator's shared block `shared` is, or -1.
+int SeatOfShared(const void* shared) noexcept
+{
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
+    {
+        if (players::generation::Active(seat) &&
+            ReadPointer(Coordinator(players::generation::ControllerOf(seat)), kScooterCoordShared) == shared)
+        {
+            return seat;
+        }
+    }
+    return -1;
+}
+
+/// Another seat's ride (boarding, riding or getting off) is on `scooter`.
+bool AnotherSeatRides(const void* scooter, int seat) noexcept
+{
+    const int other = ActiveSeatWhere([scooter](const Ride& ride) { return ride.vehicle == scooter; });
+    return other >= 1 && other != seat;
+}
+
+/// The free scooter of player 1's coordinator's list nearest `member`, as the game's own search picks the one nearest
+/// the party leader (the ridden and excluded ones skipped), read without the search's compaction and warp: null for
+/// none. Player 1's own ride is skipped from its boarding on; another seat's from its boarding to its getoff.
+void* NearestFree(SeatRide& s, int seat, void* member, const void* one) noexcept
+{
+    const void*        shared  = ReadPointer(one, kScooterCoordShared);
+    const auto*        list    = static_cast<const std::byte*>(ReadPointer(shared, kScooterSharedList));
+    const std::int32_t entries = ListCount(one);
+    const auto         count   = static_cast<std::size_t>(std::clamp(entries, 0, kScooterListCap));
+    if (entries > kScooterListCap && !s.listCapLogged)
+    {
+        s.listCapLogged = true;
+        platform::Log(L"wheelie ride: player 1's scooter list holds {} entries; {}'s mark is picked among the first {}",
+                      entries, players::SeatName(seat), kScooterListCap);
+    }
+    if (list == nullptr || count == 0)
+    {
+        return nullptr;
+    }
+    const void* oneBody = CoordState(one) >= kStateBoarding ? ReadPointer(one, kCoordinatorBody) : nullptr;
+    std::array<void*, kScooterListCap> scooters{};
+    std::array<float, kScooterListCap> distances{};
+    for (std::size_t i = 0; i < count; ++i)
+    {
+        void* scooter = scopes::leader_scope::ObjectAt(list + i * sizeof(std::uint64_t));
+        const bool fit = scooter != nullptr && VTableOf(scooter) == g_scooterVt && Free(scooter) && scooter != oneBody &&
+                         !AnotherSeatRides(scooter, seat);
+        scooters[i]  = scooter;
+        distances[i] = fit ? Between(member, scooter) : -1.0f;  // an unreadable location reads -1 too
+    }
+    const int pick = ride_rules::NearestPick(std::span<const float>(distances.data(), count));
+    return pick >= 0 ? scooters[static_cast<std::size_t>(pick)] : nullptr;
+}
+
+void LogMark(SeatRide& s, int seat, const void* coordinator, void* pick, void* member) noexcept
+{
+    if (!platform::Enabled(platform::Level::Debug))
+    {
+        return;
+    }
+    const MarkLog now{pick, MarkedOf(coordinator), ReadField<std::uint8_t>(coordinator, kScooterCoordMarkerState)};
+    if (s.markLogged && now == s.markLog)
+    {
+        return;
+    }
+    s.markLog    = now;
+    s.markLogged = true;
+    try
+    {
+        const float metres = pick != nullptr ? Between(member, pick) / 100.0f : -1.0f;
+        platform::LogDebug(L"wheelie ride: {}'s coordinator marks {}{}; its icon {} on {} (the icon's character answered "
+                           L"{}'s member {} time(s))",
+                           players::SeatName(seat), pick != nullptr ? players::NameOf(pick) : std::wstring{L"nothing"},
+                           metres >= 0.0f ? std::format(L" ({:.1f} m from their member)", metres) : std::wstring{},
+                           now.state == 2 ? L"within reach" : now.state == 1 ? L"out of reach" : L"off",
+                           now.marked != nullptr ? players::NameOf(now.marked) : std::wstring{L"nothing"},
+                           players::SeatName(seat), s.markerAnswers);
+    }
+    catch (...)
+    {
+    }
+}
+
+/// A coordinator's target search (its call in the coordinator's tick). For a seat's own coordinator: the free scooter of
+/// player 1's list nearest the seat's member becomes its target, written with the game's weak-pointer assignment when
+/// it differs (the one recreation of this ride: the header says why); the rest of the game's search, the removal of a
+/// dormant ride-on point, has nothing to remove for a seat's block. Player 1's coordinator's call is the game's own
+/// search, with its rental-return warp measured from player 1's leader.
+void UpdateTarget(void* shared) noexcept
+{
+    const int seat = g_ownMark && shared != nullptr && players::generation::OnGameThread() ? SeatOfShared(shared) : -1;
+    if (seat < 1)
+    {
+        g_fn.updateTarget(shared);
+        return;
+    }
+    SeatRide&   s           = g_seats[seat];
+    void*       member      = players::generation::MemberOf(seat);
+    const void* one         = Coordinator(players::generation::PlayerOneController());
+    const void* coordinator = Coordinator(players::generation::ControllerOf(seat));
+    void*       pick        = member != nullptr && one != nullptr ? NearestFree(s, seat, member, one) : nullptr;
+    auto* const field       = reinterpret_cast<std::uint64_t*>(static_cast<std::byte*>(shared) + kScooterSharedTarget);
+    if (pick != scopes::leader_scope::ObjectAt(field) && !players::weak_object::Assign(field, pick) && !s.markFaulted)
+    {
+        s.markFaulted = true;
+        platform::Log(L"WARNING wheelie ride: {}'s coordinator's target could not be written; it keeps marking what it "
+                      L"marked",
+                      players::SeatName(seat));
+    }
+    LogMark(s, seat, coordinator, pick, member);
+}
+
+/// The field-leader resolve of a coordinator's idle tick, the character its marker is computed for. A seat's
+/// coordinator ticks inside the seat's input pass, where the seat's controller is the primary one: there it answers
+/// the seat's member. Player 1's coordinator's (and any resolve outside a seat's scope) gets the game's answer.
+void* MarkerLeader(std::uint8_t selector) noexcept
+{
+    if (g_ownMark && players::generation::OnGameThread())
+    {
+        for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
+        {
+            void* member = players::generation::Active(seat) ? players::generation::MemberOf(seat) : nullptr;
+            if (member != nullptr && scopes::primary_controller::Is(players::generation::ControllerOf(seat)))
+            {
+                ++g_seats[seat].markerAnswers;
+                return member;
+            }
+        }
+    }
+    return g_resolveLeader(selector);
+}
+
+/// The seat's own coordinator, made with the game's creator when there is none (a new one is logged); null when it
+/// cannot be.
+void* OwnCoordinator(SeatRide& s, int seat, std::int32_t scootersHere) noexcept
+{
+    void* const controller  = players::generation::ControllerOf(seat);
+    void*       coordinator = Coordinator(controller);
+    if (coordinator == nullptr && controller != nullptr &&
+        (!platform::CallGuarded(g_fn.getOrCreate, coordinator, controller, kScooterKey) || VTableOf(coordinator) != g_coordVt))
+    {
+        coordinator = nullptr;
+    }
+    if (coordinator != s.coordinatorLogged)
+    {
+        s.coordinatorLogged = coordinator;
+        platform::Log(L"wheelie ride: {}'s own scooter coordinator {} ({} scooter(s) registered here with player 1's): "
+                      L"it marks the free one nearest {}'s member, and their walk-in question is asked of it",
+                      players::SeatName(seat), coordinator != nullptr ? L"ready" : L"COULD NOT BE MADE", scootersHere,
+                      players::SeatName(seat));
+    }
+    return coordinator;
+}
+
+/// Once per frame while the seat's player is in and does not ride: their own coordinator, as soon as a parked scooter
+/// is registered here, so its mark and icon are there before the first walk-in.
+void KeepOwnCoordinator(SeatRide& s, int seat) noexcept
+{
+    if (!g_ownMark || s.stopped)
+    {
+        return;
+    }
+    const std::int32_t scootersHere = ListCount(Coordinator(players::generation::PlayerOneController()));
+    if (scootersHere > 0)
+    {
+        (void)OwnCoordinator(s, seat, scootersHere);
     }
 }
 
@@ -886,6 +1118,7 @@ bool Install(const platform::GameImage& image) noexcept
     g_fn.getOffPrimary = reinterpret_cast<GetOffPrimaryFn>(find(kGetOffPrimary));
     g_fn.coordTick     = reinterpret_cast<CoordTickFn>(find(kCoordTick));
     g_fn.switchAi      = reinterpret_cast<SwitchAiFn>(find(kSwitchAiControlAsync));
+    g_fn.updateTarget  = reinterpret_cast<UpdateTargetFn>(find(kScooterUpdateTarget));
     g_coordVt          = rebase(kScooterCoordinatorVTable);
     g_scooterVt        = rebase(kScooterCharacterVTable);
     g_moveVt           = rebase(kScooterMoveVt);
@@ -895,6 +1128,8 @@ bool Install(const platform::GameImage& image) noexcept
     }
     g_ownSite          = rebase(kOwnGetOffSite);
     g_detachLeaderSite = rebase(kDetachLeaderSite);
+    g_updateTargetSite = rebase(facts::kScooterUpdateTargetCall);
+    g_markerLeaderSite = rebase(facts::kScooterMarkerLeaderCall);
     g_resolveLeader    = reinterpret_cast<ResolveLeaderFn>(rebase(kResolveLeader));
     const auto swap    = platform::FindFunction(image, kSwapBackSlot.target);
     g_swapBackOriginal = swap ? reinterpret_cast<SwapBackFn>(*swap) : nullptr;
@@ -917,8 +1152,9 @@ bool Install(const platform::GameImage& image) noexcept
         (void)g_swapBackSlot.Restore();  // nothing uses them without a ride (they pass everything through anyway)
         (void)g_detachSlot.Restore();
     }
-    platform::Log(L"wheelie ride: {}", g_installed ? L"installed (player 2 or 3 boards a Wheelie by walking into player 1's marked "
-                                                     L"scooter, with their own coordinator)"
+    platform::Log(L"wheelie ride: {}", g_installed ? L"installed (player 2 or 3 boards a Wheelie by walking into a marked "
+                                                     L"scooter, with their own coordinator; their own mark follows at the "
+                                                     L"first tick)"
                                                    : L"UNAVAILABLE (a check failed; players 2 and 3 cannot board, as before)");
     return g_installed;
 }
@@ -949,14 +1185,20 @@ void Remove() noexcept
     {
         platform::Log(L"wheelie ride: the getoff button's call was changed after us; left in place (it passes calls through)");
     }
+    if ((g_updateTargetCall.IsInstalled() && !g_updateTargetCall.Restore()) ||
+        (g_markerLeaderCall.IsInstalled() && !g_markerLeaderCall.Restore()))
+    {
+        platform::Log(L"wheelie ride: a mark call was changed after us; left in place (it passes calls through)");
+    }
 }
 
 void Ask(void* state) noexcept
 {
-    // The walk-in question is asked of player 1's coordinator, whose one marked scooter is the free one nearest player
-    // 1's leader, re-picked each frame (option A). The question changes nothing and measures from whoever asks, so every
-    // seat may ask about that mark; two seats answered yes for one scooter are kept apart at the boarding
-    // (AfterMemberTick: the first boards, the second finds it held). research/RE-seats-step6-world-rides.md.
+    // The walk-in question is asked of the seat's own coordinator about its mark (the free scooter of player 1's list
+    // nearest the seat's member, UpdateTarget), or, without the mark's sites, of player 1's coordinator about its one
+    // mark (the free one nearest player 1's leader). The question changes nothing and measures from whoever asks, so
+    // every seat may ask; two seats answered yes for one scooter are kept apart at the boarding (AfterMemberTick: the
+    // first boards, the second finds it held). research/RE-seats-step6-world-rides.md.
     void*     member = ReadPointer(state, facts::kMoveStateCharacter);
     const int seat   = member != nullptr ? players::generation::SeatOfMember(member) : -1;
     SeatRide* record = RideOf(seat);
@@ -979,12 +1221,19 @@ void Ask(void* state) noexcept
     {
         return;  // no move request: the game's question carries no stick and answers no
     }
-    void* coordinator = Coordinator(players::generation::PlayerOneController());
+    void* const        one         = Coordinator(players::generation::PlayerOneController());
+    const std::int32_t scootersHere = ListCount(one);
+    if (one == nullptr || scootersHere <= 0)
+    {
+        LogAsk(s, seat, nullptr, -1.0f, false);
+        return;  // no parked scooter is registered on this map
+    }
+    void* coordinator = g_ownMark ? OwnCoordinator(s, seat, scootersHere) : one;
     void* target      = TargetOf(coordinator);
     if (target == nullptr)
     {
         LogAsk(s, seat, nullptr, -1.0f, false);
-        return;  // player 1's coordinator marks no scooter (none free, or no coordinator here)
+        return;  // no coordinator, or it marks no scooter (none free)
     }
     LogSettings(target);
     // The question's gates read the leader (PM+0x148) and the primary controller's rides: the seat's here.
@@ -1174,6 +1423,22 @@ void InstallSites() noexcept
                   L"that player's scope, its field-leader test {}",
                   leader ? L"answers that player's member for her own notify"
                          : L"UNCHANGED (player 2's or 3's animated getoff will not swap back: the mod's fallback gives her back)");
+    // The seat's own mark: the target search and the marker's resolve, both or neither (a target without its marker
+    // would board a scooter no icon shows; a marker computed for the seat on player 1's mark would point at player 1's
+    // scooter).
+    const bool search = g_fn.updateTarget != nullptr && g_updateTargetSite != 0 && g_markerLeaderSite != 0 &&
+                        g_updateTargetCall.InstallFromOwnThread(g_updateTargetSite, reinterpret_cast<std::uintptr_t>(g_fn.updateTarget),
+                                                                reinterpret_cast<std::uintptr_t>(&UpdateTarget));
+    g_ownMark = search && g_markerLeaderCall.InstallFromOwnThread(g_markerLeaderSite, reinterpret_cast<std::uintptr_t>(g_resolveLeader),
+                                                                  reinterpret_cast<std::uintptr_t>(&MarkerLeader));
+    if (search && !g_ownMark && !g_updateTargetCall.Restore())
+    {
+        platform::Log(L"wheelie ride: the target search's call could not be put back; it passes every call through");
+    }
+    platform::Log(L"wheelie ride: player 2's or 3's own mark {}",
+                  g_ownMark ? L"placed: their own coordinator marks the free scooter nearest their member, shows the icon "
+                              L"in their view, and answers their walk-in"
+                            : L"NOT placed (a site differs): they walk into player 1's marked scooter only");
 }
 
 void LogSummary(SeatRide& s) noexcept
@@ -1211,8 +1476,13 @@ bool Tick(void* controller, void* member, const input::move_state::EngineTicks& 
     // The seat from its controller (the member's tick hands the seat's own).
     const int seat = players::generation::SeatOfController(controller);
     SeatRide* const record = RideOf(seat);
-    if (record == nullptr || !record->active)
+    if (record == nullptr)
     {
+        return false;
+    }
+    if (!record->active)
+    {
+        KeepOwnCoordinator(*record, seat);
         return false;
     }
     SeatRide&            s    = *record;
@@ -1242,7 +1512,20 @@ bool Tick(void* controller, void* member, const input::move_state::EngineTicks& 
         LogLine(prefix.c_str(), ride);
         switch (ride_rules::CoordChangeOf(was, state, kStateIdle))
         {
-            case ride_rules::CoordChange::Finished: Finish(s, L"the game's getoff finished"); return false;
+            case ride_rules::CoordChange::Finished:
+            {
+                // The getoff's exit clears the primary controller's active coordinator: the seat's inside the seat's
+                // scope; player 1's if the coordinator was ticked without it (a refused input pass).
+                void* const one = players::generation::PlayerOneController();
+                if (CoordState(Coordinator(one)) == kStateRiding && ReadPointer(one, kControllerActiveVehicle) == nullptr)
+                {
+                    platform::Log(L"WARNING wheelie ride: player 1's active ride was cleared as {}'s coordinator got off: "
+                                  L"its exit ran outside {}'s scope",
+                                  name, name);
+                }
+                Finish(s, L"the game's getoff finished");
+                return false;
+            }
             case ride_rules::CoordChange::Gone:
                 s.stopped = true;
                 Finish(s, BySeat(seat, L"player 2's coordinator is gone; rides stopped for this session",
@@ -1320,9 +1603,42 @@ void* Forget(int seat) noexcept
                       players::SeatName(seat));
         s.stopped = true;  // the seat's coordinator is left as the game left it: no ride is begun again this session
     }
-    s.active = false;
-    s.ride   = {};
+    s.active        = false;
+    s.ride          = {};
+    s.markFaulted   = false;  // a new map, a new coordinator: its first write fault is logged again
+    s.markLogged    = false;
+    s.listCapLogged = false;
     return scooter;
+}
+
+MarkerWidgets MarkerWidgetsNow() noexcept
+{
+    MarkerWidgets icons;
+    if (!g_installed || !g_ownMark || !players::generation::OnGameThread())
+    {
+        return icons;
+    }
+    icons.widget[0] = MarkerWidgetOf(Coordinator(players::generation::PlayerOneController()));
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
+    {
+        if (players::generation::Active(seat))
+        {
+            icons.widget[seat] = MarkerWidgetOf(Coordinator(players::generation::ControllerOf(seat)));
+        }
+    }
+    return icons;
+}
+
+int MarkerOwner(const MarkerWidgets& icons, const void* widget) noexcept
+{
+    for (int player = 0; widget != nullptr && player < players::kMaxPlayers; ++player)
+    {
+        if (icons.widget[player] == widget)
+        {
+            return player;
+        }
+    }
+    return -1;
 }
 
 }  // namespace lss::rides::wheelie_ride

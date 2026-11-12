@@ -571,7 +571,7 @@ src/
                             one, the players take turns at it (one picture for a shared vehicle, no mirror images; the
                             same for the bronco, whose crossing the other …
     wheelie_ride            Each seat's player rides a Wheelie (SB scooter) of their own
-                            (research/RE-p2-wheelie-ride.md, option A)
+                            (research/RE-p2-wheelie-ride.md, RE-wheelie-polish.md)
     wheelie_watch           Logs, read-only, the game's Wheelie (SB Scooter) system while a seat's player is in
                             (research/RE-p2-wheelie-ride.md)
   views/                    the view points, the whole-screen states, the streaming views, the columns and mirror views,
@@ -657,8 +657,8 @@ src/
     field/action_rows       The field-action row list, read and laid out once for its two users
                             (hud/field/prompt_rows.h: each player's own rows; hud/field/action_icon_base.h: the rows'
                             base in a split half)
-    field/field_markers     Each view shows only its own player's field-action point markers
-                            (research/RE-p2-field-interact.md)
+    field/field_markers     Each view shows only its own player's field markers: the field-action point markers and the
+                            scooter coordinators' auto-ride icons
     field/marker_timers     Each view's own linger timer for the off-screen enemy arrows (OutOfScreenTarget_C;
                             research/RE-p2-enemy-markers.md)
     field/prompt_rows       The field prompt rows (FieldAction_Command_C): each player sees their own, in their own view

@@ -36,6 +36,38 @@ inline constexpr std::uintptr_t kBuggyCoordinatorVTable   = 0x145D77220;
 inline constexpr std::uintptr_t kBroncoCoordinatorVTable  = 0x145D769B8;
 inline constexpr std::uintptr_t kScooterCoordinatorVTable = 0x145D76DF0;  // UEndPlayerSBScooterCoordinator
 
+/// The scooter coordinator's shared block (a TSharedPtr object at +0x48): its target (the marked scooter, a weak),
+/// its scooter list (a TArray of weaks: the data, then the count) and, further on, the bytes the coordinator's
+/// tick reads (RE-p2-wheelie-ride.md; the same in both builds, RE-wheelie-polish.md [CONFIRMED]). The list is read
+/// up to the cap: a rental area registers a few scooters.
+inline constexpr std::uint32_t kScooterCoordShared     = 0x48;
+inline constexpr std::uint32_t kScooterSharedTarget    = 0x0;
+inline constexpr std::uint32_t kScooterSharedList      = 0x8;
+inline constexpr std::uint32_t kScooterSharedListCount = 0x10;
+inline constexpr std::int32_t  kScooterListCap         = 32;
+
+/// The scooter coordinator's marker, the auto-ride icon, one per coordinator (RE-wheelie-polish.md; the same in both
+/// builds [CONFIRMED]): its state (0 none, 1 out of reach, 2 within reach), the scooter it marks (a weak) and its
+/// widget (a weak, in the UI system's field-marker list).
+inline constexpr std::uint32_t kScooterCoordMarkerState  = 0x190;
+inline constexpr std::uint32_t kScooterCoordMarkerTarget = 0x194;
+inline constexpr std::uint32_t kScooterCoordMarkerWidget = 0x1E4;
+
+/// SBScooterShared_UpdateNearestTarget(shared): the one writer of a coordinator's target in the coordinator's own
+/// tick. It searches that coordinator's own list for the free scooter nearest the party leader and, on the way,
+/// warps any free scooter far from the leader and from its home back home (the rental return).
+inline constexpr std::uint8_t kScooterUpdateTargetBytes[] = {
+    0x40, 0x53, 0xB8, 0x30, 0x00, 0x00, 0x00, 0xE8, 0xB8, 0xC1, 0x5F, 0x01,
+    0x48, 0x2B, 0xE0, 0x48, 0x8D, 0x54, 0x24, 0x20, 0x48, 0xC7, 0x44, 0x24};
+inline constexpr FunctionFact kScooterUpdateTarget{L"SBScooterShared_UpdateNearestTarget", 0x140AB2D6C,
+                                                   kScooterUpdateTargetBytes};
+/// Its call in SBScooterCoordinator_Tick_Vt280 (five bytes inside one block in both builds).
+inline constexpr std::uintptr_t kScooterUpdateTargetCall = 0x14125A727;
+/// SBScooterCoordinator_TryBeginRide (the coordinator's idle tick) resolves the party data's field leader to compute
+/// its marker against: this call (inside one block in both builds). The rider's resolve later in the same function
+/// is another site, left to the game.
+inline constexpr std::uintptr_t kScooterMarkerLeaderCall = 0x14125A682;
+
 /// AEndPlayerController::GetOrCreateVehicleCoordinator(controller, type) (RE-p2-chocobo-ride.md).
 inline constexpr std::uint8_t kGetOrCreateVehicleCoordinatorBytes[] = {
     0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x6C, 0x24, 0x10, 0x56, 0x57,

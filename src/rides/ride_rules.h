@@ -173,6 +173,28 @@ constexpr CoordChange CoordChangeOf(std::int32_t was, std::int32_t now, std::int
     return now < 0 ? CoordChange::Gone : CoordChange::None;
 }
 
+/// The scooter a seat's own coordinator marks: the free one of player 1's list nearest the seat's member, as the
+/// game's own search picks the one nearest the party leader. `distances[i]` is the member's distance to list entry
+/// i, negative for an entry that cannot be marked (gone, ridden, excluded, or a player's own ride). The index of the
+/// nearest, or -1 for none; on a tie the last entry, as the game's search walks its list from the end.
+template <class Distances>
+constexpr int NearestPick(const Distances& distances) noexcept
+{
+    int   pick = -1;
+    float best = 0.0f;
+    int   i    = 0;
+    for (const float distance : distances)
+    {
+        if (distance >= 0.0f && (pick < 0 || distance <= best))
+        {
+            pick = i;
+            best = distance;
+        }
+        ++i;
+    }
+    return pick;
+}
+
 /// FieldSummonBody's test: a move request carries a stick only when it is not (nearly) zero.
 inline bool RequestMoves(const float (&request)[3], float epsilon) noexcept
 {

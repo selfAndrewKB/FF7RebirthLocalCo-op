@@ -1,13 +1,14 @@
 // Host-side tests for rides::ride_rules, run without the game.
 //
 // The chocobo ride's end retry, seated verdict, end reasons in precedence order and getoff rule; the wheelie's forced
-// getoff plan, coordinator transitions and world stick; the shared ride's riding and change rules; the end texts per
-// seat.
+// getoff plan, coordinator transitions, world stick and a seat's own mark; the shared ride's riding and change rules;
+// the end texts per seat.
 
 #include "rides/ride_rules.h"
 
 #include "expect.h"
 
+#include <array>
 #include <cmath>
 #include <cstdio>
 #include <string>
@@ -111,6 +112,18 @@ void TestWheelie()
     EXPECT(Near(stick[0], -1) && Near(stick[1], 0));
 }
 
+void TestNearestPick()
+{
+    std::puts("wheelie: a seat's own mark is the nearest entry with a distance; none without one; the last on a tie");
+    EXPECT(NearestPick(std::array<float, 5>{-1.0f, 5.0f, 3.0f, -1.0f, 3.5f}) == 2);
+    EXPECT(NearestPick(std::array<float, 3>{-1.0f, -1.0f, -1.0f}) == -1);
+    EXPECT(NearestPick(std::array<float, 0>{}) == -1);
+    EXPECT(NearestPick(std::array<float, 3>{2.0f, 2.0f, 1.0f}) == 2);
+    EXPECT(NearestPick(std::array<float, 2>{2.0f, 2.0f}) == 1);
+    EXPECT(NearestPick(std::array<float, 3>{1.0f, 2.0f, 1.0f}) == 2);
+    EXPECT(NearestPick(std::array<float, 1>{0.0f}) == 0);  // standing on it is a distance
+}
+
 void TestSharedRide()
 {
     std::puts("shared ride: a known coordinator not idle; a bronco coordinator at state 0 is no ride; starts, ends and "
@@ -153,6 +166,7 @@ int main()
     TestChocoboEnd();
     TestSeated();
     TestWheelie();
+    TestNearestPick();
     TestSharedRide();
     TestEndTextPerSeat();
 

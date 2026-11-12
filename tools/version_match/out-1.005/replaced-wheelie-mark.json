@@ -1,0 +1,26 @@
+{
+  "build": "1.005",
+  "research_build": "1.004",
+  "date": "2026-11-12",
+  "doc": "Rebirth/Documentation/research/RE-wheelie-polish.md (sections 2.2 and 2.3; both databases read by the WHEELIEPOLISH pass; the bytes in research/.ida-mcp/wheelie-polish/1005_sites_and_bytes.asm.txt)",
+  "facts": [
+    {
+      "name": "SBScooterShared_UpdateNearestTarget(shared)",
+      "old": "0x140AB2D6C",
+      "new": "0x140F357EC",
+      "bytes": "4053b830000000e8",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "The coordinator tick's target search: FindNearestFreeScooter over the block's own list from the party leader, the dormant point removal, then AssignObject into shared+0. Same shape in both builds; 1.005 reads the scooter fields at +0x2338/+0x233A (the +0x20 move)."
+    },
+    {
+      "name": "SBScooterCoordinator_TryBeginRide's idle-branch call of PartyManager_ResolveFieldLeaderCharOrLeader(1) (the marker's character)",
+      "old": "0x14125A682",
+      "new": "0x140E89380",
+      "bytes": "e8c3ac8dff",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "1.004 E8 D5 61 80 FF at %16=2, 1.005 E8 C3 AC 8D FF at %16=0, both inside one block; the next instructions (mov rdx,rax; lea r9,[rsp+30h]; mov r8b,1: the CanAutoRideTarget call) match. The rider's resolve later in the function (1.004 0x14125A63D, 1.005 0x140E89338) is another site."
+    }
+  ]
+}

@@ -38,8 +38,8 @@ std::uint64_t WeakOf(void* object) noexcept;
 /// Whether `weak` (from WeakOf) still resolves to `object`: false once the object is destroyed.
 bool StillNames(std::uint64_t weak, const void* object) noexcept;
 
-/// Writes `object` into the weak at `field` by the game's own assignment. False if nothing was found or the call
-/// faulted.
+/// Writes `object` into the weak at `field` by the game's own assignment (a null object resets the weak to name
+/// nothing, as the game's own code clears a weak). False if nothing was found or the call faulted.
 bool Assign(std::uint64_t* field, void* object) noexcept;
 
 }  // namespace lss::players::weak_object

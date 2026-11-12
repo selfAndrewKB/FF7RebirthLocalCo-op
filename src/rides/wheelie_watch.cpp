@@ -41,7 +41,7 @@ constexpr std::uint32_t kMapElementValue = 0x8;
 using facts::kScooterCoordinatorVTable;
 using facts::kCoordinatorBody;
 using facts::kCoordinatorRider;
-constexpr std::uint32_t  kCoordShared      = 0x48;   // TSharedPtr object
+using facts::kScooterCoordShared;
 constexpr std::uint32_t  kCoordRiderTable  = 0x58;   // TSharedPtr object
 constexpr std::uint32_t  kCoordGetOffFast  = 0x182;  // u8: the getoff is instant
 constexpr std::uint32_t  kCoordScripted    = 0x1F8;  // u8
@@ -51,15 +51,15 @@ constexpr std::uint32_t  kCoordInstant     = 0x1FC;  // u8
 constexpr std::uint32_t  kCoordEnabled     = 0x29;   // u8 (vt+0x300 sets it; its key listener is registered)
 constexpr std::uint32_t  kCoordDisabled    = 0x2A;   // u8 (vt+0x308)
 constexpr std::uint32_t  kCoordStatePtr    = 0x230;  // -> u32 state id
-// The shared block: the nearest free scooter (weak), the scooter list (TArray<TWeakObjectPtr>), the ride-on point
-// (dormant), and the ride requested / idle / parking minigame on bytes and the minigame colour mask.
-constexpr std::uint32_t kSharedListData  = 0x8;
-constexpr std::uint32_t kSharedListNum   = 0x10;
+// The shared block past its target and list (facts/vehicles.h): the ride-on point (dormant), and the ride requested /
+// idle / parking minigame on bytes and the minigame colour mask.
+using facts::kScooterSharedList;
+using facts::kScooterSharedListCount;
 constexpr std::uint32_t kSharedRequested = 0x28;
 constexpr std::uint32_t kSharedIdle      = 0x29;
 constexpr std::uint32_t kSharedParking   = 0x2A;
 constexpr std::uint32_t kSharedColours   = 0x2B;
-constexpr std::int32_t  kListCap         = 32;
+using facts::kScooterListCap;
 // The per-rider table: 15 entries of 0x14 bytes (FName +0), its count and state.
 constexpr std::uint32_t kTableNum        = 0x12C;
 constexpr std::uint32_t kTableState      = 0x134;
@@ -207,16 +207,16 @@ Snapshot Read(float (&nearestFree)[players::kMaxPlayers])
     s.flags[4]           = ReadField<std::uint8_t>(coord, kCoordGetOffFast);
     s.flags[5]           = ReadField<std::uint8_t>(coord, kCoordEnabled);
     s.flags[6]           = ReadField<std::uint8_t>(coord, kCoordDisabled);
-    const void* shared   = ReadPointer(coord, kCoordShared);
+    const void* shared   = ReadPointer(coord, kScooterCoordShared);
     if (shared != nullptr)
     {
-        s.listNum   = ReadField<std::int32_t>(shared, kSharedListNum);
+        s.listNum   = ReadField<std::int32_t>(shared, kScooterSharedListCount);
         s.shared[0] = ReadField<std::uint8_t>(shared, kSharedRequested);
         s.shared[1] = ReadField<std::uint8_t>(shared, kSharedIdle);
         s.shared[2] = ReadField<std::uint8_t>(shared, kSharedParking);
         s.shared[3] = ReadField<std::uint8_t>(shared, kSharedColours);
-        const auto* list = static_cast<const std::byte*>(ReadPointer(shared, kSharedListData));
-        for (std::int32_t i = 0; list != nullptr && i < s.listNum && i < kListCap; ++i)
+        const auto* list = static_cast<const std::byte*>(ReadPointer(shared, kScooterSharedList));
+        for (std::int32_t i = 0; list != nullptr && i < s.listNum && i < kScooterListCap; ++i)
         {
             void* scooter = players::weak_object::ObjectAt(list + static_cast<std::ptrdiff_t>(i) * sizeof(std::uint64_t));
             if (scooter == nullptr || VTableOf(scooter) != g_scooterVt)
