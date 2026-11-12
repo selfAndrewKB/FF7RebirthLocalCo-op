@@ -6,10 +6,14 @@
 // type, the UI system's command controller and key guide, the input object's focus context and merged sticks,
 // the battle system's target fields. The mod makes the game's own calls for a seat's player with their values in
 // those slots and the game's values put back after. A ByteContext is one player's values for a set of live byte
-// ranges; a ByteScope writes them in on construction and puts the game's back on destruction. Three kinds of
+// ranges; a ByteScope writes them in on construction and puts the game's back on destruction. Four kinds of
 // range:
 //   - Set: a fixed value (a pointer, a type byte). It is written in; the saved live bytes go back out, unless
 //     the game wrote the slot inside the scope, in which case the game's newer value is kept (Close reports it).
+//   - Hold: a fixed value, written in as Set; the saved live bytes always go back out, whatever the game wrote
+//     inside (Close reports a write). For a slot the game writes on the player's behalf inside the call, such
+//     as the party leader during the player's own switch: the write is the player's, read by the caller through
+//     the game's own event, and the game's slot must still read player 1's after the call.
 //   - Exchange: the player's own copy of state the game keeps there (a focus path, a lock). The copy is
 //     exchanged with the live bytes both ways, so what the game wrote inside the scope stays the player's.
 //   - Keep: nothing of the player's. The live bytes are saved and put back whatever the game wrote inside (a
@@ -33,6 +37,7 @@ public:
     enum class Kind : std::uint8_t
     {
         Set,
+        Hold,
         Exchange,
         Keep,
     };
@@ -60,16 +65,17 @@ public:
     std::size_t  Count() const noexcept { return count_; }
     const Range& RangeAt(std::size_t index) const noexcept { return ranges_[index]; }
 
-    /// The value written in (Set), the player's copy (Exchange) or nothing (Keep: what the game left there,
+    /// The value written in (Set, Hold), the player's copy (Exchange) or nothing (Keep: what the game left there,
     /// after Close), to initialise or read. Empty if out of range.
     std::span<std::uint8_t>       Value(std::size_t index) noexcept;
     std::span<const std::uint8_t> Value(std::size_t index) const noexcept;
 
-    /// Saves every range and writes the Set and Exchange values in. False (nothing left changed) if already
-    /// open, undefined, or a range faulted.
+    /// Saves every range and writes the Set, Hold and Exchange values in. False (nothing left changed) if
+    /// already open, undefined, or a range faulted.
     bool Open() noexcept;
-    /// Puts the live bytes back. Returns the number of Set and Keep ranges the game had changed inside (a Set
-    /// range is left as the game wrote it, a Keep range put back); 0 when everything was still the scope's own.
+    /// Puts the live bytes back. Returns the number of Set, Hold and Keep ranges the game had changed inside (a
+    /// Set range is left as the game wrote it, a Hold or Keep range put back); 0 when everything was still the
+    /// scope's own.
     unsigned Close() noexcept;
     /// A read or write of the last Close faulted (a range the call left unreadable): what it holds is unknown.
     bool Faulted() const noexcept { return faulted_; }

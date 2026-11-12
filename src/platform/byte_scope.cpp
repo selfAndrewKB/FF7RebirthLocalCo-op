@@ -153,7 +153,7 @@ unsigned ByteContext::Close() noexcept
         for (std::size_t done = 0; done < range.size; done += sizeof(now))
         {
             const std::size_t part = range.size - done < sizeof(now) ? range.size - done : sizeof(now);
-            const auto*       was  = range.kind == Kind::Set ? value + done : saved + done;
+            const auto*       was  = range.kind == Kind::Keep ? saved + done : value + done;
             if (!CopyGuarded(now, static_cast<const std::uint8_t*>(live) + done, part))
             {
                 faulted_ = true;
@@ -168,14 +168,14 @@ unsigned ByteContext::Close() noexcept
         }
         if (same)
         {
-            if (range.kind == Kind::Set)
+            if (range.kind != Kind::Keep)
             {
-                faulted_ |= !WriteGuarded(live, saved, range.size);
+                faulted_ |= !WriteGuarded(live, saved, range.size);  // a Keep range already holds the saved bytes
             }
             continue;
         }
         ++changed;
-        if (range.kind == Kind::Keep)
+        if (range.kind != Kind::Set)
         {
             faulted_ |= !WriteGuarded(live, saved, range.size);  // the game wrote it inside: put back as found
         }

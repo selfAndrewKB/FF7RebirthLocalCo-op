@@ -6,8 +6,10 @@
 // +0x148. While a LeaderScope lives it holds the seat's member (built and checked with the game's
 // own weak pointer functions; a zero serial is never written), so the game's leader-bound code picks,
 // corrects, clamps or tests around the seat's member. Player 1's leader is put back when it ends,
-// unless the game itself wrote the field inside the call: then the game's newer value is kept and
-// noted (a Set range of platform/byte_scope.h). Game thread only.
+// whatever the game wrote inside the call (a Hold range of platform/byte_scope.h): the one game
+// write there is the seat's own switch, whose new member the seat hears as a leader event and adopts
+// (session/session.h); left in the field, the seat's member would read as player 1's leader to every
+// system outside the pass. Game thread only.
 
 #include "platform/byte_scope.h"
 #include "players/weak_object.h"

@@ -1,9 +1,10 @@
 // Host-side tests for platform/byte_scope, run without the game: ByteContext and ByteScope on plain memory.
 //
-// A Set range is written in and put back, unless the game changed it inside (then kept and reported); an
-// Exchange range swaps the player's copy with the live bytes both ways; a Keep range is put back whatever the
-// game wrote inside (reported). A store is fixed: past its capacity, a definition is refused. An unreadable
-// range opens nothing and leaves the readable ones as they were. Retarget moves a range, its value kept.
+// A Set range is written in and put back, unless the game changed it inside (then kept and reported); a Hold
+// range is written in and put back whatever the game wrote inside (reported); an Exchange range swaps the
+// player's copy with the live bytes both ways; a Keep range is put back whatever the game wrote inside
+// (reported). A store is fixed: past its capacity, a definition is refused. An unreadable range opens nothing
+// and leaves the readable ones as they were. Retarget moves a range, its value kept.
 
 #include "platform/byte_scope.h"
 
@@ -85,6 +86,50 @@ void TestOpenAndClose()
         primary = 0x4444;  // nothing is open: the destructor must not touch it
     }
     EXPECT(primary == 0x4444);
+}
+
+void TestHold()
+{
+    std::puts("byte scope: Hold written in and put back whether or not the game wrote it inside; the write reported");
+    std::uint64_t    leader = 0x1111;  // the party leader: the game's own switch writes it inside a seat's pass
+    std::uint8_t     type   = 3;
+    ByteStore<2, 9>  context;
+    const ByteContext::Range ranges[] = {
+        {At(&leader), sizeof(leader), Kind::Hold},
+        {At(&type), 1, Kind::Hold},
+    };
+    EXPECT(context.Define(ranges));
+    const std::uint64_t seat = 0x2222;
+    std::memcpy(context.Value(0).data(), &seat, sizeof(seat));
+    context.Value(1)[0] = 5;
+
+    // Untouched inside: put back, nothing reported.
+    EXPECT(context.Open() && leader == 0x2222 && type == 5);
+    EXPECT(context.Close() == 0 && leader == 0x1111 && type == 3);
+
+    // The game writes both inside (the seat's switch): player 1's values back, both writes reported.
+    EXPECT(context.Open() && leader == 0x2222);
+    leader = 0x3333;
+    type   = 1;
+    EXPECT(context.Close() == 2);
+    EXPECT(leader == 0x1111 && type == 3);
+    EXPECT(!context.Faulted());
+
+    // One of the two written inside: that one reported, both back.
+    EXPECT(context.Open());
+    type = 7;
+    EXPECT(context.Close() == 1 && leader == 0x1111 && type == 3);
+
+    // A range longer than one compare chunk, the game's write in its second chunk only: reported, the whole range back.
+    std::array<std::uint8_t, 80> wide{};
+    wide.fill(1);
+    ByteStore<1, 80>         wideContext;
+    const ByteContext::Range one[] = {{At(wide.data()), 80, Kind::Hold}};
+    EXPECT(wideContext.Define(one));
+    std::memset(wideContext.Value(0).data(), 2, 80);
+    EXPECT(wideContext.Open() && wide[0] == 2 && wide[79] == 2);
+    wide[70] = 9;
+    EXPECT(wideContext.Close() == 1 && wide[0] == 1 && wide[70] == 1 && wide[79] == 1);
 }
 
 void TestRefusals()
@@ -188,6 +233,7 @@ void TestForget()
 int main()
 {
     TestOpenAndClose();
+    TestHold();
     TestRefusals();
     TestRetarget();
     TestFaultedClose();

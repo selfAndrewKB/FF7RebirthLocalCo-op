@@ -32,17 +32,19 @@ std::uintptr_t Manager() noexcept
                : 0;
 }
 
-/// `value` written into the manager's field at `offset` for the scope's length: one Set range, opened. False if the
-/// manager is missing or the field could not be read or written (then nothing is left changed).
+/// `value` written into the manager's field at `offset` for the scope's length: one Hold range, opened (player 1's
+/// value goes back whatever the game wrote inside: a seat's own switch writes the field through the game's cycle,
+/// and the seat hears that as a leader event). False if the manager is missing or the field could not be read or
+/// written (then nothing is left changed).
 template <class T>
-bool OpenSet(platform::ByteContext& context, std::uint32_t offset, const T& value) noexcept
+bool OpenHold(platform::ByteContext& context, std::uint32_t offset, const T& value) noexcept
 {
     const std::uintptr_t manager = Manager();
     if (manager == 0)
     {
         return false;
     }
-    const platform::ByteContext::Range range{manager + offset, sizeof(T), Kind::Set};
+    const platform::ByteContext::Range range{manager + offset, sizeof(T), Kind::Hold};
     if (!context.Define(std::span<const platform::ByteContext::Range>(&range, 1)))
     {
         return false;
@@ -51,11 +53,12 @@ bool OpenSet(platform::ByteContext& context, std::uint32_t offset, const T& valu
     return context.Open();
 }
 
-/// A Set range the game wrote inside the call keeps the game's newer value (platform/byte_scope.h): noted.
-void Kept(const wchar_t* what) noexcept
+/// The game wrote the field inside the call (a seat's own switch): player 1's value is back (a Hold range of
+/// platform/byte_scope.h); noted.
+void PutBack(const wchar_t* what) noexcept
 {
-    platform::LogDebug(L"leader scope: the game wrote the party manager's {} inside player 2's or 3's call; the game's value "
-                       L"kept",
+    platform::LogDebug(L"leader scope: the game wrote the party manager's {} inside player 2's or 3's call; player 1's "
+                       L"put back (the seat hears the write as a leader event)",
                        what);
 }
 
@@ -78,27 +81,27 @@ bool Installed() noexcept
 
 LeaderScope::LeaderScope(std::uint64_t memberWeak) noexcept
 {
-    held_ = memberWeak != 0 && OpenSet(context_, kPartyManagerLeader, memberWeak);
+    held_ = memberWeak != 0 && OpenHold(context_, kPartyManagerLeader, memberWeak);
 }
 
 LeaderScope::~LeaderScope()
 {
     if (held_ && context_.Close() != 0)
     {
-        Kept(L"leader");
+        PutBack(L"leader");
     }
 }
 
 LeaderTypeScope::LeaderTypeScope(std::uint8_t type) noexcept
 {
-    held_ = OpenSet(context_, kPartyManagerLeaderType, type);
+    held_ = OpenHold(context_, kPartyManagerLeaderType, type);
 }
 
 LeaderTypeScope::~LeaderTypeScope()
 {
     if (held_ && context_.Close() != 0)
     {
-        Kept(L"leader type");
+        PutBack(L"leader type");
     }
 }
 
