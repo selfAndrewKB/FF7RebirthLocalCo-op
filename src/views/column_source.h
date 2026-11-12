@@ -11,7 +11,7 @@
 //     runs for them;
 //   - Screen: no column at all; the whole screen is the engine's single view, player 1's (players/single_view.h: the
 //     engine's split switch), and the mod does nothing per seat. One monitor only: a held column is never black (the
-//     user's columns rule), so under the three-player monitor mode or the console's `view-columns` the
+//     columns rule), so under the three-player monitor mode or the console's `view-columns` the
 //     same moments keep the columns and give them PlayerOne instead.
 //
 // The moments that take a seat's view away from its player, each a game state the mod reads, never a guess:

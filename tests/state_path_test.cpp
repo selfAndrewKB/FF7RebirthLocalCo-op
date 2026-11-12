@@ -1,6 +1,6 @@
 // Host-side tests for session/state_path.h: a member's chain of level states, walked as the lead gate walks it. The
-// chain shapes are Remake's live ones (Aerith's guide home, Barret's walk-ups to a terminal) and Rebirth's own (a
-// setting group, a chain past the limit), with the destinations made up.
+// chain shapes are the other game's live ones (Aerith's guide home, Barret's walk-ups to a terminal) and this game's
+// own (a setting group, a chain past the limit), with the destinations made up.
 
 #include "session/state_path.h"
 

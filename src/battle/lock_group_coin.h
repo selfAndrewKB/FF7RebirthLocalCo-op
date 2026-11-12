@@ -6,7 +6,7 @@
 // the party, at most N on each target, and with bPrioritizeUCPC prefers "the player": Pick takes the party leader when
 // the leader holds fewer locks than every other target, and the rebalance releases every lock and picks again,
 // leader first, when no target holds more than one and the leader holds none. Both read the leader pointer, so in
-// co-op the group prefers player 1 only. The user's rule (one lock on a human): each pick prefers player 1 or
+// co-op the group prefers player 1 only. The rule here is one lock on a human: each pick prefers player 1 or
 // a seat's player by the picking enemy's coin, and the rebalance respreads only when no human holds a lock.
 //
 // The levers: Pick's leader read and CountLocks' leader read (whose "is the leader" byte only the rebalance uses)

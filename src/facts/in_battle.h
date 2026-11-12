@@ -3,9 +3,9 @@
 // The game's own in-battle test, found once for every module that asks it.
 //
 // UEndBattleAPI::IsInBattle (facts/party.h, kIsInBattle) answers whether a battle is on. Several of
-// the seats' modules ask it: at their install they used to find it each for themselves and wrap the
-// call each in their own guard. It is found here once, at startup before the stages, and asked
-// through one guarded call; a module whose install needs the test checks that it was found.
+// the seats' modules ask it. It is found here once, at startup before the stages, and asked through
+// one guarded call, so no module finds it or guards it for itself; a module whose install needs the
+// test checks that it was found.
 
 namespace lss::platform {
 class GameImage;

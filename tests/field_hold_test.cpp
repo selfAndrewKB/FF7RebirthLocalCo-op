@@ -74,7 +74,7 @@ void TestMoveSettingAndPathEnd()
 void TestGroups()
 {
     std::puts("groups: one run or lead naming a trigger moves the member, whatever comes first; FOLLOW alone follows");
-    // The resident groups (RE-walk-gate.md section 2.3): LeadDefault opens with a stay; a Stay group's walk back to its
+    // The resident groups (research/RE-walk-gate.md): LeadDefault opens with a stay; a Stay group's walk back to its
     // anchor names no trigger; StayLookRelay's walk does (the setting row's argument 8); MoveToAnimation animates first.
     const GroupState leadDefault[] = {{kAiStateStay, -1}, {kAiStateLead, 2}, {kAiStateStay, -1}};
     const GroupState stayDefault[] = {{kAiStateStay, -1}, {kAiStateMoveTo, -1}};
