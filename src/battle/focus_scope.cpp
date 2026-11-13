@@ -1,6 +1,7 @@
 #include "battle/focus_scope.h"
 
 #include "facts/hud.h"
+#include "facts/menu.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
@@ -32,7 +33,7 @@ struct Region
 {
     std::uint32_t offset, size;
 };
-constexpr std::array<Region, 5> kContext{{{0x08, 32}, {0x40, 16}, {0x78, 1}, {0xA8, 0x50}, {0x64, 1}}};
+constexpr std::array<Region, 5> kContext{{{0x08, 32}, {0x40, 16}, {0x78, 1}, {facts::kInputCaptureMap, 0x50}, {0x64, 1}}};
 constexpr std::uint32_t kDelegate = 0x1A0;  // the menu-core delegate, run when no widget takes an action
 static_assert(kContext[0].size + kContext[1].size + kContext[2].size + kContext[3].size + kContext[4].size ==
               kContextSize);

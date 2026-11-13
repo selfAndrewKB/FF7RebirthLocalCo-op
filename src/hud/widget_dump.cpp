@@ -14,6 +14,7 @@
 #include <Unreal/UObjectGlobals.hpp>
 
 #include "facts/command_controller.h"
+#include "facts/engine.h"
 #include "facts/hud.h"
 #include "platform/build_value.h"
 #include "platform/command_registry.h"
@@ -488,7 +489,7 @@ constexpr platform::FunctionFact kPlayerHostGeometry{L"GameLayerManager player-h
                                                      kPlayerHostGeometryPrologue};
 constexpr std::uint32_t  kViewportLayerManager           = 0x120;
 constexpr std::uint32_t  kViewportLayerManagerController = 0x128;
-constexpr std::size_t    kGeometryBytes                  = 0x38;  // Size +0, Scale +8, translation +0x2C
+using facts::kGeometryBytes;
 
 using GeometryFn = void* (*)(void* layerManager, void* out, void* localPlayer);
 
@@ -585,9 +586,9 @@ int LogPlayerLayers(std::uintptr_t playerHostGeometry)
             continue;
         }
         float size[2] = {}, scale = 0.0f, translation[2] = {};
-        std::memcpy(size, geometry, sizeof(size));
-        std::memcpy(&scale, geometry + 8, sizeof(scale));
-        std::memcpy(translation, geometry + 0x2C, sizeof(translation));
+        std::memcpy(size, geometry + facts::kGeometrySize, sizeof(size));
+        std::memcpy(&scale, geometry + facts::kGeometryScale, sizeof(scale));
+        std::memcpy(translation, geometry + facts::kGeometryTranslation, sizeof(translation));
         platform::Log(L"hud managers: LocalPlayers[{}]'s stock player layer: size {:.0f}x{:.0f}, scale {:.3f}, at ({:.0f}, {:.0f})",
                       i, size[0], size[1], scale, translation[0], translation[1]);
         ++lines;

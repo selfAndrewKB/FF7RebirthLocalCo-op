@@ -9,6 +9,8 @@
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
+#include "platform/sparse_array.h"
+#include "platform/tset_find.h"
 #include "platform/verified_code.h"
 #include "platform/vtable_entry.h"
 #include "players/describe.h"
@@ -108,6 +110,12 @@ constexpr std::uint32_t kSelFinal        = 0x17C;  // FWeakObjectPtr: after lock
 // Hate selector: TSparseArray of 72-B pairs, inline 15; +0 u8 type, +8 int hate (-1 not engaged), +0x10 TArray<u8,
 // inline 8> flags (heap +0x18); the chosen type afterwards at +0x620.
 constexpr std::uint32_t kHateInline = 0x188, kHateHeap = 0x5C0, kHateNum = 0x5C8, kHatePair = 72, kHateChosen = 0x620;
+constexpr std::uint32_t kHatePairType = 0x00, kHateValue = 0x08, kHateFlagsInline = 0x10, kHateFlagsHeap = 0x18;
+// TargetSelectConditions' pairs (the TMap's sparse array, platform/sparse_array.h): 32 bytes, +0 u8 category, +8
+// TArray<Element> (data, then its Num).
+constexpr std::uint32_t kCondPair = 32, kCondCategory = 0x00, kCondElements = 0x08, kCondElementsNum = 0x10;
+// The Condition select's draw is handed the exclusions array of an element; the element's pointer sits 0x10 before it.
+constexpr std::uintptr_t kExclusionsElementBack = 0x10;
 // Condition selector: the history of picks, u8 last kind (0 UCPC, 1 AIPC, 3 none) and int run count.
 constexpr std::uint32_t kCondLastKind = 0x1E0, kCondRunCount = 0x1E4;
 // Party manager: the leader (FWeakObjectPtr), player 1's character.
@@ -366,8 +374,8 @@ std::wstring ClassName(std::uint8_t type)
 std::wstring Conditions(const void* controller, const std::wstring& enemy) noexcept
 {
     const auto* map   = static_cast<const std::byte*>(controller) + kCtrlConditions;
-    const auto* pairs = ReadPointer(map, 0x0);
-    const auto  num   = ReadField<std::int32_t>(map, 0x8);
+    const auto* pairs = ReadPointer(map, platform::kSparseData);
+    const auto  num   = ReadField<std::int32_t>(map, platform::kSetCount);
     if (pairs == nullptr || num <= 0)
     {
         return L"no TargetSelectConditions";
@@ -376,21 +384,21 @@ std::wstring Conditions(const void* controller, const std::wstring& enemy) noexc
     {
         return L"TargetSelectConditions unread (" + std::to_wstring(num) + L" pairs)";
     }
-    // Allocation bits: inline at +0x10, or the heap pointer at +0x20.
-    const auto*   heapBits = ReadPointer(map, 0x20);
+    // Allocation bits: inline, or on the heap.
+    const auto*   heapBits = ReadPointer(map, platform::kSparseHeapBits);
     std::uint32_t counts[3]{}, disabled = 0, total = 0;
     for (std::int32_t p = 0; p < num; ++p)
     {
-        const auto* words = heapBits != nullptr ? static_cast<const std::byte*>(heapBits) : map + 0x10;
+        const auto* words = heapBits != nullptr ? static_cast<const std::byte*>(heapBits) : map + platform::kSparseInlineBits;
         const auto  word  = ReadField<std::uint32_t>(words, static_cast<std::uint32_t>(p / 32) * 4);
         if ((word >> (p % 32) & 1) == 0)
         {
             continue;  // a free slot
         }
-        const auto* pair     = static_cast<const std::byte*>(pairs) + static_cast<std::size_t>(p) * 32;
-        const auto  category = ReadField<std::uint8_t>(pair, 0x0);
-        const auto* elements = ReadPointer(pair, 0x8);
-        const auto  count    = ReadField<std::int32_t>(pair, 0x10);
+        const auto* pair     = static_cast<const std::byte*>(pairs) + static_cast<std::size_t>(p) * kCondPair;
+        const auto  category = ReadField<std::uint8_t>(pair, kCondCategory);
+        const auto* elements = ReadPointer(pair, kCondElements);
+        const auto  count    = ReadField<std::int32_t>(pair, kCondElementsNum);
         for (std::int32_t e = 0; elements != nullptr && e < count && e < kListCap; ++e)
         {
             Element element{};
@@ -453,14 +461,14 @@ void LogHateTable(const void* selector) noexcept
     for (std::int32_t i = 0; i < num && i < 16; ++i)
     {
         const auto* pair = pairs + static_cast<std::size_t>(i) * kHatePair;
-        const auto  hate = ReadField<std::int32_t>(pair, 0x8);
+        const auto  hate = ReadField<std::int32_t>(pair, kHateValue);
         if (hate < 0)
         {
             continue;  // not engaged
         }
-        const auto* flags = ReadPointer(pair, 0x18);
-        const auto  flag  = ReadField<std::uint8_t>(flags != nullptr ? flags : pair + 0x10, 0);
-        table += std::format(L" {}:{}{}", ReadField<std::uint8_t>(pair, 0), hate, flag != 0 ? L"!" : L"");
+        const auto* flags = ReadPointer(pair, kHateFlagsHeap);
+        const auto  flag  = ReadField<std::uint8_t>(flags != nullptr ? flags : pair + kHateFlagsInline, 0);
+        table += std::format(L" {}:{}{}", ReadField<std::uint8_t>(pair, kHatePairType), hate, flag != 0 ? L"!" : L"");
     }
     platform::LogTrace(L"target census: hate table (type:hate, ! flagged):{}", table.empty() ? L" none engaged" : table);
 }
@@ -510,11 +518,13 @@ void OnConditionSelect(void* selector, std::uint64_t, std::uint64_t out, std::ui
 /// The Condition select's draw: the element whose exclusions narrow the candidates.
 std::uint64_t Exclusion(std::uint64_t a, std::uint64_t candidates, std::uint64_t exclusions, std::uint64_t d) noexcept
 {
-    const auto* element = exclusions > 0x10 ? ReadPointer(reinterpret_cast<const void*>(exclusions - 0x10), 0) : nullptr;
+    const auto* element = exclusions > kExclusionsElementBack
+                              ? ReadPointer(reinterpret_cast<const void*>(exclusions - kExclusionsElementBack), 0)
+                              : nullptr;
     if (element != nullptr && t_depth > 0 && t_depth <= kDepth)
     {
         Frame&     frame = t_frames[t_depth - 1];
-        const auto type  = ReadField<std::uint8_t>(element, 0x8);
+        const auto type  = ReadField<std::uint8_t>(element, offsetof(Element, characterType));
         if (type < 3)
         {
             Count(g_tally.draws[type]);
@@ -522,7 +532,7 @@ std::uint64_t Exclusion(std::uint64_t a, std::uint64_t candidates, std::uint64_t
         if (frame.draws < std::size(frame.drawClass))
         {
             frame.drawClass[frame.draws]     = type;
-            frame.drawCondition[frame.draws] = ReadField<std::uint8_t>(element, 0x9);
+            frame.drawCondition[frame.draws] = ReadField<std::uint8_t>(element, offsetof(Element, conditionType));
             ++frame.draws;
         }
     }

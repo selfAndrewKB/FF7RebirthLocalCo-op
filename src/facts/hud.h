@@ -146,6 +146,15 @@ inline constexpr platform::FunctionFact kNaviMapCircleSubmitCall{L"the navi-map 
 // BeginInitResource_OrDirectIfRenderThread (render thread: vt+0x28 directly).
 inline constexpr std::uintptr_t kVertexBufferVtable = 0x146621CF8;
 inline constexpr std::uintptr_t kIndexBufferVtable  = 0x146621D50;
+// Such a buffer as the menu renderer's ctor lays it out (research/RE-p2-hud-second-image.md): 0x20 bytes, the vtable,
+// the render resource's list index (-1 until InitResource lists it), a u16 the ctor sets to 2, the RHI buffer
+// InitResource makes, and the capacity.
+inline constexpr std::uint32_t  kMenuBufferSize      = 0x20;
+inline constexpr std::uint32_t  kMenuBufferVtable    = 0x00;
+inline constexpr std::uint32_t  kMenuBufferListIndex = 0x08;  // i32
+inline constexpr std::uint32_t  kMenuBufferCtorWord  = 0x0C;  // u16
+inline constexpr std::uint32_t  kMenuBufferRhi       = 0x10;
+inline constexpr std::uint32_t  kMenuBufferCapacity  = 0x18;  // u32
 inline constexpr std::uint8_t   kBeginInitResourcePrologue[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x74, 0x24,
                                                               0x10, 0x48, 0x89, 0x7C, 0x24, 0x18, 0x41, 0x56, 0xB8,
                                                               0x90, 0x00, 0x00, 0x00};

@@ -12,6 +12,7 @@
 // into freed memory must not be hidden. WriteAt is guarded and says whether the write landed, for
 // the modules that write a game system's fields and act on that.
 
+#include "platform/angles.h"
 #include "platform/guarded_read.h"
 
 #include <cstddef>
@@ -37,6 +38,22 @@ void WriteField(void* object, std::uint32_t offset, T value) noexcept
 inline std::uintptr_t VTableOf(const void* object) noexcept
 {
     return ReadField<std::uintptr_t>(object, 0);
+}
+
+/// The yaw (degrees) of the FQuat {x, y, z, w} field at `offset` of `object` (platform::QuaternionYawDegrees): the
+/// direction a transform or an edge faces. An unreadable field reads as the identity rotation, yaw 0.
+inline float QuatFieldYaw(const void* object, std::uint32_t offset) noexcept
+{
+    struct Quat
+    {
+        float x = 0.0f, y = 0.0f, z = 0.0f, w = 1.0f;
+    };
+    Quat read, q;
+    if (Read(object, offset, read))
+    {
+        q = read;  // a copy that faulted part-way is no value: the identity stands
+    }
+    return platform::QuaternionYawDegrees(q.x, q.y, q.z, q.w);
 }
 
 }  // namespace lss

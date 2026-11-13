@@ -3,14 +3,15 @@
 // A second set of the menu renderer's vertex and index buffers, for a layer entry drawn beside the game's own in one
 // slot (hud/passes/column_hud_images.h: the overlay's pool 2; hud/minimap/minimap.h: the minimap's pool 0). Built as
 // FEndMenuRenderer's ctor builds each pool's (research/RE-p2-hud-second-image.md, RE-p2-own-minimap.md): a 0x20-byte
-// FRenderResource with the pool's own vtable, +8 = -1 (not listed yet), +0xC = 2, the capacity at +0x18, then queued
-// for initialisation on the render thread. The SRM slot is a zeroed 0x20-byte block. Also the FName value helper both
+// FRenderResource with the pool's own vtable, not listed yet, the ctor's word and the capacity (facts/hud.h's layout),
+// then queued for initialisation on the render thread. The SRM slot is a zeroed 0x20-byte block. Also the FName value helper both
 // use for entry names. Game thread, except that the render thread initialises the buffers.
 
 #define RC_UNREAL_DISABLE_PROPERTY_DEPRECATION_WARNINGS
 #define RC_UNREAL_DISABLE_CLASS_DEPRECATION_WARNINGS
 #include <Unreal/NameTypes.hpp>
 
+#include "facts/hud.h"
 #include "platform/guarded.h"
 
 #include <cstdint>
@@ -22,7 +23,7 @@ namespace lss::hud {
 /// A render resource of the menu renderer's buffer kind, laid out as its ctor lays it out.
 struct alignas(16) MenuBuffer
 {
-    std::uint8_t bytes[0x20] = {};
+    std::uint8_t bytes[facts::kMenuBufferSize] = {};
 };
 
 /// One extra entry's buffer set. Never freed: the renderer may hold them until the process ends.
@@ -59,10 +60,10 @@ inline bool BuildMenuBuffers(const void* renderer, std::uint32_t vertexOffset, s
     auto build = [](MenuBuffer& buffer, std::uintptr_t vtable, std::uint32_t capacity) {
         const std::int32_t  unlisted = -1;
         const std::uint16_t two      = 2;
-        std::memcpy(buffer.bytes + 0x00, &vtable, sizeof(vtable));
-        std::memcpy(buffer.bytes + 0x08, &unlisted, sizeof(unlisted));
-        std::memcpy(buffer.bytes + 0x0C, &two, sizeof(two));
-        std::memcpy(buffer.bytes + 0x18, &capacity, sizeof(capacity));
+        std::memcpy(buffer.bytes + facts::kMenuBufferVtable, &vtable, sizeof(vtable));
+        std::memcpy(buffer.bytes + facts::kMenuBufferListIndex, &unlisted, sizeof(unlisted));
+        std::memcpy(buffer.bytes + facts::kMenuBufferCtorWord, &two, sizeof(two));
+        std::memcpy(buffer.bytes + facts::kMenuBufferCapacity, &capacity, sizeof(capacity));
     };
     build(set.vertex, vertexVtable, kMenuVertexCapacity);
     build(set.index, indexVtable, kMenuIndexCapacity);
@@ -71,8 +72,8 @@ inline bool BuildMenuBuffers(const void* renderer, std::uint32_t vertexOffset, s
     return true;
 }
 
-/// True once the render thread has initialised both buffers: InitResource has listed them (+8 is no longer -1) and
-/// each holds its RHI buffer (+0x10). Check every frame: an RHI device reset releases and re-creates every listed
+/// True once the render thread has initialised both buffers: InitResource has listed them (the list index is no longer
+/// -1) and each holds its RHI buffer. Check every frame: an RHI device reset releases and re-creates every listed
 /// resource, and a frame drawn in between would find no buffer.
 inline bool MenuBuffersInitialised(const MenuBufferSet& set) noexcept
 {
@@ -80,8 +81,8 @@ inline bool MenuBuffersInitialised(const MenuBufferSet& set) noexcept
     {
         std::int32_t  listIndex = -1;
         std::uint64_t rhi       = 0;
-        std::memcpy(&listIndex, buffer->bytes + 0x08, sizeof(listIndex));
-        std::memcpy(&rhi, buffer->bytes + 0x10, sizeof(rhi));
+        std::memcpy(&listIndex, buffer->bytes + facts::kMenuBufferListIndex, sizeof(listIndex));
+        std::memcpy(&rhi, buffer->bytes + facts::kMenuBufferRhi, sizeof(rhi));
         if (listIndex == -1 || rhi == 0)
         {
             return false;

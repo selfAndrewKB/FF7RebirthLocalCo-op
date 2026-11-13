@@ -96,9 +96,7 @@ std::int32_t PadOf(int who) noexcept
 /// The yaw (degrees) of the end transform's forward axis, the direction the game compares the stick with.
 float ForwardYaw(const void* transform) noexcept
 {
-    const float x = ReadField<float>(transform, 0x0), y = ReadField<float>(transform, 0x4);
-    const float z = ReadField<float>(transform, 0x8), w = ReadField<float>(transform, 0xC);
-    return platform::QuaternionYawDegrees(x, y, z, w);
+    return QuatFieldYaw(transform, 0);  // the transform's rotation leads it
 }
 
 // Game thread: the last answer logged per player, by seat (0 player 1's; Debug on change).

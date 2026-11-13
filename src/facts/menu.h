@@ -28,6 +28,9 @@ using platform::SlotFact;
 // The UI system itself: facts/hud.h kEndUISystem (a static object whose qwords are the managers).
 inline constexpr std::uint32_t  kEndUISystemSlots   = 64;
 inline constexpr std::uint32_t  kUiInputSlot        = 2;   // Square's input object (the focus stack, the stick mode)
+/// The input object's capture map: a stock TSet (platform/tset_find.h's layout) keyed by action; the widget that took a
+/// held action's press gets its release.
+inline constexpr std::uint32_t  kInputCaptureMap    = 0xA8;
 inline constexpr std::uint32_t  kUiMainMenuSlot     = 28;  // the main menu manager
 inline constexpr std::uint32_t  kUiMenuTutorialSlot = 58;  // the menu tutorial
 inline constexpr std::uint32_t  kMenuTutorialState  = 0x28;  // u8

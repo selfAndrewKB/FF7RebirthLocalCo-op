@@ -7,6 +7,7 @@
 #include "facts/command_controller.h"
 #include "facts/controller.h"
 #include "facts/hud.h"
+#include "facts/menu.h"
 #include "facts/party.h"
 #include "input/button_view.h"
 #include "input/pad_buttons.h"
@@ -15,6 +16,7 @@
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
+#include "platform/tset_find.h"
 #include "platform/verified_code.h"
 #include "platform/vtable_entry.h"
 #include "players/generation.h"
@@ -245,14 +247,16 @@ bool InSeatUi(int seat, Route route, const wchar_t* what, Call&& call) noexcept
 /// For the route log: a seat's battle input, its action requests, and player 1's capture map's count.
 std::wstring RouteState(std::uintptr_t own)
 {
-    const auto input = ReadAt<std::uintptr_t>(command_menu_tick::UiSystem() + kUIInput);
+    const auto input    = ReadAt<std::uintptr_t>(command_menu_tick::UiSystem() + kUIInput);
+    const auto captures = input + facts::kInputCaptureMap;
     return std::format(L"25C {} req 6:{} 7:{} 12:{} 13:{} 26:{} 32:{} 37:{} | members {} {} {} | captures {}",
                        ReadAt<std::uint8_t>(own + kCmdBattleInput), RequestOf(own, 6), RequestOf(own, 7),
                        RequestOf(own, kReqAttack), RequestOf(own, kReqUnique), RequestOf(own, 26),
                        RequestOf(own, kReqGuardDodge), RequestOf(own, kReqGuard),
                        ReadAt<std::int32_t>(own + kCmdMembers), ReadAt<std::int32_t>(own + kCmdMembers + 4),
                        ReadAt<std::int32_t>(own + kCmdMembers + 8),
-                       ReadAt<std::int32_t>(input + 0xB0) - ReadAt<std::int32_t>(input + 0xDC));
+                       ReadAt<std::int32_t>(captures + platform::kSetCount) -
+                           ReadAt<std::int32_t>(captures + platform::kSetFreeCount));
 }
 
 /// Notes that `seat`'s pad's press of `key` went to the seat's UI: its release goes there too.

@@ -73,6 +73,9 @@ constexpr std::uint32_t  kCarriageShown  = 0x20;
 constexpr std::uint32_t  kWidgetState    = 0x3D8;
 constexpr std::uint32_t  kWidgetZOrder   = 0x2A8;  // -1 once the game's RemoveFromParent took it off its overlay
 constexpr std::uint8_t   kRaceMenuDone   = 5;
+constexpr std::uint32_t  kChocoboHolderRace   = 0x08;  // slot 72's weak pointers after the stable's at +0
+constexpr std::uint32_t  kChocoboHolderSelect = 0x10;
+constexpr std::uint32_t  kBrawlerHolderWinner = 0x08;  // slot 82's after the select's at +0
 
 // On/off 153 ShowColosseumMenu, held by a VR or colosseum session from Begin to End (research/RE-p2-minigames.md). For the
 // log only (E4, E6): 92 SoundCallEventMiniGameMenuInOut (set by no native code: Blueprint or script data), and Chadley's
@@ -299,8 +302,8 @@ std::uint16_t NativeMenusOpen() noexcept
     if (const auto chocobo = Holder(4))
     {
         open |= WeakValid(chocobo) ? kChocoboStable : 0;
-        open |= WeakValid(chocobo + 0x10) ? kChocoboSelect : 0;
-        if (const auto race = WeakObject(chocobo + 8))
+        open |= WeakValid(chocobo + kChocoboHolderSelect) ? kChocoboSelect : 0;
+        if (const auto race = WeakObject(chocobo + kChocoboHolderRace))
         {
             std::uint8_t state = kRaceMenuDone;
             open |= Read(race + kWidgetState, state) && state != kRaceMenuDone ? kChocoboRace : 0;
@@ -313,7 +316,7 @@ std::uint16_t NativeMenusOpen() noexcept
     if (const auto brawler = Holder(6))
     {
         open |= InOverlay(WeakObject(brawler)) ? kBrawlerSelect : 0;
-        open |= InOverlay(WeakObject(brawler + 8)) ? kBrawlerWinner : 0;
+        open |= InOverlay(WeakObject(brawler + kBrawlerHolderWinner)) ? kBrawlerWinner : 0;
     }
     return open;
 }

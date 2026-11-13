@@ -235,7 +235,7 @@ std::atomic<const void*>   g_owner{nullptr};  // the input owner (the key-value 
 // it (front, then the frame stamp, release); a reader takes the stamp (acquire), then the front.
 struct alignas(16) OwnerCopy
 {
-    std::byte bytes[kKeyFieldsEnd + 0xC]{};
+    std::byte bytes[(kKeyFieldsEnd + 15) / 16 * 16]{};  // the owner's offsets up to the copied range's end, in 16-byte units
 };
 std::array<std::array<OwnerCopy, 2>, kPlayers>   g_copies{};  // [seat][buffer] (seat = player number - 1)
 std::array<std::atomic<int>, kPlayers>           g_front{};
@@ -339,9 +339,7 @@ int PlayerOf(const void* move) noexcept
 /// The yaw (degrees) of the edge rotation's X axis, the direction the lean's stick test compares with.
 float EdgeYaw(const void* move) noexcept
 {
-    const float x = ReadField<float>(move, kEdgeRotation), y = ReadField<float>(move, kEdgeRotation + 0x4);
-    const float z = ReadField<float>(move, kEdgeRotation + 0x8), w = ReadField<float>(move, kEdgeRotation + 0xC);
-    return platform::QuaternionYawDegrees(x, y, z, w);
+    return QuatFieldYaw(move, kEdgeRotation);
 }
 
 std::uint32_t EdgeStateOf(const void* move) noexcept

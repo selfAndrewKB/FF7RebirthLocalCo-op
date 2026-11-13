@@ -190,6 +190,7 @@ inline constexpr std::uint32_t kEngineGameViewport = 0x7E0;
 /// UGameViewportClient::SplitscreenInfo: the TArray's data pointer (its Num follows at +kTArrayNum).
 inline constexpr std::uint32_t kViewportClientSplitscreenInfo = 0x60;
 inline constexpr std::uint32_t kTArrayNum                     = 0x08;
+inline constexpr std::uint32_t kTArrayMax                     = 0x0C;  // a TArray's capacity (i32)
 
 /// The constructor's ten entries; an entry (FSplitscreenData) and a record (FPerPlayerSplitscreenData) are 16 bytes
 /// each.
@@ -398,6 +399,16 @@ inline constexpr std::uint32_t kEngineMediumFont = 0x70;
 /// The PlayStation pad reader's device vtable (the SonyController plugin, scePad; 1.005: 0x146432E10): not XInput, so
 /// the pad table does not move its pads.
 inline constexpr std::uintptr_t kSonyControllerDeviceVTable = 0x1465A8AE0;
+
+// ---------------------------------------------------------------------------------------------
+// Slate (stock UE4)
+// ---------------------------------------------------------------------------------------------
+
+/// FGeometry (0x38 bytes): its size (FVector2D), its scale (float), and its absolute translation (FVector2D).
+inline constexpr std::uint32_t kGeometryBytes       = 0x38;
+inline constexpr std::uint32_t kGeometrySize        = 0x00;
+inline constexpr std::uint32_t kGeometryScale       = 0x08;
+inline constexpr std::uint32_t kGeometryTranslation = 0x2C;
 
 // ---------------------------------------------------------------------------------------------
 // The startup check list

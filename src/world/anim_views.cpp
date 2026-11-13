@@ -443,11 +443,12 @@ void AppendSeatPairs() noexcept
             WriteField<float>(it->mesh, angleAt, savedAngle);
             // Appended as the game appends: Num++, the game's grow past Max, then the pair.
             auto*      list = static_cast<std::byte*>(it->data) + kDataPairs;
-            const auto num  = ReadField<std::int32_t>(list, 8);
-            WriteField<std::int32_t>(list, 8, num + 1);
-            if (num + 1 > ReadField<std::int32_t>(list, 0xC) && !platform::CallGuarded(g_grow, static_cast<void*>(list)))
+            const auto num  = ReadField<std::int32_t>(list, facts::kTArrayNum);
+            WriteField<std::int32_t>(list, facts::kTArrayNum, num + 1);
+            if (num + 1 > ReadField<std::int32_t>(list, facts::kTArrayMax) &&
+                !platform::CallGuarded(g_grow, static_cast<void*>(list)))
             {
-                WriteField<std::int32_t>(list, 8, num);
+                WriteField<std::int32_t>(list, facts::kTArrayNum, num);
                 continue;
             }
             auto* slots = static_cast<float*>(ReadPointer(list, 0));
