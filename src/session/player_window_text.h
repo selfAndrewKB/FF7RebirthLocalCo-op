@@ -99,7 +99,7 @@ inline std::wstring PlayerName(int seat)
 /// The notice after a press on the title screen: which controller plays player 1 (`user` the physical pad, 0-based).
 inline std::wstring TitleClaimed(int user)
 {
-    return L"Controller " + std::to_wstring(user + 1) + L" plays Player 1";
+    return L"Controller " + std::to_wstring(user + 1) + L" is set as Player 1";
 }
 
 inline ScreenText TextFor(const Window& w)

@@ -29,4 +29,11 @@ void Show(std::wstring text, int seconds) noexcept;
 /// early, hidden when its time is up.
 void Tick() noexcept;
 
+/// A line waits for its draw or is up.
+bool Active() noexcept;
+
+/// The line ended now, hidden if it is up, dropped if it waits (the title screen left: no line of its over a loading
+/// screen). Game thread.
+void End() noexcept;
+
 }  // namespace lss::hud::save_notice

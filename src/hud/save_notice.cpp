@@ -247,4 +247,26 @@ void Tick() noexcept
     }
 }
 
+bool Active() noexcept
+{
+    return g_pending || g_until != 0;
+}
+
+void End() noexcept
+{
+    if (!Active() || !players::generation::OnGameThread())
+    {
+        return;
+    }
+    const bool up = g_up;
+    if (up)
+    {
+        Hide();
+    }
+    g_pending   = false;
+    g_waitUntil = 0;
+    g_until     = 0;
+    platform::LogDebug(L"save notice: the line ended before its time{}", up ? L"; the game's notice hidden" : L"");
+}
+
 }  // namespace lss::hud::save_notice

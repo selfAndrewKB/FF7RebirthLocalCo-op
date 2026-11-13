@@ -521,7 +521,13 @@ try
         g_dropped = 0;
     }
     g_playing = frame.seatIds | 1u;
-    hud::save_notice::Tick();  // the title's notice of which controller plays player 1, while it is due
+    // The title's notice of which controller is player 1, while it is due; it ends with the title (no line over the
+    // loading screen).
+    if (hud::save_notice::Active() && !views::AtTitleNow())
+    {
+        hud::save_notice::End();
+    }
+    hud::save_notice::Tick();
     // The title is read only when a press is to be told apart (the press there takes player 1). A press anywhere else
     // ends the title's visit: the next one's first press is said again.
     const bool title = count > 0 && views::AtTitleNow();
