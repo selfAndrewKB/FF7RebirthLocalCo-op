@@ -1,0 +1,26 @@
+{
+ "build": "1.005",
+ "research_build": "1.004",
+ "date": "2026-11-12",
+ "doc": "Rebirth/Documentation/research/RE-landing-roll.md",
+ "facts": [
+  {
+   "name": "slot: FieldActMove58DFA88 phase table [6] (Phase6_LandingRoll_SteerToInputDir)",
+   "old": "0x1470B98D0",
+   "new": "0x146EECA50",
+   "bytes": "",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from both databases by the main session (the slot's pointer, 2026-11-12) after the IDA pass LANDROLL (RE-landing-roll.md section 7)."
+  },
+  {
+   "name": "FieldActMove58DFA88_Phase6_LandingRoll_SteerToInputDir",
+   "old": "0x1432A875C",
+   "new": "0x142FBAD44",
+   "bytes": "48895C2410488974241855574156488D",
+   "same_semantics": true,
+   "confidence": "CONFIRMED",
+   "note": "Read from both databases by the main session (the first 16 bytes, identical, 2026-11-12) after the IDA pass LANDROLL (RE-landing-roll.md section 7)."
+  }
+ ]
+}

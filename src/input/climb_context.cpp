@@ -1,6 +1,7 @@
 #include "input/climb_context.h"
 
 #include "facts/controller.h"
+#include "facts/traversal.h"
 #include "feedback/traversal_rumble.h"
 #include "input/pad_buttons.h"
 #include "input/pad_sticks.h"
@@ -57,6 +58,13 @@ const platform::FunctionFact kKeyValue{L"SquareInput__GetAggregatedKeyValue", 0x
 const platform::FunctionFact kPressedImpl{L"SquareInput_ActionTableF8_IsPressed_Impl", 0x1408062E0, kPressedBytes};
 const platform::FunctionFact kPressedGlobal{L"SquareInput_IsActionPressed_Global", 0x14080619C, kPressedBytes};
 using facts::kInputKeyCopy;
+// The landing after a high drop (research/RE-landing-roll.md): the edge-stop action's phase-6 handler, phase table
+// entry 6 (move rcx, event dl, dt xmm2); 1.005 through replaced-landing-roll.json.
+constexpr std::uint8_t kLandingBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x48, 0x89, 0x74,
+                                          0x24, 0x18, 0x55, 0x57, 0x41, 0x56, 0x48, 0x8D};
+const platform::SlotFact kLandingPhase{L"the landing's phase-6 handler (the edge-stop action's phase table entry 6)",
+                                       0x1470B98D0,
+                                       {L"FieldActMove58DFA88_Phase6_LandingRoll_SteerToInputDir", 0x1432A875C, kLandingBytes}};
 constexpr std::uintptr_t     kHoldSelectCall = 0x1416368D5;  // ClimbingMove's Tick: call TickHoldSelect
 constexpr std::uintptr_t     kHoldSelect     = 0x141635E70;  // ClimbingMove_TickHoldSelect_PrimaryPCMBasis
 
@@ -267,6 +275,7 @@ struct SteeredSeen
     std::atomic<float>       startYaw{0.0f};
 };
 std::array<SteeredSeen, kPlayers> g_steered;  // by seat (player number - 1)
+std::array<std::atomic<float>, kPlayers> g_landingYaw{};  // by seat: the facing each player's last landing started at
 std::atomic<bool>                 g_rootKnown{false};  // an actor's root component was read on the game thread
 
 // The edge-stop action as each player's Tick last left it (written by that player's Ticks, one at a time).
@@ -288,6 +297,7 @@ struct MoveLive
     platform::VTableEntry finish;
 };
 std::array<MoveLive, kMoveCount> g_moves;
+platform::VTableEntry            g_landing;  // the landing's phase-6 entry
 platform::EntryRedirect          g_cameraEntry;
 platform::EntryRedirect          g_keyEntry;
 platform::EntryRedirect          g_pressedEntry;
@@ -484,6 +494,76 @@ std::uintptr_t MoveTick(void* move, void* arg) noexcept
         owner.emplace(player - 1);
     }
     return original(move, arg);
+}
+
+/// The landing after a drop of more than 3.5 m (the edge-stop action's phase 6). At its enter (the game thread, inside
+/// the action's Begin) the game plays the roll when the action's input direction is longer than half, the plain
+/// landing otherwise; on each update (the worker, inside the action's Tick) the roll turns toward that direction. The
+/// direction is the player's stick only for the player test: for a seat's member outside a context it is the member's
+/// AI's walk goal or the way to the party leader, always full length, so a seat's character always rolled toward player
+/// 1's area; and player 1's enter read every pad merged. The phase runs in the landing player's full context, as a
+/// steered action's Tick (a seat: identity, pad, camera; player 1: pad 1), on either thread; the Tick's suspended
+/// edge-stop context is lifted for the phase alone. Debug at the enter and the exit with the character's facing.
+std::uintptr_t LandingPhase(void* move, std::uint32_t event, float dt, std::uintptr_t fourth) noexcept
+{
+    const auto original = reinterpret_cast<facts::PhaseHandlerFn>(g_landing.Original());
+    const int  player   = PlayerOf(move);
+    const auto index    = IndexOfPlayer(player);
+    // Player 1's context only carries pad 1's copy: without one (no seat in) the game's own call is the same answer.
+    if (player == 0 || (player == 1 && !Fresh(g_copyFrame[index].load(std::memory_order_acquire))))
+    {
+        return original(move, event, dt, fourth);
+    }
+    const auto code = static_cast<std::uint8_t>(event);
+    if (code == facts::kPhaseEnter && player >= 2 &&
+        (!Fresh(g_copyFrame[index].load(std::memory_order_acquire)) || g_memberType[index].load(std::memory_order_relaxed) < 0))
+    {
+        platform::Log(L"climb context: player {}'s landing after a drop runs without their pad's copy or their member's type "
+                      L"this frame: the merged stick or the game's own player test stands in (it may roll toward player 1)",
+                      player);
+    }
+    std::uintptr_t result      = 0;
+    unsigned       seatCameras = 0;
+    {
+        const InContext context(player, false);
+        result      = original(move, event, dt, fourth);
+        seatCameras = t_climb.seatCameras;
+    }
+    t_climb.seatCameras += seatCameras;  // an enclosing Tick's context counts the phase's camera reads too
+    if (code != facts::kPhaseEnter && code != facts::kPhaseExit)
+    {
+        return result;
+    }
+    const float yaw = MoveYaw(move);
+    if (code == facts::kPhaseEnter)
+    {
+        g_landingYaw[index].store(yaw, std::memory_order_relaxed);
+        try
+        {
+            platform::LogDebug(L"climb context: player {}'s landing after a drop starts facing {:.0f} deg, in player {}'s "
+                               L"context ({}; pad {}'s stick, player {}'s camera read {} time(s))",
+                               player, yaw, player,
+                               players::generation::OnGameThread() ? L"the game thread" : L"a worker thread", player, player,
+                               seatCameras);
+        }
+        catch (...)
+        {
+        }
+        return result;
+    }
+    const float start = g_landingYaw[index].load(std::memory_order_relaxed);
+    try
+    {
+        platform::LogDebug(L"climb context: player {}'s landing after a drop ends {}", player,
+                           yaw > -999.0f && start > -999.0f
+                               ? std::format(L"facing {:.0f} deg, turned {:.0f} deg since its start", yaw,
+                                             std::remainder(yaw - start, 360.0f))
+                               : std::wstring(L"facing unknown"));
+    }
+    catch (...)
+    {
+    }
+    return result;
 }
 
 /// Finish runs inside the Tick; its leader-action record would reach player 1's controller with a seat's identity.
@@ -821,10 +901,11 @@ void Install(const platform::GameImage& image) noexcept
     const bool holdSelect = site && target &&
                             g_holdSelectCall.Install(*site, *target, reinterpret_cast<std::uintptr_t>(&HoldSelect));
     g_installed           = true;
+    const bool landing    = platform::ReplaceSlot(image, kLandingPhase, reinterpret_cast<std::uintptr_t>(&LandingPhase), g_landing);
     try
     {
-        platform::Log(L"climb context: {}; player 2's or 3's hold-select presses {}",
-                      PlaceMoves(image, holdSelect, std::make_index_sequence<kMoveCount>{}),
+        platform::Log(L"climb context: {}, landing after a drop {}; player 2's or 3's hold-select presses {}",
+                      PlaceMoves(image, holdSelect, std::make_index_sequence<kMoveCount>{}), landing ? L"yes" : L"NO",
                       g_buttons ? L"from that player's pad" : L"NOT read (player 2's or 3's hold-select keeps the NPC answer)");
     }
     catch (...)
@@ -848,6 +929,10 @@ void Remove() noexcept
         {
             live.finish.Restore();
         }
+    }
+    if (g_landing.Original() != 0)
+    {
+        g_landing.Restore();
     }
     if (g_holdSelectCall.IsInstalled())
     {

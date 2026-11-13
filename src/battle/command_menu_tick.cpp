@@ -122,7 +122,6 @@ using facts::kCmdStoredLeaderType;
 using facts::kCmdMembers;
 using facts::kCmdBattleInput;
 using facts::kCmdSwitchingLayer;
-using facts::kCmdRequests;
 using facts::kCmdHudMode;
 using facts::kCmdBlocked;
 using facts::kCmdReady;
@@ -210,15 +209,6 @@ void Line(const std::wstring& text, platform::Level level = platform::Level::Inf
     if (platform::Enabled(level))
     {
         platform::LogAt(level, L"command menu tick: {}", text);
-    }
-}
-
-void SetRequest(std::uintptr_t controller, std::int32_t index, std::int32_t value) noexcept
-{
-    const auto data = ReadAt<std::uintptr_t>(controller + kCmdRequests);
-    if (data != 0 && index < ReadAt<std::int32_t>(controller + kCmdRequests + 8))
-    {
-        WriteAt(data + 4 * static_cast<std::uint32_t>(index), value);
     }
 }
 

@@ -1,5 +1,6 @@
 #include "input/seat_walk_cap.h"
 
+#include "facts/traversal.h"
 #include "platform/dev_switch.h"
 #include "platform/entry_redirect.h"
 #include "platform/guarded.h"
@@ -45,9 +46,9 @@ constexpr std::uint8_t kPhaseFourBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x48, 
                                             0x24, 0x18, 0x48, 0x89, 0x7C, 0x24, 0x20, 0x41};
 const platform::SlotFact kPhaseFour{L"the walk step's phase-4 handler (phase table entry 4)", 0x1470B98C0,
                                     {L"FieldActMove58DFA88_Phase4_WalkCapL2", 0x1432A4C74, kPhaseFourBytes}};
-using PhaseFn = std::uintptr_t (*)(void* move, std::uint32_t event, float dt, std::uintptr_t fourth);
-constexpr std::uint8_t kPhaseEnter = 0;
-constexpr std::uint8_t kPhaseExit  = 11;
+using PhaseFn = facts::PhaseHandlerFn;
+using facts::kPhaseEnter;
+using facts::kPhaseExit;
 
 // Red XIII's chain door: Begin sets Walk (game thread), End clears it (anim worker).
 constexpr std::uint8_t kRedDoorEndBytes[] = {0x48, 0x8B, 0xC4, 0x48, 0x89, 0x58, 0x10, 0x48,

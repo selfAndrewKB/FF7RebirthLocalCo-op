@@ -243,11 +243,6 @@ void Fail(const wchar_t* what) noexcept
     platform::Log(L"lock-on: {} raised an exception; players 2 and 3's targeting is off this session", what);
 }
 
-Pair PairAt(std::uintptr_t address) noexcept
-{
-    return {ReadAt<std::uintptr_t>(address), ReadAt<std::uintptr_t>(address + 8)};
-}
-
 std::uintptr_t BattleSystem() noexcept
 {
     return ReadAt<std::uintptr_t>(g_battleSystem);

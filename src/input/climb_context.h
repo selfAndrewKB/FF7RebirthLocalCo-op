@@ -35,6 +35,15 @@
 // not a climb. Its Tick tree records nothing into another player's controller; its Finish does, and is suspended as
 // the climbs' is. Logged: Debug at each dodge's start and end with the character's facing, so a turned dodge shows.
 //
+// The landing after a high drop (research/RE-landing-roll.md) is the edge-stop action's phase 6: at its enter (the game
+// thread, inside the action's Begin) the game plays the roll when the action's input direction is longer than half,
+// and the roll turns toward that direction on each update (the worker, inside the action's Tick). That direction is
+// the player's stick only for the player test; for a seat's member outside a context it is its AI's walk goal or the
+// way to the party leader (always full length: a roll toward player 1's area, every time). The phase's handler runs in
+// the landing player's full context on either thread, the Tick's suspended edge-stop context lifted for the phase
+// alone (a seat: identity, pad, camera; player 1: pad 1, so no other pad decides player 1's landing). Logged: Debug at
+// each landing's start and end with the character's facing.
+//
 // The copies are taken in the engine-tick pre-callback (Tick below), after the game's merge and before the world tick:
 // the worker reads the same frame's values. Every answer outside a context, and on every other thread, is the game's.
 // Per seat: the input copies, presses, camera manager, member type, climb frames and counts.
@@ -49,8 +58,9 @@ class GameImage;
 
 namespace lss::input::climb_context {
 
-/// Replaces the three climbs', the edge-stop action's and the field dodge's Tick and Finish slots, the hold-select call
-/// and the three getters (each checked; a failed check leaves that part to the game, logged).
+/// Replaces the three climbs', the edge-stop action's and the field dodge's Tick and Finish slots, the landing's phase
+/// handler, the hold-select call and the three getters (each checked; a failed check leaves that part to the game,
+/// logged).
 void Install(const platform::GameImage& image) noexcept;
 
 void Remove() noexcept;

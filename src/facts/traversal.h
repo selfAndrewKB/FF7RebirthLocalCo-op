@@ -75,4 +75,11 @@ inline constexpr FunctionFact kFieldActionTriggerEnter{L"End2FieldActionActor::O
 inline constexpr FunctionFact kFieldActionTriggerLeave{L"End2FieldActionActor::OnTriggerLeave", 0x1409DB844,
                                                        kFieldActionTriggerBytes};
 
+/// A behaviour action's phase handler, one per entry of its phase table: (action, event in dl, dt in xmm2); a fourth
+/// register is passed on too. Event 0 enters the phase (inside the action's Begin, on the game thread), 11 leaves it
+/// (research/RE-p2-walk-mode.md, RE-landing-roll.md).
+using PhaseHandlerFn = std::uintptr_t (*)(void* action, std::uint32_t event, float dt, std::uintptr_t fourth);
+inline constexpr std::uint8_t kPhaseEnter = 0;
+inline constexpr std::uint8_t kPhaseExit  = 11;
+
 }  // namespace lss::facts
