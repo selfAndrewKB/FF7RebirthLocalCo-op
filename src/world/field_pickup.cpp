@@ -132,6 +132,7 @@ using facts::kFieldActionPointPreset;
 using facts::kFieldActionPointFlags;
 constexpr std::uint8_t  kTargetBits     = 0x06;   // bit 1 slot target, bit 2 runner-up: carried per player
 constexpr std::uint8_t  kDisabledBit    = 0x10;   // the game's "point disabled": the candidate query skips it
+constexpr std::uint8_t  kNotUsableBit   = 0x08;   // the game's "not usable from here": the update makes it no target
 constexpr std::uint32_t kPointMarker    = 0x78;   // UFieldTargetWidget*, the point's marker: carried per player
 
 // The two maps whose points a seat's pass admits, both a stock TMap keyed by the point's FName at element +0
@@ -305,7 +306,8 @@ struct Saved
     std::uint8_t* point;
     std::uint64_t key;       // the point's key then: a pool node reused during the pass is another point
     std::uint8_t  oneBits;   // player 1's target bits
-    bool          disabled;  // the pass set the disabled bit
+    std::uint8_t  mask;      // the bits the pass set for the seat (the filter's disabled bit, a gun point's view)
+    std::uint8_t  kept;      // those bits as they were
     std::uintptr_t oneMarker;  // player 1's marker widget
     bool          matched;   // found again after the pass (same node, same key)
 };
@@ -789,10 +791,33 @@ void LogSelection(int seat, std::uint64_t key, bool seen) noexcept
     }
 }
 
+/// The bits a player's selection of a gun point gets for their view of it: off for them is the game's disabled bit,
+/// on carries the "not usable from here" bit as their own notify's answer left it. Added to `mask` and `set`.
+void AddGunView(traversal::hooks::GunPointView view, std::uint8_t& mask, std::uint8_t& set) noexcept
+{
+    using traversal::hooks::GunPointView;
+    switch (view)
+    {
+    case GunPointView::Off:
+        mask |= kDisabledBit;
+        set |= kDisabledBit;
+        break;
+    case GunPointView::NotUsable:
+        mask |= kNotUsableBit;
+        set |= kNotUsableBit;
+        break;
+    case GunPointView::Usable:
+        mask |= kNotUsableBit;
+        break;
+    case GunPointView::NotTracked:
+        break;
+    }
+}
+
 /// Before the calls: each point's target bits and marker widget become the seat's (on every live point: the far-marker
 /// sweep walks them all). With `filter`, every point that is neither a WorldItem, a chest, a vending machine, a
-/// shopkeeper nor the seat's own box gets the disabled bit (only where it is clear). Player 1's are kept for After. The
-/// seat's widgets whose point left since are doomed.
+/// shopkeeper, the seat's own box nor a hook point gets the disabled bit (only where it is clear), and a gun point the
+/// seat's own view (AddGunView). Player 1's are kept for After. The seat's widgets whose point left since are doomed.
 void Before(Pickup& p, void* mgr, const std::uint8_t* items, const std::uint8_t* chests, bool filter) noexcept
 {
     g_saved.clear();
@@ -821,6 +846,12 @@ void Before(Pickup& p, void* mgr, const std::uint8_t* items, const std::uint8_t*
                                         traversal::hooks::AdmitsPoint(key, ReadField<std::uint64_t>(point, kFieldActionPointPreset));
             const bool     disable    = filter && !worldItem && !chest && !machine && !keeper && !box && !hook &&
                                         (flags & kDisabledBit) == 0;
+            std::uint8_t   mask       = disable ? kDisabledBit : 0;
+            std::uint8_t   set        = mask;
+            if (hook)
+            {
+                AddGunView(traversal::hooks::GunPointViewFor(key, p.seat), mask, set);
+            }
             std::uintptr_t oneMarker  = 0;
             std::uintptr_t seatMarker = 0;
             if (g_destroy != nullptr)
@@ -835,7 +866,8 @@ void Before(Pickup& p, void* mgr, const std::uint8_t* items, const std::uint8_t*
                 }
                 std::memcpy(point + kPointMarker, &seatMarker, sizeof(seatMarker));
             }
-            g_saved.push_back({point, key, static_cast<std::uint8_t>(flags & kTargetBits), disable, oneMarker, false});
+            g_saved.push_back({point, key, static_cast<std::uint8_t>(flags & kTargetBits), mask,
+                               static_cast<std::uint8_t>(flags & mask), oneMarker, false});
             p.counts.worldItems += worldItem ? 1 : 0;
             p.counts.chests += chest ? 1 : 0;
             p.counts.vending += machine ? 1 : 0;
@@ -844,14 +876,15 @@ void Before(Pickup& p, void* mgr, const std::uint8_t* items, const std::uint8_t*
             p.counts.hooks += hook ? 1 : 0;
             boxSeen = boxSeen || box;
             p.counts.filtered += disable ? 1 : 0;
-            flags = static_cast<std::uint8_t>((flags & ~kTargetBits) | (carried != p.bits.end() ? carried->second : 0) |
-                                              (disable ? kDisabledBit : 0));
+            flags = static_cast<std::uint8_t>((flags & ~(kTargetBits | mask)) | (carried != p.bits.end() ? carried->second : 0) |
+                                              set);
             point[kFieldActionPointFlags] = flags;
         }
     }
     if (filter)
     {
         LogSelection(p.seat, boxKey, boxSeen);
+        traversal::hooks::LogGunPointViews();
     }
     for (const auto& [key, marker] : p.markers)
     {
@@ -862,8 +895,8 @@ void Before(Pickup& p, void* mgr, const std::uint8_t* items, const std::uint8_t*
     }
 }
 
-/// After the calls: the seat's target bits and marker widgets are kept by key, player 1's put back, and the disabled
-/// bits the pass set cleared. A point registered during the pass gets no target bits and no marker for player 1; player
+/// After the calls: the seat's target bits and marker widgets are kept by key, player 1's put back, and the bits the
+/// pass set put back as they were. A point registered during the pass gets no target bits and no marker for player 1; player
 /// 1's widget of a point removed during the pass is doomed (the removal destroyed the widget in place, the seat's).
 void After(Pickup& p, void* mgr) noexcept
 {
@@ -887,9 +920,9 @@ void After(Pickup& p, void* mgr) noexcept
                 g_seatBitsNow.emplace_back(key, static_cast<std::uint8_t>(flags & kTargetBits));
             }
             flags = static_cast<std::uint8_t>((flags & ~kTargetBits) | (known ? saved->oneBits : 0));
-            if (known && saved->disabled)
+            if (known)
             {
-                flags = static_cast<std::uint8_t>(flags & ~kDisabledBit);
+                flags = static_cast<std::uint8_t>((flags & ~saved->mask) | saved->kept);
             }
             point[kFieldActionPointFlags] = flags;
             if (known)
@@ -1247,64 +1280,120 @@ void FieldEnter(void* mgr) noexcept
 
 // --- The pass's hooks --------------------------------------------------------------------------------------
 
-/// Player 1's own selection skips the seats' box points (the point a seat's leader-action component added for the box
-/// Yuffie's throw picked): a box another player selected is not player 1's to offer, and their press on it did nothing.
-/// The game's own disabled bit on each such point around the game's update, cleared after it (each seat's pass admits
-/// its own box, the other seats' are disabled by the pass's filter). Logged on change per seat.
-std::array<std::uint64_t, players::kMaxPlayers> g_hiddenBoxes{};       // by seat: the key hidden this update (0 none)
-std::array<std::uint64_t, players::kMaxPlayers> g_hiddenBoxesLogged{};  // by seat: the key last said
-
-void HideSeatBoxes(void* mgr, bool hide) noexcept
+/// Player 1's own selection sees the points as player 1 alone would. A seat's box point (the point a seat's
+/// leader-action component added for the box Yuffie's throw picked) is not player 1's to offer, and their press on it
+/// did nothing: it gets the game's disabled bit (each seat's pass admits its own box, the other seats' are disabled by
+/// the pass's filter). A gun point gets player 1's own view (AddGunView). Set around the game's update, the bits put
+/// back as they were after it. The boxes logged on change per seat, the gun points by traversal/hooks.
+struct OneView
 {
+    std::uint8_t* point;
+    std::uint64_t key;   // the point's key then: a pool node reused during the update is another point
+    std::uint8_t  mask;  // the bits set for player 1
+    std::uint8_t  kept;  // those bits as they were
+};
+constexpr std::size_t                           kOneViews = 16;  // seats' boxes and gun points at once
+std::array<OneView, kOneViews>                  g_oneViews{};
+std::size_t                                     g_oneViewCount = 0;
+std::array<std::uint64_t, players::kMaxPlayers> g_hiddenBoxesLogged{};  // by seat: the box key last said
+
+void OpenPlayerOneView(void* mgr) noexcept
+{
+    g_oneViewCount = 0;
     if (mgr == nullptr || !players::generation::OnGameThread())
     {
         return;
     }
-    const SharedLock lock(mgr);
+    std::array<std::uint64_t, players::kMaxPlayers> boxes{};
     for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
     {
-        const auto     index  = static_cast<std::size_t>(seat);
-        std::uint64_t& hidden = g_hiddenBoxes[index];
-        const auto     key    = hide ? (players::generation::Active(seat) ? ShootingKeyOf(players::generation::ControllerOf(seat)) : 0)
-                                     : hidden;
-        hidden                = 0;
-        const auto* node      = key != 0 ? PointerAt(mgr, kFieldActionPointList) : nullptr;
+        boxes[static_cast<std::size_t>(seat)] =
+            players::generation::Active(seat) ? ShootingKeyOf(players::generation::ControllerOf(seat)) : 0;
+    }
+    std::array<std::uint64_t, players::kMaxPlayers> hidden{};
+    {
+        const SharedLock lock(mgr);
+        const auto*      node = PointerAt(mgr, kFieldActionPointList);
         for (int n = 0; node != nullptr && n < kFieldActionMaxPoints; ++n, node = PointerAt(node, kFieldActionNodeNext))
         {
-            auto* point = const_cast<std::uint8_t*>(node) + kFieldActionNodePoint;
-            if (ReadField<std::uint64_t>(point, kFieldActionPointKey) != key)
+            auto*              point = const_cast<std::uint8_t*>(node) + kFieldActionNodePoint;
+            const auto         key   = ReadField<std::uint64_t>(point, kFieldActionPointKey);
+            const std::uint8_t flags = point[kFieldActionPointFlags];
+            std::uint8_t       mask = 0, set = 0;
+            int                boxSeat = 0;
+            for (int seat = 1; key != 0 && seat <= players::kSeatsBuilt; ++seat)
+            {
+                if (boxes[static_cast<std::size_t>(seat)] == key)
+                {
+                    mask = set = kDisabledBit;
+                    boxSeat    = seat;
+                }
+            }
+            if (mask == 0 && traversal::hooks::AdmitsPoint(key, ReadField<std::uint64_t>(point, kFieldActionPointPreset)))
+            {
+                AddGunView(traversal::hooks::GunPointViewFor(key, 0), mask, set);
+            }
+            if (mask == 0 || g_oneViewCount == g_oneViews.size())
             {
                 continue;
             }
-            const std::uint8_t flags = point[kFieldActionPointFlags];
-            if (hide && (flags & kDisabledBit) == 0)
+            g_oneViews[g_oneViewCount++]  = {point, key, mask, static_cast<std::uint8_t>(flags & mask)};
+            point[kFieldActionPointFlags] = static_cast<std::uint8_t>((flags & ~mask) | set);
+            if (boxSeat != 0)
             {
-                point[kFieldActionPointFlags] = static_cast<std::uint8_t>(flags | kDisabledBit);
-                hidden                        = key;
+                hidden[static_cast<std::size_t>(boxSeat)] = key;
             }
-            else if (!hide)
-            {
-                point[kFieldActionPointFlags] = static_cast<std::uint8_t>(flags & ~kDisabledBit);
-            }
-            break;
-        }
-        if (hide && g_hiddenBoxesLogged[index] != hidden)
-        {
-            g_hiddenBoxesLogged[index] = hidden;
-            platform::LogDebug(L"field pickup: player 1's selection skips {}'s box {}", players::SeatName(seat),
-                               hidden != 0 ? Name(hidden) : L"(none now)");
         }
     }
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
+    {
+        const auto index = static_cast<std::size_t>(seat);
+        if (g_hiddenBoxesLogged[index] != hidden[index])
+        {
+            g_hiddenBoxesLogged[index] = hidden[index];
+            platform::LogDebug(L"field pickup: player 1's selection skips {}'s box {}", players::SeatName(seat),
+                               hidden[index] != 0 ? Name(hidden[index]) : L"(none now)");
+        }
+    }
+    traversal::hooks::LogGunPointViews();
 }
 
-/// The game mode tick's call of the selection update: the game's (player 1's, the seats' boxes skipped), then each
+void ClosePlayerOneView(void* mgr) noexcept
+{
+    if (mgr == nullptr || g_oneViewCount == 0)
+    {
+        return;
+    }
+    {
+        const SharedLock lock(mgr);
+        const auto*      node = PointerAt(mgr, kFieldActionPointList);
+        for (int n = 0; node != nullptr && n < kFieldActionMaxPoints; ++n, node = PointerAt(node, kFieldActionNodeNext))
+        {
+            auto*      point = const_cast<std::uint8_t*>(node) + kFieldActionNodePoint;
+            const auto key   = ReadField<std::uint64_t>(point, kFieldActionPointKey);
+            for (std::size_t i = 0; i < g_oneViewCount; ++i)
+            {
+                const OneView& view = g_oneViews[i];
+                if (view.point == point && view.key == key)
+                {
+                    point[kFieldActionPointFlags] =
+                        static_cast<std::uint8_t>((point[kFieldActionPointFlags] & ~view.mask) | view.kept);
+                    break;
+                }
+            }
+        }
+    }
+    g_oneViewCount = 0;
+}
+
+/// The game mode tick's call of the selection update: the game's (player 1's, as player 1 sees the points), then each
 /// seat's pass.
 void UpdateCall(void* mgr, float dt) noexcept
 {
-    HideSeatBoxes(mgr, true);
+    OpenPlayerOneView(mgr);
     reinterpret_cast<TickFn>(g_updateCall.Original())(mgr, dt);
-    HideSeatBoxes(mgr, false);
-    traversal::hooks::NotePressesAfter(0);  // a gun point pressed in the game's own update: player 1's press
+    ClosePlayerOneView(mgr);
+    traversal::hooks::NotePressesAfter(0);  // a gun point press no notify named yet: player 1's, from the game's input step
     if (mgr == nullptr || !players::generation::OnGameThread())
     {
         return;

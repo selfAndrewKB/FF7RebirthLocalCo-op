@@ -150,6 +150,8 @@ struct Wishes
     std::uint64_t actor = 0;  // the actor's weak value
     bool          wish[players::kMaxPlayers] = {};
     PointArgs     args[players::kMaxPlayers] = {};
+    GunPointView  view[players::kMaxPlayers] = {};        // each player's view as their selection last asked it
+    GunPointView  viewLogged[players::kMaxPlayers] = {};  // as last said
 };
 /// A seat's copy of a gun point's camera handle, per actor.
 struct ActorHandle
@@ -172,6 +174,10 @@ bool                    g_gun = false, g_rope = false;
 std::array<Wishes, kMaxActors>        g_shotWishes{}, g_ropeWishes{};
 std::array<Presser, kMaxActors>       g_pressers{};  // each gun point's last presser
 bool                                  g_pressFullLogged = false;
+bool                                  g_notifyScopeLogged = false;
+constexpr int                         kNotifiedNone    = -1;  // no notify runs (the unregister: the open scope's player)
+constexpr int                         kNotifiedOther   = -2;  // a notify for a character no player plays
+thread_local int                      t_notified       = kNotifiedNone;  // else the player whose character's notify runs
 std::array<std::uint64_t, kMaxActors> g_ropeKeys{};  // delivered ropes' point keys
 std::size_t                           g_nextRopeKey    = 0;
 const std::uint64_t*                  g_shotPreset     = nullptr;  // the FName globals of the gun point's presets, live
@@ -314,6 +320,20 @@ Presser* PresserOf(void* actor, bool make) noexcept
     return nullptr;
 }
 
+/// A press flag seen up for the first time: `player` pressed (`how` ends the line).
+void NoteRise(Presser& presser, int player, const void* actor, const wchar_t* how) noexcept
+{
+    presser.player   = player;
+    presser.lastFlag = 1;
+    try
+    {
+        platform::LogDebug(L"hooks: {} pressed the gun point {}{}", players::SeatName(player), players::NameOf(actor), how);
+    }
+    catch (...)
+    {
+    }
+}
+
 /// A presser whose wish goes off while the point stays on for another player (their character flew, or they walked
 /// away, or they left the game): the game's off path, which clears the press flag, is what the OR of the wishes holds
 /// back here, so its clear is made in its stead; otherwise the pending press would hold the other player's notifies
@@ -339,38 +359,96 @@ void SpendPressAtLeave(void* actor, int player) noexcept
     }
 }
 
-/// The gun point's notify: the game's, with the press flag at 0 for a call whose character is another player's than
-/// the presser's. The flag has no owner in the game and every holder's notify of the press frame would start the
-/// hookshot on its own character; at 0 for that one call, only the presser's starts. The flag goes back after unless
-/// the game took the point off inside the call (its off path clears the flag with the listener handle; a flag put back
-/// then would outlive the point and fire a press nobody made at the next on).
+struct NotifyCall
+{
+    NotifyFn fn;
+    void*    actor;
+    void*    context;
+};
+
+void RunNotify(void* context) noexcept
+{
+    auto& call = *static_cast<NotifyCall*>(context);
+    call.fn(call.actor, call.context);
+}
+
+/// The game's notify for `notified`'s character (0 player 1, a seat, -1 no player's): a seat's inside the seat's
+/// primary scope and leader answer, the player named for the switch meanwhile (kNotifiedOther for a character no
+/// player plays: its answer is no player's wish). The pass that calls it runs in the character's own tick, outside
+/// every scope; without them the pin would go to player 1's component and the wish be booked to player 1.
+void CallNotify(NotifyFn original, void* actor, void* context, int notified) noexcept
+{
+    const int saved = t_notified;
+    t_notified      = notified >= 0 ? notified : kNotifiedOther;
+    NotifyCall call{original, actor, context};
+    if (notified < 1)
+    {
+        original(actor, context);
+    }
+    else if (!input::member_movement::InPrimaryScope(notified, players::generation::MemberOf(notified), &RunNotify, &call))
+    {
+        if (!g_notifyScopeLogged)
+        {
+            g_notifyScopeLogged = true;
+            try
+            {
+                platform::LogWarning(L"hooks: the gun point {}'s notify for {}'s character ran outside their scope (it could "
+                                     L"not be held): its compass pin goes to player 1's (said once)",
+                                     players::NameOf(actor), players::SeatName(notified));
+            }
+            catch (...)
+            {
+            }
+        }
+        original(actor, context);
+    }
+    t_notified = saved;
+}
+
+/// The gun point's notify: the game's (CallNotify), with the press flag at 0 for a call whose character is another
+/// player's than the presser's. The flag has no owner in the game and every holder's notify of the press frame would
+/// start the hookshot on its own character; at 0 for that one call, only the presser's starts. A flag up that no
+/// seat's pass named is player 1's (a seat's press runs inside its pass, which names it at once; player 1's in the
+/// game's own input step, which may come before this notify and the game's update). The flag goes back after unless
+/// the game took the point off inside the call (its off path clears the flag with the listener handle; a flag put
+/// back then would outlive the point and fire a press nobody made at the next on).
 void ShotNotify(void* actor, void* context) noexcept
 {
-    const auto  original  = reinterpret_cast<NotifyFn>(g_shotNotify.Original());
-    const void* character = ReadPointer(context, facts::kNotifyContextCharacter);
-    Presser*    presser   = players::generation::OnGameThread() && ReadField<std::uint8_t>(actor, facts::kHookShotPressFlag) != 0
-                                ? PresserOf(actor, false)
-                                : nullptr;
+    const auto original = reinterpret_cast<NotifyFn>(g_shotNotify.Original());
+    if (!players::generation::OnGameThread())
+    {
+        original(actor, context);
+        return;
+    }
+    const int notified = PlayerOfCharacter(ReadPointer(context, facts::kNotifyContextCharacter));
+    Presser*  presser  = nullptr;
+    if (ReadField<std::uint8_t>(actor, facts::kHookShotPressFlag) != 0)
+    {
+        presser = PresserOf(actor, true);
+        if (presser != nullptr && presser->lastFlag == 0)
+        {
+            NoteRise(*presser, 0, actor, L" (named at the first notify after the game's own input step)");
+        }
+    }
     if (presser != nullptr && presser->player >= 1 && !players::generation::Active(presser->player))
     {
         SpendPressAtLeave(actor, presser->player);  // the presser left the game with their press pending
     }
-    const bool  known     = presser != nullptr && presser->player >= 0;
-    const int   notified  = known ? PlayerOfCharacter(character) : -1;
-    const int   pressed   = known ? presser->player : -1;  // kept for the line below: the entry may be reset inside
+    const bool known   = presser != nullptr && presser->player >= 0;
+    const int  pressed = known ? presser->player : -1;  // kept for the line below: the entry may be reset inside
     if (!known || notified < 0 || notified == pressed)
     {
-        original(actor, context);
+        CallNotify(original, actor, context, notified);
         return;
     }
     std::uint8_t*          flag = static_cast<std::uint8_t*>(actor) + facts::kHookShotPressFlag;
     constexpr std::uint8_t kOff = 0, kOn = 1;
     if (!platform::WriteGuarded(flag, &kOff, sizeof(kOff)))
     {
-        original(actor, context);
+        CallNotify(original, actor, context, notified);
         return;
     }
-    original(actor, context);
+    CallNotify(original, actor, context, notified);
     const bool pointOn = ReadField<std::uint64_t>(actor, facts::kHookShotListener) != 0;
     if (pointOn)
     {
@@ -448,11 +526,14 @@ void LogFull(const wchar_t* what, const void* actor, bool& logged) noexcept
 bool g_shotFullLogged = false, g_ropeFullLogged = false;
 
 /// The gun point's switch, from the notify (on or off) and the unregister (off): the caller's wish recorded for the
-/// player whose scopes are open (player 1's outside any), the game's switch called with the OR of every player's. The
-/// game adds the caller's compass pin only as the point goes from down to up and takes it down with the point, so at
-/// a player's own change while the point stays up their pin is made or removed in their own context: a player
-/// joining a point another holds gets a down and an up of the game's setter (their pin made; the other's untouched,
-/// it hangs on the other's controller), a player leaving one gets the game's own removal of their pin.
+/// player the notify runs for, else the player whose scopes are open (the unregister; player 1's outside any), the
+/// game's switch called with the OR of every player's. An on call passes the first wishing player's answer (player
+/// 1's while they wish): the setter writes the point's "not usable from here" bit from it, and each player's
+/// selection sees their own (GunPointViewFor). The game adds the caller's compass pin only as the point goes from
+/// down to up and takes it down with the point, so at a player's own change while the point stays up their pin is
+/// made or removed in their own context: a player joining a point another holds gets a down and an up of the game's
+/// setter (their pin made; the other's untouched, it hangs on the other's controller), a player leaving one gets the
+/// game's own removal of their pin.
 void ShotPointOr(void* actor, std::uint8_t show, std::uint8_t allAngle, std::uint8_t ng, float r1, float r2) noexcept
 {
     Wishes* wishes = actor != nullptr && players::generation::OnGameThread() ? WishesOf(g_shotWishes, actor) : nullptr;
@@ -465,7 +546,22 @@ void ShotPointOr(void* actor, std::uint8_t show, std::uint8_t allAngle, std::uin
         g_shotPoint(actor, show, allAngle, ng, r1, r2);
         return;
     }
-    const int  player  = scopes::primary_controller::OpenSeat();
+    if (t_notified == kNotifiedOther)
+    {
+        // A character no player plays: no player's wish. The players' switch stands (the first wisher's answer); with
+        // no player wishing, the game's own call.
+        if (AnyWish(*wishes))
+        {
+            const PointArgs& args = wishes->args[AWisher(*wishes)];
+            g_shotPoint(actor, 1, args.allAngle, args.ng, args.r1, args.r2);
+        }
+        else
+        {
+            g_shotPoint(actor, show, allAngle, ng, r1, r2);
+        }
+        return;
+    }
+    const int  player  = t_notified >= 0 ? t_notified : scopes::primary_controller::OpenSeat();
     const bool wish    = show != 0;
     const bool wasAny  = AnyWish(*wishes);
     const bool changed = wishes->wish[player] != wish;
@@ -489,10 +585,20 @@ void ShotPointOr(void* actor, std::uint8_t show, std::uint8_t allAngle, std::uin
     {
         SpendPressAtLeave(actor, player);
     }
-    const int        wisher = wish ? player : AWisher(*wishes);
-    const PointArgs& args   = wishes->args[wisher];
+    const PointArgs& args = wishes->args[AWisher(*wishes)];
     if (changed && wish && wasAny)
     {
+        if (ReadField<std::uint8_t>(actor, facts::kHookShotPressFlag) != 0)
+        {
+            try
+            {
+                platform::LogDebug(L"hooks: {} joins the gun point {} with its press flag up: the game's down clears it",
+                                   players::SeatName(player), players::NameOf(actor));
+            }
+            catch (...)
+            {
+            }
+        }
         g_shotPoint(actor, 0, 0, 0, kOffRadius, kOffRadius);
         g_shotPoint(actor, 1, args.allAngle, args.ng, args.r1, args.r2);
         LogWish(L"gun point", actor, player, wish, any, L" (down and up for their own pin: another player held it)");
@@ -981,20 +1087,72 @@ void NotePressesAfter(int player) noexcept
         }
         if (flag != 0 && presser->lastFlag == 0)
         {
-            presser->player = player;
-            try
-            {
-                platform::LogDebug(L"hooks: {} pressed the gun point {}", players::SeatName(player), players::NameOf(actor));
-            }
-            catch (...)
-            {
-            }
+            NoteRise(*presser, player, actor, L"");
         }
         else if (flag == 0)
         {
             presser->player = -1;
         }
         presser->lastFlag = flag;
+    }
+}
+
+GunPointView GunPointViewFor(std::uint64_t key, int player) noexcept
+{
+    if (!g_gun || key == 0 || player < 0 || player >= static_cast<int>(players::kMaxPlayers) ||
+        !players::generation::OnGameThread())
+    {
+        return GunPointView::NotTracked;
+    }
+    for (Wishes& wishes : g_shotWishes)
+    {
+        if (wishes.actor == 0 || !AnyWish(wishes))
+        {
+            continue;
+        }
+        const void* actor = players::weak_object::ObjectOf(wishes.actor);
+        if (actor == nullptr || KeyOf(actor) != key)
+        {
+            continue;
+        }
+        const PointArgs&   args = wishes.args[player];
+        const GunPointView view = !wishes.wish[player]                      ? GunPointView::Off
+                                  : args.allAngle != 0 || args.ng != 0      ? GunPointView::NotUsable
+                                                                            : GunPointView::Usable;
+        wishes.view[player] = view;
+        return view;
+    }
+    return GunPointView::NotTracked;
+}
+
+void LogGunPointViews() noexcept
+{
+    if (!g_gun || !players::generation::OnGameThread() || !platform::Enabled(platform::Level::Debug))
+    {
+        return;
+    }
+    for (Wishes& wishes : g_shotWishes)
+    {
+        for (int player = 0; player < static_cast<int>(players::kMaxPlayers); ++player)
+        {
+            const GunPointView view = wishes.view[player];
+            if (view == GunPointView::NotTracked || view == wishes.viewLogged[player])
+            {
+                continue;
+            }
+            wishes.viewLogged[player] = view;
+            try
+            {
+                platform::LogDebug(L"hooks: {}'s selection sees the gun point {} {}", players::SeatName(player),
+                                   players::NameOf(players::weak_object::ObjectOf(wishes.actor)),
+                                   view == GunPointView::Off         ? L"off (their own notify wishes it off)"
+                                   : view == GunPointView::NotUsable ? L"on, not usable from where they are (their own notify's answer)"
+                                                                     : L"on and usable");
+            }
+            catch (...)
+            {
+            }
+        }
     }
 }
 
@@ -1011,7 +1169,7 @@ void Remove() noexcept
     g_ropeWishes.fill({});
     g_pressers.fill({});
     g_ropeKeys.fill(0);
-    g_shotFullLogged = g_ropeFullLogged = g_pressFullLogged = false;
+    g_shotFullLogged = g_ropeFullLogged = g_pressFullLogged = g_notifyScopeLogged = false;
     const std::lock_guard<std::recursive_mutex> lock(g_handles);
     g_shotHandles.fill({});
     g_ropeHandles.fill({});

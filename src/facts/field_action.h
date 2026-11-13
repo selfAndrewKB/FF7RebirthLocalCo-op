@@ -45,8 +45,8 @@ inline constexpr std::uint32_t kFieldActionSlotPressed  = 0x48738;
 inline constexpr std::uint32_t kFieldActionSlotExecuted = 0x48740;
 inline constexpr std::uint32_t kFieldActionPending      = 0x487D0;  // u8
 
-// A point: its key (FName), the point-side range preset (FName rpa<Owner>), and its flags (bit 1 slot target, bit 2
-// runner-up, bit 4 skipped by the query, bit 0x10 disabled).
+// A point: its key (FName), the point-side range preset (FName rpa<Owner>), and its flags (0x02 slot target, 0x04
+// runner-up, 0x08 not usable from here: the update makes it no target, 0x10 disabled: the candidate query skips it).
 inline constexpr std::uint32_t kFieldActionPointKey    = 0x0C;
 inline constexpr std::uint32_t kFieldActionPointPreset = 0x44;
 inline constexpr std::uint32_t kFieldActionPointFlags  = 0x104;

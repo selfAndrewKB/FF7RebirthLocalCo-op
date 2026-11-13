@@ -9,20 +9,28 @@
 // character (the gun: the next notify of any holder consumes a per-actor press flag; the rope: the press listener
 // starts the swing on the party leader, the seat's member inside the seat's field-pickup pass). What the game shares
 // between the players, and what this does about each, the game's own lever first:
+//  - the notify itself: each character's notify pass runs in that character's own tick, outside every player's scope.
+//    The gun point's notify slot runs a seat's character's call inside the seat's primary scope and leader answer, so
+//    what the game resolves there (the compass pin's component, the switch's player below) is the seat's;
 //  - the point: one per actor, switched on and off by every holder's notify with its own answer, so two players'
 //    notifies would flip it every frame. The game's switch (the gun's SetFieldActionMgrPoint, called from the notify
 //    and the unregister; the rope's SetActive) is called with the OR of the players' wishes, each wish recorded from
-//    the call's own argument and the player whose scopes are open (call redirects on the gun's three call sites; an
-//    entry redirect on the rope's function; the actor's EndPlay, an unconditional off, is left alone). The gun
-//    point's pin on the search compass goes to the primary controller's leader-action component, the seat's inside
-//    the seat's scopes, but the game makes it only as the point goes from down to up and takes it down with the
-//    point: a player joining a point another holds gets a down and an up of the setter in their own context, a player
-//    leaving one the game's own removal of their pin;
+//    the call's own argument and the player the notify ran for (else whose scopes are open: the unregister) (call
+//    redirects on the gun's three call sites; an entry redirect on the rope's function; the actor's EndPlay, an
+//    unconditional off, is left alone). The gun's switch also writes the point's "not usable from here" bit from the
+//    call's answer (where the notified character stands, whether it can act): the switch is called with the first
+//    wishing player's answer, player 1's while they wish, and each player's selection sees the point as their own
+//    answer left it (GunPointViewFor; world/field_pickup sets the bits around player 1's update and each seat's
+//    pass). The gun point's pin on the search compass goes to the primary controller's leader-action component, but
+//    the game makes it only as the point goes from down to up and takes it down with the point: a player joining a
+//    point another holds gets a down and an up of the setter in their own context, a player leaving one the game's
+//    own removal of their pin;
 //  - the press: the seat's field-pickup pass admits the gun's point by its presets and a delivered rope's point by its
 //    key (AdmitsPoint), so the seat's press runs the game's own dispatcher and listener. The gun's press flag has no
 //    owner in the game and every holder's notify of the press frame would start the hookshot on its own character
-//    (research/RE-hook-follow.md): the flag is looked at after each selection update (the game's own, player 1's;
-//    each seat's pass, that seat's), a flag that came up names its presser, and the notify slot runs the game's with
+//    (research/RE-hook-follow.md): the flag is looked at after each seat's pass (a seat's press runs inside it), and
+//    a flag that came up names its presser; one no pass named is player 1's, from the game's own input step, named
+//    at the first notify that sees it or after the game's update, whichever comes first. The notify slot runs the game's with
 //    the flag at 0 for a call whose character is another player's, so only the presser's character goes. The game
 //    clears the flag on the point's off path, which the OR of the wishes holds back while another player still
 //    holds the point, so the presser's leave (their wish off while the point stays on) makes that clear in its stead;
@@ -77,5 +85,25 @@ bool AdmitsPoint(std::uint64_t key, std::uint64_t preset) noexcept;
 /// After a selection update ran for `player` (0: the game's own; a seat: its pass): a gun point whose press flag came
 /// up since the last look was pressed in that update, by that player. Game thread.
 void NotePressesAfter(int player) noexcept;
+
+/// How a player's own selection is to see a gun point: the point is one for every player, on while any player's
+/// notify wishes it, and carries the game's "not usable from here" bit from one player's answer; each player's
+/// selection sees it as their own notify left it.
+enum class GunPointView : std::uint8_t
+{
+    NotTracked,  // not a gun point any player wishes on: left as it is
+    Off,         // their own notify wishes it off: the game's off for them (the disabled bit)
+    NotUsable,   // on, with the "not usable from here" bit their own notify's answer sets
+    Usable,      // on, the bit clear
+};
+
+/// The view of the gun point keyed `key` for `player` (0 player 1, a seat). Game thread; reads the game's memory
+/// only and notes the view in the mod's own table, with no call, allocation or log (it may run under the field-action
+/// manager's point lock); a change is said by LogGunPointViews. One press flag serves the point: a second player's
+/// press in the frame of another's is the game's one press, named to the first.
+GunPointView GunPointViewFor(std::uint64_t key, int player) noexcept;
+
+/// Each player's view of each gun point that changed since it was last said (Debug). Game thread, outside the lock.
+void LogGunPointViews() noexcept;
 
 }  // namespace lss::traversal::hooks
