@@ -26,6 +26,7 @@
 #include "platform/module_pin.h"
 #include "platform/sparse_array.h"
 #include "platform/verified_code.h"
+#include "players/game_globals.h"
 #include "players/generation.h"
 #include "players/seats.h"
 #include "players/unreal_access.h"
@@ -578,7 +579,7 @@ bool PlaceAcquire(const platform::GameImage&) noexcept
 
 bool Install(const platform::GameImage& image) noexcept
 {
-    const auto system    = image.Rebase(facts::kEndUISystem, facts::kUIAreaMap + sizeof(void*));
+    const auto system    = players::game_globals::Address(players::game_globals::Global::UiSystem);
     const auto holder    = platform::FindFunction(image, kHolderUpdate);
     const auto leader    = platform::FindFunction(image, kGetPartyLeaderType);
     const auto leaderAt  = image.Rebase(kLeaderTypeCall, 5);
@@ -595,8 +596,8 @@ bool Install(const platform::GameImage& image) noexcept
     const auto resume    = image.Rebase(v1005 ? kConsumeStoreResume : kConsumeLoadResume);
     const auto package   = image.Rebase(kTransientPackage, sizeof(void*));
     const auto circle    = image.Rebase(kCirclePaintVTable, sizeof(void*));
-    const auto vbVtable  = image.Rebase(facts::kVertexBufferVtable, sizeof(void*));
-    const auto ibVtable  = image.Rebase(facts::kIndexBufferVtable, sizeof(void*));
+    const auto vbVtable  = players::game_globals::Address(players::game_globals::Global::VertexBufferVTable);
+    const auto ibVtable  = players::game_globals::Address(players::game_globals::Global::IndexBufferVTable);
     const auto init      = platform::FindFunction(image, facts::kBeginInitResource);
     const auto newTarget = platform::FindFunction(image, kNewRenderTarget);
     const auto format    = platform::FindFunction(image, kInitCustomFormat);
@@ -608,7 +609,7 @@ bool Install(const platform::GameImage& image) noexcept
         platform::Log(L"minimap: the minimap's code is not what the research read; player 1's map in every view");
         return false;
     }
-    g_system             = *system;
+    g_system             = system;
     g_holderUpdate       = reinterpret_cast<HolderUpdateFn>(*holder);
     g_acquireSite        = *acquireAt;
     g_acquireTarget      = *acquire;
@@ -618,7 +619,7 @@ bool Install(const platform::GameImage& image) noexcept
     g_newTarget          = reinterpret_cast<NewTargetFn>(*newTarget);
     g_initFormat         = reinterpret_cast<InitFormatFn>(*format);
     g_updateNow          = reinterpret_cast<UpdateNowFn>(*update);
-    g_slot.Install(*vbVtable, *ibVtable, reinterpret_cast<BeginInitResourceFn>(*init),
+    g_slot.Install(vbVtable, ibVtable, reinterpret_cast<BeginInitResourceFn>(*init),
                    reinterpret_cast<SubmitLayerSlotFn>(*submit));
 
     // The consume code first: it does nothing until a seat's entry name is published with its buffers.

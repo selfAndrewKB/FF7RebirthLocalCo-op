@@ -16,6 +16,7 @@
 #include "platform/settled_log.h"
 #include "platform/sparse_array.h"
 #include "platform/verified_code.h"
+#include "players/game_globals.h"
 #include "players/generation.h"
 #include "players/seats.h"
 #include "players/weak_object.h"
@@ -625,7 +626,7 @@ void PlaceOwnTargets() noexcept
 
 bool Install(const platform::GameImage& image) noexcept
 {
-    const auto system   = image.Rebase(facts::kEndUISystem, facts::kUIEnemyStatus + sizeof(void*));
+    const auto system   = players::game_globals::Address(players::game_globals::Global::UiSystem);
     const auto byWidget = platform::FindFunction(image, kByWidget);
     const auto site     = image.Rebase(kByWidgetSite, sizeof(kGaugeEntryBytes));
     const auto resume   = image.Rebase(kByWidgetResume);
@@ -638,7 +639,7 @@ bool Install(const platform::GameImage& image) noexcept
         platform::Log(L"enemy gauges: the placement code is not what the research read; gauges stay player 1's in every view");
         return false;
     }
-    g_endUISystem = *system;
+    g_endUISystem = system;
     g_byWidget    = reinterpret_cast<ByWidgetFn>(*byWidget);
     g_setPosition = reinterpret_cast<SetPositionFn>(*position);
 

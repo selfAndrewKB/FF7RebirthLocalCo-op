@@ -22,6 +22,7 @@
 #include "platform/log.h"
 #include "platform/verified_code.h"
 #include "players/describe.h"
+#include "players/game_globals.h"
 #include "players/generation.h"
 #include "players/object_fields.h"
 #include "players/seats.h"
@@ -660,8 +661,8 @@ bool Install(const platform::GameImage& image) noexcept
     {
         g_worldClass = 0;
     }
-    const auto system = image.Rebase(facts::kEndUISystem, kUIKeyGuide + sizeof(void*));
-    g_endUISystem     = system ? *system : 0;
+    const auto system = players::game_globals::Address(players::game_globals::Global::UiSystem);
+    g_endUISystem     = system;
     const auto site   = [&image](std::uintptr_t address) { return image.Rebase(address, 5); };
     const auto resetAll = image.Rebase(kResetAll);
     const auto refresh  = platform::FindFunction(image, kRefresh);

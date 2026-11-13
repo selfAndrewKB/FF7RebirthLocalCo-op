@@ -15,6 +15,7 @@
 #include "platform/log.h"
 #include "platform/verified_code.h"
 #include "players/describe.h"
+#include "players/game_globals.h"
 #include "players/generation.h"
 #include "players/object_fields.h"
 #include "players/unreal_access.h"
@@ -604,9 +605,9 @@ void SampleNow()
 
 bool Install(const platform::GameImage& image) noexcept
 {
-    const auto root  = image.Rebase(facts::kEndGameRoot, sizeof(void*));
+    const auto root  = players::game_globals::Address(players::game_globals::Global::GameRoot);
     const auto world = image.Rebase(kAnimWorldManager, sizeof(void*));
-    g_gameRoot       = root ? *root : 0;
+    g_gameRoot       = root;
     g_animWorld      = world ? *world : 0;
     g_installed      = scopes::leader_scope::Installed() && g_gameRoot != 0;
     const auto getter = platform::FindFunction(image, kInterfaceOf);

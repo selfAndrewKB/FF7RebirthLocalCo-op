@@ -5,6 +5,7 @@
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/verified_code.h"
+#include "players/game_globals.h"
 
 #include <cstdint>
 #include <cstring>
@@ -66,8 +67,8 @@ void PutBack(const wchar_t* what) noexcept
 
 bool Install(const platform::GameImage& image) noexcept
 {
-    const auto manager = image.Rebase(facts::kPartyManagerGlobal, sizeof(void*));
-    g_partyManager     = players::weak_object::Known() && manager ? *manager : 0;
+    const auto manager = players::game_globals::Address(players::game_globals::Global::PartyManager);
+    g_partyManager     = players::weak_object::Known() ? manager : 0;
     platform::Log(L"leader scope: {}",
                   g_partyManager != 0 ? L"ready (player 2's or 3's member answers as the party leader inside the game's calls)"
                                       : L"UNAVAILABLE (the party manager or the weak pointers were not found)");

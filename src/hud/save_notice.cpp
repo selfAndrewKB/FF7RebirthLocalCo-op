@@ -7,6 +7,7 @@
 #include "platform/log.h"
 #include "platform/verified_code.h"
 #include "players/first_player_scope.h"
+#include "players/game_globals.h"
 #include "players/generation.h"
 #include "players/object_fields.h"
 #include "players/weak_object.h"
@@ -150,12 +151,12 @@ bool Install(const platform::GameImage& image) noexcept
     const auto hide     = platform::FindFunction(image, facts::kHideSaveIcon);
     const auto setText  = platform::FindFunction(image, facts::kTextBlockSetText);
     const auto allocate = platform::FindFunction(image, facts::kMalloc);
-    const auto system   = image.Rebase(facts::kEndUISystem, facts::kUISaveIcon + sizeof(void*));
+    const auto system   = players::game_globals::Address(players::game_globals::Global::UiSystem);
     g_show     = show ? reinterpret_cast<ShowFn>(*show) : nullptr;
     g_hide     = hide ? reinterpret_cast<HideFn>(*hide) : nullptr;
     g_setText  = setText ? reinterpret_cast<SetTextFn>(*setText) : nullptr;
     g_allocate = allocate ? reinterpret_cast<AllocateFn>(*allocate) : nullptr;
-    g_system   = system ? *system : 0;
+    g_system   = system;
     const bool ready = g_show != nullptr && g_hide != nullptr && g_setText != nullptr && g_allocate != nullptr && g_system != 0;
     platform::Log(L"save notice: a line of the mod's on the game's save-data notice {}",
                   ready ? L"ready" : L"UNAVAILABLE (a check failed; nothing is shown)");

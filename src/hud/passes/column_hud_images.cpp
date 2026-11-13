@@ -15,6 +15,7 @@
 #include "platform/log.h"
 #include "platform/module_pin.h"
 #include "platform/verified_code.h"
+#include "players/game_globals.h"
 
 #if LSS_DEV
 #include "hud/passes/root_overlay_render.h"
@@ -271,11 +272,11 @@ bool InstallColumnHudImages(const platform::GameImage& image) noexcept
     const auto acquire   = platform::FindFunction(image, facts::kAcquireLayerSlot);
     const auto init      = platform::FindFunction(image, facts::kBeginInitResource);
     const auto submit    = platform::FindFunction(image, facts::kSubmitLayerSlot);
-    const auto overlay   = image.Rebase(facts::kRootOverlaySingleton, sizeof(void*));
+    const auto overlay   = players::game_globals::Address(players::game_globals::Global::RootOverlay);
     const auto delta     = image.Rebase(kDeltaTime, sizeof(double));
-    const auto frame     = image.Rebase(facts::kFrameNumber, sizeof(std::uint32_t));
-    const auto vbVtable  = image.Rebase(facts::kVertexBufferVtable, sizeof(void*));
-    const auto ibVtable  = image.Rebase(facts::kIndexBufferVtable, sizeof(void*));
+    const auto frame     = players::game_globals::Address(players::game_globals::Global::FrameNumber);
+    const auto vbVtable  = players::game_globals::Address(players::game_globals::Global::VertexBufferVTable);
+    const auto ibVtable  = players::game_globals::Address(players::game_globals::Global::IndexBufferVTable);
     if (!render || !passes || !acquire || !init || !submit || !overlay || !delta || !frame || !vbVtable || !ibVtable)
     {
         platform::Log(L"HUD image: the overlay's render code is not what the research read; no image for players 2 "
@@ -283,10 +284,10 @@ bool InstallColumnHudImages(const platform::GameImage& image) noexcept
         return false;
     }
     g_renderToLayer    = reinterpret_cast<RenderToCompositeLayerFn>(*render);
-    g_overlaySingleton = *overlay;
+    g_overlaySingleton = overlay;
     g_deltaTime        = *delta;
-    g_frameNumber      = *frame;
-    g_slot.Install(*vbVtable, *ibVtable, reinterpret_cast<BeginInitResourceFn>(*init),
+    g_frameNumber      = frame;
+    g_slot.Install(vbVtable, ibVtable, reinterpret_cast<BeginInitResourceFn>(*init),
                    reinterpret_cast<SubmitLayerSlotFn>(*submit));
 
     const auto buffersCode = EntryBuffersCode(g_slot.Fields());

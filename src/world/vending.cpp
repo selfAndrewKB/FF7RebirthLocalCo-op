@@ -11,6 +11,7 @@
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/verified_code.h"
+#include "players/game_globals.h"
 #include "players/generation.h"
 #include "players/object_fields.h"
 #include "players/seats.h"
@@ -518,8 +519,8 @@ void Install(const platform::GameImage& image) noexcept
 {
     const auto preset  = image.Rebase(kVendingPreset, sizeof(std::uint64_t));
     g_vendingPreset    = preset ? reinterpret_cast<const std::uint64_t*>(*preset) : nullptr;
-    const auto manager = image.Rebase(facts::kPartyManagerGlobal, sizeof(void*));
-    g_partyManager     = manager ? *manager : 0;
+    const auto manager = players::game_globals::Address(players::game_globals::Global::PartyManager);
+    g_partyManager     = manager;
     g_image            = image;
     const auto chadley = image.Rebase(kCameraCalls[kChadleyCall], 5);
     g_chadleyReturn    = chadley ? *chadley + 5 : 0;  // the call is 5 bytes (E8 rel32)

@@ -5,6 +5,7 @@
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
+#include "players/game_globals.h"
 #include "players/generation.h"
 #include "players/object_fields.h"
 #include "players/unreal_access.h"
@@ -155,12 +156,12 @@ std::wstring Format(const Snapshot& now)
 
 bool Install(const platform::GameImage& image) noexcept
 {
-    const auto system = image.Rebase(facts::kEndUISystem, facts::kUICommandController + sizeof(void*));
-    g_endUISystem     = system ? *system : 0;
+    const auto system = players::game_globals::Address(players::game_globals::Global::UiSystem);
+    g_endUISystem     = system;
     g_loggedOnce      = false;
     platform::Log(L"menu focus: {}", system ? L"player 1's UI focus logged on change (read-only)"
                                             : L"UNAVAILABLE (the UI system is outside the image)");
-    return system.has_value();
+    return system != 0;
 }
 
 void Remove() noexcept

@@ -10,6 +10,7 @@
 #include "platform/settings.h"
 #include "platform/sparse_array.h"
 #include "platform/verified_code.h"
+#include "players/game_globals.h"
 #include "players/generation.h"
 #include "players/object_fields.h"
 #include "players/seats.h"
@@ -701,7 +702,7 @@ bool InstallChecked(const platform::GameImage& image)
     const auto freeArray  = platform::FindFunction(image, facts::kFreeArrayData);
     const auto pointFind  = platform::FindFunction(image, facts::kFieldPointFind);
     const auto lock       = image.Rebase(facts::kStateTriggerLock, sizeof(CRITICAL_SECTION));
-    const auto root       = image.Rebase(facts::kEndGameRoot, sizeof(std::uintptr_t));
+    const auto root       = players::game_globals::Address(players::game_globals::Global::GameRoot);
     const auto icons      = image.Rebase(facts::kFieldIconSystem, sizeof(std::uintptr_t));
     if (!stateRow || !triggerRow || !collect || !slot || !aiSystem || !freeArray || !pointFind || !lock || !root || !icons ||
         !LooksLikeCriticalSection(reinterpret_cast<const CRITICAL_SECTION*>(*lock)))
@@ -718,7 +719,7 @@ bool InstallChecked(const platform::GameImage& image)
     g_freeArray  = reinterpret_cast<FreeArrayFn>(*freeArray);
     g_fieldPointFind = reinterpret_cast<PointFindFn>(*pointFind);
     g_lock       = reinterpret_cast<CRITICAL_SECTION*>(*lock);
-    g_root       = reinterpret_cast<const std::uintptr_t*>(*root);
+    g_root       = reinterpret_cast<const std::uintptr_t*>(root);
     g_icons      = reinterpret_cast<const std::uintptr_t*>(*icons);
     g_keeps = platform::settings::Of(platform::settings::kLeadHolder).word == L"keeps";
     try

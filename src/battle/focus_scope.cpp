@@ -5,6 +5,7 @@
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
+#include "players/game_globals.h"
 #include "players/generation.h"
 #include "players/object_fields.h"
 #include "players/seats.h"
@@ -116,9 +117,9 @@ void CopyBetween(int seat, platform::ByteContext& context, bool intoContext) noe
 
 bool Install(const platform::GameImage& image) noexcept
 {
-    const auto system = image.Rebase(facts::kEndUISystem, kUIKeyGuide + sizeof(void*));
-    g_endUISystem     = system ? *system : 0;
-    return system.has_value();
+    const auto system = players::game_globals::Address(players::game_globals::Global::UiSystem);
+    g_endUISystem     = system;
+    return system != 0;
 }
 
 void SetKeyGuide(int seat, void* keyGuide) noexcept

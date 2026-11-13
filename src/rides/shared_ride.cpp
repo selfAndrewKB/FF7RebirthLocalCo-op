@@ -9,6 +9,7 @@
 #include "platform/log.h"
 #include "platform/verified_code.h"
 #include "players/describe.h"
+#include "players/game_globals.h"
 #include "players/generation.h"
 #include "players/object_fields.h"
 #include "players/seats.h"
@@ -228,9 +229,9 @@ bool Install(const platform::GameImage& image) noexcept
         g_vt[i]       = vt ? *vt : 0;
         any           = any || g_vt[i] != 0;
     }
-    const auto manager = image.Rebase(facts::kPartyManagerGlobal, sizeof(void*));
+    const auto manager = players::game_globals::Address(players::game_globals::Global::PartyManager);
     const auto battle  = platform::FindFunction(image, facts::kIsInBattle);
-    g_partyManager     = manager ? *manager : 0;
+    g_partyManager     = manager;
     g_inBattle         = battle ? reinterpret_cast<GlobalTestFn>(*battle) : nullptr;
     platform::Log(L"shared ride: buggy {}, bronco {} (while player 1 rides one, players 2 and 3 stand aside: player 1's view alone, "
                   L"every pad drives)",

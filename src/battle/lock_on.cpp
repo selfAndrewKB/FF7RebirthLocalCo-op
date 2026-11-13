@@ -21,6 +21,7 @@
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/verified_code.h"
+#include "players/game_globals.h"
 #include "players/generation.h"
 #include "players/object_fields.h"
 #include "players/seats.h"
@@ -802,9 +803,9 @@ bool Install(const platform::GameImage& image) noexcept
     g_deactivate    = reinterpret_cast<LayerFn>(find(kDeactivate));
     g_moduleOn      = reinterpret_cast<LayerTestFn>(find(kModuleOn));
     const auto system = image.Rebase(kBattleStateGlobal, sizeof(void*));
-    const auto ui     = image.Rebase(facts::kEndUISystem, facts::kUIEnemyStatus + sizeof(void*));
+    const auto ui     = players::game_globals::Address(players::game_globals::Global::UiSystem);
     g_battleSystem    = system ? *system : 0;
-    g_endUISystem     = ui ? *ui : 0;
+    g_endUISystem     = ui;
     g_installed = g_setLock && facts::InBattleKnown() && g_release && g_cursorRelease && g_deactivate && g_moduleOn &&
                   system;
     if (!g_installed)

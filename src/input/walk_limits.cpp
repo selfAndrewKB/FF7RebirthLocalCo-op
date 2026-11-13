@@ -7,6 +7,7 @@
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/verified_code.h"
+#include "players/game_globals.h"
 #include "players/generation.h"
 #include "players/object_fields.h"
 #include "players/unreal_access.h"
@@ -423,14 +424,14 @@ void TickSeat(int seat) noexcept
 bool Install(const platform::GameImage& image) noexcept
 {
     const auto create   = platform::FindFunction(image, kCreateNavArea);
-    const auto party    = image.Rebase(facts::kPartyManagerGlobal, sizeof(void*));
+    const auto party    = players::game_globals::Address(players::game_globals::Global::PartyManager);
     const auto set      = platform::FindFunction(image, kSetLayer7);
     const auto listener = image.Rebase(kMoveTypeListener, sizeof(void*));
     const bool volumes  = camera::location_volumes::Install(image);
     if (create && party && scopes::primary_controller::Installed())
     {
         g_createNavArea = reinterpret_cast<CreateNavAreaFn>(*create);
-        g_partyManager  = *party;
+        g_partyManager  = party;
     }
     if (set && listener && volumes && scopes::primary_controller::Installed())
     {

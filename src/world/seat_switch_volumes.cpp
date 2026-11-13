@@ -8,6 +8,7 @@
 #include "platform/image.h"
 #include "platform/log.h"
 #include "players/describe.h"
+#include "players/game_globals.h"
 #include "players/generation.h"
 #include "players/object_fields.h"
 #include "players/seats.h"
@@ -264,7 +265,7 @@ void Install(const platform::GameImage& image) noexcept
     const auto vtable = image.Rebase(kVolumeVtable, std::max<std::uint32_t>(kEnterSlot, kLeaveSlot) + 8);
     const auto enter  = image.Rebase(kEnterOverride);
     const auto leave  = image.Rebase(kLeaveOverride);
-    const auto root   = image.Rebase(facts::kEndGameRoot, sizeof(std::uintptr_t));
+    const auto root   = players::game_globals::Address(players::game_globals::Global::GameRoot);
     const bool slots  = vtable && enter && leave &&
                        ReadField<std::uintptr_t>(reinterpret_cast<const void*>(*vtable), kEnterSlot) == *enter &&
                        ReadField<std::uintptr_t>(reinterpret_cast<const void*>(*vtable), kLeaveSlot) == *leave;
@@ -277,7 +278,7 @@ void Install(const platform::GameImage& image) noexcept
     g_vtable   = *vtable;
     g_enter    = reinterpret_cast<OverrideFn>(*enter);
     g_leave    = reinterpret_cast<OverrideFn>(*leave);
-    g_gameRoot = reinterpret_cast<const std::uintptr_t*>(*root);
+    g_gameRoot = reinterpret_cast<const std::uintptr_t*>(root);
     g_ready    = true;
     platform::Log(L"switch volume: installed ({} inside a CharaPop switch volume with a show list counts as inside, "
                   L"the union of {}; volumes with a hide list stay player 1's)",

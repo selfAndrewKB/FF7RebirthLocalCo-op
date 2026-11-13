@@ -8,6 +8,7 @@
 #include "platform/log.h"
 #include "platform/verified_code.h"
 #include "platform/vtable_entry.h"
+#include "players/game_globals.h"
 #include "players/generation.h"
 #include "players/object_fields.h"
 #include "players/seats.h"
@@ -214,7 +215,7 @@ bool Install(const platform::GameImage& image) noexcept
     }
     const auto characterByType = platform::FindFunction(image, kCharacterByPlayerType);
     const auto validTarget     = platform::FindFunction(image, kValidTarget);
-    const auto manager         = image.Rebase(facts::kPartyManagerGlobal, sizeof(void*));
+    const auto manager         = players::game_globals::Address(players::game_globals::Global::PartyManager);
     const auto site            = image.Rebase(kLeaderTypeCall, 5);
     const auto target          = image.Rebase(kGetPartyLeaderType.address);
     if (!characterByType || !validTarget || !manager || !site || !target)
@@ -224,7 +225,7 @@ bool Install(const platform::GameImage& image) noexcept
     }
     g_characterByType = reinterpret_cast<CharacterByTypeFn>(*characterByType);
     g_validTarget     = reinterpret_cast<ValidTargetFn>(*validTarget);
-    g_partyManager    = *manager;
+    g_partyManager    = manager;
     g_crossing        = (*site & ~std::uintptr_t{0xF}) != ((*site + 4) & ~std::uintptr_t{0xF});
     // This runs in on_unreal_init: no world and no enemy exist yet, so no thread can be at the call. That is what
     // InstallFromOwnThread needs for a call crossing two blocks (the research build's).

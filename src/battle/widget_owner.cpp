@@ -10,6 +10,7 @@
 #include "platform/log.h"
 #include "platform/verified_code.h"
 #include "platform/vtable_entry.h"
+#include "players/game_globals.h"
 #include "players/generation.h"
 #include "players/object_fields.h"
 #include "players/seats.h"
@@ -411,7 +412,7 @@ void GuideTick(void* keyGuide) noexcept
 
 bool Install(const platform::GameImage& image) noexcept
 {
-    const auto system  = image.Rebase(facts::kEndUISystem, kUIKeyGuide + sizeof(void*));
+    const auto system  = players::game_globals::Address(players::game_globals::Global::UiSystem);
     const auto guide   = platform::FindFunction(image, kGuideTick);
     const auto site    = image.Rebase(kGuideTickCall, 5);
     if (!system)
@@ -419,7 +420,7 @@ bool Install(const platform::GameImage& image) noexcept
         platform::Log(L"widget owner: UNAVAILABLE (a check failed): players 2 and 3's widgets tick in the shared view");
         return false;
     }
-    g_endUISystem = *system;
+    g_endUISystem = system;
     g_cellsOn     = platform::ReplaceSlot(image, kCellTick, reinterpret_cast<std::uintptr_t>(&CellTick), g_cellSlot);
     g_guidesOn    = guide && site && g_guideCall.Install(*site, *guide, reinterpret_cast<std::uintptr_t>(&GuideTick));
     g_panesOn     = platform::ReplaceSlot(image, kPaneTick, reinterpret_cast<std::uintptr_t>(&PaneTick), g_paneSlot);

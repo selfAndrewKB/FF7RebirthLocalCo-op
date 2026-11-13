@@ -6,6 +6,7 @@
 #include "platform/log.h"
 #include "platform/verified_code.h"
 #include "platform/vtable_entry.h"
+#include "players/game_globals.h"
 #include "players/generation.h"
 #include "players/seats.h"
 #include "players/unreal_access.h"
@@ -309,14 +310,14 @@ std::wstring Reading()
 bool Install(const platform::GameImage& image) noexcept
 {
     const auto postRender = platform::FindFunction(image, facts::kHudPostRender);
-    const auto engine     = image.Rebase(facts::kGEngine, sizeof(void*));
+    const auto engine     = players::game_globals::Address(players::game_globals::Global::Engine);
     if (!postRender || !engine)
     {
         platform::Log(L"view prompt: an engine check failed; no prompt can be drawn in a player's view");
         return false;
     }
     g_postRender = reinterpret_cast<PostRenderFn>(*postRender);
-    g_engine     = *engine;
+    g_engine     = engine;
     if (!platform::ReplaceSlot(image, facts::kHudPostRenderSlot, reinterpret_cast<std::uintptr_t>(&PostRenderFor), g_entry))
     {
         platform::Log(L"view prompt: the HUD pass could not be taken; no prompt can be drawn in a player's view");

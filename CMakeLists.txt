@@ -189,6 +189,7 @@ add_library(LocalSplitScreen SHARED
     src/session/player_window.cpp
     src/facts/in_battle.cpp
     src/players/weak_object.cpp
+    src/players/game_globals.cpp
     src/session/party_member.cpp
     src/session/party_switch.cpp
     src/scopes/primary_controller.cpp

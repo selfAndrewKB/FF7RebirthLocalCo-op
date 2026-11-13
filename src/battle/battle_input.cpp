@@ -12,6 +12,7 @@
 #include "platform/log.h"
 #include "platform/settled_log.h"
 #include "platform/verified_code.h"
+#include "players/game_globals.h"
 #include "players/generation.h"
 #include "players/object_fields.h"
 #include "scopes/leader_scope.h"
@@ -205,14 +206,14 @@ bool Install(const platform::GameImage& image) noexcept
         return live ? *live : std::uintptr_t{0};
     };
     const auto battleSystem = image.Rebase(kBattleStateGlobal, sizeof(void*));
-    const auto partyManager = image.Rebase(facts::kPartyManagerGlobal, sizeof(void*));
-    const auto system = image.Rebase(facts::kEndUISystem, facts::kUICommandController + sizeof(void*));
+    const auto partyManager = players::game_globals::Address(players::game_globals::Global::PartyManager);
+    const auto system = players::game_globals::Address(players::game_globals::Global::UiSystem);
     const auto vtable = image.Rebase(kBattlePlayerComponentVTable, sizeof(void*));
     g_installed = scopes::leader_scope::Installed() && facts::InBattleKnown() && battleSystem && partyManager && system &&
                   vtable;
     g_battleSystem       = battleSystem ? *battleSystem : 0;
-    g_partyManager       = partyManager ? *partyManager : 0;
-    g_endUISystem        = system ? *system : 0;
+    g_partyManager       = partyManager;
+    g_endUISystem        = system;
     g_battlePlayerVTable = vtable ? *vtable : 0;
     platform::Log(L"battle input: {}", g_installed ? L"ready (logs player 2's and 3's battle states)" : L"UNAVAILABLE (a check failed)");
     return g_installed;

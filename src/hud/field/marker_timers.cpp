@@ -6,6 +6,7 @@
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/sparse_array.h"
+#include "players/game_globals.h"
 #include "players/seats.h"
 #include "views/columns.h"
 
@@ -79,8 +80,8 @@ void Write(std::uintptr_t element, float t) noexcept
 
 bool Install(const platform::GameImage& image) noexcept
 {
-    const auto system = image.Rebase(facts::kEndUISystem, kMarkerList + sizeof(void*));
-    g_endUISystem     = system ? *system : 0;
+    const auto system = players::game_globals::Address(players::game_globals::Global::UiSystem);
+    g_endUISystem     = system;
     return g_endUISystem != 0;
 }
 

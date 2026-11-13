@@ -21,6 +21,7 @@
 #include "platform/settings.h"
 #include "platform/settled_log.h"
 #include "platform/verified_code.h"
+#include "players/game_globals.h"
 #include "players/generation.h"
 #include "players/object_fields.h"
 #include "players/seats.h"
@@ -781,8 +782,8 @@ bool Install(const platform::GameImage& image) noexcept
                mode8 = find(kGuideMode8), hud = find(kSetHudMode), resume = find(kResumeHudInput),
                suspend = find(kSuspendHudInput), listInput = find(kSetPartyListInput),
                leader = find(facts::kResolvePartyLeader), layer = find(kSetMenuLayer);
-    const auto system  = image.Rebase(facts::kEndUISystem, facts::kUIFilterManager + sizeof(void*));
-    const auto manager = image.Rebase(facts::kPartyManagerGlobal, sizeof(void*));
+    const auto system  = players::game_globals::Address(players::game_globals::Global::UiSystem);
+    const auto manager = players::game_globals::Address(players::game_globals::Global::PartyManager);
     const bool tint    = menu_tint::Find(image);  // each unit's finds run whatever the tick's found (each logs its own)
     const bool route   = menu_input_route::Find(image);
     const bool ok      = tick && slot && snapshot && show && mode8 && hud && resume && suspend && listInput && leader &&
@@ -794,8 +795,8 @@ bool Install(const platform::GameImage& image) noexcept
         g_suspendHudInput = reinterpret_cast<SuspendHudInputFn>(*suspend);
         g_partyListInput  = reinterpret_cast<PartyListInputFn>(*listInput);
         g_resolveLeader   = reinterpret_cast<LeaderFn>(*leader);
-        g_endUISystem     = *system;
-        g_partyManager    = *manager;
+        g_endUISystem     = system;
+        g_partyManager    = manager;
         g_setMenuLayer    = reinterpret_cast<SetMenuLayerFn>(*layer);
         g_targets         = {*slot, *snapshot, *show, *mode8, *tick};
     }

@@ -11,6 +11,7 @@
 #include "platform/sparse_array.h"
 #include "platform/verified_code.h"
 #include "players/describe.h"
+#include "players/game_globals.h"
 #include "players/generation.h"
 #include "players/seats.h"
 #include "players/weak_object.h"
@@ -191,10 +192,10 @@ void LogIfChanged(int mine, const Logged& now, std::uintptr_t manager) noexcept
 
 void Install(const platform::GameImage& image) noexcept
 {
-    const auto system = image.Rebase(facts::kEndUISystem, kPinManager + sizeof(void*));
+    const auto system = players::game_globals::Address(players::game_globals::Global::UiSystem);
     const auto pin    = platform::FindFunction(image, kPlacePin);
     const auto hook   = platform::FindFunction(image, kPlaceHook);
-    g_system          = system ? *system : 0;
+    g_system          = system;
     g_placePin        = pin ? reinterpret_cast<PlacePinFn>(*pin) : nullptr;
     g_placeHook       = hook ? reinterpret_cast<PlaceHookFn>(*hook) : nullptr;
     platform::Log(L"search pins: each view's pins placed from its own camera: {}; each view shows only its own player's "

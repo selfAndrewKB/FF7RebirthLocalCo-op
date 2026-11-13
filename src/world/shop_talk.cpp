@@ -8,6 +8,7 @@
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/verified_code.h"
+#include "players/game_globals.h"
 #include "players/generation.h"
 #include "players/object_fields.h"
 #include "players/seats.h"
@@ -389,12 +390,12 @@ void Install(const platform::GameImage& image) noexcept
     const auto state = platform::FindFunction(image, facts::kStateChangeRow);
     const auto act   = platform::FindFunction(image, kActionRow);
     const auto group = platform::FindFunction(image, kGroupRow);
-    const auto root  = image.Rebase(facts::kEndGameRoot, sizeof(std::uintptr_t));
+    const auto root  = players::game_globals::Address(players::game_globals::Global::GameRoot);
     g_findObject     = find ? reinterpret_cast<FindFn>(*find) : nullptr;
     g_stateRow       = state ? reinterpret_cast<AccessorFn>(*state) : nullptr;
     g_actionRow      = act ? reinterpret_cast<AccessorFn>(*act) : nullptr;
     g_groupRow       = group ? reinterpret_cast<AccessorFn>(*group) : nullptr;
-    g_gameRoot       = root ? reinterpret_cast<const std::uintptr_t*>(*root) : nullptr;
+    g_gameRoot       = root ? reinterpret_cast<const std::uintptr_t*>(root) : nullptr;
     g_queue.reserve(kQueueSize);
     const bool walk    = g_findObject != nullptr && g_stateRow != nullptr && g_actionRow != nullptr && g_gameRoot != nullptr;
     const bool presses = walk && Place(image, g_request, kRequest, reinterpret_cast<std::uintptr_t>(&Request));

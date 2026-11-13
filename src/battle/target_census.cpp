@@ -14,6 +14,7 @@
 #include "platform/verified_code.h"
 #include "platform/vtable_entry.h"
 #include "players/describe.h"
+#include "players/game_globals.h"
 #include "players/generation.h"
 #include "players/object_fields.h"
 #include "players/unreal_access.h"
@@ -701,8 +702,8 @@ void OnPick(const void* group, std::uint64_t result, std::uint64_t out, bool fir
 void Install(const platform::GameImage& image) noexcept
 {
     const auto find  = [&image](const platform::FunctionFact& fact) { return platform::FindFunction(image, fact).value_or(0); };
-    const auto manager = image.Rebase(facts::kPartyManagerGlobal, sizeof(void*));
-    g_partyManager     = manager ? *manager : 0;
+    const auto manager = players::game_globals::Address(players::game_globals::Global::PartyManager);
+    g_partyManager     = manager;
     g_hateType         = reinterpret_cast<HateTypeFn>(find(kHateType));
     g_applied          = reinterpret_cast<AppliedFn>(find(kApplied));
     if (g_partyManager == 0 || g_hateType == nullptr || g_applied == nullptr || !scopes::leader_scope::Installed())

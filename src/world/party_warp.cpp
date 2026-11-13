@@ -8,6 +8,7 @@
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/verified_code.h"
+#include "players/game_globals.h"
 #include "players/generation.h"
 #include "players/object_fields.h"
 #include "players/seats.h"
@@ -334,8 +335,8 @@ bool Install(const platform::GameImage& image) noexcept
         g_fieldStateCheck = slot;
         g_fieldState      = *fieldState;
     }
-    const auto gameRoot = image.Rebase(kEndGameRoot, sizeof(void*));
-    g_gameRoot          = gameRoot ? *gameRoot : 0;
+    const auto gameRoot = players::game_globals::Address(players::game_globals::Global::GameRoot);
+    g_gameRoot          = gameRoot;
     g_image = image;
     g_installed = true;
     platform::Log(L"party warp: a stranded {} is brought back by the game's follow warp (on foot; riding: {} of 3 "

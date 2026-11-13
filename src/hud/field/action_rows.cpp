@@ -4,6 +4,7 @@
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/verified_code.h"
+#include "players/game_globals.h"
 #include "players/weak_object.h"
 
 #ifndef WIN32_LEAN_AND_MEAN
@@ -46,9 +47,9 @@ bool Install(const platform::GameImage& image) noexcept
     {
         return true;
     }
-    const auto system = image.Rebase(facts::kEndUISystem, facts::kUIActionRows + sizeof(void*));
+    const auto system = players::game_globals::Address(players::game_globals::Global::UiSystem);
     const auto layout = platform::FindFunction(image, facts::kSortAndLayout);
-    g_endUISystem     = system ? *system : 0;
+    g_endUISystem     = system;
     g_sortAndLayout   = layout ? reinterpret_cast<SortAndLayoutFn>(*layout) : nullptr;
     return g_endUISystem != 0;
 }

@@ -9,6 +9,7 @@
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/verified_code.h"
+#include "players/game_globals.h"
 #include "players/generation.h"
 
 #include <array>
@@ -211,13 +212,13 @@ bool InstallHudTrace(const platform::GameImage& image) noexcept
     const auto tick    = platform::FindFunction(image, kMasterHudTick);
     const auto marker  = platform::FindFunction(image, kPlaceMarker);
     const auto project = platform::FindFunction(image, kProject);
-    const auto frame   = image.Rebase(facts::kFrameNumber, sizeof(std::uint32_t));
+    const auto frame   = players::game_globals::Address(players::game_globals::Global::FrameNumber);
     if (!tick || !marker || !project || !frame)
     {
         platform::Log(L"HUD trace: the functions are not what the research read; no trace");
         return false;
     }
-    g_frameNumber  = *frame;
+    g_frameNumber  = frame;
     g_project      = *project;
     bool installed = g_tickCall.Install(image, kMasterHudTickCall, *tick,
                                         reinterpret_cast<std::uintptr_t>(&TracedHudTick)) &&

@@ -17,6 +17,7 @@
 #include "platform/log.h"
 #include "platform/module_pin.h"
 #include "platform/verified_code.h"
+#include "players/game_globals.h"
 #include "players/generation.h"
 #include "players/seats.h"
 #include "views/player_view_point.h"
@@ -371,13 +372,13 @@ bool InstallOverlayLayout(const platform::GameImage& image) noexcept
     const auto rectCall   = image.Rebase(facts::kOverlayRectCall, 5);
     const auto entryCall  = image.Rebase(facts::kEntryCall, 5);
     const auto submitCall = image.Rebase(facts::kSubmitCall, 5);
-    const auto singleton  = image.Rebase(facts::kRootOverlaySingleton, sizeof(void*));
+    const auto singleton  = players::game_globals::Address(players::game_globals::Global::RootOverlay);
     if (!rectFn || !entryFn || !submitFn || !contain || !rectCall || !entryCall || !submitCall || !singleton)
     {
         platform::Log(L"HUD layout: the overlay's code is not what the research read; the HUD keeps the game's layout");
         return false;
     }
-    g_overlaySingleton = *singleton;
+    g_overlaySingleton = singleton;
     g_containScale     = reinterpret_cast<ContainScaleFn>(*contain);
 
     // The later calls first: they change nothing until the rect call has decided on a band.

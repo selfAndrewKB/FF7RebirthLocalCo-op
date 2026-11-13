@@ -10,6 +10,7 @@
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/verified_code.h"
+#include "players/game_globals.h"
 #include "players/generation.h"
 #include "players/object_fields.h"
 #include "players/seats.h"
@@ -263,8 +264,8 @@ bool Install(const platform::GameImage& image) noexcept
     const auto enabled = platform::FindFunction(image, kEnabled), locked = platform::FindFunction(image, kLocked),
                category = platform::FindFunction(image, kCategory), dispatcher = platform::FindFunction(image, kDispatcher);
     const auto enabledAt = image.Rebase(kEnabledCall, 5), lockedAt = image.Rebase(kLockedCall, 5);
-    const auto system    = image.Rebase(facts::kEndUISystem, kUICommandController + sizeof(void*));
-    g_endUISystem        = system ? *system : 0;
+    const auto system    = players::game_globals::Address(players::game_globals::Global::UiSystem);
+    g_endUISystem        = system;
     g_installed          = enabled && locked && category && dispatcher && enabledAt && lockedAt && system;
     const auto first     = [](const std::uint8_t* bytes) { return std::span<const std::uint8_t>(bytes, kFirstInstruction); };
     if (g_installed)

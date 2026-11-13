@@ -9,6 +9,7 @@
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/verified_code.h"
+#include "players/game_globals.h"
 #include "players/generation.h"
 #include "players/seats.h"
 #include "players/unreal_access.h"
@@ -355,10 +356,10 @@ void SetActive(bool active, const wchar_t* why) noexcept
 
 bool Install(const platform::GameImage& image) noexcept
 {
-    const auto root   = image.Rebase(facts::kEndGameRoot, sizeof(void*));
+    const auto root   = players::game_globals::Address(players::game_globals::Global::GameRoot);
     const auto setter = platform::FindFunction(image, kSetCentre);
     const auto score  = platform::FindFunction(image, kScore);
-    g_gameRoot        = root ? *root : 0;
+    g_gameRoot        = root;
     g_setCentre       = setter ? reinterpret_cast<SetCentreFn>(*setter) : nullptr;
     bool placed       = false;
     if (g_gameRoot != 0 && g_setCentre != nullptr && score)

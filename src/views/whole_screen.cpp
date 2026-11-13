@@ -8,6 +8,7 @@
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/verified_code.h"
+#include "players/game_globals.h"
 #include "players/unreal_access.h"
 #include "views/screen_widgets.h"
 #include "views/whole_screen_rules.h"
@@ -486,7 +487,7 @@ void LogOnChange(const ScreenSignals& now) noexcept
 bool InstallWholeScreen(const platform::GameImage& image) noexcept
 {
     const auto getState = platform::FindFunction(image, kGetEndGameState);
-    const auto root     = image.Rebase(kEndGameRoot, sizeof(std::uintptr_t));
+    const auto root     = players::game_globals::Address(players::game_globals::Global::GameRoot);
     const auto manager  = image.Rebase(kCutsceneManager, sizeof(std::uintptr_t));
     const auto playing  = platform::FindFunction(image, kIsAnyPlaying);
     if (!getState || !root || !manager || !playing)
@@ -496,7 +497,7 @@ bool InstallWholeScreen(const platform::GameImage& image) noexcept
         return false;
     }
     g_getEndGameState = reinterpret_cast<GetEndGameStateFn>(*getState);
-    g_gameRoot        = *root;
+    g_gameRoot        = root;
     g_cutsceneManager = *manager;
     g_isAnyPlaying    = reinterpret_cast<IsAnyPlayingFn>(*playing);
     g_installed       = true;

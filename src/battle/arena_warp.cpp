@@ -8,6 +8,7 @@
 #include "platform/log.h"
 #include "platform/verified_code.h"
 #include "players/describe.h"
+#include "players/game_globals.h"
 #include "players/generation.h"
 #include "players/object_fields.h"
 #include "players/seats.h"
@@ -189,7 +190,7 @@ bool Install(const platform::GameImage& image) noexcept
     const auto alive  = platform::FindFunction(image, facts::kIsBattleActive);
     const auto inside = platform::FindFunction(image, facts::kInsideAnyBattleArea);
     const auto leader = platform::FindFunction(image, facts::kResolvePartyLeader);
-    const auto root   = image.Rebase(facts::kEndGameRoot, sizeof(std::uintptr_t));
+    const auto root   = players::game_globals::Address(players::game_globals::Global::GameRoot);
     if (!alive || !inside || !leader || !root || !world::catch_up_move::Installed())
     {
         platform::Log(L"arena warp: an engine check failed; L3 twice in a fight brings no character in");
@@ -198,7 +199,7 @@ bool Install(const platform::GameImage& image) noexcept
     g_alive     = reinterpret_cast<CharacterTestFn>(*alive);
     g_inside    = reinterpret_cast<CharacterTestFn>(*inside);
     g_leader    = reinterpret_cast<LeaderFn>(*leader);
-    g_root      = reinterpret_cast<const std::uintptr_t*>(*root);
+    g_root      = reinterpret_cast<const std::uintptr_t*>(root);
     g_installed = true;
     platform::Log(L"arena warp: L3 twice in a fight brings player 2's or 3's character shut outside the fight's area in, with "
                   L"the game's own placement and battle warp");

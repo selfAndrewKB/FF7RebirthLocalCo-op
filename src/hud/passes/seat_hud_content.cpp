@@ -25,6 +25,7 @@
 #include "platform/log.h"
 #include "platform/module_pin.h"
 #include "platform/sparse_array.h"
+#include "players/game_globals.h"
 #include "players/generation.h"
 #include "players/seats.h"
 #include "players/unreal_access.h"
@@ -461,7 +462,7 @@ bool InstallSeatHudContent(const platform::GameImage& image) noexcept
     enemy_gauges::Install(image);  // optional: without it the gauges keep player 1's placement in both halves
     popups::Install(image);      // optional, likewise for the battle popups
     const auto mode    = image.Rebase(kGameMode, sizeof(void*));
-    const auto overlay = image.Rebase(facts::kRootOverlaySingleton, sizeof(void*));
+    const auto overlay = players::game_globals::Address(players::game_globals::Global::RootOverlay);
     const auto entry   = image.Rebase(kFirstGamePlayer, sizeof(kFirstPlayerEntryBytes));
     const auto resume  = image.Rebase(kFirstGamePlayerResume);
     if (!parts || !mode || !overlay || !entry || !resume)
@@ -471,9 +472,9 @@ bool InstallSeatHudContent(const platform::GameImage& image) noexcept
         return false;
     }
     g_gameMode = *mode;
-    g_overlay  = *overlay;
-    const auto system = image.Rebase(facts::kEndUISystem, kAbilityNames + sizeof(void*));
-    g_endUISystem     = system ? *system : 0;
+    g_overlay  = overlay;
+    const auto system = players::game_globals::Address(players::game_globals::Global::UiSystem);
+    g_endUISystem     = system;
 
     // The first-player code reads g_firstPlayerAnswer, in this DLL: pin it before installing.
     const auto code = FirstPlayerCode(g_firstPlayerAnswer);

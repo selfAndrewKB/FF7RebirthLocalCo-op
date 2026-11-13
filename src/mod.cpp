@@ -34,6 +34,7 @@
 #include "platform/thread_times.h"
 #include "platform/verified_code.h"
 #include "players/console_access.h"
+#include "players/game_globals.h"
 #include "players/generation.h"
 #include "players/join_keys.h"
 #include "players/seats.h"
@@ -83,7 +84,7 @@ namespace {
 namespace Hook = RC::Unreal::Hook;
 using lss::platform::Log;
 
-constexpr const wchar_t* kVersion = L"0.145.0";  // built against the Nexus UE4SS (c0a8d4c)
+constexpr const wchar_t* kVersion = L"0.146.0";  // built against the Nexus UE4SS (c0a8d4c)
 
 /// How often the seats' status lines are written while a seat is in.
 constexpr ULONGLONG kStatusIntervalMs = 10'000;
@@ -306,6 +307,8 @@ public:
             return;
         }
         lss::players::weak_object::Install(*image);    // the engine's weak pointers, once, for every module
+        // The game's shared globals, once, for every module (a missing one is logged; its readers stand aside).
+        lss::players::game_globals::Install(*image);
         lss::facts::InstallInBattle(*image);  // the game's in-battle test, once, for the stages that ask it
         session_.emplace(*removeLocalPlayer);
         session_->InstallStages(*image);

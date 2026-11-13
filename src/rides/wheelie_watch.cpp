@@ -12,6 +12,7 @@
 #include "platform/sparse_array.h"
 #include "platform/verified_code.h"
 #include "players/describe.h"
+#include "players/game_globals.h"
 #include "players/generation.h"
 #include "players/object_fields.h"
 #include "players/unreal_access.h"
@@ -380,12 +381,12 @@ bool Install(const platform::GameImage& image) noexcept
 {
     const auto coord   = image.Rebase(kScooterCoordinatorVTable);
     const auto scooter = image.Rebase(kScooterCharacterVTable);
-    const auto root    = image.Rebase(facts::kEndGameRoot, sizeof(void*));
-    const auto input   = image.Rebase(facts::kSquareInputGlobal, sizeof(void*));
+    const auto root    = players::game_globals::Address(players::game_globals::Global::GameRoot);
+    const auto input   = players::game_globals::Address(players::game_globals::Global::SquareInputOwner);
     g_coordVt          = coord ? *coord : 0;
     g_scooterVt        = scooter ? *scooter : 0;
-    g_gameRoot         = root ? *root : 0;
-    g_input            = input ? *input : 0;
+    g_gameRoot         = root;
+    g_input            = input;
     const bool ok      = g_coordVt != 0 && g_scooterVt != 0 && g_gameRoot != 0 && g_input != 0 && players::weak_object::Known();
     platform::Log(L"wheelie watch: {}", ok ? L"installed (the Wheelie system logged while player 2 or 3 is in; read-only)"
                                            : L"UNAVAILABLE (a check failed)");

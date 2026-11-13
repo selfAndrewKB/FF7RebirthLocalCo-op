@@ -15,6 +15,7 @@
 #include "platform/log.h"
 #include "platform/sparse_array.h"
 #include "platform/verified_code.h"
+#include "players/game_globals.h"
 #include "players/generation.h"
 #include "players/seats.h"
 #include "players/weak_object.h"
@@ -435,13 +436,13 @@ bool Install(const platform::GameImage& image) noexcept
     g_release    = reinterpret_cast<ReleaseFn>(find(facts::kWeakPtrRelease));
     g_enemyAi    = reinterpret_cast<EnemyAiFn>(find(kEnemyAi));
     const auto system  = image.Rebase(kBattleStateGlobal, sizeof(void*));
-    const auto ui      = image.Rebase(facts::kEndUISystem, facts::kUIEnemyStatus + sizeof(void*));
+    const auto ui      = players::game_globals::Address(players::game_globals::Global::UiSystem);
     g_installed =
         g_mainTarget && g_release && g_enemyAi && players::weak_object::Known() && system &&
         facts::InBattleKnown() && ui &&
         players::widget_opacity::Installed();  // a row of the module table before this one
     g_battleSystem = system ? *system : 0;
-    g_endUISystem  = ui ? *ui : 0;
+    g_endUISystem  = ui;
     g_collect = collect;
     // The label lookup's call and both collection calls cross a 16-byte block in 1.005: they are placed from the
     // game thread, between its ticks (platform/deferred_sites.h).

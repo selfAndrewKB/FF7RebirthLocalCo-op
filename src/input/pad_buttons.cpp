@@ -14,6 +14,7 @@
 #include "platform/verified_code.h"
 #include "platform/vtable_entry.h"
 #include "players/call_site.h"
+#include "players/game_globals.h"
 #include "players/generation.h"
 #include "players/seats.h"
 #include "players/unreal_access.h"
@@ -816,13 +817,13 @@ bool TakeLeftThumbPress(int seat) noexcept
 
 bool Install(const platform::GameImage& image) noexcept
 {
-    const auto owner  = image.Rebase(facts::kSquareInputGlobal, sizeof(void*));
+    const auto owner  = players::game_globals::Address(players::game_globals::Global::SquareInputOwner);
     const auto engine = platform::FindFunction(image, kInputTick.target);
     if (!owner || !engine)
     {
         return false;
     }
-    g_inputOwner = reinterpret_cast<const std::byte* const*>(*owner);
+    g_inputOwner = reinterpret_cast<const std::byte* const*>(owner);
     g_engineTick = reinterpret_cast<TickFn>(*engine);
     FindTraceKeys(image);
     if (!platform::ReplaceSlot(image, kInputTick, reinterpret_cast<std::uintptr_t>(&Tick), g_tickSlot))

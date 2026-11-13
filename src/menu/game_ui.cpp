@@ -6,6 +6,7 @@
 #include "platform/guarded_read.h"
 #include "platform/image.h"
 #include "platform/verified_code.h"
+#include "players/game_globals.h"
 #include "players/unreal_access.h"
 #include "players/weak_object.h"
 
@@ -36,14 +37,14 @@ std::uintptr_t g_topVtable = 0;
 bool Install(const platform::GameImage& image) noexcept
 {
     const auto assign    = platform::FindFunction(image, facts::kFStringAssign);
-    const auto ui        = image.Rebase(facts::kEndUISystem, 8 * facts::kEndUISystemSlots);
+    const auto ui        = players::game_globals::Address(players::game_globals::Global::UiSystem);
     const auto topVtable = image.Rebase(facts::kMainMenuTopWindowVTable, 8);
     if (!assign || !ui || !topVtable || !weak::Known())
     {
         return false;
     }
     g_assign    = reinterpret_cast<AssignFn>(*assign);
-    g_ui        = *ui;
+    g_ui        = ui;
     g_topVtable = *topVtable;
     return true;
 }

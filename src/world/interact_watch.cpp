@@ -13,6 +13,7 @@
 #include "platform/sparse_array.h"
 #include "platform/verified_code.h"
 #include "players/describe.h"
+#include "players/game_globals.h"
 #include "players/generation.h"
 #include "players/object_fields.h"
 #include "players/unreal_access.h"
@@ -748,15 +749,15 @@ void Summary(std::wstring& installed, std::wstring& skipped, const wchar_t* what
 void Install(const platform::GameImage& image) noexcept
 {
     g_image          = image;
-    const auto root  = image.Rebase(kEndGameRoot, sizeof(void*));
-    const auto party = image.Rebase(kPartyManagerGlobal, sizeof(void*));
+    const auto root  = players::game_globals::Address(players::game_globals::Global::GameRoot);
+    const auto party = players::game_globals::Address(players::game_globals::Global::PartyManager);
     if (!root || !party || !scopes::leader_scope::Installed())
     {
         platform::Log(L"interact: the root or party manager is outside the image; not watched");
         return;
     }
-    g_root  = *root;
-    g_party = *party;
+    g_root  = root;
+    g_party = party;
     if (const auto scooterKey = image.Rebase(kScooterKey, sizeof(std::uint64_t)))
     {
         g_scooterKey = reinterpret_cast<const std::uint64_t*>(*scooterKey);

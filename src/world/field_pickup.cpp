@@ -22,6 +22,7 @@
 #include "platform/verified_code.h"
 #include "players/describe.h"
 #include "players/first_player_scope.h"
+#include "players/game_globals.h"
 #include "players/generation.h"
 #include "players/object_fields.h"
 #include "players/seats.h"
@@ -1601,8 +1602,8 @@ void LogThrowGate(int seat, const void* controller, std::uint64_t target, bool w
 
 void Install(const platform::GameImage& image) noexcept
 {
-    const auto root    = image.Rebase(kEndGameRoot, sizeof(void*));
-    const auto ui      = image.Rebase(facts::kEndUISystem, facts::kUICommandController + sizeof(void*));
+    const auto root    = players::game_globals::Address(players::game_globals::Global::GameRoot);
+    const auto ui      = players::game_globals::Address(players::game_globals::Global::UiSystem);
     const auto pause   = image.Rebase(kPauseMenuKey, 24);
     const auto find    = [&image](const platform::FunctionFact& fact) {
         const auto at = platform::FindFunction(image, fact);
@@ -1626,8 +1627,8 @@ void Install(const platform::GameImage& image) noexcept
     bool resets = false;
     if (root && ui && pause && functions)
     {
-        g_root     = *root;
-        g_uiSystem = *ui;
+        g_root     = root;
+        g_uiSystem = ui;
         g_pauseKey = *pause;
         g_saved.reserve(kFieldActionMaxPoints);
         g_seatBitsNow.reserve(kFieldActionMaxPoints);

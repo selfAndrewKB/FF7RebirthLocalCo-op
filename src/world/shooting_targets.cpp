@@ -5,6 +5,7 @@
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/verified_code.h"
+#include "players/game_globals.h"
 #include "players/object_fields.h"
 #include "players/generation.h"
 #include "players/weak_object.h"
@@ -51,9 +52,9 @@ void Refresh(const wchar_t* whose) noexcept
 bool Install(const platform::GameImage& image) noexcept
 {
     const auto refresh = platform::FindFunction(image, facts::kRefreshShootingTargets);
-    const auto slot    = image.Rebase(facts::kFieldActionGlobal, sizeof(void*));
+    const auto slot    = players::game_globals::Address(players::game_globals::Global::FieldAction);
     g_refresh          = refresh ? reinterpret_cast<RefreshFn>(*refresh) : nullptr;
-    g_slot             = slot ? *slot : 0;
+    g_slot             = slot;
     const bool ready   = g_refresh != nullptr && g_slot != 0;
     platform::Log(L"shooting targets: a breakable box counts as near for a player 2 or 3's throw by their own distance {}",
                   ready ? L"(the game's leader-near refresh run for their member before their tick, for player 1 after)"

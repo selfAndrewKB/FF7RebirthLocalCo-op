@@ -14,6 +14,7 @@
 #include "platform/log.h"
 #include "platform/verified_code.h"
 #include "platform/vtable_entry.h"
+#include "players/game_globals.h"
 #include "players/generation.h"
 #include "players/object_fields.h"
 #include "players/unreal_access.h"
@@ -866,8 +867,8 @@ bool Entry(const platform::GameImage& image, platform::EntryRedirect& redirect, 
 
 void Install(const platform::GameImage& image) noexcept
 {
-    const auto owner = image.Rebase(facts::kSquareInputGlobal, sizeof(void*));
-    g_ownerGlobal    = owner ? *owner : 0;
+    const auto owner = players::game_globals::Address(players::game_globals::Global::SquareInputOwner);
+    g_ownerGlobal    = owner;
     // The two getters first: outside a context they answer the game's own.
     const bool core = g_ownerGlobal != 0 &&
                       Entry(image, g_cameraEntry, kCameraGetter, reinterpret_cast<std::uintptr_t>(&CameraGetter)) &&

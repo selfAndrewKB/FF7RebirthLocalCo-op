@@ -3,6 +3,7 @@
 #include "facts/party.h"
 #include "platform/image.h"
 #include "platform/verified_code.h"
+#include "players/game_globals.h"
 #include "players/generation.h"
 #include "players/seats.h"
 #include "players/weak_object.h"
@@ -41,12 +42,12 @@ std::uint64_t* PrimaryField() noexcept
 
 bool Install(const platform::GameImage& image) noexcept
 {
-    const auto manager = image.Rebase(facts::kPartyManagerGlobal, sizeof(void*));
+    const auto manager = players::game_globals::Address(players::game_globals::Global::PartyManager);
     if (!manager || !players::weak_object::Known())
     {
         return false;
     }
-    g_partyManager = reinterpret_cast<void* const*>(*manager);
+    g_partyManager = reinterpret_cast<void* const*>(manager);
     return true;
 }
 

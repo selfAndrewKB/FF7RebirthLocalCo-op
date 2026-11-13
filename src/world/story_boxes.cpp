@@ -15,6 +15,7 @@
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/verified_code.h"
+#include "players/game_globals.h"
 #include "players/generation.h"
 #include "players/object_fields.h"
 #include "players/seats.h"
@@ -483,7 +484,7 @@ bool InstallChecked(const platform::GameImage& image)
     const auto groupRow = platform::FindFunction(image, facts::kActorGroupRow);
     const auto leader   = platform::FindFunction(image, facts::kResolvePartyLeader);
     const auto rows     = image.Rebase(facts::kObjectLayoutRegistry, sizeof(std::uintptr_t));
-    const auto root     = image.Rebase(facts::kEndGameRoot, sizeof(std::uintptr_t));
+    const auto root     = players::game_globals::Address(players::game_globals::Global::GameRoot);
     if (!begin || !end || !layout || !findRow || !findSlot || !offCode || !groupRow || !leader || !rows || !root ||
         !players::weak_object::Known())
     {
@@ -500,7 +501,7 @@ bool InstallChecked(const platform::GameImage& image)
     g_groupRow   = reinterpret_cast<data_rows::AccessorFn>(*groupRow);
     g_leader     = reinterpret_cast<LeaderFn>(*leader);
     g_layoutRows = reinterpret_cast<void*>(*rows);
-    g_root       = reinterpret_cast<const std::uintptr_t*>(*root);
+    g_root       = reinterpret_cast<const std::uintptr_t*>(root);
     g_pending    = true;  // placed by the game thread's tick, outside the field tick
     g_installed  = true;
 #if LSS_DEV

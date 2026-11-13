@@ -7,6 +7,7 @@
 #include "platform/image.h"
 #include "platform/verified_code.h"
 
+#include "players/game_globals.h"
 #include "players/weak_object.h"
 
 #include <array>
@@ -194,14 +195,14 @@ bool Install(const platform::GameImage& image) noexcept
         holds           = live.has_value();
         g_subTicks[i]   = live ? reinterpret_cast<ObjectFn>(*live) : nullptr;
     }
-    const auto system  = image.Rebase(facts::kEndUISystem, kSubTicks.back().member + sizeof(void*));
+    const auto system  = players::game_globals::Address(players::game_globals::Global::UiSystem);
     const auto leader  = platform::FindFunction(image, kLeaderTargetTick);
     const auto compass = platform::FindFunction(image, kCompassFrameUpdate);
     if (!holds || !system || !leader || !compass)
     {
         return false;
     }
-    g_endUISystem  = *system;
+    g_endUISystem  = system;
     g_leaderTarget = reinterpret_cast<ObjectFn>(*leader);
     g_compass      = reinterpret_cast<CompassFn>(*compass);
     return true;

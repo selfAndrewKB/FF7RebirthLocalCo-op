@@ -19,6 +19,7 @@
 #include "platform/log.h"
 #include "platform/verified_code.h"
 #include "players/describe.h"
+#include "players/game_globals.h"
 #include "players/generation.h"
 #include "players/object_fields.h"
 #include "players/unreal_access.h"
@@ -574,8 +575,8 @@ void Run()
 
 bool Install(const platform::GameImage& image) noexcept
 {
-    const auto root  = image.Rebase(facts::kEndGameRoot, sizeof(void*));
-    const auto input = image.Rebase(facts::kSquareInputGlobal, sizeof(void*));
+    const auto root  = players::game_globals::Address(players::game_globals::Global::GameRoot);
+    const auto input = players::game_globals::Address(players::game_globals::Global::SquareInputOwner);
     const auto test  = platform::FindFunction(image, facts::kIsPlayerCore);
     const std::uintptr_t vts[] = {kChocoboCoordinatorVTable, kBuggyCoordinatorVTable, kBroncoCoordinatorVTable,
                                   kScooterCoordinatorVTable};
@@ -587,8 +588,8 @@ bool Install(const platform::GameImage& image) noexcept
         vtsFound      = vtsFound && vt.has_value();
     }
     const auto move  = image.Rebase(kChocoboMoveStateVTable);
-    g_gameRoot       = root ? *root : 0;
-    g_input          = input ? *input : 0;
+    g_gameRoot       = root;
+    g_input          = input;
     g_chocoboMoveVt  = move ? *move : 0;
     g_isCore         = test ? reinterpret_cast<CoreTestFn>(*test) : nullptr;
     // Optional reads: each logged as unread when its bytes differ.

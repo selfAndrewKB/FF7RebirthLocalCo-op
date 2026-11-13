@@ -13,6 +13,7 @@
 #include "platform/log.h"
 #include "platform/verified_code.h"
 #include "platform/vtable_entry.h"
+#include "players/game_globals.h"
 #include "players/generation.h"
 #include "players/object_fields.h"
 #include "players/seats.h"
@@ -650,8 +651,8 @@ void Install(const platform::GameImage& image) noexcept
                      g_zipGateCall.InstallResearch(image, kZipGateCall, kZipGate,
                                                    reinterpret_cast<std::uintptr_t>(&ZipGate));
     // The stop by name: a seat's loops added to its list must stop there.
-    const auto owner  = image.Rebase(facts::kFieldActionGlobal, sizeof(void*));  // the list's owner (StopNamed and PlayNamed read it)
-    g_listOwner       = owner ? *owner : 0;
+    const auto owner  = players::game_globals::Address(players::game_globals::Global::FieldAction);  // the list's owner (StopNamed and PlayNamed read it)
+    g_listOwner       = owner;
     const auto stopAt = platform::FindFunction(image, kStopNamed);
     const bool stop   = zip && g_listOwner != 0 && stopAt &&
                       g_stopNamed.Install(*stopAt,

@@ -8,6 +8,7 @@
 #include "platform/log.h"
 #include "platform/verified_code.h"
 #include "platform/vtable_entry.h"
+#include "players/game_globals.h"
 #include "players/object_fields.h"
 #include "players/seats.h"
 
@@ -103,13 +104,13 @@ bool Install(const platform::GameImage& image) noexcept
     const auto composite  = image.Rebase(facts::kCompositeCollisionNameGlobal, sizeof(std::uint64_t));
     const auto guard      = image.Rebase(facts::kCompositeCollisionNameGuard, sizeof(std::int32_t));
     const auto controller = image.Rebase(facts::kEndPlayerControllerVTable);
-    const auto camera     = image.Rebase(facts::kCameraManagerVTable);
+    const auto camera     = players::game_globals::Address(players::game_globals::Global::CameraManagerVTable);
     const auto engineFn   = platform::FindFunction(image, facts::kCameraManagerBeginPlay.target);
     if (!endCamera || !composite || !guard || !controller || !camera || !engineFn)
     {
         return false;
     }
-    g_cameraManagerVTable = *camera;
+    g_cameraManagerVTable = camera;
     g_endCameraName          = reinterpret_cast<std::uint64_t*>(*endCamera);
     g_compositeName          = reinterpret_cast<std::uint64_t*>(*composite);
     g_compositeNameGuard     = reinterpret_cast<const void*>(*guard);

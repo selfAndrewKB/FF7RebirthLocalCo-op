@@ -6,6 +6,7 @@
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/sparse_array.h"
+#include "players/game_globals.h"
 #include "players/seats.h"
 #include "players/weak_object.h"
 #include "players/widget_opacity.h"
@@ -66,8 +67,8 @@ void LogIfChanged(int seat, const Hidden& now) noexcept
 
 void Install(const platform::GameImage& image) noexcept
 {
-    const auto system = image.Rebase(facts::kEndUISystem, facts::kUIFieldMarkers + sizeof(void*));
-    g_system          = system ? *system : 0;
+    const auto system = players::game_globals::Address(players::game_globals::Global::UiSystem);
+    g_system          = system;
     g_hidden.Reserve(256);  // four widgets per marker; grows (guarded) past that
     platform::Log(L"field markers: each view shows only its own player's point markers: {}",
                   g_system == 0 ? L"UNAVAILABLE (no marker list)"

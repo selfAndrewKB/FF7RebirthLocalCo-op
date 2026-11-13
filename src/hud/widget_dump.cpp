@@ -22,6 +22,7 @@
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/verified_code.h"
+#include "players/game_globals.h"
 #include "players/generation.h"
 #include "players/object_slot.h"
 #include "players/unreal_access.h"
@@ -600,17 +601,17 @@ int LogPlayerLayers(std::uintptr_t playerHostGeometry)
 /// holder's widget, the two setup flags, and the stock per-player layer geometry each local player would get.
 int LogHudManagers(const platform::GameImage& image)
 {
-    const auto system = image.Rebase(facts::kEndUISystem, kUISetupDeferred + 1);
+    const auto system = players::game_globals::Address(players::game_globals::Global::UiSystem);
     if (!system)
     {
         platform::Log(L"hud managers: EndUISystem not located");
         return 1;
     }
-    const auto ctrl    = PointerAt(*system + facts::kUICommandController).value_or(0);
-    const auto compass = PointerAt(*system + facts::kUIAreaMap).value_or(0);
+    const auto ctrl    = PointerAt(system + facts::kUICommandController).value_or(0);
+    const auto compass = PointerAt(system + facts::kUIAreaMap).value_or(0);
     const auto holder  = compass != 0 ? PointerAt(compass + kCompassHolder).value_or(0) : 0;
     platform::Log(L"hud managers: EndUISystem field-command setup pending {}; field command controller {}",
-                  Flag(*system + kUISetupDeferred), ctrl != 0 ? L"present" : L"absent");
+                  Flag(system + kUISetupDeferred), ctrl != 0 ? L"present" : L"absent");
     int lines = 1;
     if (ctrl != 0)
     {

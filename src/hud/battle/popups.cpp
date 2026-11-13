@@ -9,6 +9,7 @@
 #include "platform/module_pin.h"
 #include "platform/sparse_array.h"
 #include "platform/verified_code.h"
+#include "players/game_globals.h"
 #include "players/generation.h"
 #include "players/seats.h"
 #include "players/weak_object.h"
@@ -143,7 +144,7 @@ int ReplayList(std::uintptr_t manager, const List& list, void* canvas, void* sea
 
 bool Install(const platform::GameImage& image) noexcept
 {
-    const auto system      = image.Rebase(facts::kEndUISystem, kManager + sizeof(void*));
+    const auto system      = players::game_globals::Address(players::game_globals::Global::UiSystem);
     const auto slate       = platform::FindFunction(image, kPlaceSlate);
     const auto umg         = platform::FindFunction(image, kPlaceUmg);
     if (!system || !slate || !umg || !players::weak_object::Known())
@@ -151,7 +152,7 @@ bool Install(const platform::GameImage& image) noexcept
         platform::Log(L"popups: the placement code is not what the research read; popups stay player 1's in every view");
         return false;
     }
-    g_endUISystem = *system;
+    g_endUISystem = system;
     g_placeSlate  = reinterpret_cast<PlaceFn>(*slate);
     g_placeUmg    = reinterpret_cast<PlaceFn>(*umg);
 

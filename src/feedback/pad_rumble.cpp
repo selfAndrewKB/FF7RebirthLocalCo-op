@@ -15,6 +15,7 @@
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/verified_code.h"
+#include "players/game_globals.h"
 #include "players/generation.h"
 #include "players/object_fields.h"
 #include "players/seats.h"
@@ -197,10 +198,10 @@ void LogDevice() noexcept
 
 void Install(const platform::GameImage& image) noexcept
 {
-    const auto owner = image.Rebase(kSquareInputGlobal, sizeof(void*));
+    const auto owner = players::game_globals::Address(players::game_globals::Global::SquareInputOwner);
     const auto app   = image.Rebase(kPlatformApplication, sizeof(void*));
     const auto note  = platform::FindFunction(image, kNoteLastDevice);
-    g_owner          = owner ? *owner : 0;
+    g_owner          = owner;
     g_app            = app ? *app : 0;
     const bool device = note &&
                         g_note.Install(*note,

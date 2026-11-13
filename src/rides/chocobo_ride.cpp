@@ -9,6 +9,7 @@
 #include "facts/vehicles.h"
 #include "facts/world.h"
 #include "players/describe.h"
+#include "players/game_globals.h"
 #include "rides/ride_rules.h"
 #define RC_UNREAL_DISABLE_PROPERTY_DEPRECATION_WARNINGS
 #define RC_UNREAL_DISABLE_CLASS_DEPRECATION_WARNINGS
@@ -569,9 +570,9 @@ bool Install(const platform::GameImage& image) noexcept
     g_fn.endRide        = reinterpret_cast<EndRideFn>(find(kEndRide));
     g_fn.switchAi       = reinterpret_cast<SwitchAiFn>(find(kSwitchAiControlAsync));
     g_fn.chocoboFor     = reinterpret_cast<ChocoboForFn>(find(kChocoboForCharacter));
-    const auto root     = image.Rebase(facts::kEndGameRoot, sizeof(void*));
+    const auto root     = players::game_globals::Address(players::game_globals::Global::GameRoot);
     const auto key      = image.Rebase(kVehicleKeyName, sizeof(std::uint64_t));
-    g_gameRoot          = root ? *root : 0;
+    g_gameRoot          = root;
     g_vehicleKey        = key ? reinterpret_cast<const std::uint64_t*>(*key) : nullptr;
     g_coordVt           = rebase(kChocoboCoordinatorVTable);
     g_moveVt            = rebase(kChocoboMoveStateVTable);

@@ -7,6 +7,7 @@
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/verified_code.h"
+#include "players/game_globals.h"
 #include "players/generation.h"
 #include "players/object_fields.h"
 
@@ -69,13 +70,13 @@ void RequestExit() noexcept
 bool Install(const platform::GameImage& image, LeaveFn leave, void* context) noexcept
 {
     const auto target  = platform::FindFunction(image, kRequestExit);
-    const auto mode    = image.Rebase(kEndGameRoot, sizeof(void*));
-    const auto manager = image.Rebase(facts::kPartyManagerGlobal, sizeof(void*));
+    const auto mode    = players::game_globals::Address(players::game_globals::Global::GameRoot);
+    const auto manager = players::game_globals::Address(players::game_globals::Global::PartyManager);
     bool       ok      = target && mode && manager;
     if (ok)
     {
-        g_gameMode     = *mode;
-        g_partyManager = *manager;
+        g_gameMode     = mode;
+        g_partyManager = manager;
         g_leave        = leave;
         g_context      = context;
         ok             = g_entry.Install(*target, image.EntryInstruction(kRequestExit.address, std::span<const std::uint8_t>(kRequestExitBytes, kFirstInstruction)),

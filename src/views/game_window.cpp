@@ -5,6 +5,7 @@
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/verified_code.h"
+#include "players/game_globals.h"
 
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
@@ -51,7 +52,7 @@ Fn Slot(std::size_t index) noexcept
 bool Install(const platform::GameImage& image) noexcept
 {
     // The vtable is one hand-found data address per build (its slots are read live, not translated one by one).
-    const auto engineGlobal = image.Rebase(facts::kGEngine, sizeof(std::uintptr_t));
+    const auto engineGlobal = players::game_globals::Address(players::game_globals::Global::Engine);
     const auto vtable       = image.Rebase(facts::kWindowsWindowVTable, sizeof(std::uintptr_t));
     const auto reshape      = vtable ? ReadPointer(*vtable + facts::kWindowsWindowSlotReshapeWindow * 8) : std::nullopt;
     const auto mode         = vtable ? ReadPointer(*vtable + facts::kWindowsWindowSlotGetWindowMode * 8) : std::nullopt;
@@ -73,7 +74,7 @@ bool Install(const platform::GameImage& image) noexcept
                       codeMatches ? L"matches" : L"differs");
         return false;
     }
-    g_engineGlobal         = *engineGlobal;
+    g_engineGlobal         = engineGlobal;
     g_vtable               = *vtable;
     g_viewportWindowOffset = facts::kGameViewportWindowOffset;
     g_nativeWindowOffset   = facts::kSWindowNativeWindowOffset;

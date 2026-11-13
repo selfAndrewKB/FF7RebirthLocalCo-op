@@ -3,6 +3,7 @@
 #include "facts/cameras.h"
 #include "facts/controller.h"
 #include "platform/image.h"
+#include "players/game_globals.h"
 #include "players/generation.h"
 #include "players/object_fields.h"
 
@@ -24,14 +25,14 @@ bool Install(const platform::GameImage& image) noexcept
     {
         return true;
     }
-    const auto camera = image.Rebase(facts::kCameraManagerVTable);
+    const auto camera = players::game_globals::Address(players::game_globals::Global::CameraManagerVTable);
     const auto field  = image.Rebase(facts::kFieldOperatorVTable);
     const auto battle = image.Rebase(facts::kBattleOperatorVTable);
     if (!camera || !field || !battle)
     {
         return false;
     }
-    g_cameraManagerVTable = *camera;
+    g_cameraManagerVTable = camera;
     g_fieldVTable         = *field;
     g_battleVTable        = *battle;
     return true;

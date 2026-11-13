@@ -244,6 +244,7 @@ src/
     describe                Short descriptions of engine objects for log lines
     first_player_scope.h    A seat's controller first in the world's player controller list for one call, so "the first
                             local player" the game asks for is the seat's; player 1's order put back after
+    game_globals            The game's globals that more than one module reads, rebased once
     generation              The seats' players, as every wrapper sees them: one generation per seat (players/seats.h)
     held_setting            A game setting held at the mod's value for a while, then put back: the console settings
                             two-player rendering needs (split_screen_settings.h), the two-player layout (split_layout.h)

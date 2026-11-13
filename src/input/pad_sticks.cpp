@@ -9,6 +9,7 @@
 #include "platform/log.h"
 #include "platform/verified_code.h"
 #include "platform/vtable_entry.h"
+#include "players/game_globals.h"
 #include "players/generation.h"
 #include "players/object_fields.h"
 #include "scopes/primary_controller.h"
@@ -107,14 +108,14 @@ void ProcessPlayerInput(void* controller, float deltaTime, bool gamePaused)
 
 bool Install(const platform::GameImage& image) noexcept
 {
-    const auto owner    = image.Rebase(facts::kSquareInputGlobal, sizeof(void*));
+    const auto owner    = players::game_globals::Address(players::game_globals::Global::SquareInputOwner);
     const auto selector = image.Rebase(facts::kDirectInputOnlyFlag);
     const auto engineFn = platform::FindFunction(image, facts::kProcessPlayerInput.target);
     if (!owner || !selector || !engineFn || !scopes::primary_controller::Installed())
     {
         return false;
     }
-    g_inputOwner         = reinterpret_cast<const std::byte* const*>(*owner);
+    g_inputOwner         = reinterpret_cast<const std::byte* const*>(owner);
     g_directInputOnly    = reinterpret_cast<const std::uint8_t*>(*selector);
     g_engineProcessInput = reinterpret_cast<ProcessInputFn>(*engineFn);
     const bool replaced = platform::ReplaceSlot(image, facts::kProcessPlayerInput,

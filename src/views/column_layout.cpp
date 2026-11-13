@@ -5,6 +5,7 @@
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/settings.h"
+#include "players/game_globals.h"
 #include "players/held_setting.h"
 #include "players/split_settings_access.h"
 #include "views/column_rules.h"
@@ -140,7 +141,7 @@ void Waiting(const wchar_t*& waiting, const wchar_t* why) noexcept
 std::uint8_t* FindRecords(std::uint32_t type, std::int32_t expected, const wchar_t** why) noexcept
 {
     const void*    engine  = platform::ReadPointerAt(g_engineGlobal);
-    const void*    client  = platform::ReadPointer(engine, facts::kEngineGameViewport);
+    const void*    client  = players::game_globals::GameViewportClient();
     std::uintptr_t entries = 0, records = 0;
     std::int32_t   count   = 0;
     if (engine == nullptr)
@@ -460,13 +461,13 @@ bool Install(const platform::GameImage& image) noexcept
         SetThreeSplit(column_rules::ParseThreeSplit(settings::Of(settings::kThreePlayerSplit).word).value_or(column_rules::ThreeSplit::Top),
                       settings::Why(settings::kThreePlayerSplit).c_str());
     });
-    const auto engineGlobal = image.Rebase(facts::kGEngine, sizeof(std::uintptr_t));
+    const auto engineGlobal = players::game_globals::Address(players::game_globals::Global::Engine);
     if (!engineGlobal)
     {
         platform::LogWarning(L"column layout: GEngine is outside the image; the columns keep the engine's equal widths");
         return false;
     }
-    g_engineGlobal = *engineGlobal;
+    g_engineGlobal = engineGlobal;
     g_installed    = true;
     for (TwoEntry& e : g_two)
     {
