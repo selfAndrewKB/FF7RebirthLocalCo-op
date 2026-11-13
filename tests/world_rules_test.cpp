@@ -19,11 +19,7 @@ using namespace std::chrono_literals;
 
 int g_member, g_one, g_other;
 
-struct Pair
-{
-    std::uint8_t move = 6, dash = 0;
-    bool         operator==(const Pair&) const = default;
-};
+using Pair = MoveTypePair;
 
 void TestLatches()
 {

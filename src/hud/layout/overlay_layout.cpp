@@ -13,6 +13,7 @@
 #include "platform/call_redirect.h"
 #include "platform/code_redirect.h"
 #include "platform/deferred_sites.h"
+#include "platform/game_vectors.h"
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/module_pin.h"
@@ -42,14 +43,8 @@ using GetCompositeLayerRectFn = IntRect* (*)(IntRect* out);
 using FindOrAddEntryFn        = void* (*)(void* slot, std::uintptr_t name, IntRect* rect, std::uintptr_t unused);
 using SubmitLayerSlotFn       = void (*)(void* renderer, std::uintptr_t pool, void* slot, std::uintptr_t unused);
 
-/// FVector2D by value: 8 bytes, so the x64 convention passes it packed in rcx, as the game's callers do.
-struct Size2D
-{
-    float x = 0.0f;
-    float y = 0.0f;
-};
-static_assert(sizeof(Size2D) == 8);
-using ContainScaleFn = float (*)(Size2D size);
+/// The size by value (platform/game_vectors.h: packed in rcx, as the game's callers pass it).
+using ContainScaleFn = float (*)(platform::GameVector2D size);
 
 // Set once at install, then only read.
 platform::CallRedirect g_rectCall;

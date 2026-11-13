@@ -151,6 +151,7 @@ src/
                             the mod's own text for the game's string copies to read
     game_thread_sites.h     Call sites placed from the game thread instead of at install: the ones whose five bytes
                             cross a 16-byte block in game version 1.005 (platform/call_redirect.h, InstallFromOwnThread)
+    game_vectors.h          The engine's FVector2D as this engine lays it out: two 4-byte floats, packed, no padding
     guarded                 Structured-exception guards for touching engine memory and calling engine code
     guarded_read.h          The guarded reads of engine memory: platform/guarded.h's CopyGuarded and WriteGuarded under
                             the shapes every module reads with
@@ -170,6 +171,7 @@ src/
                             and the mod's own folder above it (Mods/LocalSplitScreen); and the flag files a player puts
                             there
     module_pin              Keeps this DLL loaded until the process exits
+    offset_range.h          A stretch of bytes inside a block, by its offset from the block's start and its length
     pool_bits               The counting behind platform/binned_pools.h, pure so it is tested on the host
                             (tests/pool_bits_test.cpp)
     rip_relative.h          RIP-relative addressing, as the mod's checks of the game's instructions compute it: an

@@ -14,6 +14,7 @@
 // exactly as a failed byte check does on an unknown build.
 
 #include "platform/build_value.h"
+#include "platform/offset_range.h"
 
 #include <cstdint>
 #include <optional>
@@ -33,11 +34,7 @@ struct TranslatedRange
 
 /// A field inside a range whose bytes differ between the builds: a branch or RIP-relative distance, or an
 /// absolute pointer into the image. Its offset is from the range's start.
-struct MovedField
-{
-    std::uint32_t offset;
-    std::uint32_t size;
-};
+using MovedField = OffsetRange;
 
 /// An address re-found by hand in another build, with that build's bytes there (empty for data: only the address
 /// translates). A byte check compares as many of them as the research build's array is long.

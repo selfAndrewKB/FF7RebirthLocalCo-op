@@ -88,8 +88,15 @@ constexpr bool LowerPriority(std::uint8_t priority, std::uint8_t best) noexcept
 
 // ---- walk_limits: the move-type stack the game keeps per controller ----
 
+/// One entry's pair: {SpecificMoveType, DashType}; {6 Empty, 0 Enable} is no limit.
+struct MoveTypePair
+{
+    std::uint8_t move = 6, dash = 0;
+    bool         operator==(const MoveTypePair&) const = default;
+};
+
 /// The game's stack of move-type pairs (index 0 = top): a push of a pair already on it gains a reference, a new one
-/// goes to the front; a pop loses a reference and leaves at 0. `Pair` is the module's own (equality-comparable).
+/// goes to the front; a pop loses a reference and leaves at 0. `Pair` is equality-comparable (MoveTypePair above).
 template <class Pair, std::size_t N>
 class PairStack
 {

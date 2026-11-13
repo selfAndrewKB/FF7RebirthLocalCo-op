@@ -12,6 +12,7 @@
 #include "menu/coop_page.h"
 #include "menu/game_ui.h"
 #include "platform/call_redirect.h"
+#include "platform/game_array.h"
 #include "platform/guarded.h"
 #include "platform/guarded_read.h"
 #include "platform/image.h"
@@ -77,15 +78,6 @@ struct ArrowsBox
 };
 ArrowsBox g_arrows;
 
-/// An FString parameter as ProcessEvent's frame holds it: a view over the mod's text (the call copies it; nothing here
-/// is freed by the game).
-struct StringView
-{
-    const wchar_t* data;
-    std::int32_t   num;
-    std::int32_t   max;
-};
-
 /// SetScrollOffset's parameters: the offset and the animate flag right after it, 5 bytes as the function reads them
 /// (read live); the frame is the struct, padded to 8.
 struct ScrollParams
@@ -104,8 +96,10 @@ bool Call(void* object, UFunction* function, void* params) noexcept
 
 bool SetText(void* block, const wchar_t* text) noexcept
 {
-    const auto length = static_cast<std::int32_t>(std::wcslen(text)) + 1;
-    StringView params{text, length, length};
+    // An FString parameter as ProcessEvent's frame holds it: a view over the mod's text (the call copies it; nothing
+    // here is freed by the game).
+    const auto          length = static_cast<std::int32_t>(std::wcslen(text)) + 1;
+    platform::GameArray params{const_cast<wchar_t*>(text), length, length};
     return Call(block, g_calls.setText, &params);
 }
 
@@ -326,7 +320,7 @@ try
         return function != nullptr && function->GetParmsSize() == bytes;
     };
     if (shaped(g_calls.setDesiredCount, 4) && shaped(g_calls.setScrollOffset, kScrollParamsSize) &&
-        shaped(g_calls.getScrollOffset, 4) && shaped(g_calls.setText, sizeof(StringView)))
+        shaped(g_calls.getScrollOffset, 4) && shaped(g_calls.setText, sizeof(platform::GameArray)))
     {
         return true;
     }

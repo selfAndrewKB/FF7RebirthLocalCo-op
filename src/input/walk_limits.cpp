@@ -74,12 +74,7 @@ SetLayer7Fn     g_setLayer7     = nullptr;
 std::uintptr_t  g_partyManager  = 0;  // addresses of the globals holding the pointers
 std::uintptr_t  g_listener      = 0;
 
-/// {SpecificMoveType, DashType}; {6 Empty, 0 Enable} is no limit.
-struct Pair
-{
-    std::uint8_t move = 6, dash = 0;
-    bool         operator==(const Pair&) const = default;
-};
+using Pair = world::world_rules::MoveTypePair;
 constexpr Pair kNoLimit{};
 
 struct Inside

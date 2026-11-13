@@ -5,6 +5,7 @@
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
+#include "platform/offset_range.h"
 #include "players/game_globals.h"
 #include "players/generation.h"
 #include "players/object_fields.h"
@@ -30,11 +31,7 @@ using facts::kUIKeyGuide;
 // menu owner byte (+0x64: written by the member selecter's tick in the field top states, read by
 // SquareInput_Owner64Gate in the key-down mapper; per-pad input state tied to that player's
 // menu, research/RE-p2-command-menu-levers.md).
-struct Region
-{
-    std::uint32_t offset, size;
-};
-constexpr std::array<Region, 5> kContext{{{0x08, 32}, {0x40, 16}, {0x78, 1}, {facts::kInputCaptureMap, 0x50}, {0x64, 1}}};
+constexpr std::array<platform::OffsetRange, 5> kContext{{{0x08, 32}, {0x40, 16}, {0x78, 1}, {facts::kInputCaptureMap, 0x50}, {0x64, 1}}};
 constexpr std::uint32_t kDelegate = 0x1A0;  // the menu-core delegate, run when no widget takes an action
 static_assert(kContext[0].size + kContext[1].size + kContext[2].size + kContext[3].size + kContext[4].size ==
               kContextSize);
@@ -197,7 +194,7 @@ FocusScope::FocusScope(int seat, void* controller) noexcept : seat_(seat)
     const std::uintptr_t keyGuide = g_keyGuides[static_cast<std::size_t>(seat)];
     std::array<Range, 8> ranges{};
     std::size_t          count = 0;
-    for (const Region& region : kContext)
+    for (const platform::OffsetRange& region : kContext)
     {
         ranges[count++] = {input + region.offset, region.size, Kind::Exchange};
     }

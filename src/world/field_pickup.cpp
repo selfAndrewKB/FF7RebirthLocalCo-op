@@ -17,6 +17,7 @@
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
+#include "platform/offset_range.h"
 #include "platform/sparse_array.h"
 #include "platform/tset_find.h"
 #include "platform/verified_code.h"
@@ -90,12 +91,7 @@ constexpr std::uint8_t  kGameFlagBlocksPoll = 11;
 constexpr std::uint8_t  kModeBlocksPoll     = 2;
 
 // FieldActionMgr: the per-player ranges, exchanged with the seat's copy around the pass.
-struct Range
-{
-    std::uint32_t offset;
-    std::uint32_t size;
-};
-constexpr std::array<Range, 5> kRanges{{
+constexpr std::array<platform::OffsetRange, 5> kRanges{{
     {0x90, 0x2F8 - 0x90},          // candidates, the show-all timer, the trace-handle map
     {0x48328, 0x48748 - 0x48328},  // labels, rows, slot entries, records, keys, locations, latches
     {0x4874C, 4},                  // the far-marker sweep timer
@@ -104,7 +100,7 @@ constexpr std::array<Range, 5> kRanges{{
 }};
 constexpr std::size_t kCopySize = [] {
     std::size_t size = 0;
-    for (const Range& range : kRanges)
+    for (const platform::OffsetRange& range : kRanges)
     {
         size += range.size;
     }
@@ -397,7 +393,7 @@ std::uint8_t* CopyAt(Pickup& p, std::uint32_t offset) noexcept
 {
     for (std::size_t i = 0; i < kRanges.size(); ++i)
     {
-        const Range& range = kRanges[i];
+        const platform::OffsetRange& range = kRanges[i];
         if (offset >= range.offset && offset < range.offset + range.size)
         {
             const auto value = p.copy.Value(i);

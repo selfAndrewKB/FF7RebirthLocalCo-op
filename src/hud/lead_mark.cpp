@@ -7,6 +7,7 @@
 #include "hud/minimap/minimap.h"
 #include "hud/passes/menu_buffers.h"
 #include "hud/widget_visibility.h"
+#include "platform/game_array.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
@@ -34,14 +35,6 @@ constexpr float         kVisibleRange = 5000;  // cm: the diamond shows within 5
 constexpr std::uint32_t kCheckEvery   = 10;    // ticks
 constexpr float         kMovedCm      = 1;     // a stop further than this from the placed one is a new stop
 
-/// The game's FString as AddIcon copies it: empty.
-struct EmptyText
-{
-    const wchar_t* data = nullptr;
-    std::int32_t   num  = 0;
-    std::int32_t   max  = 0;
-};
-
 /// MapIconParams (research/RE-lead-mark.md), 96 bytes: a plain objective mark at a world point.
 struct alignas(8) IconParams
 {
@@ -63,7 +56,9 @@ static_assert(sizeof(IconParams) == 96 && offsetof(IconParams, visibleRange) == 
                   offsetof(IconParams, compass) == 20 && offsetof(IconParams, layer) == 24 && offsetof(IconParams, mapName) == 28,
               "the block as the game reads it");
 
-using AddIconFn    = void (*)(std::uint64_t key, std::uint8_t kind, const float* position, const EmptyText* text, const IconParams* params);
+// The text is the game's FString as AddIcon copies it: empty (platform/game_array.h).
+using AddIconFn    = void (*)(std::uint64_t key, std::uint8_t kind, const float* position, const platform::GameArray* text,
+                              const IconParams* params);
 using RemoveIconFn = void (*)(std::uint64_t key);
 
 /// One seat's marker.
@@ -111,7 +106,7 @@ bool KeyOf(int seat, Seat& s) noexcept
 
 bool Add(const Seat& s, const float at[3]) noexcept
 {
-    const EmptyText  text;
+    const platform::GameArray text;
     const IconParams params;
     return platform::CallGuarded(g_add, s.key, facts::kMapIconKindMainStory, at, &text, &params);
 }
