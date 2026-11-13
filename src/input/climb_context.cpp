@@ -14,6 +14,7 @@
 #include "platform/log.h"
 #include "platform/verified_code.h"
 #include "platform/vtable_entry.h"
+#include "players/actor_fields.h"
 #include "players/game_globals.h"
 #include "players/generation.h"
 #include "players/object_fields.h"
@@ -988,8 +989,7 @@ void Tick() noexcept
             g_rootKnown.store(true, std::memory_order_release);  // the offset is cached now, for the workers' reads
         }
         const auto type = session::party_member::PlayerTypeOf(players::generation::MemberOf(seat));
-        g_cameraWeak[s].store(scopes::leader_scope::WeakOf(ReadPointer(players::generation::ControllerOf(seat),
-                                                               facts::kControllerCameraManager)),
+        g_cameraWeak[s].store(scopes::leader_scope::WeakOf(players::actor_fields::CameraManager(players::generation::ControllerOf(seat))),
                               std::memory_order_relaxed);
         g_memberType[s].store(type ? *type : -1, std::memory_order_relaxed);
     }

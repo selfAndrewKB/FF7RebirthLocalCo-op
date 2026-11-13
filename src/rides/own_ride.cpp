@@ -11,6 +11,7 @@
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/verified_code.h"
+#include "players/actor_fields.h"
 #include "players/describe.h"
 #include "players/object_fields.h"
 #include "players/seats.h"
@@ -23,7 +24,6 @@ namespace lss::rides::own_ride {
 
 namespace {
 
-using facts::kCameraManagerFieldOperator;
 using facts::kCharacterControlHolder;
 using facts::kControllerActiveVehicle;
 constexpr std::uint32_t kHolderComponent = 0x40;
@@ -67,8 +67,8 @@ std::int32_t CoordState(const void* coordinator, std::uintptr_t coordVt, std::ui
 
 const void* CameraModule15(const void* controller) noexcept
 {
-    const void* pcm     = ReadPointer(controller, facts::kControllerCameraManager);
-    const void* op      = ReadPointer(pcm, kCameraManagerFieldOperator);
+    const void* pcm     = players::actor_fields::CameraManager(controller);
+    const void* op      = players::actor_fields::FieldOperator(pcm);
     return camera::camera_access::ModuleAt(op, kModuleSlot15);
 }
 
@@ -83,8 +83,8 @@ const void* InputComponentOf(const void* vehicle) noexcept
 
 bool ControllerHolds(const void* character, const void* controller) noexcept
 {
-    return ReadPointer(character, facts::kCharacterEffectiveController) == controller &&
-           ReadPointer(controller, facts::kControllerPawn) == character;
+    return players::actor_fields::EffectiveController(character) == controller &&
+           players::actor_fields::Pawn(controller) == character;
 }
 
 bool BoardingGateOpen(int seat, void* member, void* controller, const wchar_t* label) noexcept
@@ -101,15 +101,15 @@ bool BoardingGateOpen(int seat, void* member, void* controller, const wchar_t* l
 
 std::wstring PossessionText(const Lease& lease, const wchar_t* word)
 {
-    const void* pawn   = ReadPointer(lease.controller, facts::kControllerPawn);
+    const void* pawn   = players::actor_fields::Pawn(lease.controller);
     const void* active = ReadPointer(lease.controller, kControllerActiveVehicle);
     const bool own = active == lease.coordinator && active != nullptr;
     return std::format(L"member controller {} (effective {}); {} controller {} (effective {}); PC{}'s pawn {}, active "
                        L"coordinator {}{}",
-                       players::Who(ReadPointer(lease.member, facts::kPawnController)),
-                       players::Who(ReadPointer(lease.member, facts::kCharacterEffectiveController)), word,
-                       players::Who(ReadPointer(lease.vehicle, facts::kPawnController)),
-                       players::Who(ReadPointer(lease.vehicle, facts::kCharacterEffectiveController)), lease.seat + 1,
+                       players::Who(players::actor_fields::Controller(lease.member)),
+                       players::Who(players::actor_fields::EffectiveController(lease.member)), word,
+                       players::Who(players::actor_fields::Controller(lease.vehicle)),
+                       players::Who(players::actor_fields::EffectiveController(lease.vehicle)), lease.seat + 1,
                        pawn == lease.vehicle ? std::wstring(L"the ") + word
                        : pawn == lease.member ? std::wstring(L"the member")
                        : pawn != nullptr      ? std::wstring(L"other")
@@ -123,7 +123,7 @@ std::wstring PossessionText(const Lease& lease, const wchar_t* word)
 bool GiveBack(const Lease& lease, SwitchAiFn switchAi, const wchar_t* label, const wchar_t* what) noexcept
 {
     bool held = ControllerHolds(lease.member, lease.controller);
-    if (!held && ReadPointer(lease.member, facts::kPawnController) != lease.controller)
+    if (!held && players::actor_fields::Controller(lease.member) != lease.controller)
     {
         RestoreCall restore{lease.member, lease.controller, switchAi};
         input::member_movement::InPrimaryScope(lease.seat, lease.member, &RunRestore, &restore);

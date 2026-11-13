@@ -7,6 +7,7 @@
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/verified_code.h"
+#include "players/actor_fields.h"
 #include "players/generation.h"
 #include "players/object_fields.h"
 
@@ -61,20 +62,20 @@ bool Installed() noexcept
 
 void* Current(void* controller) noexcept
 {
-    return ReadPointer(CameraManagerOf(controller), facts::kCameraManagerViewTarget);
+    return players::actor_fields::ViewTarget(CameraManagerOf(controller));
 }
 
 bool OnOwnCamera(void* controller) noexcept
 {
     void* cameraManager = CameraManagerOf(controller);
-    void* cameraActor   = ReadPointer(cameraManager, facts::kCameraManagerEndCameraActor);
-    return cameraActor != nullptr && ReadPointer(cameraManager, facts::kCameraManagerViewTarget) == cameraActor;
+    void* cameraActor   = players::actor_fields::EndCameraActor(cameraManager);
+    return cameraActor != nullptr && players::actor_fields::ViewTarget(cameraManager) == cameraActor;
 }
 
 bool Aim(void* controller) noexcept
 {
     void* cameraManager = CameraManagerOf(controller);
-    void* cameraActor   = ReadPointer(cameraManager, facts::kCameraManagerEndCameraActor);
+    void* cameraActor   = players::actor_fields::EndCameraActor(cameraManager);
     if (!Installed() || g_stopped || cameraActor == nullptr || !players::generation::OnGameThread())
     {
         return false;
@@ -103,7 +104,7 @@ bool AimAt(void* controller, void* actor) noexcept
                       L"at another actor); no camera manager is aimed again this session");
         return false;
     }
-    return ReadPointer(cameraManager, facts::kCameraManagerViewTarget) == actor;
+    return players::actor_fields::ViewTarget(cameraManager) == actor;
 }
 
 }  // namespace lss::camera::view_target

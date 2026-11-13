@@ -6,6 +6,7 @@
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/verified_code.h"
+#include "players/actor_fields.h"
 #include "players/generation.h"
 #include "players/object_fields.h"
 #include "rides/wheelie_ride.h"
@@ -227,7 +228,7 @@ MemberTickScope::MemberTickScope(void* state, const void* controller, float delt
         return;
     }
     g_memberState = state;
-    const void* component = ReadPointer(controller, facts::kControllerLeaderActions);
+    const void* component = players::actor_fields::LeaderActions(controller);
     // With the fix off (diagnosis) the clock is left as the tick leaves it, as without this scope.
     if (g_frames == nullptr || component == nullptr || !Acts(kFixClock))
     {

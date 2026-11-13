@@ -21,6 +21,7 @@
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/verified_code.h"
+#include "players/actor_fields.h"
 #include "players/game_globals.h"
 #include "players/generation.h"
 #include "players/object_fields.h"
@@ -362,7 +363,7 @@ struct LockCamera
 
 LockCamera LockCameraOf(void* controller) noexcept
 {
-    const auto camera = reinterpret_cast<std::uintptr_t>(ReadPointer(controller, facts::kControllerCameraManager));
+    const auto camera = reinterpret_cast<std::uintptr_t>(players::actor_fields::CameraManager(controller));
     const auto op     = ReadAt<std::uintptr_t>(camera != 0 ? camera + kCameraManagerBattleOperator : 0);
     const auto module =
         reinterpret_cast<std::uintptr_t>(camera::camera_access::ModuleAt(reinterpret_cast<const void*>(op), kLockOnLayer));

@@ -10,6 +10,7 @@
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/verified_code.h"
+#include "players/actor_fields.h"
 #include "players/generation.h"
 #include "players/object_fields.h"
 #include "players/seats.h"
@@ -115,7 +116,7 @@ int SeatPlaying(const void* character) noexcept
 bool PlayerOnes(const void* character) noexcept
 {
     const void* one = players::generation::PlayerOneController();
-    return character != nullptr && one != nullptr && ReadPointer(one, facts::kControllerLeader) == character;
+    return character != nullptr && one != nullptr && players::actor_fields::LeaderCharacter(one) == character;
 }
 
 /// Whether the switch in flight must pass over `character` (session/party_switch_rules.h), and whose it is.

@@ -20,6 +20,7 @@
 #include "platform/frame_watch.h"
 #include "platform/game_thread_sites.h"
 #include "platform/log.h"
+#include "players/actor_fields.h"
 #include "players/describe.h"
 #include "players/generation.h"
 #include "players/object_fields.h"
@@ -261,8 +262,8 @@ void Seat::WatchOwnCamera() noexcept
 void Seat::LogPlayerOneAfterJoin() noexcept
 {
     platform::LogDebug(L"after the join, tick {}: player 1's pawn {} and leader {}", ticks_,
-        players::NameOf(ReadPointer(playerOneController_, facts::kControllerPawn)),
-        players::NameOf(ReadPointer(playerOneController_, facts::kControllerLeader)));
+        players::NameOf(players::actor_fields::Pawn(playerOneController_)),
+        players::NameOf(players::actor_fields::LeaderCharacter(playerOneController_)));
 }
 
 void Seat::Settle() noexcept
@@ -272,8 +273,8 @@ void Seat::Settle() noexcept
         LogPlayerOneAfterJoin();
     }
     const bool settled = ticks_ >= kPlayerOneWatchTicks &&
-                         ReadPointer(playerOneController_, facts::kControllerPawn) != nullptr &&
-                         ReadPointer(playerOneController_, facts::kControllerLeader) != nullptr;
+                         players::actor_fields::Pawn(playerOneController_) != nullptr &&
+                         players::actor_fields::LeaderCharacter(playerOneController_) != nullptr;
     if (!settled)
     {
         return;
@@ -547,7 +548,7 @@ void Seat::OnLeaderChanging(void* controller, void* character) noexcept
     const auto action = session_rules::DecideLeaderEvent(event);
     // Player 1's controller's leader is still the one before the change here (the funnel runs before the switch
     // writes it); the party manager's leader fields are the new one's already.
-    const void* before = In() ? ReadPointer(controller, facts::kControllerLeader) : nullptr;
+    const void* before = In() ? players::actor_fields::LeaderCharacter(controller) : nullptr;
     const bool  home   = event.controllerIsPlayerOne && party_member::IsFieldLeader(character);
     if (In())
     {
@@ -1413,7 +1414,7 @@ std::wstring Seat::MemberReading() const
 
 bool Seat::HoldsMember() const noexcept
 {
-    return member_ != nullptr || ReadPointer(controller_, facts::kControllerLeader) != nullptr;
+    return member_ != nullptr || players::actor_fields::LeaderCharacter(controller_) != nullptr;
 }
 
 bool Seat::MemberReleased() const noexcept

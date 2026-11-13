@@ -1,6 +1,7 @@
 #include "players/generation.h"
 
 #include "facts/controller.h"
+#include "players/actor_fields.h"
 #include "players/object_fields.h"
 #include "players/weak_object.h"
 
@@ -248,7 +249,7 @@ void BeginTick(const void* const (&drivenChocobo)[kMaxPlayers]) noexcept
         state.chocoboWeak.store(weak_object::WeakOf(const_cast<void*>(drivenChocobo[seat])));
     }
     g_playerOnePawnWeak.store(
-        AnyActive() ? weak_object::WeakOf(ReadPointer(g_seats[0].controller.load(), facts::kControllerPawn)) : 0);
+        AnyActive() ? weak_object::WeakOf(players::actor_fields::Pawn(g_seats[0].controller.load())) : 0);
 }
 
 std::uint64_t MemberWeakOf(int seat) noexcept

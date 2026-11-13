@@ -3,6 +3,7 @@
 #include "facts/cameras.h"
 #include "facts/controller.h"
 #include "platform/image.h"
+#include "players/actor_fields.h"
 #include "players/game_globals.h"
 #include "players/generation.h"
 #include "players/object_fields.h"
@@ -45,9 +46,9 @@ bool Installed() noexcept
 
 void* CameraManagerOf(const void* controller) noexcept
 {
-    void* cameraManager = ReadPointer(controller, facts::kControllerCameraManager);
+    void* cameraManager = players::actor_fields::CameraManager(controller);
     if (g_cameraManagerVTable == 0 || VTableOf(cameraManager) != g_cameraManagerVTable ||
-        ReadPointer(cameraManager, facts::kCameraManagerPcOwner) != controller)
+        players::actor_fields::CameraOwner(cameraManager) != controller)
     {
         return nullptr;
     }
@@ -56,7 +57,7 @@ void* CameraManagerOf(const void* controller) noexcept
 
 void* FieldOperatorOf(const void* cameraManager) noexcept
 {
-    void* field = ReadPointer(cameraManager, facts::kCameraManagerFieldOperator);
+    void* field = players::actor_fields::FieldOperator(cameraManager);
     return g_fieldVTable != 0 && VTableOf(field) == g_fieldVTable ? field : nullptr;
 }
 
@@ -81,7 +82,7 @@ void CameraManagers(const void* (&managers)[players::kMaxPlayers]) noexcept
     for (int seat = 0; seat < players::kMaxPlayers; ++seat)
     {
         const bool counted = seat == 0 || (players::SeatBuilt(seat) && players::generation::Active(seat));
-        managers[seat] = counted ? ReadPointer(players::generation::ControllerOf(seat), facts::kControllerCameraManager) : nullptr;
+        managers[seat] = counted ? players::actor_fields::CameraManager(players::generation::ControllerOf(seat)) : nullptr;
     }
 }
 
@@ -105,7 +106,7 @@ int SeatOfOperator(const void* op) noexcept
     for (int seat = 0; seat < players::kMaxPlayers; ++seat)
     {
         const void* pcm = managers[seat];
-        if (pcm != nullptr && (ReadPointer(pcm, facts::kCameraManagerFieldOperator) == op ||
+        if (pcm != nullptr && (players::actor_fields::FieldOperator(pcm) == op ||
                                ReadPointer(pcm, facts::kCameraManagerBattleOperator) == op))
         {
             return seat;

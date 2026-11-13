@@ -10,6 +10,7 @@
 #include "platform/settings.h"
 #include "platform/sparse_array.h"
 #include "platform/verified_code.h"
+#include "players/actor_fields.h"
 #include "players/game_globals.h"
 #include "players/generation.h"
 #include "players/object_fields.h"
@@ -155,7 +156,7 @@ bool FieldPointAt(std::uint64_t name, float out[3]) noexcept
     std::uintptr_t root = 0;
     if (g_fieldPointFind == nullptr || name == 0 || !players::generation::OnGameThread() || g_root == nullptr ||
         !platform::CopyGuarded(&root, g_root, sizeof(root)) || root == 0 ||
-        ReadPointer(reinterpret_cast<const void*>(root), facts::kRootTriggerManager) == nullptr)
+        players::actor_fields::RootTriggerManager(reinterpret_cast<const void*>(root)) == nullptr)
     {
         return false;  // the find reads the registry without a null check
     }
@@ -198,8 +199,8 @@ void ReadPoint(const std::uint8_t* state, std::uint32_t pointAt, std::uint32_t e
 /// The member's walk or lead on the level's brains, from its active AI state.
 bool MoveOf(const void* member, Move& out) noexcept
 {
-    const void* brain = ReadPointer(ReadPointer(member, facts::kCharacterRetainedAi), facts::kAiActiveBrain);
-    const void* state = ReadPointer(brain, facts::kBrainState);
+    const void* brain = players::actor_fields::ActiveBrain(players::actor_fields::RetainedAi(member));
+    const void* state = players::actor_fields::BrainState(brain);
     if (state == nullptr || !field_hold::LevelBrain(ReadField<std::uint8_t>(brain, facts::kBrainIndex)))
     {
         return false;
@@ -261,7 +262,7 @@ void* StateManager() noexcept
     {
         return nullptr;
     }
-    return ReadPointer(reinterpret_cast<const void*>(root), facts::kRootGameState);
+    return players::actor_fields::RootGameState(reinterpret_cast<const void*>(root));
 }
 
 /// Whether `lock` reads as an initialised Win32 critical section (a wrong address must not reach EnterCriticalSection).

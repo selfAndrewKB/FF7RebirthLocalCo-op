@@ -4,6 +4,7 @@
 #include "facts/controller.h"
 #include "platform/guarded.h"
 #include "platform/log.h"
+#include "players/actor_fields.h"
 #include "players/object_fields.h"
 #include "players/object_slot.h"
 #include "players/unreal_access.h"
@@ -87,10 +88,10 @@ Actors Collect(void* seatController) noexcept
     {
         return actors;
     }
-    void* cameraManager = ReadPointer(seatController, facts::kControllerCameraManager);
-    actors.trigger      = AsActor(ReadPointer(seatController, facts::kControllerTrigger));
+    void* cameraManager = players::actor_fields::CameraManager(seatController);
+    actors.trigger      = AsActor(players::actor_fields::Trigger(seatController));
     actors.battleTalk   = AsActor(ReadPointer(seatController, facts::kControllerBattleTalkActor));
-    actors.cameraActor  = AsActor(ReadPointer(cameraManager, facts::kCameraManagerEndCameraActor));
+    actors.cameraActor  = AsActor(players::actor_fields::EndCameraActor(cameraManager));
     actors.playerInput  = AsA(ReadPointer(seatController, facts::kControllerPlayerInput), STR("/Script/Engine.PlayerInput"));
 
     auto* component = static_cast<UObject*>(ReadPointer(cameraManager, facts::kCameraManagerCollisionComponent));

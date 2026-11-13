@@ -13,6 +13,7 @@
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/verified_code.h"
+#include "players/actor_fields.h"
 #include "players/describe.h"
 #include "players/generation.h"
 #include "players/object_fields.h"
@@ -135,7 +136,7 @@ Latch& Find(std::array<Latch, kLatches>& latches, std::uint64_t key, bool& made)
 
 void* PlayerOneCharacter() noexcept
 {
-    return ReadPointer(players::generation::PlayerOneController(), facts::kControllerPawn);
+    return players::actor_fields::Pawn(players::generation::PlayerOneController());
 }
 
 /// The seat's member while its player is in, or null.

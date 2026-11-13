@@ -11,6 +11,7 @@
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/verified_code.h"
+#include "players/actor_fields.h"
 #include "players/generation.h"
 #include "players/object_fields.h"
 #include "scopes/primary_controller.h"
@@ -243,7 +244,7 @@ void RestoreMember(int seat) noexcept
 
 std::wstring DescribeCamera(void* controller)
 {
-    const auto camera = reinterpret_cast<std::uintptr_t>(ReadPointer(controller, facts::kControllerCameraManager));
+    const auto camera = reinterpret_cast<std::uintptr_t>(players::actor_fields::CameraManager(controller));
     if (camera == 0)
     {
         return L"-";
@@ -301,10 +302,10 @@ Snapshot Take(int seat, void* member) noexcept
     Snapshot   now{g_global->object, g_seatModule[Index(seat)].object};
     void*      controllers[2] = {players::generation::PlayerOneController(), players::generation::ControllerOf(seat)};
     const auto characters     = std::array<std::uintptr_t, 2>{
-        reinterpret_cast<std::uintptr_t>(ReadPointer(controllers[0], facts::kControllerPawn)), reinterpret_cast<std::uintptr_t>(member)};
+        reinterpret_cast<std::uintptr_t>(players::actor_fields::Pawn(controllers[0])), reinterpret_cast<std::uintptr_t>(member)};
     for (int i = 0; i < 2; ++i)
     {
-        const auto camera = reinterpret_cast<std::uintptr_t>(ReadPointer(controllers[i], facts::kControllerCameraManager));
+        const auto camera = reinterpret_cast<std::uintptr_t>(players::actor_fields::CameraManager(controllers[i]));
         for (int k = 0; k < 2 && camera != 0; ++k)
         {
             const auto oper =
@@ -347,7 +348,7 @@ void Log(int seat, void* member)
     }
     last                    = now;
     void*          playerOne = players::generation::PlayerOneController();
-    const auto     oneChar   = reinterpret_cast<std::uintptr_t>(ReadPointer(playerOne, facts::kControllerPawn));
+    const auto     oneChar   = reinterpret_cast<std::uintptr_t>(players::actor_fields::Pawn(playerOne));
     const wchar_t* who       = players::SeatName(seat);
     platform::LogDebug(L"camera override: global {:#x} {}'s {:#x} | player 1 camera{} | {} camera{} | player 1 {} | {} {}",
                        g_global->object, who, g_seatModule[Index(seat)].object, DescribeCamera(playerOne), who,

@@ -18,6 +18,7 @@
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/verified_code.h"
+#include "players/actor_fields.h"
 #include "players/describe.h"
 #include "players/game_globals.h"
 #include "players/generation.h"
@@ -279,9 +280,9 @@ std::int32_t CoreTest(const void* character) noexcept
 /// The AI state type of a character's retained AI controller (+0x588 -> brain +0x518 -> state +0x20 -> +0x18).
 std::int32_t AiStateOf(const void* character) noexcept
 {
-    const void* ai    = ReadPointer(character, facts::kCharacterRetainedAi);
-    const void* brain = ReadPointer(ai, facts::kAiActiveBrain);
-    const void* state = ReadPointer(brain, facts::kBrainState);
+    const void* ai    = players::actor_fields::RetainedAi(character);
+    const void* brain = players::actor_fields::ActiveBrain(ai);
+    const void* state = players::actor_fields::BrainState(brain);
     return state != nullptr ? ReadField<std::uint8_t>(state, facts::kAiStateType) : -1;
 }
 
@@ -298,7 +299,7 @@ Sample Read(void* playerOne, void* seatController, void* member) noexcept
         s.rider    = ReadPointer(coord, kCoordinatorRider);
         s.boarding = s.kind == Kind::Chocobo ? ReadField<std::uint8_t>(coord, kChocoboBoarding) : 0;
         s.oneCoreTest = s.kind == Kind::Chocobo ? CoreTest(s.body) : -1;
-        s.bodyController = ReadPointer(s.body, facts::kCharacterEffectiveController);
+        s.bodyController = players::actor_fields::EffectiveController(s.body);
     }
     s.seatVehicle = ReadPointer(seatController, kControllerActiveVehicle);
     s.seatMap     = seatController != nullptr ? ReadField<std::int32_t>(seatController, kVehicleMapCount) : 0;
@@ -333,7 +334,7 @@ Sample Read(void* playerOne, void* seatController, void* member) noexcept
     s.inBattle = g_inBattle != nullptr && platform::CallGuarded(g_inBattle, battle) ? battle : -1;
     if (s.kind == Kind::Chocobo)
     {
-        const void* state = ReadPointer(s.body, facts::kCharacterMoveState);
+        const void* state = players::actor_fields::MoveState(s.body);
         for (std::size_t i = 0; state != nullptr && i < std::size(kRowRequests); ++i)
         {
             s.oneRows[i] = ReadField<std::uint8_t>(state, kRowRequests[i]);
@@ -347,12 +348,12 @@ Sample Read(void* playerOne, void* seatController, void* member) noexcept
         s.flag1922          = ReadField<std::uint8_t>(c, kChocoboFlag1922);
         s.rideMode          = ReadField<std::uint8_t>(c, kChocoboRideMode);
         s.rideObject        = ReadPointer(c, kChocoboRideObject) != nullptr;
-        const void* move    = ReadPointer(c, facts::kCharacterMoveState);
+        const void* move    = players::actor_fields::MoveState(c);
         s.moveState         = move != nullptr;
         s.moveIsChocobo     = move != nullptr && VTableOf(move) == g_chocoboMoveVt;
-        s.chocoboController = ReadPointer(c, facts::kPawnController);
-        s.chocoboRequested  = ReadPointer(c, facts::kCharacterRequestedController);
-        s.chocoboEffective  = ReadPointer(c, facts::kCharacterEffectiveController);
+        s.chocoboController = players::actor_fields::Controller(c);
+        s.chocoboRequested  = players::actor_fields::RequestedController(c);
+        s.chocoboEffective  = players::actor_fields::EffectiveController(c);
         s.chocoboAi         = AiStateOf(c);
         s.core              = ReadPointer(c, kCharacterControlHolder);
         s.coreTest          = CoreTest(c);
@@ -362,8 +363,8 @@ Sample Read(void* playerOne, void* seatController, void* member) noexcept
     if (member != nullptr)
     {
         s.attachedTo       = ReadPointer(players::unreal::RootOf(member), kSceneComponentAttachParent);
-        s.memberController = ReadPointer(member, facts::kPawnController);
-        s.memberEffective  = ReadPointer(member, facts::kCharacterEffectiveController);
+        s.memberController = players::actor_fields::Controller(member);
+        s.memberEffective  = players::actor_fields::EffectiveController(member);
     }
     return s;
 }

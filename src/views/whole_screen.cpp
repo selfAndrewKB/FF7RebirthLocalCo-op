@@ -35,7 +35,6 @@ constexpr std::uint32_t  kMenuKind = 0x3BC;  // uint8: EEndSystemPauseMenuKind
 
 // The on/off table: its owner at [[kEndGameRoot]+0x170] (a native game object the game mode creates
 // and frees), two int32 counts per id; an id is on while their sum is not zero.
-using facts::kEndGameRoot;
 using facts::kRootGameState;
 constexpr std::uint32_t  kOnOffCountA  = 0x1A1238C;
 constexpr std::uint32_t  kOnOffCountB  = 0x1A1263C;

@@ -6,6 +6,7 @@
 #include "platform/call_redirect.h"
 #include "platform/image.h"
 #include "platform/log.h"
+#include "players/actor_fields.h"
 #include "players/generation.h"
 #include "players/object_fields.h"
 #include "scopes/primary_controller.h"
@@ -85,7 +86,7 @@ int WhoIs(const void* character) noexcept
         return seat;
     }
     void* one = players::generation::ControllerOf(0);
-    return one != nullptr && character == ReadPointer(one, facts::kControllerPawn) ? 0 : kOther;
+    return one != nullptr && character == players::actor_fields::Pawn(one) ? 0 : kOther;
 }
 
 std::int32_t PadOf(int who) noexcept

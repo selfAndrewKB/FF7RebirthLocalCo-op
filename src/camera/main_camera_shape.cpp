@@ -17,6 +17,7 @@
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
+#include "players/actor_fields.h"
 #include "players/generation.h"
 #include "players/object_fields.h"
 #include "players/seats.h"
@@ -159,7 +160,7 @@ bool SetConstraint(UObject* component, bool value) noexcept
 void ShapeMainCamera(void* controller, const wchar_t* who) noexcept
 {
     void* cameraManager = CameraManagerOf(controller);
-    auto* camera = static_cast<UObject*>(ReadPointer(cameraManager, facts::kCameraManagerEndCameraActor));
+    auto* camera = static_cast<UObject*>(players::actor_fields::EndCameraActor(cameraManager));
     if (camera == nullptr || IsTracked(camera) || !players::IsLiveObject(camera))
     {
         return;  // none, already set, or not a live object (reflection is not run on it)

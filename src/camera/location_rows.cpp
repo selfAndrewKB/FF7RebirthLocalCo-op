@@ -10,6 +10,7 @@
 #include "platform/log.h"
 #include "platform/verified_code.h"
 #include "platform/vtable_entry.h"
+#include "players/actor_fields.h"
 #include "players/generation.h"
 #include "players/object_fields.h"
 #include "players/unreal_access.h"
@@ -116,7 +117,7 @@ void Line(const std::wstring& text) noexcept
 
 void* CameraManager(void* controller) noexcept
 {
-    return ReadPointer(controller, facts::kControllerCameraManager);
+    return players::actor_fields::CameraManager(controller);
 }
 
 /// "player N's Field/Battle", or "another" for an operator of no player's camera manager.
@@ -126,7 +127,7 @@ std::wstring OperatorText(const void* op, int seat)
     {
         return L"another";
     }
-    const bool field = ReadPointer(CameraManager(players::generation::ControllerOf(seat)), facts::kCameraManagerFieldOperator) == op;
+    const bool field = players::actor_fields::FieldOperator(CameraManager(players::generation::ControllerOf(seat))) == op;
     return std::format(L"{}'s {}", players::SeatName(seat), field ? L"Field" : L"Battle");
 }
 
@@ -263,7 +264,7 @@ void TickSeat(int seat) noexcept
     {
         return;
     }
-    void* const ops[2] = {ReadPointer(pcm, facts::kCameraManagerFieldOperator),
+    void* const ops[2] = {players::actor_fields::FieldOperator(pcm),
                           ReadPointer(pcm, kCameraManagerBattleOperator)};
     bool        ok     = true;
     for (void* op : ops)

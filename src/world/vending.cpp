@@ -11,6 +11,7 @@
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/verified_code.h"
+#include "players/actor_fields.h"
 #include "players/game_globals.h"
 #include "players/generation.h"
 #include "players/object_fields.h"
@@ -157,7 +158,7 @@ const wchar_t* Whose(const void* character) noexcept
     {
         return kMembers[seat];
     }
-    if (character == ReadPointer(players::generation::PlayerOneController(), facts::kControllerPawn))
+    if (character == players::actor_fields::Pawn(players::generation::PlayerOneController()))
     {
         return L"player 1's character";
     }

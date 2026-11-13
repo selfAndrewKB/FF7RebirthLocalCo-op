@@ -6,6 +6,7 @@
 #include "platform/guarded.h"
 #include "platform/log.h"
 #include "platform/verified_code.h"
+#include "players/actor_fields.h"
 #include "players/generation.h"
 #include "players/object_fields.h"
 #include "players/unreal_access.h"
@@ -114,8 +115,8 @@ Framing  g_last[players::kMaxPlayers];  // by player: 0 player 1's, then each se
 Framing Take(void* controller) noexcept
 {
     Framing f;
-    void* pcm = ReadPointer(controller, facts::kControllerCameraManager);
-    void* op  = ReadPointer(pcm, facts::kCameraManagerFieldOperator);
+    void* pcm = players::actor_fields::CameraManager(controller);
+    void* op  = players::actor_fields::FieldOperator(pcm);
     f.op      = op != nullptr;
     if (!f.op)
     {

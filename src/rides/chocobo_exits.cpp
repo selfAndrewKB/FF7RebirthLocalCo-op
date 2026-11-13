@@ -6,6 +6,7 @@
 #include "platform/log.h"
 #include "platform/verified_code.h"
 #include "platform/vtable_entry.h"
+#include "players/actor_fields.h"
 #include "players/describe.h"
 #include "players/generation.h"
 #include "players/object_fields.h"
@@ -69,7 +70,7 @@ std::wstring Whose(const void* chocobo)
     {
         return L"an unread chocobo";
     }
-    if (chocobo == ReadPointer(players::generation::PlayerOneController(), facts::kControllerPawn))
+    if (chocobo == players::actor_fields::Pawn(players::generation::PlayerOneController()))
     {
         return L"player 1's chocobo";
     }

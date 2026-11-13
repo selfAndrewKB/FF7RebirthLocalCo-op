@@ -13,6 +13,7 @@
 #include "platform/log.h"
 #include "platform/verified_code.h"
 #include "platform/vtable_entry.h"
+#include "players/actor_fields.h"
 
 #include <array>
 #include <cstdint>
@@ -134,7 +135,7 @@ const wchar_t* ShowInList(void* start, std::int32_t rows, bool& counted) noexcep
     }
     // The height, as the construct sets it in its canvas slot (Square's): in any other slot its panel sizes the list.
     float       width = 0.0f, base = 0.0f;
-    void* const slot  = platform::ReadPointer(list, facts::kWidgetSlot);
+    void* const slot  = players::actor_fields::WidgetSlot(list);
     if (slot == nullptr || !platform::Read(At(start, facts::kStartMenuListWidth), width) ||
         !platform::Read(At(start, facts::kStartMenuListBase), base))
     {

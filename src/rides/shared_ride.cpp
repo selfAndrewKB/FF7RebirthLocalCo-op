@@ -8,6 +8,7 @@
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/verified_code.h"
+#include "players/actor_fields.h"
 #include "players/describe.h"
 #include "players/game_globals.h"
 #include "players/generation.h"
@@ -32,7 +33,6 @@ using facts::kControllerActiveVehicle;
 // A coordinator's VehicleChara (the buggy, the boat).
 using facts::kCoordinatorBody;
 // APawn::Controller, and AActor's bHidden bit (RE-p2-tiny-bronco.md logging plan).
-using facts::kPawnController;
 constexpr std::uint32_t kActorHidden    = 0x58;
 constexpr std::uint8_t  kHiddenBit      = 0x20;
 
@@ -89,9 +89,9 @@ std::size_t KindOf(const void* coordinator) noexcept
 /// The member's AI state type (its retained AI controller's active brain's state), or -1.
 std::int32_t AiStateOf(const void* character) noexcept
 {
-    const void* ai    = ReadPointer(character, facts::kCharacterRetainedAi);
-    const void* brain = ReadPointer(ai, facts::kAiActiveBrain);
-    const void* state = ReadPointer(brain, facts::kBrainState);
+    const void* ai    = players::actor_fields::RetainedAi(character);
+    const void* brain = players::actor_fields::ActiveBrain(ai);
+    const void* state = players::actor_fields::BrainState(brain);
     return state != nullptr ? ReadField<std::uint8_t>(state, facts::kAiStateType) : -1;
 }
 
@@ -127,14 +127,14 @@ void LogState(const void* coordinator, std::int32_t state)
                                                  kKinds[g_kind].name)
                                    : std::wstring{L"at a position that cannot be read"},
                               (ReadField<std::uint8_t>(given, kActorHidden) & kHiddenBit) != 0 ? 1 : 0,
-                              players::NameOf(ReadPointer(given, facts::kCharacterEffectiveController)), AiStateOf(given));
+                              players::NameOf(players::actor_fields::EffectiveController(given)), AiStateOf(given));
     }
     if (member.empty())
     {
         member = L"no member was given back";
     }
     platform::Log(L"shared ride: {} state {}: {}; the {} {} is driven by {}; party busy {}, in battle {}", kKinds[g_kind].name,
-                  state, member, kKinds[g_kind].name, players::NameOf(body), players::NameOf(ReadPointer(body, kPawnController)), PartyBusy(),
+                  state, member, kKinds[g_kind].name, players::NameOf(body), players::NameOf(players::actor_fields::Controller(body)), PartyBusy(),
                   InBattle());
 }
 

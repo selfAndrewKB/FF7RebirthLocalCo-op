@@ -43,7 +43,6 @@ constexpr std::uint8_t   kNoteLastDeviceBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08,
 constexpr platform::FunctionFact kNoteLastDevice{L"SquareInput__NoteLastActiveDevice", 0x1415F4900,
                                                  kNoteLastDeviceBytes};
 constexpr std::size_t    kNoteLastDeviceFirst   = 5;
-using facts::kSquareInputGlobal;
 constexpr std::uint32_t  kOwnerPad      = 0x74;         // i32: the last XInput pad
 using facts::kPlatformApplication;
 using facts::kPlatformAppDeviceCode;

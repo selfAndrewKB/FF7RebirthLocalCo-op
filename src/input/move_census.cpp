@@ -7,6 +7,7 @@
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/verified_code.h"
+#include "players/actor_fields.h"
 #include "players/describe.h"
 #include "players/generation.h"
 #include "players/object_fields.h"
@@ -83,7 +84,7 @@ bool OfInterest(const void* character) noexcept
     void* one = players::generation::PlayerOneController();
     return character != nullptr &&
            (players::SeatIndex(players::generation::SeatOfMember(character)) ||
-            character == ReadPointer(one, facts::kControllerPawn) || character == ReadPointer(one, facts::kControllerLeader));
+            character == players::actor_fields::Pawn(one) || character == players::actor_fields::LeaderCharacter(one));
 }
 
 /// Evaluates the per-character and per-state gate tests one by one.
@@ -172,7 +173,7 @@ void Log() noexcept
                 L"player-controlled {}; gate tests over {} samples: leader type {}, primary's character {}, special {}, "
                 L"tag17 {}, tag22 {}, blocked {}, cooling {}",
                 players::NameOf(character), RoleOf(character), ticks, inputTicks, ownTicks,
-                players::NameOf(ReadPointer(character, facts::kCharacterEffectiveController)),
+                players::NameOf(players::actor_fields::EffectiveController(character)),
                 static_cast<unsigned>(ReadField<std::uint8_t>(character, facts::kCharacterPlayerControlled)),
                 entry.samples, entry.playerCore, entry.primaryOnes, entry.special, entry.tag17, entry.tag22, entry.blocked,
                 entry.cooling);

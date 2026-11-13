@@ -9,6 +9,7 @@
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/verified_code.h"
+#include "players/actor_fields.h"
 #include "players/game_globals.h"
 #include "players/generation.h"
 #include "players/seats.h"
@@ -321,7 +322,7 @@ void Pass() noexcept
         return;
     }
     float       one[3]{};
-    const void* playerOne = ReadPointer(players::generation::PlayerOneController(), facts::kControllerPawn);
+    const void* playerOne = players::actor_fields::Pawn(players::generation::PlayerOneController());
     const bool  oneRead   = CharacterAt(playerOne, one);
     for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
     {

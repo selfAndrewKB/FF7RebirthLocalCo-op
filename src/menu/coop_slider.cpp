@@ -19,6 +19,7 @@
 #include "platform/settings.h"
 #include "platform/verified_code.h"
 #include "platform/vtable_entry.h"
+#include "players/actor_fields.h"
 #include "players/generation.h"
 #include "players/unreal_access.h"
 
@@ -133,9 +134,9 @@ bool ClassText(void* object, wchar_t (&out)[64]) noexcept
 bool MoveArrows(void* gauge, float shift) noexcept
 {
     void* const arrow     = ReadPointer(gauge, facts::kGaugeArrowLeft);
-    void* const arrowSlot = arrow != nullptr ? ReadPointer(arrow, facts::kWidgetSlot) : nullptr;
+    void* const arrowSlot = arrow != nullptr ? players::actor_fields::WidgetSlot(arrow) : nullptr;
     void* const box       = arrowSlot != nullptr ? ReadPointer(arrowSlot, facts::kPanelSlotParent) : nullptr;
-    void* const boxSlot   = box != nullptr ? ReadPointer(box, facts::kWidgetSlot) : nullptr;
+    void* const boxSlot   = box != nullptr ? players::actor_fields::WidgetSlot(box) : nullptr;
     if (!game_ui::IsCanvasSlot(boxSlot))
     {
         return false;
@@ -206,7 +207,7 @@ void Fit(void* page, void* gauge, const std::uint8_t* info, bool opened) noexcep
     // The marker, by the setter the game placed it with (Square's canvas slot): its x within the window, its y as the
     // game left it.
     void* const head   = ReadPointer(gauge, facts::kGaugeHead);
-    void* const slot   = head != nullptr ? ReadPointer(head, facts::kWidgetSlot) : nullptr;
+    void* const slot   = head != nullptr ? players::actor_fields::WidgetSlot(head) : nullptr;
     const bool  canvas = game_ui::IsCanvasSlot(slot);
     float       y      = 0.0f;
     const float x      = static_cast<float>(marker - first) * facts::kGaugePitch + facts::kGaugeHeadX + g_shift;

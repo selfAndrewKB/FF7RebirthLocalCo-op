@@ -9,6 +9,7 @@
 #include "platform/log.h"
 #include "platform/verified_code.h"
 #include "platform/vtable_entry.h"
+#include "players/actor_fields.h"
 #include "players/generation.h"
 #include "players/object_fields.h"
 #include "players/seats.h"
@@ -151,7 +152,7 @@ CameraState StateOf(void* cameraManager) noexcept
     }
     state.present = true;
     void* battle  = BattleOperatorOf(cameraManager);
-    void* field   = ReadPointer(cameraManager, facts::kCameraManagerFieldOperator);
+    void* field   = players::actor_fields::FieldOperator(cameraManager);
     Read(reinterpret_cast<std::uintptr_t>(cameraManager) + kOperatorBytes, state.operators);
     const auto battleAt = reinterpret_cast<std::uintptr_t>(battle);
     const auto fieldAt  = reinterpret_cast<std::uintptr_t>(field);

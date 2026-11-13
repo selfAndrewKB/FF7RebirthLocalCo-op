@@ -10,6 +10,7 @@
 #include "platform/log.h"
 #include "platform/verified_code.h"
 #include "platform/vtable_entry.h"
+#include "players/actor_fields.h"
 #include "players/generation.h"
 #include "players/object_fields.h"
 #include "players/seats.h"
@@ -133,7 +134,7 @@ int SeatOfScooter(const void* state) noexcept
             continue;
         }
         scooter = scooter != nullptr ? scooter : ReadPointer(state, kStateOwner);
-        if (scooter != nullptr && ReadPointer(scooter, facts::kPawnController) == controller &&
+        if (scooter != nullptr && players::actor_fields::Controller(scooter) == controller &&
             g_seatList[seat].load(std::memory_order_acquire) != nullptr)
         {
             return seat;

@@ -20,6 +20,7 @@
 #include "platform/sparse_array.h"
 #include "platform/tset_find.h"
 #include "platform/verified_code.h"
+#include "players/actor_fields.h"
 #include "players/describe.h"
 #include "players/first_player_scope.h"
 #include "players/game_globals.h"
@@ -69,7 +70,6 @@ namespace {
 using Clock = std::chrono::steady_clock;
 
 // The objects (research/RE-p2-field-interact.md; this build).
-using facts::kEndGameRoot;
 constexpr std::uint32_t  kRootStage         = 0x70;         // u8: the input step's FieldAction part runs from 8
 using facts::kRootGameState;
 using facts::kRootModeHolder;
@@ -748,7 +748,7 @@ void DestroySeatMarkers(Pickup& p, Why why) noexcept
 /// `controller`'s leader-action component (null for a null controller).
 const void* LeaderActionsOf(const void* controller) noexcept
 {
-    return ReadPointer(controller, facts::kControllerLeaderActions);
+    return players::actor_fields::LeaderActions(controller);
 }
 
 std::uint64_t ShootingKeyOf(const void* controller) noexcept

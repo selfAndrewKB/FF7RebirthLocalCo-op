@@ -3,6 +3,7 @@
 #include "facts/controller.h"
 #include "facts/engine.h"
 #include "platform/guarded.h"
+#include "players/actor_fields.h"
 #include "players/generation.h"
 #include "players/object_fields.h"
 #include "players/object_slot.h"
@@ -74,7 +75,7 @@ std::wstring Who(const void* object) noexcept
     {
         return std::wstring(SeatName(seat)) + L"'s member";
     }
-    if (object == ReadPointer(playerOne, facts::kControllerPawn))
+    if (object == players::actor_fields::Pawn(playerOne))
     {
         return L"player 1's character";
     }

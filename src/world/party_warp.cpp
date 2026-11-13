@@ -8,6 +8,7 @@
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/verified_code.h"
+#include "players/actor_fields.h"
 #include "players/game_globals.h"
 #include "players/generation.h"
 #include "players/object_fields.h"
@@ -71,7 +72,6 @@ constexpr std::uintptr_t kEndPlayerCharacterVTable = 0x145840A90;
 constexpr std::uintptr_t kFieldStateCheck          = 0x140A5F5AC;  // the slot's function
 constexpr std::uint8_t   kFieldStateBytes[]        = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00};
 constexpr platform::FunctionFact kFieldState{L"EndCharacter_IsInFieldControllerState", 0x140A5FA84, kFieldStateBytes};
-using facts::kEndGameRoot;
 constexpr std::uint32_t kFieldStep        = 0x70;  // EEndFieldStep
 constexpr std::uint8_t  kFieldStepUp      = 13;
 constexpr std::uint32_t kAiSkipsUpdate    = 0xAD8;  // the PLAYER update returns at once while set
@@ -80,7 +80,6 @@ constexpr std::uint32_t kCharacterWarping = 0xB59;  // a warp request is queued 
 using facts::kAiActiveBrain;
 using facts::kAiStateFollow;
 using facts::kAiStateType;
-using facts::kBrainState;
 using facts::kFollowStateForced;
 // The teleport query runner (research/RE-p2-party-warp.md): the result pointer and its status (1 = done).
 constexpr std::uint32_t kStateQueryResult = 0x540;
@@ -187,8 +186,8 @@ const Variant* VariantOf(const void* state, Subject subject) noexcept
 void* FollowOf(const void* pawn, Subject subject, const Variant** variantOut = nullptr,
                const void** aiOut = nullptr) noexcept
 {
-    void* ai    = ReadPointer(pawn, facts::kCharacterRetainedAi);
-    void* state = ReadPointer(ReadPointer(ai, kAiActiveBrain), kBrainState);
+    void* ai    = players::actor_fields::RetainedAi(pawn);
+    void* state = players::actor_fields::BrainState(players::actor_fields::ActiveBrain(ai));
     if (aiOut != nullptr)
     {
         *aiOut = ai;
@@ -372,7 +371,7 @@ std::wstring AiText(const void* pawn, Subject subject) noexcept
     const void*    ai      = nullptr;
     const Variant* variant = nullptr;
     const void*    state   = FollowOf(pawn, subject, &variant, &ai);
-    const void*    current = ReadPointer(ReadPointer(ai, kAiActiveBrain), kBrainState);
+    const void*    current = players::actor_fields::BrainState(players::actor_fields::ActiveBrain(ai));
     std::uint32_t  pause   = 0;
     float          range   = 0.0f;
     Read(ai, facts::kAiPauseMask, pause);
@@ -421,7 +420,7 @@ bool Start(int seat, void* pawn, Subject subject, bool attached, bool splitShown
     // member on a ride is refused and her chocobo is warped instead.
     // The follow update's own gates first (RE-warp-gates.md), then the forced request's. G1 asks player 1's pawn (no
     // answer from a mount or vehicle) and the member on foot; a chocobo's warp carries its seated rider.
-    const void*    leader  = ReadPointer(players::generation::PlayerOneController(), facts::kControllerPawn);
+    const void*    leader  = players::actor_fields::Pawn(players::generation::PlayerOneController());
     const wchar_t* refused = !splitShown                                      ? L"the split is not on screen"
                              : !FieldUp()                                     ? L"the field is not up"
                              : FieldHeld()                                    ? L"a scene, a talk or an event holds the field"

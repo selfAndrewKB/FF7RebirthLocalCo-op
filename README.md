@@ -236,6 +236,7 @@ src/
   players/                  the engine's own paths: local players, reflection calls, console and settings access; the
                             split layout; each player's member generation, the log descriptions and the field reads
                             every module shares
+    actor_fields.h          The fields of the game's actors that several modules read, one reader each
     call_site.h             Checks for the build-specific paths that hear one caller of a game function some other way
                             than a plain call redirect: at the function's entry, by the caller's return address, or with
                             CallRedirect::InstallFromOwnThread

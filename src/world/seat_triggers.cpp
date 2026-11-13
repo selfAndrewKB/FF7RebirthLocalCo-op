@@ -10,6 +10,7 @@
 #include "platform/guarded.h"
 #include "platform/log.h"
 #include "platform/verified_code.h"
+#include "players/actor_fields.h"
 #include "players/describe.h"
 #include "players/generation.h"
 #include "players/object_fields.h"
@@ -283,7 +284,7 @@ platform::Every                       g_summary{std::chrono::seconds(10)};
 
 void* TriggerOf(const void* controller) noexcept
 {
-    return ReadPointer(controller, facts::kControllerTrigger);
+    return players::actor_fields::Trigger(controller);
 }
 
 void* TrackerOf(const void* controller) noexcept
@@ -591,11 +592,11 @@ std::uintptr_t Deliver(int seat, bool enter, FilterFn original, void* manager, s
     void*                member     = players::generation::MemberOf(seat);
     const auto           memberWeak = scopes::leader_scope::WeakOf(member);
     void* const          controller = players::generation::ControllerOf(seat);
-    const bool           possessed  = member != nullptr && ReadPointer(member, facts::kPawnController) == controller;
+    const bool           possessed  = member != nullptr && players::actor_fields::Controller(member) == controller;
     // The chocobo climb also while the seat's player rides their own chocobo (the member then belongs to her AI), and
     // for the leave of a spot the seat entered, so a ride that ended inside it still takes the spot off its list.
     const void* chocobo = cls.rides ? RiddenChocoboOf(seat) : nullptr;
-    const bool  rides   = chocobo != nullptr && ReadPointer(chocobo, facts::kPawnController) == controller;
+    const bool  rides   = chocobo != nullptr && players::actor_fields::Controller(chocobo) == controller;
     const bool  entered = cls.rides && !enter && ShadowOf(seat, scopes::leader_scope::WeakOf(actor)).flag != 0;
     if (member == nullptr || memberWeak == 0 || !(possessed || rides || entered))
     {

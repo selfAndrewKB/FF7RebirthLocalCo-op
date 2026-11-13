@@ -12,6 +12,7 @@
 #include "input/pad_buttons.h"
 #include "input/pad_sticks.h"
 #include "platform/log.h"
+#include "players/actor_fields.h"
 #include "players/describe.h"
 #include "players/generation.h"
 #include "players/object_fields.h"
@@ -91,23 +92,23 @@ struct JoinWitness
 /// A seat's controller has a camera manager that began play completely: owned, with its camera.
 bool CameraManagerComplete(void* controller) noexcept
 {
-    void* cameraManager = ReadPointer(controller, facts::kControllerCameraManager);
-    return cameraManager != nullptr && ReadPointer(cameraManager, facts::kCameraManagerPcOwner) == controller &&
-           ReadPointer(cameraManager, facts::kCameraManagerEndCameraActor) != nullptr;
+    void* cameraManager = players::actor_fields::CameraManager(controller);
+    return cameraManager != nullptr && players::actor_fields::CameraOwner(cameraManager) == controller &&
+           players::actor_fields::EndCameraActor(cameraManager) != nullptr;
 }
 
 void LogJoined(const wchar_t* name, void* seatController, void* one, const own_controller::Report& report,
                const JoinWitness& before, const JoinWitness& after) noexcept
 {
-    void* cameraManager = ReadPointer(seatController, facts::kControllerCameraManager);
+    void* cameraManager = players::actor_fields::CameraManager(seatController);
     Log(L"{} joined with its own controller: {} (class {}), camera manager handled here: {} (owner filled: {}, "
         L"names swapped: {}), camera actor '{}' (player 1's: '{}'); HUDs {} -> {}; viewport input mode {:#010x} -> "
         L"{:#010x}",
         name, players::NameOf(seatController), ClassNameOf(seatController),
         players::YesNo(cameraManager != nullptr && cameraManager == report.cameraManager),
         players::YesNo(report.ownerFilled), players::YesNo(report.namesSwapped),
-        players::NameOf(ReadPointer(cameraManager, facts::kCameraManagerEndCameraActor)),
-        players::NameOf(ReadPointer(ReadPointer(one, facts::kControllerCameraManager), facts::kCameraManagerEndCameraActor)),
+        players::NameOf(players::actor_fields::EndCameraActor(cameraManager)),
+        players::NameOf(players::actor_fields::EndCameraActor(players::actor_fields::CameraManager(one))),
         before.huds, after.huds, before.inputMode, after.inputMode);
 }
 

@@ -11,6 +11,7 @@
 #include "platform/log.h"
 #include "platform/sparse_array.h"
 #include "platform/verified_code.h"
+#include "players/actor_fields.h"
 #include "players/describe.h"
 #include "players/game_globals.h"
 #include "players/generation.h"
@@ -86,7 +87,6 @@ constexpr std::uint32_t kInputCatchOther = 0x11B0;
 constexpr std::uint32_t kInputAccelOther = 0x11B4;
 
 // The on/off counters: [[game root]+0x170] + base + 4 * id, two arrays.
-using facts::kRootGameState;
 constexpr std::uint32_t                kOnOffBase      = 0x1A1238C;
 constexpr std::uint32_t                kOnOffAltBase   = 0x1A1263C;
 constexpr std::array<std::uint32_t, 3> kOnOffIds       = {152, 136, 4};
@@ -185,7 +185,7 @@ Snapshot Read(float (&nearestFree)[players::kMaxPlayers])
         }
     }
     const void* root  = ReadPointer(reinterpret_cast<const void*>(g_gameRoot), 0);
-    const void* onOff = ReadPointer(root, kRootGameState);
+    const void* onOff = players::actor_fields::RootGameState(root);
     for (std::size_t i = 0; onOff != nullptr && i < kOnOffIds.size(); ++i)
     {
         s.onOff[i]     = ReadField<std::int32_t>(onOff, kOnOffBase + 4 * kOnOffIds[i]);

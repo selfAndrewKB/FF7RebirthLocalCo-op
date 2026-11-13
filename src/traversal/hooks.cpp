@@ -14,6 +14,7 @@
 #include "platform/log.h"
 #include "platform/verified_code.h"
 #include "platform/vtable_entry.h"
+#include "players/actor_fields.h"
 #include "players/describe.h"
 #include "players/generation.h"
 #include "players/object_fields.h"
@@ -206,7 +207,7 @@ int SeatNow() noexcept
 /// A field-action actor's point key: its first tag, or 0.
 std::uint64_t KeyOf(const void* actor) noexcept
 {
-    const auto* tags = static_cast<const std::uint64_t*>(ReadPointer(actor, facts::kActorTagsData));
+    const auto* tags = static_cast<const std::uint64_t*>(players::actor_fields::Tags(actor));
     return tags != nullptr && ReadField<std::int32_t>(actor, facts::kActorTagsCount) > 0 ? ReadField<std::uint64_t>(tags, 0) : 0;
 }
 
@@ -275,7 +276,7 @@ int AWisher(const Wishes& wishes) noexcept
 /// A wishing player's character: player 1's pawn, or the seat's member.
 void* CharacterOf(int wisher) noexcept
 {
-    return wisher == 0 ? ReadPointer(players::generation::PlayerOneController(), facts::kControllerPawn)
+    return wisher == 0 ? players::actor_fields::Pawn(players::generation::PlayerOneController())
                        : players::generation::MemberOf(wisher);
 }
 

@@ -7,6 +7,7 @@
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
+#include "players/actor_fields.h"
 #include "players/describe.h"
 #include "players/game_globals.h"
 #include "players/generation.h"
@@ -151,7 +152,7 @@ std::uint64_t TagOf(const void* actor) noexcept
     {
         return 0;  // NAME_None, as the filter passes for an untagged owner
     }
-    const void* tags = ReadPointer(actor, facts::kActorTagsData);
+    const void* tags = players::actor_fields::Tags(actor);
     return tags != nullptr ? ReadField<std::uint64_t>(tags, 0) : 0;
 }
 

@@ -18,6 +18,7 @@
 #include "platform/log.h"
 #include "platform/verified_code.h"
 #include "platform/vtable_entry.h"
+#include "players/actor_fields.h"
 #include "players/generation.h"
 #include "players/object_fields.h"
 #include "players/seats.h"
@@ -501,7 +502,7 @@ int TossForLockPick(const void* controller) noexcept
 
 const void* ControllerOfEnemy(const void* enemy) noexcept
 {
-    const auto* const controller = static_cast<const std::byte*>(ReadPointer(enemy, facts::kCharacterRetainedAi));
+    const auto* const controller = static_cast<const std::byte*>(players::actor_fields::RetainedAi(enemy));
     return controller != nullptr && enemy != nullptr &&
                    scopes::leader_scope::ObjectAt(controller + facts::kEnemyControllerCharacter) == enemy
                ? controller
@@ -514,7 +515,7 @@ const void* CheckedController(const void* controller) noexcept
         controller != nullptr
             ? scopes::leader_scope::ObjectAt(static_cast<const std::byte*>(controller) + facts::kEnemyControllerCharacter)
             : nullptr;
-    return enemy != nullptr && ReadPointer(enemy, facts::kCharacterRetainedAi) == controller ? controller : nullptr;
+    return enemy != nullptr && players::actor_fields::RetainedAi(enemy) == controller ? controller : nullptr;
 }
 
 int CoinFor(const void* controller) noexcept

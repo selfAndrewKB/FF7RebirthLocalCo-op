@@ -10,6 +10,7 @@
 #include "platform/guarded.h"
 #include "platform/log.h"
 #include "platform/verified_code.h"
+#include "players/actor_fields.h"
 #include "players/generation.h"
 #include "players/object_fields.h"
 #include "rides/chocobo_ride.h"
@@ -121,7 +122,7 @@ std::uint8_t VaultCoreTest(const void* character) noexcept
                                                         name)
                                           : std::wstring());
             }
-            else if (character == ReadPointer(players::generation::ControllerOf(0), facts::kControllerPawn))
+            else if (character == players::actor_fields::Pawn(players::generation::ControllerOf(0)))
             {
                 platform::LogDebug(L"vault camera: player 1's pawn vaults; the game's player-core test answers {} ({})",
                                    answer, OpenScopeText());
@@ -306,7 +307,7 @@ void Tick() noexcept
         }
         // The operator as the game's PrimaryPCM_FieldOp_DeactivateModule loads it (*(PCM+0x2CB0)), and only with its
         // module table in place: the game's DeactivateModule reads the table unchecked.
-        void* op = ReadPointer(ReadPointer(players::generation::ControllerOf(seat), facts::kControllerCameraManager), kFieldOperator);
+        void* op = ReadPointer(players::actor_fields::CameraManager(players::generation::ControllerOf(seat)), kFieldOperator);
         cached.store(op != nullptr && ReadPointer(op, kOperatorModules) != nullptr ? op : nullptr,
                      std::memory_order_release);
     }

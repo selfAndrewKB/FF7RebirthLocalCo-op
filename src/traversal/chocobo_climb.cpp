@@ -9,6 +9,7 @@
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/vtable_entry.h"
+#include "players/actor_fields.h"
 #include "players/describe.h"
 #include "players/generation.h"
 #include "players/object_fields.h"
@@ -286,7 +287,7 @@ void Enter(void* executer) noexcept
         }
         else
         {
-            const void* controller = chocobo != nullptr ? ReadPointer(chocobo, facts::kPawnController) : nullptr;
+            const void* controller = chocobo != nullptr ? players::actor_fields::Controller(chocobo) : nullptr;
             platform::LogDebug(L"chocobo climb: {} chocobo climbs; the camera setup ran as the game runs it; {}",
                                controller != nullptr && controller == players::generation::PlayerOneController() ? L"player 1's"
                                                                                                         : L"another",

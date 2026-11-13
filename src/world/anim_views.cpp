@@ -14,6 +14,7 @@
 #include "platform/log.h"
 #include "platform/sparse_array.h"
 #include "platform/verified_code.h"
+#include "players/actor_fields.h"
 #include "players/describe.h"
 #include "players/generation.h"
 #include "players/object_fields.h"
@@ -593,7 +594,7 @@ void Tick(bool splitShown) noexcept
             void* const            controller = players::generation::ControllerOf(seat);
             const charapop::Camera camera     = charapop::CameraOf(controller);
             PublishSeatCamera(seat, camera.read, camera, players::generation::MemberOf(seat),
-                              ReadPointer(controller, facts::kControllerPawn));
+                              players::actor_fields::Pawn(controller));
             published = true;
         }
         else

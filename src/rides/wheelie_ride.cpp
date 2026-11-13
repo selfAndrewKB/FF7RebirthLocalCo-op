@@ -16,6 +16,7 @@
 #include "platform/log.h"
 #include "platform/verified_code.h"
 #include "platform/vtable_entry.h"
+#include "players/actor_fields.h"
 #include "players/describe.h"
 #include "players/generation.h"
 #include "players/object_fields.h"
@@ -429,7 +430,7 @@ float Between(void* a, void* b) noexcept
 
 void* PlayerOneBody() noexcept
 {
-    return ReadPointer(players::generation::PlayerOneController(), facts::kControllerPawn);
+    return players::actor_fields::Pawn(players::generation::PlayerOneController());
 }
 
 /// The game's rental-return warp would take the scooter home during an animated getoff (player 1's leader more than
@@ -930,8 +931,8 @@ void End(SeatRide& s, const wchar_t* why) noexcept
                       L"(then {}; member controller {}, scooter controller {})",
                       why, players::SeatName(ride.seat), StateName(state), players::SeatName(ride.seat),
                       ok ? L"ran" : L"COULD NOT RUN", StateName(CoordState(ride.coordinator)),
-                      players::Who(ReadPointer(ride.member, facts::kCharacterEffectiveController)),
-                      players::Who(ReadPointer(ride.vehicle, facts::kCharacterEffectiveController)));
+                      players::Who(players::actor_fields::EffectiveController(ride.member)),
+                      players::Who(players::actor_fields::EffectiveController(ride.vehicle)));
     }
     else if (state == kStateGettingOff)
     {
@@ -1298,7 +1299,7 @@ void Ask(void* state) noexcept
     // mark (the free one nearest player 1's leader). The question changes nothing and measures from whoever asks, so
     // every seat may ask; two seats answered yes for one scooter are kept apart at the boarding (AfterMemberTick: the
     // first boards, the second finds it held). research/RE-seats-step6-world-rides.md.
-    void*     member = ReadPointer(state, facts::kMoveStateCharacter);
+    void*     member = players::actor_fields::MoveStateCharacter(state);
     const int seat   = member != nullptr ? players::generation::SeatOfMember(member) : -1;
     SeatRide* record = RideOf(seat);
     if (!g_installed || record == nullptr || record->active || record->stopped || record->asked.valid ||
@@ -1391,7 +1392,7 @@ void AfterMemberTick(void* controller, void* member) noexcept
         }
     }
     // A scooter a getoff left half-swapped (still on a player's controller) cannot be boarded again (seen live).
-    const void* holder     = ReadPointer(scooter, facts::kCharacterEffectiveController);
+    const void* holder     = players::actor_fields::EffectiveController(scooter);
     const int   holderSeat = holder != nullptr ? players::generation::SeatOfController(holder) : -1;  // 0 player 1's
     if (holderSeat >= 0)
     {
@@ -1467,7 +1468,7 @@ void AfterMemberTick(void* controller, void* member) noexcept
     const bool owned   = begun && flushed && s.ride.state == kStateBoarding &&
                        ControllerHolds(scooter, controller) &&
                        ReadPointer(controller, kControllerActiveVehicle) == coordinator &&
-                       VTableOf(ReadPointer(scooter, facts::kCharacterMoveState)) == g_moveVt;
+                       VTableOf(players::actor_fields::MoveState(scooter)) == g_moveVt;
     s.ride.component = owned ? InputComponentOf(scooter) : nullptr;
     s.heldLogged     = nullptr;  // a later refusal (of any scooter) is logged again
     if (!owned)
@@ -1650,7 +1651,7 @@ bool Tick(void* controller, void* member, const input::move_state::EngineTicks& 
     }
     // The field ticker runs the leader's ride body while it is the primary controller's active ride: the seat's
     // scooter is ticked the same way, on the frames the ticker runs, while the seat's controller holds it.
-    void*      state16 = ReadPointer(ride.vehicle, facts::kCharacterMoveState);
+    void*      state16 = players::actor_fields::MoveState(ride.vehicle);
     const bool holds   = ReadPointer(controller, kControllerActiveVehicle) == ride.coordinator &&
                        ReadPointer(ride.coordinator, kCoordinatorBody) == ride.vehicle &&
                        ControllerHolds(ride.vehicle, controller) && VTableOf(state16) == g_moveVt;
@@ -1688,8 +1689,8 @@ const void* DrivenMoveState(int seat) noexcept
     {
         return nullptr;
     }
-    const void* state = ReadPointer(s->ride.vehicle, facts::kCharacterMoveState);
-    return VTableOf(state) == g_moveVt && ReadPointer(state, facts::kMoveStateCharacter) == s->ride.vehicle ? state : nullptr;
+    const void* state = players::actor_fields::MoveState(s->ride.vehicle);
+    return VTableOf(state) == g_moveVt && players::actor_fields::MoveStateCharacter(state) == s->ride.vehicle ? state : nullptr;
 }
 
 void Release(int seat, const wchar_t* why) noexcept

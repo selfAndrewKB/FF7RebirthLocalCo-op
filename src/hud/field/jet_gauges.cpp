@@ -8,6 +8,7 @@
 #include "platform/log.h"
 #include "platform/verified_code.h"
 #include "platform/vtable_entry.h"
+#include "players/actor_fields.h"
 #include "players/describe.h"
 #include "players/first_player_scope.h"
 #include "players/generation.h"
@@ -96,7 +97,7 @@ int OwnerOf(const void* chocobo) noexcept
     {
         return seat;
     }
-    return chocobo == ReadPointer(players::generation::PlayerOneController(), facts::kControllerPawn) ? 0 : -1;
+    return chocobo == players::actor_fields::Pawn(players::generation::PlayerOneController()) ? 0 : -1;
 }
 
 void LogIfChanged(int seat, const Logged& now) noexcept

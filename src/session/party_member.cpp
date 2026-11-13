@@ -8,6 +8,7 @@
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/verified_code.h"
+#include "players/actor_fields.h"
 #include "players/object_fields.h"
 #include "players/seats.h"
 #include "scopes/primary_controller.h"
@@ -128,17 +129,17 @@ MemberSnapshot Snapshot(void* character, void* playerOneController, std::uint8_t
     }
     member.isEndCharacter = g_fn.isEndCharacter(character) != 0;
     member.isPlayerOnes   = character == g_fn.globalLeader() ||
-                          character == ReadPointer(playerOneController, facts::kControllerPawn) ||
-                          character == ReadPointer(playerOneController, facts::kControllerLeader);
+                          character == players::actor_fields::Pawn(playerOneController) ||
+                          character == players::actor_fields::LeaderCharacter(playerOneController);
     if (!member.isEndCharacter)
     {
         return member;  // the lease fields exist only on End characters
     }
-    member.requested         = ReadPointer(character, facts::kCharacterRequestedController);
-    member.effective         = ReadPointer(character, facts::kCharacterEffectiveController);
-    member.retainedAi        = ReadPointer(character, facts::kCharacterRetainedAi);
-    member.controller        = ReadPointer(character, facts::kPawnController);
-    member.aiPawn            = ReadPointer(member.retainedAi, facts::kControllerPawn);
+    member.requested         = players::actor_fields::RequestedController(character);
+    member.effective         = players::actor_fields::EffectiveController(character);
+    member.retainedAi        = players::actor_fields::RetainedAi(character);
+    member.controller        = players::actor_fields::Controller(character);
+    member.aiPawn            = players::actor_fields::Pawn(member.retainedAi);
     member.playerControlled  = ReadField<std::uint8_t>(character, facts::kCharacterPlayerControlled);
     member.aiControllerValid = g_fn.validateAiController(g_fn.aiControllerOf(character)) != nullptr;
     member.battleReady       = member.aiControllerValid && BattleReady(character);
@@ -195,8 +196,8 @@ bool GameReady() noexcept
 AiSnapshot ReadAi(const void* member) noexcept
 {
     AiSnapshot ai;
-    const void* brain = ReadPointer(ReadPointer(member, facts::kCharacterRetainedAi), facts::kAiActiveBrain);
-    const void* state = ReadPointer(brain, facts::kBrainState);
+    const void* brain = players::actor_fields::ActiveBrain(players::actor_fields::RetainedAi(member));
+    const void* state = players::actor_fields::BrainState(brain);
     if (state == nullptr)
     {
         return ai;
@@ -625,7 +626,7 @@ bool Take(int seat, void* controller, void* member) noexcept
         return false;
     }
     // The trigger is read from the controller afterwards: the function does not return it.
-    if (!GuardedEnsureTrigger(controller) || ReadPointer(controller, facts::kControllerTrigger) == nullptr)
+    if (!GuardedEnsureTrigger(controller) || players::actor_fields::Trigger(controller) == nullptr)
     {
         platform::Log(L"take refused: {}'s trigger actor could not be created", players::SeatName(seat));
         return false;
@@ -647,7 +648,7 @@ bool Take(int seat, void* controller, void* member) noexcept
 
 bool GiveBack(int seat, void* controller) noexcept
 {
-    if (!g_installed || ReadPointer(controller, facts::kControllerTrigger) == nullptr)
+    if (!g_installed || players::actor_fields::Trigger(controller) == nullptr)
     {
         return false;  // the switch writes through the trigger unconditionally
     }
@@ -710,12 +711,12 @@ LeaseState ReadLease(const void* member, const void* seatController) noexcept
     LeaseState state;
     if (member != nullptr)
     {
-        state.memberEffective  = ReadPointer(member, facts::kCharacterEffectiveController);
-        state.memberRetainedAi = ReadPointer(member, facts::kCharacterRetainedAi);
-        state.aiPawn           = ReadPointer(state.memberRetainedAi, facts::kControllerPawn);
+        state.memberEffective  = players::actor_fields::EffectiveController(member);
+        state.memberRetainedAi = players::actor_fields::RetainedAi(member);
+        state.aiPawn           = players::actor_fields::Pawn(state.memberRetainedAi);
     }
-    state.seatPawn   = ReadPointer(seatController, facts::kControllerPawn);
-    state.seatLeader = ReadPointer(seatController, facts::kControllerLeader);
+    state.seatPawn   = players::actor_fields::Pawn(seatController);
+    state.seatLeader = players::actor_fields::LeaderCharacter(seatController);
     return state;
 }
 

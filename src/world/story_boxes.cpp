@@ -15,6 +15,7 @@
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/verified_code.h"
+#include "players/actor_fields.h"
 #include "players/game_globals.h"
 #include "players/generation.h"
 #include "players/object_fields.h"
@@ -155,7 +156,7 @@ void* Root() noexcept
 std::uint64_t FirstTag(const void* actor) noexcept
 {
     const auto count = ReadField<std::int32_t>(actor, facts::kActorTagsCount);
-    return actor != nullptr && count > 0 ? ReadField<std::uint64_t>(ReadPointer(actor, facts::kActorTagsData), 0) : 0;
+    return actor != nullptr && count > 0 ? ReadField<std::uint64_t>(players::actor_fields::Tags(actor), 0) : 0;
 }
 
 /// The box's layout object (0: the tag maps to none, as when its level is not loaded).
@@ -215,7 +216,7 @@ enum class Sends : std::uint8_t
 
 Sends WouldSend(std::uint64_t object) noexcept
 {
-    void*        manager = ReadPointer(Root(), facts::kRootGameState);
+    void*        manager = players::actor_fields::RootGameState(Root());
     void*        slot    = nullptr;
     std::uint8_t off     = 0;
     if (manager == nullptr || !CallGuarded(g_findSlot, slot, manager, object, facts::kBoxSlotAttribute) || slot == nullptr ||
@@ -229,7 +230,7 @@ Sends WouldSend(std::uint64_t object) noexcept
 /// The box object's sending state's current row (its slot 1's; 0 when none).
 std::uint64_t BoxStateRow(std::uint64_t object) noexcept
 {
-    void* manager = ReadPointer(Root(), facts::kRootGameState);
+    void* manager = players::actor_fields::RootGameState(Root());
     void* slot    = nullptr;
     return manager != nullptr && CallGuarded(g_findSlot, slot, manager, object, facts::kBoxSlotAttribute) && slot != nullptr
                ? ReadField<std::uint64_t>(slot, facts::kSlotState)
@@ -339,7 +340,7 @@ bool ShapeOf(void* boxActor, rules::Box& out) noexcept
 /// The character's controller is its seat's player's (not its AI's).
 bool HeldByPlayer(const void* member, int seat) noexcept
 {
-    const void* controller = ReadPointer(member, facts::kPawnController);
+    const void* controller = players::actor_fields::Controller(member);
     return controller != nullptr && controller == players::generation::ControllerOf(seat);
 }
 
@@ -429,7 +430,7 @@ void Begin(void* manager, std::uint64_t box, void* collider)
 /// The character enters the box now: the game's own enter, then its leave when the character is no longer inside.
 void Replay(const Waiting& w, void* member, const wchar_t* why)
 {
-    void*       manager = ReadPointer(Root(), facts::kRootTriggerManager);
+    void*       manager = players::actor_fields::RootTriggerManager(Root());
     const auto  begin   = reinterpret_cast<BoxEventFn>(g_redirect.Original());
     const Sends sends   = WouldSend(w.object);
     const bool  began   = manager != nullptr && CallGuarded(begin, manager, w.box, member);

@@ -11,6 +11,7 @@
 #include "platform/log.h"
 #include "platform/verified_code.h"
 #include "platform/vtable_entry.h"
+#include "players/actor_fields.h"
 #include "players/generation.h"
 #include "players/object_fields.h"
 #include "players/seats.h"
@@ -69,7 +70,7 @@ std::uintptr_t RunForOwner(TickFn engine, void* state, float deltaTime, bool via
     {
         return engine(state, deltaTime);
     }
-    void* character = ReadPointer(state, facts::kMoveStateCharacter);
+    void* character = players::actor_fields::MoveStateCharacter(state);
     if (!g_ownTick)
     {
         EachSeatRecord([&](int seat, EngineTicks& ticks) {
@@ -80,7 +81,7 @@ std::uintptr_t RunForOwner(TickFn engine, void* state, float deltaTime, bool via
     }
     move_census::Count(state, character, viaTickInput, g_ownTick);  // the census (dev tools)
 
-    const void* owner = ReadPointer(character, facts::kCharacterEffectiveController);
+    const void* owner = players::actor_fields::EffectiveController(character);
     if (!pad_sticks::Enabled() || !pad_sticks::PartActs(pad_sticks::kPartPlayerOneMove) || !players::generation::AnyActive() ||
         owner == nullptr ||
         owner != players::generation::ControllerOf(0))
@@ -111,8 +112,8 @@ std::uintptr_t RunOnPlayerOnesPad(TickFn engine, void* object, float deltaTime, 
 
 std::uintptr_t UpdateInputFor(TickFn engine, void* state, float deltaTime) noexcept
 {
-    const void* character = players::generation::OnGameThread() ? ReadPointer(state, facts::kMoveStateCharacter) : nullptr;
-    return RunOnPlayerOnesPad(engine, state, deltaTime, ReadPointer(character, facts::kCharacterEffectiveController));
+    const void* character = players::generation::OnGameThread() ? players::actor_fields::MoveStateCharacter(state) : nullptr;
+    return RunOnPlayerOnesPad(engine, state, deltaTime, players::actor_fields::EffectiveController(character));
 }
 
 std::uintptr_t UpdateInput(void* state, float deltaTime)
@@ -132,11 +133,11 @@ std::uintptr_t PlayerUpdateInput(void* state, float deltaTime)
 /// through.
 std::uintptr_t ChocoboFor(TickFn engine, void* state, float deltaTime, bool outer) noexcept
 {
-    const void* chocobo = players::generation::OnGameThread() ? ReadPointer(state, facts::kMoveStateCharacter) : nullptr;
-    const void* owner   = ReadPointer(chocobo, facts::kCharacterEffectiveController);
+    const void* chocobo = players::generation::OnGameThread() ? players::actor_fields::MoveStateCharacter(state) : nullptr;
+    const void* owner   = players::actor_fields::EffectiveController(chocobo);
     if (owner == nullptr)
     {
-        owner = ReadPointer(chocobo, facts::kPawnController);
+        owner = players::actor_fields::Controller(chocobo);
     }
     // Recorded from slot 16 only (the field tick's call, with its delta time; slot 11 runs inside it).
     if (outer && !g_ownTick && owner != nullptr && owner == players::generation::ControllerOf(0) && deltaTime > 0.0f &&

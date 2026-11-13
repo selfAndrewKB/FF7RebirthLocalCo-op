@@ -8,6 +8,7 @@
 #include "facts/party.h"
 #include "facts/vehicles.h"
 #include "facts/world.h"
+#include "players/actor_fields.h"
 #include "players/describe.h"
 #include "players/game_globals.h"
 #include "rides/ride_rules.h"
@@ -96,7 +97,6 @@ constexpr std::uint32_t  kCoordRiding       = 2;
 using facts::kChocoboRidden;
 using facts::kChocoboRideObject;
 using facts::kSceneComponentAttachParent;
-using facts::kCameraManagerViewTarget;
 constexpr std::uint32_t  kRideSubjectField  = 0x2CC8;  // PCM, weak
 using facts::kChocoboCoordinatorVTable;
 using facts::kChocoboMoveStateVTable;
@@ -213,17 +213,17 @@ bool RideCameraOn(const void* controller) noexcept
 /// The possession and ride fields, for the log.
 std::wstring LeaseText(const Ride& ride)
 {
-    const void* pcm = ReadPointer(ride.controller, facts::kControllerCameraManager);
+    const void* pcm = players::actor_fields::CameraManager(ride.controller);
     return std::format(L"{} (state {}), leader {}; {}'s camera ride subject {}, ride framing {}, view target {}",
                        own_ride::PossessionText(ride, L"chocobo"), CoordState(ride.coordinator),
-                       ReadPointer(ride.controller, facts::kControllerLeader) == ride.member ? L"the member" : L"other",
+                       players::actor_fields::LeaderCharacter(ride.controller) == ride.member ? L"the member" : L"other",
                        players::SeatName(ride.seat),
                        scopes::leader_scope::ObjectAt(static_cast<const std::byte*>(pcm) + kRideSubjectField) == ride.vehicle
                            ? L"the chocobo"
                            : L"not the chocobo",
                        RideCameraOn(ride.controller) ? L"on" : L"off",
-                       ReadPointer(pcm, kCameraManagerViewTarget) == ride.member    ? L"the member"
-                       : ReadPointer(pcm, kCameraManagerViewTarget) == ride.vehicle ? L"the chocobo"
+                       players::actor_fields::ViewTarget(pcm) == ride.member    ? L"the member"
+                       : players::actor_fields::ViewTarget(pcm) == ride.vehicle ? L"the chocobo"
                                                                        : L"the camera actor or other");
 }
 
@@ -320,7 +320,7 @@ void End(SeatRide& s, const wchar_t* why, bool force) noexcept
         return;
     }
     Ride& ride = s.ride;
-    if (void* state = ReadPointer(ride.vehicle, facts::kCharacterMoveState);
+    if (void* state = players::actor_fields::MoveState(ride.vehicle);
         !ride.rowsCleared && scopes::leader_scope::StillNames(ride.weak, ride.vehicle) && VTableOf(state) == g_moveVt)
     {
         input::member_movement::ClearRideRows(state);  // the seat's rows go with the ride
@@ -367,9 +367,9 @@ void End(SeatRide& s, const wchar_t* why, bool force) noexcept
                       CoordState(ride.coordinator), players::SeatName(ride.seat),
                       ReadPointer(ride.controller, kControllerActiveVehicle) == ride.coordinator ? L"still it"
                                                                                                   : L"cleared",
-                      ReadPointer(ride.vehicle, facts::kPawnController) == ride.controller ? L"" : L"not ",
+                      players::actor_fields::Controller(ride.vehicle) == ride.controller ? L"" : L"not ",
                       ride.seat + 1,
-                      ReadPointer(ride.member, facts::kPawnController) == ride.controller ? L"" : L"not ",
+                      players::actor_fields::Controller(ride.member) == ride.controller ? L"" : L"not ",
                       ride.seat + 1);
     }
     const Ride ended  = ride;
@@ -384,7 +384,7 @@ void End(SeatRide& s, const wchar_t* why, bool force) noexcept
 /// she stands; taken at once, before the chocobo's follow AI can pull it toward player 1). Null when not.
 void* SeatedChocobo(SeatRide& s, void* controller, void* member) noexcept
 {
-    if (ReadPointer(member, facts::kPawnController) != controller || ReadPointer(controller, facts::kControllerLeader) != member)
+    if (players::actor_fields::Controller(member) != controller || players::actor_fields::LeaderCharacter(controller) != member)
     {
         return nullptr;
     }
@@ -442,9 +442,9 @@ void Begin(SeatRide& s, int seat, void* controller, void* member, void* chocobo)
         return;
     }
     s.phase          = Phase::Riding;
-    void* state      = ReadPointer(chocobo, facts::kCharacterMoveState);
-    const bool owned = call.ok && ReadPointer(chocobo, facts::kCharacterEffectiveController) == controller &&
-                       ReadPointer(controller, facts::kControllerPawn) == chocobo &&
+    void* state      = players::actor_fields::MoveState(chocobo);
+    const bool owned = call.ok && players::actor_fields::EffectiveController(chocobo) == controller &&
+                       players::actor_fields::Pawn(controller) == chocobo &&
                        ReadPointer(controller, kControllerActiveVehicle) == call.coordinator &&
                        VTableOf(state) == g_moveVt;
     s.ride.component = owned ? InputComponentOf(chocobo) : nullptr;
@@ -539,7 +539,7 @@ void LogSummary(SeatRide& s) noexcept
     }
     const Ride& ride = s.ride;
     float seatAt[3]{}, oneAt[3]{};
-    const void* oneBody = ReadPointer(players::generation::PlayerOneController(), facts::kControllerPawn);
+    const void* oneBody = players::actor_fields::Pawn(players::generation::PlayerOneController());
     const bool  read    = players::unreal::ActorLocation(ride.vehicle, seatAt) &&
                           players::unreal::ActorLocation(oneBody, oneAt);
     try
@@ -640,7 +640,7 @@ bool Tick(void* controller, void* member, const input::move_state::EngineTicks& 
         {
             s.phase         = Phase::GettingOff;
             s.ride.getOffAt = Clock::now();
-            if (void* state = ReadPointer(s.ride.vehicle, facts::kCharacterMoveState); VTableOf(state) == g_moveVt)
+            if (void* state = players::actor_fields::MoveState(s.ride.vehicle); VTableOf(state) == g_moveVt)
             {
                 input::member_movement::ClearRideRows(state);
                 s.ride.rowsCleared = true;
@@ -660,7 +660,7 @@ bool Tick(void* controller, void* member, const input::move_state::EngineTicks& 
         platform::Log(L"chocobo ride STOPPED for this session: {} stays a passenger", players::SeatName(seat));
         return false;
     }
-    void* state = ReadPointer(s.ride.vehicle, facts::kCharacterMoveState);
+    void* state = players::actor_fields::MoveState(s.ride.vehicle);
     if (VTableOf(state) != g_moveVt)
     {
         End(s, L"the chocobo's move state changed", false);
@@ -715,8 +715,8 @@ const void* DrivenMoveState(int seat) noexcept
     {
         return nullptr;
     }
-    const void* state = ReadPointer(s->ride.vehicle, facts::kCharacterMoveState);
-    return VTableOf(state) == g_moveVt && ReadPointer(state, facts::kMoveStateCharacter) == s->ride.vehicle ? state
+    const void* state = players::actor_fields::MoveState(s->ride.vehicle);
+    return VTableOf(state) == g_moveVt && players::actor_fields::MoveStateCharacter(state) == s->ride.vehicle ? state
                                                                                                             : nullptr;
 }
 

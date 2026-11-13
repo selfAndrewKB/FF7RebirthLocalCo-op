@@ -6,6 +6,7 @@
 #include "facts/controller.h"
 #include "facts/world.h"
 #include "platform/angles.h"
+#include "players/actor_fields.h"
 #include "players/object_fields.h"
 
 #include <cmath>
@@ -96,7 +97,7 @@ struct Camera
 inline Camera CameraOf(const void* controller) noexcept
 {
     Camera      camera;
-    const void* manager = ReadPointer(controller, facts::kControllerCameraManager);
+    const void* manager = players::actor_fields::CameraManager(controller);
     const void* posed   = ReadPointer(manager, kCameraPose);
     float       pose[7]{};  // location [0..2], 4 bytes, rotator [4..6] (pitch, yaw, roll)
     if (posed == nullptr || !platform::CopyGuarded(pose, posed, sizeof(pose)))

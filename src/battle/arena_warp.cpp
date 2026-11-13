@@ -7,6 +7,7 @@
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/verified_code.h"
+#include "players/actor_fields.h"
 #include "players/describe.h"
 #include "players/game_globals.h"
 #include "players/generation.h"
@@ -64,7 +65,7 @@ std::uint8_t EncounterState() noexcept
 
 bool EventHoldsParty() noexcept
 {
-    const void* state = ReadPointer(Root(), facts::kRootGameState);
+    const void* state = players::actor_fields::RootGameState(Root());
     return state != nullptr && (ReadField<std::int32_t>(state, facts::kGameStateEventCounterA) != 0 ||
                                 ReadField<std::int32_t>(state, facts::kGameStateEventCounterB) != 0);
 }

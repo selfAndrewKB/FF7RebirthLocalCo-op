@@ -27,7 +27,6 @@ constexpr std::uint8_t kRequestExitBytes[] = {0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8
 constexpr platform::FunctionFact kRequestExit{L"AEndGameMode_RequestFieldExit_Clear71", 0x1410A9168, kRequestExitBytes};
 constexpr std::size_t kFirstInstruction = 5;
 
-using facts::kEndGameRoot;
 constexpr std::uint32_t  kFieldStep  = 0x70;         // EEndFieldStep; 13 once the entry steps are done
 constexpr std::uint32_t  kRunning    = 0x71;         // 1 while the field runs
 constexpr std::uint8_t   kStepSettled = 13;

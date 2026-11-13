@@ -8,6 +8,7 @@
 #include "platform/log.h"
 #include "platform/verified_code.h"
 #include "platform/vtable_entry.h"
+#include "players/actor_fields.h"
 #include "players/game_globals.h"
 #include "players/object_fields.h"
 #include "players/seats.h"
@@ -39,12 +40,12 @@ Report             g_report{};
 /// that has no other camera manager (the engine publishes this one to it right after the spawn).
 void FillOwner(void* cameraManager) noexcept
 {
-    if (ReadPointer(cameraManager, facts::kCameraManagerPcOwner) != nullptr)
+    if (players::actor_fields::CameraOwner(cameraManager) != nullptr)
     {
         return;
     }
     void*       owner       = ReadPointer(cameraManager, facts::kActorOwner);
-    const void* ownersCamera = ReadPointer(owner, facts::kControllerCameraManager);
+    const void* ownersCamera = players::actor_fields::CameraManager(owner);
     if (VTableOf(owner) != g_playerControllerVTable || (ownersCamera != nullptr && ownersCamera != cameraManager))
     {
         g_report.ownerRefused = true;
@@ -137,7 +138,7 @@ bool Ready() noexcept
 bool UsesNativeClasses(const void* playerOneController) noexcept
 {
     return playerOneController != nullptr && VTableOf(playerOneController) == g_playerControllerVTable &&
-           VTableOf(ReadPointer(playerOneController, facts::kControllerCameraManager)) == g_cameraManagerVTable;
+           VTableOf(players::actor_fields::CameraManager(playerOneController)) == g_cameraManagerVTable;
 }
 
 void* JoiningPlayerOne() noexcept

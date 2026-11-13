@@ -47,9 +47,7 @@ namespace lss::world::interact_watch {
 namespace {
 
 // The objects (research/RE-p2-field-interact.md; this build).
-using facts::kEndGameRoot;
 using facts::kRootWorldItems;
-using facts::kPartyManagerGlobal;
 using facts::kPartyManagerPrimaryController;
 using facts::kPartyManagerLeader;
 using facts::kPartyManagerLeaderType;

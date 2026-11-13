@@ -13,6 +13,7 @@
 #include "platform/log.h"
 #include "platform/verified_code.h"
 #include "platform/vtable_entry.h"
+#include "players/actor_fields.h"
 #include "players/describe.h"
 #include "players/generation.h"
 #include "players/object_fields.h"
@@ -192,7 +193,7 @@ int SeatOfCharacter(const void* actor, bool pawns) noexcept
             continue;
         }
         if (actor == players::generation::MemberOf(seat) ||
-            (pawns && actor == ReadPointer(players::generation::ControllerOf(seat), facts::kControllerPawn)))
+            (pawns && actor == players::actor_fields::Pawn(players::generation::ControllerOf(seat))))
         {
             return seat;
         }
@@ -208,7 +209,7 @@ bool Line() noexcept
 
 void* PlayerOnePawn() noexcept
 {
-    return ReadPointer(players::generation::PlayerOneController(), facts::kControllerPawn);
+    return players::actor_fields::Pawn(players::generation::PlayerOneController());
 }
 
 /// `seat`'s leader view (leader, leader type, primary controller) for one call; nothing held if any part refuses (the

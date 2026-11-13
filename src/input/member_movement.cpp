@@ -20,6 +20,7 @@
 #include "platform/log.h"
 #include "platform/verified_code.h"
 #include "platform/vtable_entry.h"
+#include "players/actor_fields.h"
 #include "players/generation.h"
 #include "players/object_fields.h"
 #include "rides/chocobo_ride.h"
@@ -188,10 +189,10 @@ void TickInScopes(int seat, void* controller, void* member, void* state, int typ
 /// tick's unchecked reads hold (the controller's leader-action component).
 void* MoveStateToTick(void* controller, void* member) noexcept
 {
-    void* state = ReadPointer(member, facts::kCharacterMoveState);
-    if (VTableOf(state) != g_moveStateVTable || ReadPointer(state, facts::kMoveStateCharacter) != member ||
-        ReadPointer(member, facts::kPawnController) != controller ||
-        ReadPointer(controller, facts::kControllerLeaderActions) == nullptr)
+    void* state = players::actor_fields::MoveState(member);
+    if (VTableOf(state) != g_moveStateVTable || players::actor_fields::MoveStateCharacter(state) != member ||
+        players::actor_fields::Controller(member) != controller ||
+        players::actor_fields::LeaderActions(controller) == nullptr)
     {
         return nullptr;
     }
@@ -349,7 +350,7 @@ RideTick TickRide(int seat, void* controller, void* member, void* state, const v
 {
     const int type = MemberType(member);
     if (!players::SeatBuilt(seat) || !players::generation::OnGameThread() || g_tickForCharacter == nullptr || type == kNoType ||
-        ReadPointer(controller, facts::kControllerLeaderActions) == nullptr)
+        players::actor_fields::LeaderActions(controller) == nullptr)
     {
         return RideTick::Refused;
     }

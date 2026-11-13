@@ -21,6 +21,7 @@
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/verified_code.h"
+#include "players/actor_fields.h"
 #include "players/call_site.h"
 #include "players/generation.h"
 #include "players/object_fields.h"
@@ -397,7 +398,7 @@ std::wstring AtText(const void* pawn) noexcept
 std::wstring PlacesText(int seat)
 {
     float one[3]{}, member[3]{}, cell[3]{};
-    const void* leader    = ReadPointer(players::generation::PlayerOneController(), facts::kControllerPawn);
+    const void* leader    = players::actor_fields::Pawn(players::generation::PlayerOneController());
     const bool  hasOne    = players::unreal::ActorLocation(leader, one);
     const bool  hasMember = players::unreal::ActorLocation(g_members[seat].pawn, member);
     const void* manager = nullptr;
@@ -594,7 +595,7 @@ void Ask(int seat, const wchar_t* how, bool splitShown) noexcept
         return;
     }
     float       one[3]{}, at[3]{};
-    const void* leader = ReadPointer(players::generation::PlayerOneController(), facts::kControllerPawn);
+    const void* leader = players::actor_fields::Pawn(players::generation::PlayerOneController());
     if (players::unreal::ActorLocation(leader, one) && players::unreal::ActorLocation(subject.pawn, at) &&
         party_warp_rules::Beside(std::hypot(at[0] - one[0], at[1] - one[1]), at[2] - one[2]))
     {

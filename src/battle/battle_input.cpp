@@ -12,6 +12,7 @@
 #include "platform/log.h"
 #include "platform/settled_log.h"
 #include "platform/verified_code.h"
+#include "players/actor_fields.h"
 #include "players/game_globals.h"
 #include "players/generation.h"
 #include "players/object_fields.h"
@@ -271,9 +272,8 @@ void Watch(int seat, void* member, void* state) noexcept
                                   ? ReadAt<std::int32_t>(requests + 4 * static_cast<std::uint32_t>(index))
                                   : -1;
         }
-        const auto one      = reinterpret_cast<std::uintptr_t>(ReadPointer(players::generation::PlayerOneController(), facts::kControllerPawn));
-        const auto oneState = one != 0 ? reinterpret_cast<std::uintptr_t>(ReadPointer(reinterpret_cast<void*>(one),
-                                                                                        facts::kCharacterMoveState))
+        const auto one      = reinterpret_cast<std::uintptr_t>(players::actor_fields::Pawn(players::generation::PlayerOneController()));
+        const auto oneState = one != 0 ? reinterpret_cast<std::uintptr_t>(players::actor_fields::MoveState(reinterpret_cast<void*>(one)))
                                        : 0;
         const Parts oneParts = PartsOf(one);
         now.characters[0]    = CharacterOf(oneState, oneParts);

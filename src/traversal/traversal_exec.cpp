@@ -6,6 +6,7 @@
 #include "platform/log.h"
 #include "platform/verified_code.h"
 #include "platform/vtable_entry.h"
+#include "players/actor_fields.h"
 #include "players/object_fields.h"
 #include "players/seats.h"
 #include "traversal/traversal_shared.h"
@@ -725,7 +726,7 @@ std::uintptr_t LadderInput(LadderInputFn original, void* executer, float dt) noe
         // Player 1's slide flag, for the log (a seat on the same ladder: the seat's input must not change it).
         void* one = players::generation::AnyActive() && players::generation::OnGameThread() ? players::generation::PlayerOneController() : nullptr;
         if (one != nullptr && g_exec[kLadder].actorVt != 0 &&
-            ObjectIn(executer, kExecCharacter) == ReadPointer(one, facts::kControllerPawn))
+            ObjectIn(executer, kExecCharacter) == players::actor_fields::Pawn(one))
         {
             void* actor = ObjectIn(executer, kExecClasses[kLadder].actorLater);
             if (actor != nullptr && VTableOf(actor) == g_exec[kLadder].actorVt)

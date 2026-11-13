@@ -11,6 +11,7 @@
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/verified_code.h"
+#include "players/actor_fields.h"
 #include "players/describe.h"
 #include "players/generation.h"
 #include "players/object_fields.h"
@@ -313,12 +314,12 @@ bool Bound() noexcept
 /// The player (1 player 1, seat + 1 a seat's player) whose controller drives `character` now, else 0.
 int PlayerHolding(const void* character) noexcept
 {
-    return PlayerOfController(ReadPointer(character, facts::kCharacterEffectiveController));
+    return PlayerOfController(players::actor_fields::EffectiveController(character));
 }
 
 const wchar_t* Holder(const void* character) noexcept
 {
-    const void* driver = ReadPointer(character, facts::kCharacterEffectiveController);
+    const void* driver = players::actor_fields::EffectiveController(character);
     const int   player = PlayerOfController(driver);
     return driver == nullptr ? L"nobody" : player != 0 ? players::SeatName(SeatOfPlayer(player)) : L"its AI";
 }
@@ -461,7 +462,7 @@ void* ControllerOf(int player) noexcept
 /// The pawn `controller` plays instead of `character` (null if it plays nothing, or that character).
 const void* PlaysInstead(const void* controller, const void* character) noexcept
 {
-    const void* pawn = ReadPointer(controller, facts::kControllerPawn);
+    const void* pawn = players::actor_fields::Pawn(controller);
     return pawn != character ? pawn : nullptr;
 }
 

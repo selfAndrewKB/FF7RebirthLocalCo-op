@@ -4,6 +4,7 @@
 #include "facts/cameras.h"
 #include "facts/controller.h"
 #include "platform/log.h"
+#include "players/actor_fields.h"
 #include "players/object_fields.h"
 #include "traversal/traversal_shared.h"
 
@@ -34,7 +35,7 @@ std::array<CollisionWatch, players::kMaxPlayers> g_collision;  // by player: 0 p
 
 const void* SlotFifteen(const void* cameraManager) noexcept
 {
-    const void* op = ReadPointer(cameraManager, facts::kCameraManagerFieldOperator);
+    const void* op = players::actor_fields::FieldOperator(cameraManager);
     return camera::camera_access::ModuleAt(op, kSlotFifteen);
 }
 
@@ -143,7 +144,7 @@ void Tick(bool active) noexcept
                 continue;
             }
             void* const controller = players::generation::ControllerOf(p);
-            WatchCollision(p, controller != nullptr ? ReadPointer(controller, facts::kControllerCameraManager) : nullptr);
+            WatchCollision(p, controller != nullptr ? players::actor_fields::CameraManager(controller) : nullptr);
         }
     }
     catch (...)

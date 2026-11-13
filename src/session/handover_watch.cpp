@@ -15,6 +15,7 @@
 #include "platform/log.h"
 #include "platform/sparse_array.h"
 #include "platform/verified_code.h"
+#include "players/actor_fields.h"
 #include "players/generation.h"
 #include "players/object_fields.h"
 #include "players/unreal_access.h"
@@ -47,11 +48,9 @@ constexpr std::uint32_t kAiDefaultState = 0x340;  // u8, EEndAIState
 // The pause mask: facts::kAiPauseMask, read without the animation budget's every-other-frame bit.
 constexpr std::uint32_t kAiBrains       = 0x478;  // 20 pointers; index 0 is the base brain
 constexpr int           kBrainSlots     = 20;
-constexpr std::uint32_t kAiActiveBrain  = 0x518;
 constexpr std::uint32_t kAiActiveIndex  = 0x520;  // u8 (21: none)
 constexpr std::uint32_t kBrainMode      = 0x18;   // u8
 constexpr std::uint32_t kBrainIndex     = 0x19;   // u8; 0 is the base brain
-constexpr std::uint32_t kBrainState     = 0x20;
 constexpr std::uint32_t kStateType      = 0x18;   // u8, EEndAIState
 
 // The states' catch-up fields.
@@ -291,7 +290,7 @@ std::wstring TypeText(std::optional<std::uint8_t> type)
 /// holds. `seat` (0: none) and `member`: one seat's member as the caller holds it, in place of the record's.
 void LogOrder(const wchar_t* why, const Order& order, int seat, const void* member)
 {
-    const auto playerOnes = party_member::PlayerTypeOf(ReadPointer(players::generation::PlayerOneController(), facts::kControllerPawn));
+    const auto playerOnes = party_member::PlayerTypeOf(players::actor_fields::Pawn(players::generation::PlayerOneController()));
     const std::int32_t anchor = AnchorOf(order);
     std::wstring       seats;
     for (int s = 1; s < players::kMaxPlayers; ++s)
@@ -321,13 +320,13 @@ void LogOrder(const wchar_t* why, const Order& order, int seat, const void* memb
 Ai ReadAi(const void* character) noexcept
 {
     Ai ai;
-    ai.controller = ReadPointer(character, facts::kCharacterRetainedAi);
+    ai.controller = players::actor_fields::RetainedAi(character);
     if (ai.controller == nullptr)
     {
         return ai;
     }
-    const void* brain = ReadPointer(ai.controller, kAiActiveBrain);
-    ai.stateObject    = ReadPointer(brain, kBrainState);
+    const void* brain = players::actor_fields::ActiveBrain(ai.controller);
+    ai.stateObject    = players::actor_fields::BrainState(brain);
     ai.state          = ai.stateObject == nullptr ? kUnread : ReadField<std::uint8_t>(ai.stateObject, kStateType);
     ai.brain          = brain == nullptr ? kUnread : ReadField<std::uint8_t>(brain, kBrainIndex);
     ai.brainMode      = brain == nullptr ? kUnread : ReadField<std::uint8_t>(brain, kBrainMode);
@@ -347,7 +346,7 @@ std::wstring BrainsText(const void* controller)
         {
             continue;
         }
-        const void* state = ReadPointer(brain, kBrainState);
+        const void* state = players::actor_fields::BrainState(brain);
         if (state == nullptr)
         {
             continue;  // an unused brain (every slot holds one)
@@ -519,7 +518,7 @@ std::wstring Whose(const void* character)
     {
         return std::format(L" ({}'s)", players::SeatName(seat));
     }
-    if (character != nullptr && character == ReadPointer(players::generation::PlayerOneController(), facts::kControllerPawn))
+    if (character != nullptr && character == players::actor_fields::Pawn(players::generation::PlayerOneController()))
     {
         return L" (player 1's)";
     }
@@ -617,7 +616,7 @@ void WatchHeld(int seat, const Clock::time_point now)
     }
     float at[3]{}, one[3]{};
     const bool placed = players::unreal::ActorLocation(character, at) &&
-                        players::unreal::ActorLocation(ReadPointer(players::generation::PlayerOneController(), facts::kControllerPawn), one);
+                        players::unreal::ActorLocation(players::actor_fields::Pawn(players::generation::PlayerOneController()), one);
     if (placed && held.placed)
     {
         const float seconds   = std::chrono::duration<float>(now - held.lastSpeed).count();

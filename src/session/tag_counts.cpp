@@ -4,6 +4,7 @@
 #include "facts/party.h"
 #include "platform/image.h"
 #include "platform/verified_code.h"
+#include "players/actor_fields.h"
 #include "players/object_fields.h"
 #include "players/weak_object.h"
 
@@ -47,7 +48,7 @@ std::optional<std::uint64_t> FirstTagOf(const void* actor) noexcept
     {
         return std::nullopt;
     }
-    const void* tags = ReadPointer(actor, facts::kActorTagsData);
+    const void* tags = players::actor_fields::Tags(actor);
     return tags == nullptr ? std::nullopt : std::optional<std::uint64_t>(ReadField<std::uint64_t>(tags, 0));
 }
 

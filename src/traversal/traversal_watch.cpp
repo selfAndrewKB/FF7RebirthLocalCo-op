@@ -9,6 +9,7 @@
 #include "platform/log.h"
 #include "platform/verified_code.h"
 #include "platform/vtable_entry.h"
+#include "players/actor_fields.h"
 #include "players/describe.h"
 #include "players/generation.h"
 #include "players/object_fields.h"
@@ -234,7 +235,7 @@ int Tracked(const void* character) noexcept
     }
     for (int p = 0; p < players::kMaxPlayers; ++p)
     {
-        if (character == ReadPointer(players::generation::ControllerOf(p), facts::kControllerPawn))
+        if (character == players::actor_fields::Pawn(players::generation::ControllerOf(p)))
         {
             return p;
         }
@@ -302,7 +303,7 @@ List ReadList(const void* controller) noexcept
 TriggerState ReadTrigger(const void* controller) noexcept
 {
     TriggerState state;
-    state.trigger = ReadPointer(controller, facts::kControllerTrigger);
+    state.trigger = players::actor_fields::Trigger(controller);
     if (state.trigger == nullptr)
     {
         return state;
@@ -313,7 +314,7 @@ TriggerState ReadTrigger(const void* controller) noexcept
     state.firstIsTriggerTag       = first && tag && *first == *tag;
     state.parentOwner = ReadPointer(ReadPointer(ReadPointer(state.trigger, kActorRoot), kComponentParent), kComponentOwner);
     float at[3]{}, pawnAt[3]{};
-    auto* pawn = const_cast<void*>(ReadPointer(controller, facts::kControllerPawn));
+    auto* pawn = const_cast<void*>(players::actor_fields::Pawn(controller));
     if (players::unreal::ActorLocation(state.trigger, at) && players::unreal::ActorLocation(pawn, pawnAt))
     {
         const float metres = world::charapop::Distance(at, pawnAt) / 100.0f;
@@ -326,7 +327,7 @@ bool Watching() noexcept;
 
 const void* TrackerOf(const void* controller) noexcept
 {
-    const auto* trigger = static_cast<const std::byte*>(ReadPointer(controller, facts::kControllerTrigger));
+    const auto* trigger = static_cast<const std::byte*>(players::actor_fields::Trigger(controller));
     return trigger != nullptr ? trigger + kTriggerTracker : nullptr;
 }
 
@@ -346,7 +347,7 @@ TrackerState ReadTracker(int player, const void* controller) noexcept
     state.prevActors        = ReadField<std::int32_t>(tracker, kTrackerPrevActors);
     state.overlaps          = ReadField<std::int32_t>(tracker, kTrackerOverlaps);
     state.channel           = ReadField<std::int32_t>(tracker, kTrackerChannel);
-    const void* capsule     = ReadPointer(ReadPointer(controller, facts::kControllerTrigger), kTriggerCapsule);
+    const void* capsule     = ReadPointer(players::actor_fields::Trigger(controller), kTriggerCapsule);
     state.capsuleOverlapBit = ReadField<std::uint8_t>(capsule, kCapsuleOverlapFlags) & 1;
     return state;
 }
@@ -449,7 +450,7 @@ std::uintptr_t Trigger(bool enter, void* actor, void* key, void* other, void* fo
     for (int p = 0; p < players::kMaxPlayers; ++p)
     {
         controllers[p] = p == 0 || players::generation::Active(p) ? players::generation::ControllerOf(p) : nullptr;
-        if (other != nullptr && controllers[p] != nullptr && other == ReadPointer(controllers[p], facts::kControllerTrigger))
+        if (other != nullptr && controllers[p] != nullptr && other == players::actor_fields::Trigger(controllers[p]))
         {
             whose = p;
         }
@@ -507,7 +508,7 @@ void NotifyPass(void* character, float dt) noexcept
         const int slot = Tracked(character);
         if (slot >= 0)
         {
-            const void* controller = ReadPointer(character, facts::kPawnController);
+            const void* controller = players::actor_fields::Controller(character);
             const auto  now = std::make_tuple(static_cast<const void*>(character), controller,
                                               ReadField<std::int32_t>(controller, kControllerActorList + 8));
             if (!g_passSeen[slot] || now != g_pass[slot])
@@ -795,7 +796,7 @@ void Tick() noexcept
                                now.parentOwner != nullptr ? Whom(now.parentOwner) + L" (" + players::NameOf(now.parentOwner) + L")"
                                                           : std::wstring(L"nothing"),
                                now.reach >= 0 ? kReach[now.reach] : L"unknown distance",
-                               Whom(ReadPointer(controllers[p], facts::kControllerPawn)));
+                               Whom(players::actor_fields::Pawn(controllers[p])));
         }
         catch (...)
         {

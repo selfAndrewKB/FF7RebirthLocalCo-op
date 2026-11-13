@@ -10,6 +10,7 @@
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/verified_code.h"
+#include "players/actor_fields.h"
 #include "players/call_site.h"
 #include "players/generation.h"
 #include "players/object_fields.h"
@@ -200,7 +201,7 @@ bool OptionLevels(std::uint8_t& field, std::uint8_t& battle) noexcept
 /// if the operator is initialised and holds another level.
 void DriveTo(void* cameraManager, int seat, std::uint8_t level, std::uint8_t battle) noexcept
 {
-    void* op = ReadPointer(cameraManager, facts::kCameraManagerFieldOperator);
+    void* op = players::actor_fields::FieldOperator(cameraManager);
     std::uint8_t initialized = 0, now = 0;
     if (op == nullptr || !platform::CopyGuarded(&initialized, static_cast<std::uint8_t*>(op) + kOpInitialized, 1) ||
         initialized == 0 || !platform::CopyGuarded(&now, static_cast<std::uint8_t*>(op) + kOpLevel, 1) || now == level)

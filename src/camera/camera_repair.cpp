@@ -6,6 +6,7 @@
 #include "platform/guarded.h"
 #include "platform/log.h"
 #include "platform/verified_code.h"
+#include "players/actor_fields.h"
 #include "players/generation.h"
 #include "players/object_fields.h"
 #include "players/unreal_access.h"
@@ -140,7 +141,7 @@ std::wstring Metres(float cm)
 float CameraToMember(int seat, const void* cameraManager) noexcept
 {
     float camera[3]{}, member[3]{};
-    if (!players::unreal::ActorLocation(ReadPointer(cameraManager, facts::kCameraManagerEndCameraActor), camera) ||
+    if (!players::unreal::ActorLocation(players::actor_fields::EndCameraActor(cameraManager), camera) ||
         !players::unreal::ActorLocation(players::generation::MemberOf(seat), member))
     {
         return -1.0f;
@@ -200,14 +201,14 @@ std::wstring Whom(const void* actor)
             return std::format(L"{}'s member", players::SeatName(seat));
         }
     }
-    if (one != nullptr && actor == ReadPointer(one, facts::kControllerPawn))
+    if (one != nullptr && actor == players::actor_fields::Pawn(one))
     {
         return L"player 1's pawn";
     }
     for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
     {
         const void* controller = players::generation::ControllerOf(seat);
-        if (controller != nullptr && actor == ReadPointer(controller, facts::kControllerPawn))
+        if (controller != nullptr && actor == players::actor_fields::Pawn(controller))
         {
             return std::format(L"{}'s pawn", players::SeatName(seat));
         }
@@ -218,7 +219,7 @@ std::wstring Whom(const void* actor)
 /// The camera's ride framing in words: slot 15 of its Field operator and the ride subject (the pose is PoseText's).
 std::wstring Describe(const void* cameraManager)
 {
-    const void* op = ReadPointer(cameraManager, facts::kCameraManagerFieldOperator);
+    const void* op = players::actor_fields::FieldOperator(cameraManager);
     if (op == nullptr)
     {
         return L"no Field operator";
@@ -289,7 +290,7 @@ void Repair(int seat, void* cameraManager, const void* op, const Pose& pose) noe
         }
         return;
     }
-    if (ReadPointer(scopes::primary_controller::Current(), facts::kControllerCameraManager) != cameraManager)
+    if (players::actor_fields::CameraManager(scopes::primary_controller::Current()) != cameraManager)
     {
         if (!s.refusalLogged)  // the game would resolve another camera manager: never reset player 1's
         {
@@ -334,8 +335,8 @@ void TickSeat(int seat) noexcept
         s.following = false;
         return;
     }
-    void*       cameraManager = ReadPointer(players::generation::ControllerOf(seat), facts::kControllerCameraManager);
-    const void* op            = ReadPointer(cameraManager, facts::kCameraManagerFieldOperator);
+    void*       cameraManager = players::actor_fields::CameraManager(players::generation::ControllerOf(seat));
+    const void* op            = players::actor_fields::FieldOperator(cameraManager);
     const Pose  pose          = ReadPose(op);
     if (!pose.read)
     {

@@ -7,6 +7,7 @@
 #include "platform/log.h"
 #include "platform/verified_code.h"
 #include "platform/vtable_entry.h"
+#include "players/actor_fields.h"
 #include "players/generation.h"
 #include "players/object_fields.h"
 #include "scopes/leader_answer.h"
@@ -358,7 +359,7 @@ void StealBegin(void* notify, void* mesh, void* animation, float duration) noexc
         const wchar_t* name = players::SeatName(seat);
         platform::LogDebug(L"camera effects: a chain move by {} with {}'s member: {}'s camera looks between "
                            L"{}'s member and its partner (StealCamera with {} as the leader)",
-                           owner == ReadPointer(players::generation::ControllerOf(0), facts::kControllerPawn)
+                           owner == players::actor_fields::Pawn(players::generation::ControllerOf(0))
                                ? L"player 1's character"
                                : L"a party ally",
                            name, name, name, name);

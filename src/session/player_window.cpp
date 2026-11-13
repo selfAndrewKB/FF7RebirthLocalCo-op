@@ -10,6 +10,7 @@
 #include "platform/guarded_read.h"
 #include "platform/log.h"
 #include "platform/settings.h"
+#include "players/actor_fields.h"
 #include "players/describe.h"
 #include "players/generation.h"
 #include "players/seats.h"
@@ -114,7 +115,7 @@ void Note(int user, std::uint16_t pressed, bool open, bool bTap, bool bHeld) noe
 /// The seat's character now (player 1's pawn, a seat's member), or null.
 const void* CharacterOf(int seat) noexcept
 {
-    return seat == 0 ? platform::ReadPointer(players::generation::PlayerOneController(), facts::kControllerPawn)
+    return seat == 0 ? players::actor_fields::Pawn(players::generation::PlayerOneController())
                      : players::generation::MemberOf(seat);
 }
 

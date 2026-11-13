@@ -6,6 +6,7 @@
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
+#include "players/actor_fields.h"
 #include "players/game_globals.h"
 #include "players/generation.h"
 #include "players/object_fields.h"
@@ -418,7 +419,7 @@ void Pass(const std::array<bool, players::kMaxPlayers>& playing) noexcept
 {
     const auto* manager = Manager();
     float       one[3]{};
-    const void* playerOne = ReadPointer(players::generation::PlayerOneController(), facts::kControllerPawn);
+    const void* playerOne = players::actor_fields::Pawn(players::generation::PlayerOneController());
     if (manager == nullptr || !CharacterAt(playerOne, one))
     {
         return;
