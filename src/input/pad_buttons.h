@@ -31,7 +31,9 @@
 //     game's own flag; and while a pause-family menu owns the game's input (the game's pause states
 //     or a pause-family widget alive, views/whole_screen.h MenuOwnsInput) every element gets the
 //     merged state and every seated pad's press is passed as it came, outside the seat's own route:
-//     every pad is the game's pad then, as in an unmodded game. A seat's shop (not a pause-family
+//     every pad is the game's pad then, as in an unmodded game. The same while a minigame holds the whole screen
+//     (views/whole_screen_reason.h SharedPlay): the game plays it on player 1's picture through its pad-blind
+//     pollers, so every pad plays it, as a second pad does unmodded. A seat's shop (not a pause-family
 //     menu) keeps its pad meanwhile. The merged stick already moves every menu cursor (pad_sticks
 //     swaps only inside a player's own calls); releases are the game's own (its tables carry a source
 //     mask per pad);

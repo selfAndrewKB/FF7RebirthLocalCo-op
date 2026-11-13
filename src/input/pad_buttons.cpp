@@ -166,7 +166,8 @@ PerSeat  g_menuDowns{};    // a seated pad's presses while a menu owns input, pa
 unsigned g_padOneDowns = 0;  // pad 1's action-downs kept from the UI while a seat holds the menus
 int      g_menuPlayer  = 0;  // whose view the tables show outside the seats' calls, and whose presses reach the UI:
                              // 0 player 1, or the seat whose shop is up (SetMenuPlayer)
-bool     g_menuTime    = false;  // a pause-family menu owns the game's input this frame (views::MenuOwnsInput)
+bool     g_menuTime     = false;  // the game's input is shared this frame: a pause-family menu owns it, or a minigame
+bool     g_minigameTime = false;  // a minigame shares it (views::SharedPlay of the engine tick's reason)
 std::array<const std::uint64_t*, kOpenerKeyNames.size()> g_openerKeys{};  // live addresses (set at install; null: none)
 std::array<std::uint64_t, kOpenerKeyNames.size()>        g_openers{};     // the FNames, once read
 bool     g_openersRead   = false;  // all three read non-zero
@@ -531,20 +532,36 @@ void GiveBack() noexcept
     g_tables           = {};
     g_leftThumbPressed = {};
     g_menuPlayer       = 0;  // the game's merge: the one pad again
-    g_menuTime   = false;
+    g_menuTime         = false;
+    g_minigameTime     = false;
 }
 
-/// Once per input tick while the views are written: whether a pause-family menu owns the game's input, from the game's
-/// own state (views/whole_screen.h). Logged on change.
+/// Once per input tick while the views are written: whether the game's input is shared, from the game's own state
+/// (views/whole_screen.h): a pause-family menu owns it, or a minigame holds the whole screen (the game plays it on
+/// player 1's picture through its pad-blind pollers, as it treats a second pad unmodded; the engine tick's reason, a
+/// frame before). Logged on change: a menu at Debug, a minigame's start and end at Info.
 void ReadMenuTime() noexcept
 {
-    const bool menuTime = views::MenuOwnsInput();
-    if (menuTime == g_menuTime)
+    const bool menu     = views::MenuOwnsInput();
+    const bool minigame = !menu && views::SharedPlay(views::LastReason());
+    const bool menuTime = menu || minigame;
+    if (menuTime == g_menuTime && minigame == g_minigameTime)
     {
         return;
     }
-    g_menuTime = menuTime;
-    if (!platform::Enabled(platform::Level::Debug))
+    const bool minigameWas = g_minigameTime;
+    g_menuTime             = menuTime;
+    g_minigameTime         = minigame;
+    if (minigame && !minigameWas)
+    {
+        platform::Log(L"buttons: a minigame holds the screen: every pad drives it (the game's merged state in the tables, "
+                      L"every pad's presses passed as they came)");
+    }
+    else if (!minigame && minigameWas)
+    {
+        platform::Log(L"buttons: the minigame no longer holds the screen");
+    }
+    if (!platform::Enabled(platform::Level::Debug) || minigame)
     {
         return;
     }

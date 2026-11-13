@@ -63,6 +63,11 @@ bool WholeScreenShown() noexcept;
 /// Game thread, once per engine tick: this tick's signals (zeroed if not installed).
 ScreenSignals ReadScreenSignals() noexcept;
 
+/// Game thread: the reason of the last signals read: the engine tick's, for a reader that runs before it in the frame
+/// (the per-pad buttons' share of a minigame: SharedPlay). None before any read, when they were unreadable, and when the
+/// last read is more than a few frames old (the engine tick reads them only while the view choice is automatic).
+WholeScreenReason LastReason() noexcept;
+
 /// Game thread, any time: whether the game's location is the title screen now (the location name read; its text is
 /// classified only when the name changes). False if not installed.
 bool AtTitleNow() noexcept;

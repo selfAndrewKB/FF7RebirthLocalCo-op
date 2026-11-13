@@ -68,6 +68,10 @@ bool OwnBoxRun(const void* member, float point[3], std::uint64_t& box) noexcept;
 /// is judged afresh.
 void Forget(int seat) noexcept;
 
+/// The field is left (a retry, a load, a jump, the title) or the party is rebuilt under a player: every judgment
+/// forgotten, so a level entered again is judged from its own data, not from a verdict reached before the change.
+void ForgetAll() noexcept;
+
 /// The last judgment, one line (the reading).
 std::wstring Reading() noexcept;
 

@@ -352,6 +352,27 @@ void TestMenuOwnsInput()
     static_assert(MenuOwnsInput(8, false) && !MenuOwnsInput(6, false), "constexpr");
 }
 
+void TestSharedPlay()
+{
+    std::puts("shared play: a minigame only; a menu, a cutscene, a scene, a skip, the title and nothing are not");
+    using lss::views::SharedPlay;
+    using lss::views::WholeScreenReason;
+    EXPECT(SharedPlay(WholeScreenReason::Minigame));
+    constexpr WholeScreenReason kOthers[] = {
+        WholeScreenReason::None,         WholeScreenReason::PauseMenu,   WholeScreenReason::CinemaPause,
+        WholeScreenReason::ScriptMenu,   WholeScreenReason::JobBoard,    WholeScreenReason::PauseWidget,
+        WholeScreenReason::NativeMenu,   WholeScreenReason::ScreenWidget, WholeScreenReason::ArenaMenu,
+        WholeScreenReason::Cutscene,     WholeScreenReason::SkippableScene, WholeScreenReason::CutsceneSkip,
+        WholeScreenReason::Title,
+    };
+    static_assert(std::size(kOthers) == static_cast<std::size_t>(WholeScreenReason::Title),
+                  "every reason but the minigame listed (a new reason belongs in the list)");
+    for (const WholeScreenReason reason : kOthers)
+    {
+        EXPECT(!SharedPlay(reason));
+    }
+}
+
 }  // namespace
 
 int main()
@@ -367,6 +388,7 @@ int main()
     TestOtherStates();
     TestRules();
     TestMenuOwnsInput();
+    TestSharedPlay();
 
     return lss::test::Report();
 }

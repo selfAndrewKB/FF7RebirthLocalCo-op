@@ -389,6 +389,7 @@ bool Seat::MemberDestroyed() noexcept
         L"go of it and join again",
         Name());
     EndRideAlong(L"the member was destroyed");
+    lead_gate::ForgetAll();  // the level began again with the party: every walk judged before is stale
     players::generation::SetMember(seat_, nullptr);  // the seat's member movement and scopes stop at once
     // Riding, the seat's controller possessed the member's chocobo: its pawn field names that instead.
     const auto forgotten = rides::own_ride::Forget(seat_);

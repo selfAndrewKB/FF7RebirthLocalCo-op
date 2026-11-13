@@ -108,6 +108,15 @@ constexpr bool MenuOwnsInput(std::uint8_t gameState, bool pauseWidget) noexcept
            pauseWidget;
 }
 
+/// The whole-screen moments the game plays with every pad as its own, as it does a menu: a minigame, which the game runs
+/// on player 1's picture through its pad-blind pollers and the merged stick (the field uses, the chicken lure and the
+/// chocobo capture's chase, are not one: the party stays split there). A cutscene, a scene, a skip or the title plays
+/// nothing of a pad's, and a menu has the game's own test (MenuOwnsInput above), so none of them is one.
+constexpr bool SharedPlay(WholeScreenReason reason) noexcept
+{
+    return reason == WholeScreenReason::Minigame;
+}
+
 /// The first reason that holds, in the order above; None when nothing does or nothing is readable.
 WholeScreenReason ReasonOf(const ScreenSignals& signals) noexcept;
 

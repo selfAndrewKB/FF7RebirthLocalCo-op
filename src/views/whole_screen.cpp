@@ -13,6 +13,7 @@
 #include "views/whole_screen_rules.h"
 
 #include <array>
+#include <chrono>
 #include <cstdint>
 #include <string>
 #include <string_view>
@@ -154,6 +155,9 @@ bool              g_installed       = false;
 
 // Game thread.
 ScreenSignals g_logged{};
+WholeScreenReason g_lastReason     = WholeScreenReason::None;  // the reason of the last signals read
+std::chrono::steady_clock::time_point g_lastReasonAt{};          // when they were read
+constexpr auto    kReasonFresh     = std::chrono::milliseconds(250);  // a few frames: older, no reason is known
 bool          g_stateCallFailed    = false;
 bool          g_cutsceneCallFailed = false;
 bool          g_boardCallFailed    = false;
@@ -642,7 +646,14 @@ ScreenSignals ReadScreenSignals() noexcept
         }
     }
     LogOnChange(signals);
+    g_lastReason   = signals.readable ? ReasonOf(signals) : WholeScreenReason::None;
+    g_lastReasonAt = std::chrono::steady_clock::now();
     return signals;
+}
+
+WholeScreenReason LastReason() noexcept
+{
+    return std::chrono::steady_clock::now() - g_lastReasonAt <= kReasonFresh ? g_lastReason : WholeScreenReason::None;
 }
 
 void RemoveWholeScreen() noexcept

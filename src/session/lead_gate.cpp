@@ -978,6 +978,21 @@ void Forget(int seat) noexcept
     object = 0;
 }
 
+void ForgetAll() noexcept
+{
+    bool any = false;
+    for (Judgment& j : g_judged)
+    {
+        any = any || j.object != 0;
+        j   = Judgment{.touched = j.touched};
+    }
+    g_seatObject.fill(0);
+    if (any)
+    {
+        platform::LogDebug(L"lead gate: every walk judged is forgotten (the field is left or the party rebuilt)");
+    }
+}
+
 std::wstring Reading() noexcept
 {
     return g_reading;

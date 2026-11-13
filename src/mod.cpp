@@ -50,6 +50,7 @@
 #include "renderer/view_family_submission.h"
 #include "rides/shared_ride.h"
 #include "session/field_exit.h"
+#include "session/lead_gate.h"
 #include "session/player_window.h"
 #include "session/session.h"
 #include "views/column_layout.h"
@@ -82,7 +83,7 @@ namespace {
 namespace Hook = RC::Unreal::Hook;
 using lss::platform::Log;
 
-constexpr const wchar_t* kVersion = L"0.144.7";  // built against the Nexus UE4SS (c0a8d4c)
+constexpr const wchar_t* kVersion = L"0.145.0";  // built against the Nexus UE4SS (c0a8d4c)
 
 /// How often the seats' status lines are written while a seat is in.
 constexpr ULONGLONG kStatusIntervalMs = 10'000;
@@ -406,6 +407,8 @@ private:
             Log(L"{}: {} mirror view(s) stay in through the load (the loading screen is drawn in every column)", why,
                 mirrors);
         }
+        // The field goes with its level, players in or not: a level entered again is judged from its own data.
+        lss::session::lead_gate::ForgetAll();
         if (!session_->AnyIn())
         {
             return;
