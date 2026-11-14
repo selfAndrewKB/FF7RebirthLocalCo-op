@@ -153,7 +153,7 @@ bool IsPartnerOf(const LinkRecordView& record, std::uint8_t playerType) noexcept
            record.ended[record.partner] == 0;
 }
 
-SlotWait SlotWaitOf(Eligibility verdict, AiReadiness readiness, bool linkBusy) noexcept
+SlotWait SlotWaitOf(Eligibility verdict, AiReadiness readiness, bool linkBusy, bool inFieldAction) noexcept
 {
     if (verdict != Eligibility::Eligible)
     {
@@ -167,6 +167,11 @@ SlotWait SlotWaitOf(Eligibility verdict, AiReadiness readiness, bool linkBusy) n
     {
         // A synergy partner on its approach (its AI's, in BATTLE): taken only once the game gives it back.
         return SlotWait::LinkPartner;
+    }
+    if (inFieldAction)
+    {
+        // A climb its AI began, taken mid-way, would end at the ladder's foot and leave the walk it was part of short.
+        return SlotWait::FieldAction;
     }
     return SlotWait::None;
 }

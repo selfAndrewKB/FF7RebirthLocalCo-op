@@ -222,13 +222,15 @@ enum class SlotWait
     NotEligible,  // the slot's member is not free by the switch's own member test (yet)
     AiNotReady,   // the slot's member is held by a story script, or not following the party
     LinkPartner,  // the slot's member is a synergy partner the game has not given back yet (`link`)
+    FieldAction,  // the slot's member is inside a field action its AI began (a ladder, a squeeze, a crawl): taken at
+                  // its end, since a take during it would run the rest as the player's and stop it where it stands
     Unread,       // the party reads faulted (objects torn down under them, as in a reload)
 };
 
 /// The slot's member is taken only when free by the switch's own member test, with its AI in a state the game
-/// hands players, and not while it is a synergy partner the game has not given back: None, or the first reason
-/// in that order.
-SlotWait SlotWaitOf(Eligibility verdict, AiReadiness readiness, bool linkBusy) noexcept;
+/// hands players, not while it is a synergy partner the game has not given back, and not inside a field action its
+/// AI began: None, or the first reason in that order.
+SlotWait SlotWaitOf(Eligibility verdict, AiReadiness readiness, bool linkBusy, bool inFieldAction) noexcept;
 
 // ---- the take and the swap, awaited over the following ticks ----
 

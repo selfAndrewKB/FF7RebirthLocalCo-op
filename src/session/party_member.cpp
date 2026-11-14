@@ -9,9 +9,11 @@
 #include "platform/log.h"
 #include "platform/verified_code.h"
 #include "players/actor_fields.h"
+#include "players/generation.h"
 #include "players/object_fields.h"
 #include "players/seats.h"
 #include "scopes/primary_controller.h"
+#include "world/party_warp.h"
 
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
@@ -233,6 +235,7 @@ struct SlotRead
     AiSnapshot     ai{};
     bool           linkBusy = false;
     LinkRecordView link{};
+    bool           fieldAction = false;  // the character is inside a field action, by the game's own test
 };
 
 // The battle system's link manager and its records (research/RE-p2-synergy-skills.md; the same
@@ -390,6 +393,9 @@ void ReadSlot(int seat, void* playerOneController, std::uint8_t standIn, SlotRea
     // In battle only: synergy records come only from battle commands, and the battle teardown keeps a
     // record whose started member never ended, which must not hold a seat after it.
     out.linkBusy = facts::InBattle() && FindBusyLink(type, out.link);
+    // Asked only of a character the seat does not play: its action under way is its AI's. The seat's own character
+    // (the slot check of a seat in play) climbs as its player's, which is no reason to wait.
+    out.fieldAction = character != players::generation::MemberOf(seat) && world::party_warp::InFieldAction(character);
 }
 
 /// The party reads, guarded: during a reload the party's objects may be torn down under them. False
@@ -482,7 +488,7 @@ SlotChoice ChooseSlot(int seat, void* playerOneController, std::uint8_t standIn,
     choice.verdict            = Assess(read.member);
     choice.ai      = read.ai;
     const AiReadiness readiness = AssessAi(choice.ai);
-    choice.wait                 = SlotWaitOf(choice.verdict, readiness, read.linkBusy);
+    choice.wait                 = SlotWaitOf(choice.verdict, readiness, read.linkBusy, read.fieldAction);
     if (choice.wait == SlotWait::LinkPartner)
     {
         choice.link = read.link;
@@ -502,7 +508,9 @@ SlotChoice ChooseSlot(int seat, void* playerOneController, std::uint8_t standIn,
                                                 : L"",
                       Describe(choice.verdict), static_cast<unsigned>(choice.ai.brainIndex),
                       static_cast<unsigned>(choice.ai.state), Describe(readiness),
-                      choice.wait == SlotWait::LinkPartner ? L"; a synergy partner the game has not given back yet" : L"");
+                      choice.wait == SlotWait::LinkPartner   ? L"; a synergy partner the game has not given back yet"
+                      : choice.wait == SlotWait::FieldAction ? L"; inside a field action its AI began, taken at its end"
+                                                             : L"");
     }
     return choice;
 }

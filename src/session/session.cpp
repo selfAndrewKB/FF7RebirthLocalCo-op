@@ -112,6 +112,7 @@ const wchar_t* WaitWords(party_member::SlotWait wait) noexcept
     {
         case party_member::SlotWait::AiNotReady: return L"a story script, or not following the party";
         case party_member::SlotWait::LinkPartner: return L"a synergy partner the game has not given back yet";
+        case party_member::SlotWait::FieldAction: return L"its AI is inside a field action";
         case party_member::SlotWait::NotEligible: return L"not free by the game's own member test yet";
         case party_member::SlotWait::Unread: return L"the party could not be read";
         case party_member::SlotWait::None:
@@ -817,9 +818,11 @@ void Seat::WaitForSlot(const party_member::SlotChoice& choice) noexcept
     Log(L"{} waits for party member type {} (the {} slot, ordinal {}): {} (AI brain {} state {}); the game's "
         L"party order chooses the player's member, so a menu reorder ends the wait",
         Name(), choice.type, SlotWord(seat_), choice.ordinal,
-        choice.wait == party_member::SlotWait::NotEligible ? Describe(choice.verdict)
-        : choice.wait == party_member::SlotWait::Unread    ? L"the party could not be read"
-                                                           : Describe(AssessAi(choice.ai)),
+        choice.wait == party_member::SlotWait::NotEligible   ? Describe(choice.verdict)
+        : choice.wait == party_member::SlotWait::Unread      ? L"the party could not be read"
+        : choice.wait == party_member::SlotWait::FieldAction ? L"its AI is inside a field action (a ladder, a squeeze, a crawl); "
+                                                               L"taken at its end, so the action finishes as the AI's"
+                                                             : Describe(AssessAi(choice.ai)),
         choice.ai.brainIndex, choice.ai.state);
 }
 

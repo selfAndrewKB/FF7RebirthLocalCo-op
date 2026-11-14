@@ -16,11 +16,12 @@
 //     a fight whose data gathers no one, or keeps this member out, gets no warp from the mod either);
 //   - the member alive (not knocked out, not petrified: the game's battle-switch test);
 //   - no event holding the party (the leader switch's own counters);
-//   - outside every battle area by the game's own test; inside one nothing moves ("already in the fight");
-// and the mod's: in no field action and on no ride of its own. The trigger is the mod's: the game has no in-battle ask
-// for a battle member (the one recreation, written down in the plan and the research). Logged: each ask's answer
-// (Info), and the member's inside test half a second after a warp. Outside a battle the same double click is the
-// field's ask (world/party_warp). Game thread.
+// and the mod's: in no field action and on no ride of its own. The game's battle-area test is read for the log, not
+// as a gate: a character can be cut off from the fight while that test still counts it inside, and neither the
+// navmesh query nor the battle warp tests the area. The trigger is the mod's: the game has no in-battle ask for a
+// battle member (the one recreation, written down in the plan and the research). Logged: each ask's answer (Info),
+// with the area test's reading, and the member's area test half a second after a warp. Outside a battle the same
+// double click is the field's ask (world/party_warp). Game thread.
 
 namespace lss::platform {
 class GameImage;

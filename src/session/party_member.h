@@ -56,8 +56,9 @@ struct SlotChoice
 /// (RowOrFieldLeader); with `standIn` set (party_lease.h StandInFor: the game's leader change took the seat's
 /// member), the seat plays that character instead while it is deployed and not player 1's. The member is taken
 /// only when free by the battle switch's own member test and its AI is in the state the game hands players (FOLLOW,
-/// BATTLE), and not while it is a synergy partner the game has not given back yet (party_lease.h LinkPartnerBusy);
-/// otherwise the seat waits on it and never falls through to the next slot. Logged when `log` is set.
+/// BATTLE), not while it is a synergy partner the game has not given back yet (party_lease.h LinkPartnerBusy), and not
+/// while its AI is inside a field action (a ladder climb; world/party_warp.h InFieldAction); otherwise the seat waits on
+/// it and never falls through to the next slot. Logged when `log` is set.
 SlotChoice ChooseSlot(int seat, void* playerOneController, std::uint8_t standIn, bool log = true) noexcept;
 
 /// `character` is the field leader's (the character the game's leader goes home to at a fight's end). Guarded.

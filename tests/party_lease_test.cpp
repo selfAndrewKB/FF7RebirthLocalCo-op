@@ -303,14 +303,19 @@ void TestLinkPartnerBusy()
 
 void TestSlotWait()
 {
-    std::puts("slot wait: not eligible beats an unready AI, which beats a busy synergy partner; else the member is taken");
-    EXPECT(SlotWaitOf(Eligibility::Eligible, AiReadiness::Ready, false) == SlotWait::None);
-    EXPECT(SlotWaitOf(Eligibility::Eligible, AiReadiness::Ready, true) == SlotWait::LinkPartner);
-    EXPECT(SlotWaitOf(Eligibility::Eligible, AiReadiness::ScriptBrain, true) == SlotWait::AiNotReady);
-    EXPECT(SlotWaitOf(Eligibility::Eligible, AiReadiness::NotFollow, false) == SlotWait::AiNotReady);
-    EXPECT(SlotWaitOf(Eligibility::Eligible, AiReadiness::Unread, false) == SlotWait::AiNotReady);
-    EXPECT(SlotWaitOf(Eligibility::Requested, AiReadiness::ScriptBrain, true) == SlotWait::NotEligible);
-    EXPECT(SlotWaitOf(Eligibility::PlayerOnes, AiReadiness::Ready, false) == SlotWait::NotEligible);
+    std::puts("slot wait: not eligible beats an unready AI, which beats a busy synergy partner, which beats a field "
+              "action; else the member is taken");
+    EXPECT(SlotWaitOf(Eligibility::Eligible, AiReadiness::Ready, false, false) == SlotWait::None);
+    EXPECT(SlotWaitOf(Eligibility::Eligible, AiReadiness::Ready, true, false) == SlotWait::LinkPartner);
+    EXPECT(SlotWaitOf(Eligibility::Eligible, AiReadiness::ScriptBrain, true, false) == SlotWait::AiNotReady);
+    EXPECT(SlotWaitOf(Eligibility::Eligible, AiReadiness::NotFollow, false, false) == SlotWait::AiNotReady);
+    EXPECT(SlotWaitOf(Eligibility::Eligible, AiReadiness::Unread, false, false) == SlotWait::AiNotReady);
+    EXPECT(SlotWaitOf(Eligibility::Requested, AiReadiness::ScriptBrain, true, false) == SlotWait::NotEligible);
+    EXPECT(SlotWaitOf(Eligibility::PlayerOnes, AiReadiness::Ready, false, false) == SlotWait::NotEligible);
+    EXPECT(SlotWaitOf(Eligibility::Eligible, AiReadiness::Ready, false, true) == SlotWait::FieldAction);
+    EXPECT(SlotWaitOf(Eligibility::Eligible, AiReadiness::Ready, true, true) == SlotWait::LinkPartner);
+    EXPECT(SlotWaitOf(Eligibility::Eligible, AiReadiness::NotFollow, false, true) == SlotWait::AiNotReady);
+    EXPECT(SlotWaitOf(Eligibility::PlayerOnes, AiReadiness::Ready, false, true) == SlotWait::NotEligible);
 }
 
 void TestIsPartnerOf()

@@ -42,7 +42,7 @@ constexpr std::uint32_t        kCheckAfterTicks = 30;  // the inside test again,
 // Set at install, then only read.
 bool                  g_installed = false;
 CharacterTestFn       g_alive     = nullptr;  // the battle switch's member test: live, not dead, not petrified
-CharacterTestFn       g_inside    = nullptr;  // inside any battle area
+CharacterTestFn       g_inside    = nullptr;  // inside any battle area (read for the log; null when not found)
 LeaderFn              g_leader    = nullptr;
 const std::uintptr_t* g_root      = nullptr;
 
@@ -72,7 +72,16 @@ bool EventHoldsParty() noexcept
 
 bool Test(CharacterTestFn fn, const void* character, bool& out) noexcept
 {
-    return platform::CallGuarded(fn, out, character);
+    return fn != nullptr && platform::CallGuarded(fn, out, character);
+}
+
+/// The game's battle-area test on `character`, in words for the log; `outside` names the outside answer.
+const wchar_t* AreaReading(const void* character, const wchar_t* outside) noexcept
+{
+    bool inside = false;
+    return !Test(g_inside, character, inside) ? L"its area test not read"
+           : inside                           ? L"inside the fight's area by the game's test"
+                                              : outside;
 }
 
 /// Why `seat`'s member cannot be brought in now (null: it can).
@@ -115,14 +124,6 @@ const wchar_t* Refusal(int seat, void* member, const void* one) noexcept
     if (world::party_warp::InFieldAction(member))
     {
         return L"it is in a field action";
-    }
-    if (!Test(g_inside, member, flag))
-    {
-        return L"the battle area could not be read";
-    }
-    if (flag)
-    {
-        return L"it is already in the fight's area";
     }
     return nullptr;
 }
@@ -169,6 +170,8 @@ try
     }
     const wchar_t* found = placed ? L"beside player 1's character"
                                   : L"no navmesh point beside player 1's character: on its spot, as the game's gather does";
+    // Before the move: where the game counted it when asked.
+    const wchar_t* area = AreaReading(member, L"outside the fight's area by the game's test");
     if (!world::catch_up_move::Move(member, dest, oneYaw * 180.0f / kPi, oneAt, true))
     {
         platform::LogWarning(L"arena warp: the move of {} raised; it may stand where it was", who);
@@ -176,8 +179,9 @@ try
     }
     g_warped[static_cast<std::size_t>(seat)]  = players::weak_object::WeakOf(member);
     g_checkIn[static_cast<std::size_t>(seat)] = kCheckAfterTicks;
-    platform::Log(L"arena warp: {} brought into the fight ({}): {}, at ({:.1f}, {:.1f}, {:.1f}) m, with the game's battle warp", who,
-                  how, found, dest[0] / 100, dest[1] / 100, dest[2] / 100);
+    platform::Log(L"arena warp: {} brought into the fight ({}; it was {}): {}, at ({:.1f}, {:.1f}, {:.1f}) m, with the game's "
+                  L"battle warp",
+                  who, how, area, found, dest[0] / 100, dest[1] / 100, dest[2] / 100);
 }
 catch (...)
 {
@@ -192,18 +196,19 @@ bool Install(const platform::GameImage& image) noexcept
     const auto inside = platform::FindFunction(image, facts::kInsideAnyBattleArea);
     const auto leader = platform::FindFunction(image, facts::kResolvePartyLeader);
     const auto root   = players::game_globals::Address(players::game_globals::Global::GameRoot);
-    if (!alive || !inside || !leader || !root || !world::catch_up_move::Installed())
+    if (!alive || !leader || !root || !world::catch_up_move::Installed())
     {
         platform::Log(L"arena warp: an engine check failed; L3 twice in a fight brings no character in");
         return false;
     }
     g_alive     = reinterpret_cast<CharacterTestFn>(*alive);
-    g_inside    = reinterpret_cast<CharacterTestFn>(*inside);
+    g_inside    = inside ? reinterpret_cast<CharacterTestFn>(*inside) : nullptr;
     g_leader    = reinterpret_cast<LeaderFn>(*leader);
     g_root      = reinterpret_cast<const std::uintptr_t*>(root);
     g_installed = true;
-    platform::Log(L"arena warp: L3 twice in a fight brings player 2's or 3's character shut outside the fight's area in, with "
-                  L"the game's own placement and battle warp");
+    platform::Log(L"arena warp: L3 twice in a fight brings player 2's or 3's character in beside player 1's, with the game's own "
+                  L"placement and battle warp{}",
+                  inside ? L"" : L" (the game's battle-area test not found: the log does not say where the game counted it)");
     return true;
 }
 
@@ -247,10 +252,8 @@ void Tick() noexcept
         if (g_checkIn[i] != 0 && --g_checkIn[i] == 0)
         {
             void* member = players::weak_object::ObjectOf(g_warped[i]);
-            bool  inside = false;
-            const bool read = member != nullptr && Test(g_inside, member, inside);
             platform::Log(L"arena warp: {}'s character half a second after its warp: {}", players::SeatName(seat),
-                          !read ? L"not read" : inside ? L"inside the fight's area" : L"STILL OUTSIDE the fight's area");
+                          member != nullptr ? AreaReading(member, L"STILL OUTSIDE the fight's area by the game's test") : L"gone");
         }
     }
 }
