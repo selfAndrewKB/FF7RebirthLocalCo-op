@@ -80,8 +80,10 @@ void ProcessPlayerInput(void* controller, float deltaTime, bool gamePaused)
     const bool isOne  = seat == 0;
     const bool isSeat = players::SeatBuilt(seat) && players::generation::Active(seat);
     const scopes::scope_leaks::InputScope leaks(isSeat);  // a seat's input writes the leader transform; put back after
+    const std::int32_t                    padId = ControllerIdOf(controller);
+    // In a minigame player 1's input reads every pad's stick, its camera stick too (PlayerOnePadShared).
     if (!Enabled() || (!isOne && !isSeat) || (isSeat && !PartActs(kPartSeatInput)) ||
-        !players::generation::OnGameThread())
+        !players::generation::OnGameThread() || PlayerOnePadShared(padId))
     {
         g_inputCounters.Pass();
         g_engineProcessInput(controller, deltaTime, gamePaused);
@@ -95,7 +97,7 @@ void ProcessPlayerInput(void* controller, float deltaTime, bool gamePaused)
     {
         args.seat = seat;  // player 1's call opens Sticks alone, which reads no seat
     }
-    args.padId = ControllerIdOf(controller);
+    args.padId = padId;
     const unsigned which = isSeat ? seat_ladder::Sticks | seat_ladder::Primary | seat_ladder::Buttons
                                   : seat_ladder::Sticks;
     const seat_ladder::SeatScopes scopes(which, which, args);
@@ -235,11 +237,18 @@ void SetStickOverride(std::int32_t controllerId, const Sticks* sticks) noexcept
     slot       = sticks == nullptr ? std::nullopt : std::optional<Sticks>(*sticks);
 }
 
+bool PlayerOnePadShared(std::int32_t controllerId) noexcept
+{
+    return controllerId >= 0 && pad_buttons::SharedPlay() &&
+           controllerId == ControllerIdOf(players::generation::PlayerOneController());
+}
+
 StickScope::StickScope(std::int32_t controllerId) noexcept
 {
     std::byte* input = InputObject();
     Sticks     merged{};
     if (g_scopeOpen || input == nullptr || controllerId < 0 || !players::generation::OnGameThread() ||
+        PlayerOnePadShared(controllerId) ||
         !platform::CopyGuarded(merged.data(), input + facts::kInputMergedSticks, sizeof(merged)))
     {
         return;

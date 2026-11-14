@@ -23,6 +23,8 @@
 //     chocobo player 1 rides, and each seat's member is ticked with that seat's pad
 //     (input/member_movement.h).
 // Both act only on the game thread (players/generation.h); a call on any other thread is left alone.
+// While a minigame holds the screen no scope opens on player 1's pad (PlayerOnePadShared): every pad's stick
+// moves player 1's character and turns its camera, as unmodded.
 
 #include "input/stick_select.h"
 #include "platform/byte_scope.h"
@@ -85,6 +87,11 @@ std::int32_t ControllerIdOf(const void* controller) noexcept;
 /// pad itself reports and whether or not the game window has focus; null puts the pad back. Used by
 /// control scripts (control/remote.h). Game thread only.
 void SetStickOverride(std::int32_t controllerId, const Sticks* sticks) noexcept;
+
+/// Pad `controllerId` is player 1's and a minigame holds the screen (input/pad_buttons.h SharedPlay): a StickScope for
+/// it opens nothing, so the game's own aggregate of every pad stands, the stick to move and the camera stick, as every
+/// pad's buttons play the minigame. Game thread.
+bool PlayerOnePadShared(std::int32_t controllerId) noexcept;
 
 class StickScope
 {

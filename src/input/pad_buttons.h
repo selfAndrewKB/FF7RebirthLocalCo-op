@@ -35,9 +35,10 @@
 //     (views/whole_screen_reason.h SharedPlay): the game plays it on player 1's picture through its pad-blind
 //     pollers, so every pad plays it, as a second pad does unmodded. A seat's shop (not a pause-family
 //     menu) keeps its pad meanwhile. The merged stick already moves every menu cursor (pad_sticks
-//     swaps only inside a player's own calls), and in a minigame player 1's own stick scopes stand
-//     aside (SharedPlay, input/move_state), so every pad's stick moves player 1's character as every
-//     pad's buttons play it; releases are the game's own (its tables carry a source mask per pad);
+//     swaps only inside a player's own calls), and in a minigame no stick scope opens on
+//     player 1's pad (SharedPlay, input/pad_sticks.h), so every pad's stick moves player 1's
+//     character and turns its camera as every pad's buttons play it; releases are the game's own
+//     (its tables carry a source mask per pad);
 //   - a ButtonScope, opened around one seat's calls (its controller input and its member's tick, next
 //     to the stick scope), writes that seat's view and puts back what the Tick wrote after. Seats take
 //     turns: a scope never opens inside another.

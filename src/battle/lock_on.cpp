@@ -541,9 +541,10 @@ void Targeting(void* system, float deltaTime) noexcept
     }
     if (input::pad_sticks::Enabled() && input::pad_sticks::PartActs(input::pad_sticks::kPartPlayerOneMove))
     {
-        const input::pad_sticks::StickScope sticks(input::pad_sticks::ControllerIdOf(players::generation::PlayerOneController()));
-        static bool                  refusedLogged = false;
-        if (!sticks.Held() && !refusedLogged)
+        const std::int32_t                  padId = input::pad_sticks::ControllerIdOf(players::generation::PlayerOneController());
+        const input::pad_sticks::StickScope sticks(padId);
+        static bool                         refusedLogged = false;
+        if (!sticks.Held() && !input::pad_sticks::PlayerOnePadShared(padId) && !refusedLogged)
         {
             refusedLogged = true;  // another scope was open: this tick reads whatever stick that scope holds
             Note(L"player 1's targeting ran without pad 1's own stick (another stick scope was open)");

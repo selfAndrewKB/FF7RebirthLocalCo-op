@@ -556,7 +556,7 @@ void ReadMenuTime() noexcept
     if (minigame && !minigameWas)
     {
         platform::Log(L"buttons: a minigame holds the screen: every pad drives it (the game's merged state in the tables, "
-                      L"every pad's presses passed as they came, every pad's stick moving player 1's character)");
+                      L"every pad's presses passed as they came, every pad's stick moving player 1's character and camera)");
     }
     else if (!minigame && minigameWas)
     {
