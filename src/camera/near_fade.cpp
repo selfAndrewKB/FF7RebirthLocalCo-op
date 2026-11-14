@@ -1,6 +1,7 @@
 #include "camera/near_fade.h"
 
 #include "facts/engine.h"
+#include "facts/party.h"
 #include "platform/call_redirect.h"
 #include "platform/dev_switch.h"
 #include "platform/guarded.h"
@@ -38,8 +39,7 @@ constexpr std::uintptr_t kIsPlayerChar      = 0x140806FE0;  // IsUCPC_WithVehicl
 constexpr std::uint32_t kArrayNum = 8;
 
 // A seat's character's SE fade object (research/RE-p2-camera-near-fade.md, same in both builds): the EndActorInterface
-// subobject at +0x4B8, its fade getter at vtable +0x1D0 (may return null).
-constexpr std::uint32_t kCharInterface = 0x4B8;
+// subobject's fade getter at vtable +0x1D0 (may return null).
 constexpr std::uint32_t kFadeGetter    = 0x1D0;
 constexpr std::uint32_t kFadeTarget    = 0x90;  // float: the opacity it fades toward
 constexpr std::uint32_t kFadeReasons   = 0xA4;  // u32 hidden reasons: bit 0x10 the near fade
@@ -224,7 +224,7 @@ bool OverlapPlayerTest(const void* actor) noexcept
 /// A seat's character's fade object, by the game's getter (guarded), or null.
 const void* FadeOfMember(void* member) noexcept
 {
-    void*      iface  = static_cast<std::byte*>(member) + kCharInterface;
+    void*      iface  = static_cast<std::byte*>(member) + facts::kCharacterActorInterface;
     const auto getter = reinterpret_cast<FadeOfFn>(ReadPointer(ReadPointer(iface, 0), kFadeGetter));
     void*      fade   = nullptr;
     return getter != nullptr && platform::CallGuarded(getter, fade, iface) ? fade : nullptr;

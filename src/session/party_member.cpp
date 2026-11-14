@@ -38,6 +38,8 @@ using GlobalObjectFn    = void* (*)();
 using TypeFn            = std::uint8_t (*)();                           // al only
 using TypeTestFn        = std::uint8_t (*)(std::uint8_t playerType);    // al only
 using SwitchAiFn        = void (*)(void* character, std::uint8_t toPlayer, void* controller);
+using ActorTypeFn       = std::uint8_t (*)(void* actorInterface);
+using SetActorTypeFn    = void (*)(void* actorInterface, std::uint8_t type);
 
 struct Functions
 {
@@ -704,6 +706,50 @@ bool ReturnTo(int seat, void* member, void* controller) noexcept
         return false;
     }
     return true;
+}
+
+bool IsGameLeader(const void* character) noexcept
+{
+    return g_installed && character != nullptr && IsLeaderGuarded(character);
+}
+
+namespace {
+
+/// `character`'s actor interface, and the function its table holds at `slot` (null when unreadable).
+template <class Fn>
+Fn ActorInterfaceFunction(void* character, std::uint32_t slot, void*& actorInterface) noexcept
+{
+    actorInterface = static_cast<std::byte*>(character) + facts::kCharacterActorInterface;
+    return reinterpret_cast<Fn>(platform::ReadPointer(platform::ReadPointer(actorInterface, 0), slot));
+}
+
+}  // namespace
+
+std::optional<std::uint8_t> ActorType(void* character) noexcept
+{
+    if (character == nullptr)
+    {
+        return std::nullopt;
+    }
+    void*             actorInterface = nullptr;
+    const ActorTypeFn getter = ActorInterfaceFunction<ActorTypeFn>(character, facts::kActorTypeGetSlot, actorInterface);
+    std::uint8_t      type   = 0;
+    if (getter == nullptr || !platform::CallGuarded(getter, type, actorInterface))
+    {
+        return std::nullopt;
+    }
+    return type;
+}
+
+bool SetActorType(void* character, std::uint8_t type) noexcept
+{
+    if (character == nullptr)
+    {
+        return false;
+    }
+    void*                actorInterface = nullptr;
+    const SetActorTypeFn setter = ActorInterfaceFunction<SetActorTypeFn>(character, facts::kActorTypeSetSlot, actorInterface);
+    return setter != nullptr && platform::CallGuarded(setter, actorInterface, type);
 }
 
 LeaseState ReadLease(const void* member, const void* seatController) noexcept

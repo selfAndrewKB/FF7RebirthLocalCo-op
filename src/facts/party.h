@@ -96,6 +96,15 @@ inline constexpr std::uint32_t kCharacterRequestedController = 0x578;
 inline constexpr std::uint32_t kCharacterEffectiveController = 0x580;
 inline constexpr std::uint32_t kCharacterRetainedAi          = 0x588;
 inline constexpr std::uint32_t kCharacterPlayerControlled    = 0x625;
+// The character's EndActorInterface (IEndActorInterface; the same offset and slots in both builds) and its actor type
+// (EActorType: the game's leader PLAYER, every other party member PARTY), read and set through the interface
+// (research/RE-actor-type-on-hand.md). The setter re-registers the character's per-type invisible walls, so the type is
+// never written as a byte.
+inline constexpr std::uint32_t kCharacterActorInterface = 0x4B8;
+inline constexpr std::uint32_t kActorTypeGetSlot        = 0x1B0;  // u8 (interface)
+inline constexpr std::uint32_t kActorTypeSetSlot        = 0x1B8;  // void (interface, u8 type)
+inline constexpr std::uint8_t  kActorTypePlayer         = 0;
+inline constexpr std::uint8_t  kActorTypeParty          = 1;
 // The character's control holder (IsUCPC_Core: mov rcx,[rcx+638h]): its vt+0x40 gives the input component, its
 // vt+0x48 the BattlePlayer component (BattlePlayerControllerComp, whose vtable's +0x70 is the leader test above).
 inline constexpr std::uint32_t  kCharacterControlHolder      = 0x638;

@@ -13,6 +13,7 @@
 #include "camera/view_target.h"
 #include "facts/controller.h"
 #include "facts/in_battle.h"
+#include "facts/party.h"
 #include "input/member_movement.h"
 #include "input/move_census.h"
 #include "input/pad_buttons.h"
@@ -502,6 +503,7 @@ void Seat::Yield(const wchar_t* why) noexcept
     rides::own_ride::Release(seat_, L"the player gives the member back");  // while the seat's scopes still hold
     Log(L"{}'s {} is {}: giving it back to choose again among the deployed party", Name(), players::NameOf(member_), why);
     handover_watch::Snapshot(L"the give-back", member_);
+    PartyTypeAfterOwnSwitch(why);
     players::generation::SetMember(seat_, nullptr);  // the seat's member movement and scopes stop at once
     ownSwitch_        = false;       // the member given back: the slot decides the next
     ownSwitchTicks_   = 0;
@@ -574,6 +576,7 @@ void Seat::OnLeaderChanging(void* controller, void* character) noexcept
             // Read before the give-back: the roster walk names the member by its character.
             const auto own = party_member::PlayerTypeOf(member_);
             const auto was = party_member::PlayerTypeOf(before);
+            ownSwitch_     = false;  // the member becomes the game's leader: the game types it itself, so no retype
             Yield(L"about to become player 1's leader (the game's leader change)");
             const std::uint8_t mark = StandInFor(home, was.value_or(kNoStandIn), own.value_or(kNoStandIn));
             if (home && standIn_ != kNoStandIn)
@@ -616,9 +619,11 @@ void Seat::AdoptOwnSwitch(void* character) noexcept
     {
         return;
     }
-    Log(L"{} switches from {} to {} (their own d-pad switch in the fight, the game's own cycle); back on their slot's "
-        L"member when the fight ends",
-        Name(), players::NameOf(member_), players::NameOf(character));
+    const auto type = party_member::ActorType(character);
+    Log(L"{} switches from {} to {} (their own d-pad switch in the fight, the game's own cycle; its actor type {} as the "
+        L"switch reaches the possession); "
+        L"back on their slot's member when the fight ends",
+        Name(), players::NameOf(member_), players::NameOf(character), type ? std::to_wstring(*type) : L"unread");
     handover_watch::Snapshot(L"the player's own switch", character);
     member_      = character;
     memberWeak_  = scopes::leader_scope::WeakOf(character);
@@ -664,8 +669,41 @@ void Seat::AwaitOwnSwitch() noexcept
 void Seat::EndOwnSwitch(const wchar_t* why) noexcept
 {
     Log(L"{}'s own switch ends: {}; {}'s slot of the party order decides again", Name(), why, Name());
+    PartyTypeAfterOwnSwitch(why);
     ownSwitch_ = false;
     FollowSlot(why, true);
+}
+
+/// The game's switch types the member it moves a player onto as its leader (PLAYER) and the one it leaves PARTY; in the
+/// seat's pass that is the seat's member, and nothing types it back when the fight ends, the player leaves or the member
+/// is given back (research/RE-actor-type-on-hand.md). A PLAYER-typed member meets player 1's invisible walls and walks
+/// through the party's, so a level's walk can stop short of its point. As in the one-player game, every member but the
+/// game's leader is PARTY again: through the game's setter, before the possession changes (the game's order).
+void Seat::PartyTypeAfterOwnSwitch(const wchar_t* when) noexcept
+{
+    if (!ownSwitch_ || member_ == nullptr)
+    {
+        return;
+    }
+    const auto type = party_member::ActorType(member_);
+    if (!type)
+    {
+        Log(L"WARNING: {}'s {}: its actor type could not be read after their own switch ({}); left as it is", Name(),
+            players::NameOf(member_), when);
+        return;
+    }
+    if (*type != facts::kActorTypePlayer || party_member::IsGameLeader(member_))
+    {
+        platform::LogDebug(L"{}'s {} keeps actor type {} after their own switch ({})", Name(), players::NameOf(member_),
+                           *type, when);
+        return;
+    }
+    const bool set   = party_member::SetActorType(member_, facts::kActorTypeParty);
+    const auto after = party_member::ActorType(member_);
+    Log(L"{}'s {} was typed as the game's leader (actor type {}) after {}'s own switch ({}): typed PARTY with the game's "
+        L"setter {} (now {})",
+        Name(), players::NameOf(member_), *type, Name(), when, set ? L"done" : L"FAILED",
+        after ? std::to_wstring(*after) : L"unread");
 }
 
 /// The game changed a party member's status (session/party_events.h): the seat's member is checked
@@ -1238,6 +1276,7 @@ void Seat::Leave() noexcept
         return;
     }
     rides::own_ride::Leave(seat_, L"the player leaves");  // before the withdraw: the swap back needs the seat's scopes
+    PartyTypeAfterOwnSwitch(L"the player leaves");
     seat_out::LetGo(seat_);
     players::generation::Withdraw(seat_);  // every wrapper passes through from here on
     phase_ = Phase::Leaving;

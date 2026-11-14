@@ -231,6 +231,7 @@ private:
     void AdoptOwnSwitch(void* character) noexcept;            // the seat's own switch: the seat plays `character`
     void AwaitOwnSwitch() noexcept;                           // the switch's hand-over read from the lease, as a take's
     void EndOwnSwitch(const wchar_t* why) noexcept;           // the own switch over (logged) and the slot followed
+    void PartyTypeAfterOwnSwitch(const wchar_t* when) noexcept;  // the member typed PARTY again, as single player's
     void WaitForSlot(const party_member::SlotChoice& choice) noexcept;
     bool ScriptNeedsMember(const AiSnapshot& ai) noexcept;
     void CheckHeldAi() noexcept;

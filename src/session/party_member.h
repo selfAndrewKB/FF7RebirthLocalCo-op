@@ -114,6 +114,17 @@ bool HandToAi(void* member) noexcept;
 /// primary scope. False when the scope or the call is refused (logged). Game thread.
 bool ReturnTo(int seat, void* member, void* controller) noexcept;
 
+/// `character` is the game's leader now (player 1's character). Guarded.
+bool IsGameLeader(const void* character) noexcept;
+
+/// `character`'s actor type through its actor interface's getter (facts::kActorTypePlayer, facts::kActorTypeParty, ...),
+/// or nullopt when it cannot be read.
+std::optional<std::uint8_t> ActorType(void* character) noexcept;
+
+/// `character`'s actor type set with the game's setter, which re-registers its per-type invisible walls. False when it
+/// cannot be called or faulted.
+bool SetActorType(void* character, std::uint8_t type) noexcept;
+
 /// The lease fields for `member` and the seat's controller.
 LeaseState ReadLease(const void* member, const void* seatController) noexcept;
 
