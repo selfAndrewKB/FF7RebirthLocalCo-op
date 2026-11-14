@@ -123,6 +123,7 @@ add_library(LocalSplitScreen SHARED
     src/battle/arena_warp.cpp
     src/hud/widget_visibility.cpp
     src/hud/lead_mark.cpp
+    src/hud/low_health.cpp
     src/world/shop_talk.cpp
     src/world/seat_switch_volumes.cpp
     src/world/seat_triggers.cpp
@@ -389,6 +390,7 @@ lss_test(party_lease src/session/party_lease.cpp)
 lss_test(field_hold)
 lss_test(state_path)
 lss_test(lead_keep_rules)
+lss_test(low_health_rules)
 lss_test(story_box_rules)
 lss_test(battle_rates_rules)
 lss_test(battle_warps_rules)

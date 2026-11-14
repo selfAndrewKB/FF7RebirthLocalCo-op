@@ -31,18 +31,12 @@ namespace {
 // (EndUIFilter_RefInc/RefDec on EndUISystem[41], keeping their own "holds it" byte). Each seat's menu does
 // the same; player 1's keeps the latch. The wait sound's off is one mode slot: it is skipped while the
 // other menu is still in wait mode.
-constexpr std::uint8_t kFilterOnBytes[]  = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0xE8, 0xD3, 0xEB, 0x00};
-constexpr std::uint8_t kFilterOffBytes[] = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0xF0, 0xDA, 0xEB, 0x00};
 constexpr std::uint8_t kMenuSoundBytes[] = {0x40, 0x53, 0xB8, 0x30, 0x00, 0x00, 0x00, 0xE8, 0xE8, 0x50, 0x51, 0x01};
-constexpr std::uint8_t kRefIncBytes[]    = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x57, 0xB8, 0x20,
-                                            0x00, 0x00, 0x00, 0xE8, 0xAC, 0xD3, 0xEB, 0x00};
-constexpr std::uint8_t kRefDecBytes[]    = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x57, 0xB8, 0x20,
-                                            0x00, 0x00, 0x00, 0xE8, 0x74, 0xDA, 0xEB, 0x00};
-constexpr platform::FunctionFact kFilterOn{L"EndUIFilter_EnableType", 0x1411F1B3C, kFilterOnBytes};
-constexpr platform::FunctionFact kFilterOff{L"EndUIFilter_DisableType", 0x1411F1434, kFilterOffBytes};
+using facts::kFilterOn;
+using facts::kFilterOff;
 constexpr platform::FunctionFact kMenuSound{L"EndSound_PostMenuEventIdx", 0x140B99E3C, kMenuSoundBytes};
-constexpr platform::FunctionFact kRefInc{L"EndUIFilter_RefInc", 0x1411F1B74, kRefIncBytes};
-constexpr platform::FunctionFact kRefDec{L"EndUIFilter_RefDec", 0x1411F14AC, kRefDecBytes};
+using facts::kRefInc;
+using facts::kRefDec;
 // The wait's muffle at its open: the sound event (event table entry 12) and the audio mode "WaitMode", both inlined in
 // the wait machine (research/RE-menu-slow.md).
 constexpr std::uint8_t kSoundEventBytes[] = {0x48, 0x89, 0x4C, 0x24, 0x08, 0xB8, 0x38, 0x04,
@@ -60,8 +54,8 @@ constexpr std::uintptr_t kSoundOffCall    = 0x14096384B;  // 4 -> 0 (event 13, t
 constexpr std::uint8_t kWaitSoundOn  = 12;
 constexpr std::uint8_t kWaitSoundOff = 13;
 using facts::kUIFilterManager;  // EndUISystem[41]
-constexpr std::uint32_t  kFilterLatch   = 0x1C;         // u8 per type
-constexpr std::uint32_t  kFilterCount   = 0x2C;         // i32 per type
+using facts::kFilterLatch;
+using facts::kFilterCount;
 constexpr std::uint8_t   kTintType      = 0;
 using facts::kUICommandController;
 using facts::kCmdWaitFilter;

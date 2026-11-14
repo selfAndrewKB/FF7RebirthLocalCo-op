@@ -127,7 +127,6 @@ using facts::kCmdHudMode;
 using facts::kCmdBlocked;
 using facts::kCmdReady;
 using facts::kCmdWaitFilter;
-constexpr std::uint32_t kPinch            = 0x650;  // u8
 using facts::kCmdGuardLatch;
 constexpr std::uint32_t kHudSoundMode     = 0x774;  // u8
 using facts::kCmdReadyB;
@@ -505,7 +504,7 @@ void Watch(int seat, std::uintptr_t ctrl, std::uintptr_t ctrl1) noexcept
     now.guardLatch = ReadAt<std::int32_t>(ctrl + kCmdGuardLatch);
     now.waitFilter = ReadAt<std::int32_t>(ctrl + kCmdWaitFilter);
     now.storedType = ReadAt<std::uint8_t>(ctrl + kCmdStoredLeaderType);
-    now.pinch      = ReadAt<std::uint8_t>(ctrl + kPinch);
+    now.pinch      = ReadAt<std::uint8_t>(ctrl + facts::kCmdDanger);
     now.members    = {ReadAt<std::int32_t>(ctrl + kCmdMembers), ReadAt<std::int32_t>(ctrl + kCmdMembers + 4)};
     Snapshot steady = now;
     steady.requests = {};

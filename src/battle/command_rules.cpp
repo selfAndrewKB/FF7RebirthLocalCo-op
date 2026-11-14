@@ -1,6 +1,7 @@
 #include "battle/command_rules.h"
 
 #include "battle/command_rules_code.h"
+#include "facts/party.h"
 #include "platform/call_redirect.h"
 #include "platform/code_redirect.h"
 #include "platform/guarded.h"
@@ -21,10 +22,8 @@ namespace lss::battle::command_rules {
 namespace {
 
 // Facts read from the database (research/RE-p2-command-menu.md; this build).
-// The chooser's HP call: Party_GetHpByType(u8 type), 0 for a knocked-out member.
-constexpr std::uint8_t kHpBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x57, 0xB8, 0x20,
-                                     0x00, 0x00, 0x00, 0xE8, 0x9C, 0x2B, 0x67, 0x01};
-constexpr platform::FunctionFact kHp{L"Party_GetHpByType", 0x140A3C384, kHpBytes};
+// The chooser's HP call: Party_GetHpByType (facts/party.h).
+using facts::kPartyHp;
 constexpr std::uintptr_t kChooserHpCall = 0x141836901;
 // FieldCommandCtrl_IsMemberCommandable(ctrl, ordinal, flag): gated at its first instruction, which
 // covers its five callers (one call site straddles a code block; battle/command_rules_code.h).
@@ -145,7 +144,7 @@ std::uint32_t ChooserHp(std::uint8_t type) noexcept
 
 bool Install(const platform::GameImage& image) noexcept
 {
-    const auto hp          = platform::FindFunction(image, kHp);
+    const auto hp          = platform::FindFunction(image, kPartyHp);
     const auto commandable = platform::FindFunction(image, kCommandable);
     const auto ordinalType = platform::FindFunction(image, kOrdinalType);
     // The HP lever and the command test together, or neither: ally mode and the menu must agree. The

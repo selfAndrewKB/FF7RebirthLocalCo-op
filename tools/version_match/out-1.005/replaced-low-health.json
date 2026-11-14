@@ -1,0 +1,30 @@
+{
+  "build": "1.005",
+  "research_build": "1.004",
+  "date": "2026-11-14",
+  "doc": "Rebirth/Documentation/research/RE-low-health-effect.md (section 8)",
+  "facts": [
+    {"name": "Party_GetHpByType", "old": "0x140A3C384", "new": "0x140C25A50", "bytes": "", "same_semantics": true, "confidence": "CONFIRMED",
+     "note": "The IDA pass LOWHEALTH on both databases: (type in cl) -> HP; the decision's HP read."},
+    {"name": "FieldCommandCtrl_Tick_PinchFilter650", "old": "0x141526EE0", "new": "0x140C2A164", "bytes": "", "same_semantics": true, "confidence": "CONFIRMED",
+     "note": "The IDA pass LOWHEALTH on both databases: the low-health decision (controller); first 16 bytes identical."},
+    {"name": "call: decision -> Party_GetHpByType", "old": "0x141526F79", "new": "0x140C2A1FD", "bytes": "", "same_semantics": true, "confidence": "CONFIRMED",
+     "note": "The IDA pass LOWHEALTH: the decision's one HP read (E8), followed by cmp eax,ebx in both builds."},
+    {"name": "call: decision -> EndUIFilter_EnableType(1)", "old": "0x142A67126", "new": "0x14259FEC2", "bytes": "", "same_semantics": true, "confidence": "CONFIRMED",
+     "note": "The IDA pass LOWHEALTH: the Dying filter's on in the decision's state change."},
+    {"name": "call: decision -> EndUIFilter_EnableType(6)", "old": "0x142A6712F", "new": "0x14259FECB", "bytes": "", "same_semantics": true, "confidence": "CONFIRMED",
+     "note": "The IDA pass LOWHEALTH: the Stone filter's on in the decision's state change."},
+    {"name": "call: decision -> EndUIFilter_DisableType(1)", "old": "0x142A670E4", "new": "0x14259FE80", "bytes": "", "same_semantics": true, "confidence": "CONFIRMED",
+     "note": "The IDA pass LOWHEALTH: the Dying filter's off in the decision's state change."},
+    {"name": "call: decision -> EndUIFilter_DisableType(6)", "old": "0x142A670ED", "new": "0x14259FE89", "bytes": "", "same_semantics": true, "confidence": "CONFIRMED",
+     "note": "The IDA pass LOWHEALTH: the Stone filter's off in the decision's state change."},
+    {"name": "EndUI__MC0_Lerps_GameModeDt", "old": "0x140F37340", "new": "0x14114E8CC", "bytes": "", "same_semantics": true, "confidence": "CONFIRMED",
+     "note": "The IDA pass LOWHEALTH: the screen-filter slot's tick (slot, dt); first 16 bytes identical."},
+    {"name": "call: MasterHUD_Tick -> the slot's tick", "old": "0x140F37F18", "new": "0x140F75AC0", "bytes": "", "same_semantics": true, "confidence": "CONFIRMED",
+     "note": "The IDA pass LOWHEALTH: the slot tick's only call, every HUD tick."},
+    {"name": "ScreenFilterFunctor_ApplyToView", "old": "0x1450F73D4", "new": "0x144F1F7E4", "bytes": "", "same_semantics": true, "confidence": "CONFIRMED",
+     "note": "The IDA pass LOWHEALTH: the screen filter functor's apply (functor, view settings, weight), the vtable slot's function."},
+    {"name": "vt_ScreenFilterFunctor slot 4", "old": "0x146BE7B08", "new": "0x145E66720", "bytes": "", "same_semantics": true, "confidence": "CONFIRMED",
+     "note": "The IDA pass LOWHEALTH: the apply's vtable entry (vtable 0x146BE7AE8 / 0x145E66700, slot 4); holds the apply in both builds."}
+  ]
+}

@@ -111,6 +111,7 @@
 #include "world/run_catch_up.h"
 #include "battle/arena_warp.h"
 #include "hud/lead_mark.h"
+#include "hud/low_health.h"
 #include "world/shop_talk.h"
 #include "world/vending.h"
 #include "world/world_actor_reach.h"
@@ -191,6 +192,8 @@ constexpr std::array kModules{
     Module{Call<&battle::command_locks::Install>, &battle::command_locks::Remove},
     // ticked in battle; each seat's attack, guard and dodge
     Module{Call<&battle::command_menu_tick::Install>, &battle::command_menu_tick::Remove},
+    // the low-health red edge in each player's own view, on that player's own danger (after the controllers' tick)
+    Module{Call<&hud::low_health::Install>, &hud::low_health::Remove},
     // party-list cells and key guide tick in their owner's view
     Module{Call<&battle::widget_owner::Install>, &battle::widget_owner::Remove},
     // parallel passes without their own GPU submission (several views)
@@ -522,6 +525,7 @@ void TickAfterSession(const Frame& frame) noexcept
     world::nav_strand::Tick(frame.splitShown);  // a stranded player is warped back to the party
     battle::arena_warp::Tick();  // an ask made in a fight: the character brought into the fight's area
     hud::lead_mark::Tick();  // each kept walk's marker added, moved or removed
+    hud::low_health::Tick(plays, frame.splitShown);  // each seat's danger decided outside a fight
     camera::camera_repair::Tick();
     traversal::traversal_watch::Tick();
     world::seat_triggers::Tick();
@@ -890,6 +894,7 @@ void RegisterCommands(session::Session& session, views::column_source::Override&
         menu::coop_menu::RegisterCommands();
         battle::lock_on::RegisterCommands();
         battle::menu_tint::RegisterCommands();
+        hud::low_health::RegisterCommands();
         battle::enemy_leader::RegisterCommands();
         camera::shoulder_scale::RegisterCommands();
         camera::camera_distance::RegisterCommands();

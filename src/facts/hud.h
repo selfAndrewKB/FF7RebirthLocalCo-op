@@ -283,4 +283,77 @@ inline constexpr std::uintptr_t kFieldQuestIconVTable = 0x1457C00C0;
 inline constexpr std::uint32_t  kIconImage            = 0x3B0;
 inline constexpr float          kQuestIconSize        = 24.0f;
 
+// ---------------------------------------------------------------------------------------------
+// The UI filters and the low-health red edge (RE-p2-command-menu-tint.md, RE-low-health-effect.md)
+// ---------------------------------------------------------------------------------------------
+
+/// The UI filter manager's latch over a reference count, per filter type: EnableType(world, type) sets the type's one
+/// latch and counts it once; DisableType(type) clears it (type 1's also clears type 6's). RefInc/RefDec(manager, type)
+/// count a holder of the filter's own, as the game's other menus share one.
+inline constexpr std::uint8_t kFilterOnBytes[]  = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0xE8, 0xD3, 0xEB, 0x00};
+inline constexpr std::uint8_t kFilterOffBytes[] = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0xF0, 0xDA, 0xEB, 0x00};
+inline constexpr std::uint8_t kRefIncBytes[]    = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x57, 0xB8, 0x20,
+                                                   0x00, 0x00, 0x00, 0xE8, 0xAC, 0xD3, 0xEB, 0x00};
+inline constexpr std::uint8_t kRefDecBytes[]    = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x57, 0xB8, 0x20,
+                                                   0x00, 0x00, 0x00, 0xE8, 0x74, 0xDA, 0xEB, 0x00};
+inline constexpr FunctionFact kFilterOn{L"EndUIFilter_EnableType", 0x1411F1B3C, kFilterOnBytes};
+inline constexpr FunctionFact kFilterOff{L"EndUIFilter_DisableType", 0x1411F1434, kFilterOffBytes};
+inline constexpr FunctionFact kRefInc{L"EndUIFilter_RefInc", 0x1411F1B74, kRefIncBytes};
+inline constexpr FunctionFact kRefDec{L"EndUIFilter_RefDec", 0x1411F14AC, kRefDecBytes};
+inline constexpr std::uint32_t kFilterLatch = 0x1C;  // the manager's u8 latch per type
+inline constexpr std::uint32_t kFilterCount = 0x2C;  // its i32 count per type
+
+/// The low-health decision, each command controller's tick: any battle member at or below the danger share of its HP
+/// sets the controller's danger to Dying (filter type 1, the red edge); a member in the stone state to Stone (type 6,
+/// white; the petrify state) unless one is low. Gated by the controller's set-up and allowed bytes; a change of its danger
+/// value (only while its DyingStone widget exists) turns the old type's filter off and the new one's on. Its HP read is
+/// one call (facts/party.h kPartyHp).
+inline constexpr std::uint8_t kDangerDecisionBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x6C,
+                                                        0x24, 0x10, 0x48, 0x89, 0x74, 0x24, 0x18, 0x57};
+inline constexpr FunctionFact kDangerDecision{L"FieldCommandCtrl_Tick_PinchFilter650", 0x141526EE0, kDangerDecisionBytes};
+inline constexpr std::uintptr_t kDangerHpCall          = 0x141526F79;  // the decision's HP read
+inline constexpr std::uintptr_t kDangerDyingOnCall     = 0x142A67126;  // its EnableType(1)
+inline constexpr std::uintptr_t kDangerStoneOnCall     = 0x142A6712F;  // its EnableType(6)
+inline constexpr std::uintptr_t kDangerDyingOffCall    = 0x142A670E4;  // its DisableType(1)
+inline constexpr std::uintptr_t kDangerStoneOffCall    = 0x142A670ED;  // its DisableType(6)
+inline constexpr std::uint32_t  kCmdDanger             = 0x650;  // i32: 0 none, 1 Dying, 4 Stone
+inline constexpr std::uint32_t  kCmdDangerAllowed      = 0x77C;  // u8: an event hides the edge here, on player 1's only
+inline constexpr std::int32_t   kDangerDying           = 1;
+inline constexpr std::int32_t   kDangerStone           = 4;
+inline constexpr std::uint8_t   kFilterDying           = 1;
+inline constexpr std::uint8_t   kFilterStone           = 6;
+inline constexpr std::int32_t   kNeverLowHp            = 0x7FFFFFFF;  // an HP no danger share reaches
+
+/// The screen-filter slot (EndUISystem[24], a pointer): the edge's intensity fades linearly to its target, run every HUD
+/// tick by the slot's tick (slot, frame time), which hands the value to the world's screen-effect registry only through
+/// the slot's weak world (zero in a copy: a copy only fades). Arming as the game's setter does: start = now, the target,
+/// elapsed 0, the length.
+inline constexpr std::uint32_t kUIScreenFilter = 0xC0;
+inline constexpr std::uint8_t kFilterTickBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x7C,
+                                                    0x24, 0x18, 0x55, 0x48, 0x8B, 0xEC, 0xB8, 0x70};
+inline constexpr FunctionFact kFilterTick{L"EndUI__MC0_Lerps_GameModeDt", 0x140F37340, kFilterTickBytes};
+inline constexpr std::uintptr_t kFilterTickCall    = 0x140F37F18;  // MasterHUD_Tick's one call
+inline constexpr std::uint32_t  kFilterSlotSize    = 0xC8;
+inline constexpr std::uint32_t  kFilterIntensity   = 0x9C;
+inline constexpr std::uint32_t  kFilterFadeStart   = 0xB4;
+inline constexpr std::uint32_t  kFilterFadeTarget  = 0xB8;
+inline constexpr std::uint32_t  kFilterFadeElapsed = 0xBC;
+inline constexpr std::uint32_t  kFilterFadeLength  = 0xC0;
+inline constexpr float          kDyingIntensity    = 1.0f;  // the Dying filter's intensity when on
+inline constexpr float          kDyingFadeSeconds  = 0.5f;  // its fade's length, in and out
+
+/// The registry's screen-filter functor: its apply (vtable slot, the one function for this functor class) writes the
+/// view's filter fields from its own, each blended by the weight: (functor, the view's settings at kViewSettings,
+/// weight). Its "on" float and its intensity; the object's size, copied whole for a view's own value.
+inline constexpr std::uintptr_t kFilterApplySlot  = 0x146BE7B08;
+inline constexpr std::uint8_t   kFilterApplyBytes[] = {0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8};
+inline constexpr FunctionFact   kFilterApply{L"ScreenFilterFunctor_ApplyToView", 0x1450F73D4, kFilterApplyBytes};
+inline constexpr std::uint32_t  kFunctorOn        = 0x0C;
+inline constexpr std::uint32_t  kFunctorIntensity = 0x14;
+inline constexpr std::uint32_t  kFunctorSize      = 0x38;
+/// FSceneView: the settings the registry is applied to, and the view's player (its local player's controller id; -1
+/// for a scene capture).
+inline constexpr std::uint32_t kViewSettings    = 0xF10;
+inline constexpr std::uint32_t kViewPlayerIndex = 0x228;
+
 }  // namespace lss::facts

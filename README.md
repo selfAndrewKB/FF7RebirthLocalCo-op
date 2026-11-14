@@ -717,6 +717,8 @@ src/
                             Where a HUD root goes in a split half (pure; no game access)
     lead_mark               Player 2's or 3's own marker for the walk they keep: the game's own main-objective diamond
                             and minimap pin at the walk's stop, in that player's view only
+    low_health              The low-health red edge in each player's own view
+    low_health_rules.h      The low-health red edge's rules for each player's view (hud/low_health.h)
     minimap/column_area_icons
                             Each further column's own area-map icon manager (research/RE-p2-hud-icon-manager.md)
     minimap/label_relayouts Which text blocks the game lays out again, where in the frame, and why (logging only;
@@ -837,7 +839,7 @@ src/
     dev_tools               The development tools, behind one switch: the console (control/), the HUD trace
                             (hud/hud_trace.h), the position probe (hud/position_probe.h), the dump commands, and the
                             watches that only log: the rumble, ride, Wheelie, framing, …
-tests/                      106 host-side test programs (ctest), one per pure header or code stub; run without the game
+tests/                      107 host-side test programs (ctest), one per pure header or code stub; run without the game
 tools/                      the control scripts, the regression harness, the version match, this file
 ```
 

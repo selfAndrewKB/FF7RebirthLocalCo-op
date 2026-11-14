@@ -47,6 +47,11 @@ inline constexpr std::uint8_t kTypeHasStateIdBytes[] = {0x48, 0x89, 0x5C, 0x24, 
                                                         0x24, 0x10, 0x57, 0xB8, 0x80, 0x00, 0x00, 0x00};
 inline constexpr FunctionFact kTypeHasStateId{L"PartyType_HasStateId", 0x140A40050, kTypeHasStateIdBytes};
 inline constexpr std::uint8_t kPetrifyStateId = 22;
+/// Party_GetHpByType(u8 type): the member's HP, 0 for a knocked-out member (the command chooser's and the low-health
+/// decision's read).
+inline constexpr std::uint8_t kPartyHpBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x57, 0xB8, 0x20,
+                                                 0x00, 0x00, 0x00, 0xE8, 0x9C, 0x2B, 0x67, 0x01};
+inline constexpr FunctionFact kPartyHp{L"Party_GetHpByType", 0x140A3C384, kPartyHpBytes};
 /// Party roster: lane 0 is the field lane; a type of 0x10 or more is "none".
 inline constexpr std::uint8_t kFieldLane       = 0;
 inline constexpr std::uint8_t kNoPlayerType    = 0x10;
