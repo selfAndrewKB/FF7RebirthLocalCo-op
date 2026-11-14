@@ -105,7 +105,6 @@ MainTargetFn   g_mainTarget   = nullptr;
 ReleaseFn      g_release      = nullptr;
 EnemyAiFn      g_enemyAi      = nullptr;
 std::uintptr_t g_battleSystem = 0;
-std::uintptr_t g_endUISystem  = 0;
 // 1.005: the call sites are placed from the game thread (platform/deferred_sites.h), with what Install found kept
 // for it.
 platform::DeferredSites g_placement;
@@ -375,7 +374,7 @@ void FindOtherGauges(std::uintptr_t system)
     {
         gauges.clear();
     }
-    const std::uintptr_t manager = ReadAt<std::uintptr_t>(g_endUISystem + facts::kUIEnemyStatus);
+    const std::uintptr_t manager = battle::lock_on::EnemyStatusManager();
     if (manager == 0 || system == 0)
     {
         return;
@@ -442,7 +441,6 @@ bool Install(const platform::GameImage& image) noexcept
         facts::InBattleKnown() && ui &&
         players::widget_opacity::Installed();  // a row of the module table before this one
     g_battleSystem = system ? *system : 0;
-    g_endUISystem  = ui;
     g_collect = collect;
     // The label lookup's call and both collection calls cross a 16-byte block in 1.005: they are placed from the
     // game thread, between its ticks (platform/deferred_sites.h).

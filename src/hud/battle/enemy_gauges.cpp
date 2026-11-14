@@ -157,7 +157,6 @@ platform::CallRedirect g_forcedCall;
 GaugeRecord            g_record;
 bool                   g_installed    = false;
 bool                   g_ownTargets   = false;  // a seat's pass classifies by the seat's target
-std::uintptr_t         g_endUISystem  = 0;
 ByWidgetFn             g_byWidget     = nullptr;
 YStepFn                g_yStep        = nullptr;
 ScaleStepFn            g_scaleStep    = nullptr;
@@ -639,7 +638,6 @@ bool Install(const platform::GameImage& image) noexcept
         platform::Log(L"enemy gauges: the placement code is not what the research read; gauges stay player 1's in every view");
         return false;
     }
-    g_endUISystem = system;
     g_byWidget    = reinterpret_cast<ByWidgetFn>(*byWidget);
     g_setPosition = reinterpret_cast<SetPositionFn>(*position);
 
@@ -751,11 +749,10 @@ void LogSeatPass(int seat, const PassState& now) noexcept
 
 void Replay(int seat) noexcept
 {
-    std::uintptr_t manager = 0;
-    std::uint8_t   gate    = 0;
-    const bool     read    = Read(g_endUISystem + facts::kUIEnemyStatus, manager) && manager != 0 &&
-                             Read(manager + kGate, gate);
-    const bool     isSeat  = players::SeatIndex(seat);
+    const std::uintptr_t manager = battle::lock_on::EnemyStatusManager();
+    std::uint8_t         gate    = 0;
+    const bool           read    = manager != 0 && Read(manager + kGate, gate);
+    const bool           isSeat  = players::SeatIndex(seat);
     if (isSeat && g_installed && !g_failed && (!read || gate == 0 || g_record.count == 0))
     {
         LogSeatPass(seat, {gate, static_cast<std::int32_t>(g_record.count), 0, 0, battle::lock_on::TargetListOpen(seat)});

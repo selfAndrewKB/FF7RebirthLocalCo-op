@@ -363,6 +363,18 @@ std::vector<field_hold::GroupState> GroupStatesOf(std::uint64_t group)
     return states;
 }
 
+/// A state row's status text.
+std::wstring RowStatus(const std::byte* row)
+{
+    return MappedText(row + facts::kStateRowStatus);
+}
+
+/// The trigger names a state row lists, as many as the judgment reads.
+std::vector<std::uint64_t> RowTriggers(const std::byte* row)
+{
+    return MappedNames(row + facts::kStateRowTriggers, facts::kStateRowTriggersRead);
+}
+
 /// A state row as the walk needs it, through the game's own lookup (state_path::Row); nullopt when unknown.
 std::optional<state_path::Row> PathRow(const std::wstring& name)
 {
@@ -372,7 +384,7 @@ std::optional<state_path::Row> PathRow(const std::wstring& name)
         return std::nullopt;
     }
     state_path::Row out;
-    out.status        = MappedText(row + facts::kStateRowStatus);
+    out.status        = RowStatus(row);
     const auto* next  = MappedData(row + facts::kStateRowNext);
     const auto  nexts = MappedCount(row + facts::kStateRowNext, kNextStatesRead);
     for (std::int32_t i = 0; i < nexts && next != nullptr; ++i)
@@ -460,7 +472,7 @@ struct Census
 /// The walk row's exits: its triggers other than the arrival (the steps it moves on at besides arriving).
 std::vector<std::uint64_t> ExitsOf(const std::byte* self, std::uint64_t arrival)
 {
-    std::vector<std::uint64_t> exits = MappedNames(self + facts::kStateRowTriggers, facts::kStateRowTriggersRead);
+    std::vector<std::uint64_t> exits = RowTriggers(self);
     std::erase_if(exits, [arrival](std::uint64_t t) { return t == 0 || t == arrival; });
     return exits;
 }
@@ -472,8 +484,8 @@ bool SendsOneOf(const std::byte* row, const std::vector<std::uint64_t>& exits)
     {
         return false;
     }
-    const std::vector<std::uint64_t> listens = MappedNames(row + facts::kStateRowTriggers, facts::kStateRowTriggersRead);
-    const std::wstring               status  = MappedText(row + facts::kStateRowStatus);
+    const std::vector<std::uint64_t> listens = RowTriggers(row);
+    const std::wstring               status  = RowStatus(row);
     for (const std::uint64_t exit : exits)
     {
         if (std::find(listens.begin(), listens.end(), exit) != listens.end() && _wcsicmp(status.c_str(), Name(exit).c_str()) == 0)
@@ -547,7 +559,7 @@ Census Waiters(const Move& move, const void* member)
     // The member's own step: its row's trigger list pairs the arrival with the next state.
     std::wstring ownNext;
     {
-        const std::vector<std::uint64_t> triggers = MappedNames(self + facts::kStateRowTriggers, facts::kStateRowTriggersRead);
+        const std::vector<std::uint64_t> triggers = RowTriggers(self);
         const auto*                      next     = MappedData(self + facts::kStateRowNext);
         const auto                       nexts    = MappedCount(self + facts::kStateRowNext, kNextStatesRead);
         for (std::size_t i = 0; i < triggers.size(); ++i)
@@ -612,7 +624,7 @@ Census Waiters(const Move& move, const void* member)
         {
             continue;
         }
-        const std::vector<std::uint64_t> triggers = MappedNames(row + facts::kStateRowTriggers, facts::kStateRowTriggersRead);
+        const std::vector<std::uint64_t> triggers = RowTriggers(row);
         if (std::find(triggers.begin(), triggers.end(), trigger) != triggers.end())
         {
             ++census.others;

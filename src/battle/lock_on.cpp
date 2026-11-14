@@ -252,7 +252,7 @@ std::uintptr_t BattleSystem() noexcept
 
 std::uintptr_t TargetedKeyAddress() noexcept
 {
-    const auto manager = ReadAt<std::uintptr_t>(g_endUISystem + facts::kUIEnemyStatus);
+    const auto manager = EnemyStatusManager();
     return manager != 0 ? manager + kTargetedKey : 0;
 }
 
@@ -941,6 +941,12 @@ void SeatOut(int seat) noexcept
 bool Held() noexcept
 {
     return g_held;
+}
+
+std::uintptr_t EnemyStatusManager() noexcept
+{
+    static_assert(facts::kUIEnemyStatus % sizeof(void*) == 0, "EndUISystem's slots are pointers");
+    return reinterpret_cast<std::uintptr_t>(players::game_globals::UiSlot(facts::kUIEnemyStatus / sizeof(void*)));
 }
 
 std::uintptr_t DisplayedObject(int seat) noexcept

@@ -95,6 +95,9 @@ void SeatOut(int seat) noexcept;
 /// Whether a TargetScope holds now, whichever seat's (then the game is in battle).
 bool Held() noexcept;
 
+/// The game's enemy-status manager (its gauges and lock-on bars), from EndUISystem's slot, or 0.
+std::uintptr_t EnemyStatusManager() noexcept;
+
 /// `seat`'s displayed target object (outside a TargetScope), or 0.
 std::uintptr_t DisplayedObject(int seat) noexcept;
 
