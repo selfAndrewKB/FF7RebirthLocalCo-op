@@ -6,6 +6,7 @@
 #include "facts/party.h"
 #include "facts/vehicles.h"
 #include "input/move_census.h"
+#include "input/pad_buttons.h"
 #include "input/pad_sticks.h"
 #include "platform/image.h"
 #include "platform/log.h"
@@ -83,8 +84,7 @@ std::uintptr_t RunForOwner(TickFn engine, void* state, float deltaTime, bool via
 
     const void* owner = players::actor_fields::EffectiveController(character);
     if (!pad_sticks::Enabled() || !pad_sticks::PartActs(pad_sticks::kPartPlayerOneMove) || !players::generation::AnyActive() ||
-        owner == nullptr ||
-        owner != players::generation::ControllerOf(0))
+        pad_buttons::SharedPlay() || owner == nullptr || owner != players::generation::ControllerOf(0))
     {
         return engine(state, deltaTime);
     }
@@ -98,11 +98,14 @@ std::uintptr_t RunForOwner(TickFn engine, void* state, float deltaTime, bool via
 /// stick too: the input update's terrain detection turns its probes toward it, and the leader-action
 /// tick keeps its history (research/RE-p2-terrain-action-conflict.md). Unscoped, they read the merged stick,
 /// which is a seat's pad's whenever only that seat's player moves. A scope already open (a seat's
-/// member, or slot 11 inside slot 16) passes through.
+/// member, or slot 11 inside slot 16) passes through. While a minigame holds the screen (pad_buttons::SharedPlay)
+/// neither of player 1's scopes opens: the game's own aggregate of every pad drives player 1's character then, as
+/// unmodded.
 std::uintptr_t RunOnPlayerOnesPad(TickFn engine, void* object, float deltaTime, const void* owner) noexcept
 {
     if (!players::generation::OnGameThread() || !pad_sticks::Enabled() || !pad_sticks::PartActs(pad_sticks::kPartPlayerOneDetect) ||
-        !players::generation::AnyActive() || owner == nullptr || owner != players::generation::ControllerOf(0))
+        !players::generation::AnyActive() || pad_buttons::SharedPlay() || owner == nullptr ||
+        owner != players::generation::ControllerOf(0))
     {
         return engine(object, deltaTime);
     }

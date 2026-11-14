@@ -35,8 +35,9 @@
 //     (views/whole_screen_reason.h SharedPlay): the game plays it on player 1's picture through its pad-blind
 //     pollers, so every pad plays it, as a second pad does unmodded. A seat's shop (not a pause-family
 //     menu) keeps its pad meanwhile. The merged stick already moves every menu cursor (pad_sticks
-//     swaps only inside a player's own calls); releases are the game's own (its tables carry a source
-//     mask per pad);
+//     swaps only inside a player's own calls), and in a minigame player 1's own stick scopes stand
+//     aside (SharedPlay, input/move_state), so every pad's stick moves player 1's character as every
+//     pad's buttons play it; releases are the game's own (its tables carry a source mask per pad);
 //   - a ButtonScope, opened around one seat's calls (its controller input and its member's tick, next
 //     to the stick scope), writes that seat's view and puts back what the Tick wrote after. Seats take
 //     turns: a scope never opens inside another.
@@ -102,6 +103,11 @@ using SeatRouteFn = bool (*)(ActionDownFn dispatch, void* owner, void* unused, s
 /// presses are passed to the game's dispatcher as handled. Anything else than a built seat is player 1. Stick
 /// navigation (the game's synthetic d-pad from the merged stick) is not split. Logged on change. Game thread.
 void SetMenuPlayer(int seat) noexcept;
+
+/// A minigame holds the whole screen this frame and every pad plays it (no player's shop up). Read at each input tick,
+/// before the move states tick. Not a menu: a pause-family widget can leave the world live, and a menu's cursor already
+/// reads every pad's stick. Game thread.
+bool SharedPlay() noexcept;
 
 /// Sets the route (null: none). Game thread.
 void SetSeatRoute(SeatRouteFn route) noexcept;

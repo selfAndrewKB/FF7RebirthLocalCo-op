@@ -556,7 +556,7 @@ void ReadMenuTime() noexcept
     if (minigame && !minigameWas)
     {
         platform::Log(L"buttons: a minigame holds the screen: every pad drives it (the game's merged state in the tables, "
-                      L"every pad's presses passed as they came)");
+                      L"every pad's presses passed as they came, every pad's stick moving player 1's character)");
     }
     else if (!minigame && minigameWas)
     {
@@ -799,6 +799,11 @@ void SetMenuPlayer(int seat) noexcept
                       g_padOneDowns);
     }
     g_padOneDowns = 0;
+}
+
+bool SharedPlay() noexcept
+{
+    return g_minigameTime && g_menuPlayer == 0;
 }
 
 void SetSeatRoute(SeatRouteFn route) noexcept
