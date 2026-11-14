@@ -16,6 +16,7 @@
 #endif
 
 #include <array>
+#include <cstddef>
 #include <cstdint>
 #include <cstring>
 
@@ -128,6 +129,25 @@ using FirstControllerFn = void* (*)(void* world);
 using LeaderFn          = void* (*)();
 using EventFn         = void (*)();
 using SetFlagFn       = void (*)(char flag);
+using SetRenderTransformFn = bool (*)(void* widget, void* attribute, const void* value, std::uint8_t reason);
+
+/// A widget's render-transform attribute as the game's setter takes it (facts/hud.h): set, with no getter delegate.
+struct RenderTransform
+{
+    float         m00 = 1.0f, m01 = 0.0f, m10 = 0.0f, m11 = 1.0f;  // the 2x2 matrix
+    float         tx = 0.0f, ty = 0.0f;                            // the translation
+    std::uint8_t  optionalSet  = 1;
+    std::uint8_t  pad19[3]{};
+    std::uint8_t  attributeSet = 1;
+    std::uint8_t  pad1D[3]{};
+    void*         delegate      = nullptr;
+    std::int32_t  delegateCount = 0;
+    std::uint8_t  pad2C[4]{};
+};
+static_assert(sizeof(RenderTransform) == facts::kRenderTransformSize &&
+                  offsetof(RenderTransform, optionalSet) == facts::kRenderTransformOptSet &&
+                  offsetof(RenderTransform, attributeSet) == facts::kRenderTransformAttrSet,
+              "the attribute as the game's setter reads it");
 
 // Set once at install.
 platform::CallRedirect g_firstControllerCall;
@@ -141,6 +161,8 @@ ClearAllFn             g_clearAll       = nullptr;
 EventFn                g_enable         = nullptr;
 EventFn                g_hideAndClear   = nullptr;
 SetFlagFn              g_setFlagD1      = nullptr;
+SetRenderTransformFn   g_setTransform   = nullptr;  // null: diamonds keep the game's size
+std::uintptr_t         g_questVTable    = 0;        // the field diamond widget's vtable, live
 std::array<platform::CallRedirect, std::size(kEventSites)> g_eventCalls;
 bool                   g_eventsFollowed = false;
 
@@ -523,6 +545,18 @@ bool Install(const platform::GameImage& image) noexcept
     g_clearAll      = reinterpret_cast<ClearAllFn>(*clear);
     g_installed     = true;
     g_eventsFollowed = FollowEvents(image);
+    const auto transform = platform::FindFunction(image, facts::kSetRenderTransform);
+    const auto vtable    = image.Rebase(facts::kFieldQuestIconVTable, sizeof(void*));
+    if (transform && vtable)
+    {
+        g_setTransform    = reinterpret_cast<SetRenderTransformFn>(*transform);
+        g_questVTable     = *vtable;
+    }
+    else
+    {
+        platform::Log(L"area icons: the diamond's render-transform setter or its widget's vtable was not found; a player's "
+                      L"own lead marker keeps the game's size");
+    }
     platform::Log(L"area icons: ready (each further column's icon manager is made at its first pass); the game's "
                   L"map-icon events {}",
                   g_eventsFollowed ? L"are followed at their seven call sites"
@@ -594,14 +628,17 @@ void Tick(int column, void* controller, void* member, float deltaTime) noexcept
     LogIfChanged(column, one);
 }
 
-bool HideIcon(int column, std::uint64_t key) noexcept
+namespace {
+
+/// The live widget of `key` in the column's instance (0: player 1's, the game's), or 0.
+std::uintptr_t IconWidget(int column, std::uint64_t key) noexcept
 {
     if (!g_installed || key == 0 || column < 0 || column >= kColumns)
     {
-        return false;
+        return 0;
     }
     const std::uintptr_t instance = column == 0 ? InstanceOne() : g_instance[column];
-    bool                 hidden   = false;
+    std::uintptr_t       widget   = 0;
     try
     {
         platform::ForEachSparseElement(instance != 0 ? instance + facts::kAreaIconMap : 0, facts::kAreaIconMapElement,
@@ -614,16 +651,50 @@ bool HideIcon(int column, std::uint64_t key) noexcept
                                            }
                                            if (Read(element + facts::kAreaIconMapValue, value) && value != 0)
                                            {
-                                               hidden = widget_visibility::Set(widget_visibility::PinnedWidget(value), kHidden);
+                                               widget = widget_visibility::PinnedWidget(value);
                                            }
                                            return false;
                                        });
     }
     catch (...)
     {
+        return 0;
+    }
+    return widget;
+}
+
+}  // namespace
+
+bool HideIcon(int column, std::uint64_t key) noexcept
+{
+    const std::uintptr_t widget = IconWidget(column, key);
+    return widget != 0 && widget_visibility::Set(widget, kHidden);
+}
+
+bool ScaleIcon(int column, std::uint64_t key, float scale) noexcept
+{
+    if (g_setTransform == nullptr || column < 1)
+    {
         return false;
     }
-    return hidden;
+    const std::uintptr_t widget = IconWidget(column, key);
+    std::uintptr_t       vtable = 0, image = 0;
+    if (widget == 0 || !Read(widget, vtable) || vtable != g_questVTable || !Read(widget + facts::kIconImage, image) ||
+        image == 0)
+    {
+        return false;
+    }
+    // The image grows about its centre (the game's pivot): lifted by the growth below the centre, its bottom stays on
+    // the line.
+    RenderTransform value;
+    value.m00 = scale;
+    value.m11 = scale;
+    value.ty  = -(scale - 1.0f) * facts::kQuestIconSize / 2.0f;
+    void* const target = reinterpret_cast<void*>(image);
+    void* const field  = reinterpret_cast<void*>(image + facts::kWidgetRenderTransform);
+    bool        changed = false;  // the setter's answer (false: already this value); only the guard's result matters
+    return platform::CallGuarded(g_setTransform, changed, target, field, static_cast<const void*>(&value),
+                                 facts::kRenderTransformReason);
 }
 
 void ShowOnly(int column) noexcept

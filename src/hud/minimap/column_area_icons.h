@@ -64,6 +64,13 @@ void ShowOnly(int column) noexcept;
 /// paint. False when the key has no widget there yet (or it could not be set).
 bool HideIcon(int column, std::uint64_t key) noexcept;
 
+/// The field diamond of `key` in a further column's instance drawn `scale` times the game's size, its bottom kept on the
+/// line under it: a render transform on the diamond's own image, set with the game's Slate setter (the line and the
+/// layout keep the game's sizes; nothing else in the game writes that transform, so it holds until the widget is made
+/// again, and an unchanged value costs one compare). False when the key has no diamond there, the widget is not the
+/// game's diamond, or the setter was not found.
+bool ScaleIcon(int column, std::uint64_t key, float scale) noexcept;
+
 /// No player in: player 1's canvases shown, every column's hidden (each instance is cleared when its column changes
 /// hands, FollowColumns).
 void AllOut() noexcept;

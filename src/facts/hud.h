@@ -254,4 +254,33 @@ inline constexpr std::uint32_t kHolderEntryElement = 160;
 inline constexpr std::uint32_t kHolderEntryIcon    = 0x10;
 inline constexpr std::uint32_t kSharedCount        = 0x8;  // a reference controller's shared count (int32)
 
+// ---------------------------------------------------------------------------------------------
+// The objective diamond's and the minimap pin's drawn size (RE-lead-marker-size.md)
+// ---------------------------------------------------------------------------------------------
+
+/// SWidget::SetAttribute on a widget's render transform (stock Slate): (widget, the widget's attribute, const new
+/// attribute*, the invalidate reason the game's callers pass). It compares first: an unchanged value costs nothing.
+inline constexpr std::uint8_t kSetRenderTransformBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x6C, 0x24, 0x18, 0x56, 0x57,
+                                                            0x41, 0x54, 0x41, 0x56, 0x41, 0x57, 0xB8, 0x30, 0x00, 0x00, 0x00, 0xE8};
+inline constexpr FunctionFact kSetRenderTransform{L"SWidget_SetAttribute_RenderTransform", 0x140970390, kSetRenderTransformBytes};
+inline constexpr std::uint8_t  kRenderTransformReason = 17;
+/// A Slate widget's render-transform attribute (TAttribute<TOptional<FSlateRenderTransform>>, 48 bytes): the 2x2 matrix
+/// at +0, the translation at +0x10, the optional's set byte at +0x18, the attribute's set byte at +0x1C, an unbound
+/// getter delegate at +0x20 (its pointer) and +0x28 (its count).
+inline constexpr std::uint32_t kWidgetRenderTransform  = 0x1D0;
+inline constexpr std::uint32_t kRenderTransformSize    = 48;
+inline constexpr std::uint32_t kRenderTransformOptSet  = 0x18;
+inline constexpr std::uint32_t kRenderTransformAttrSet = 0x1C;
+/// SEndMapIcon_SetIconScale(icon, FVector2D scale by value): the minimap pin's image scaled about its centre. The holder's
+/// render loop writes a main-objective pin's scale on every run (1, or 0.5 while a kind-11 icon is up).
+inline constexpr std::uint8_t kSetMapIconScaleBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x18, 0x55, 0x48, 0x8B,
+                                                         0xEC, 0xB8, 0x60, 0x00, 0x00, 0x00, 0xE8};
+inline constexpr FunctionFact kSetMapIconScale{L"SEndMapIcon_SetIconScale", 0x140E70F60, kSetMapIconScaleBytes};
+/// SEndFieldQuestIcon, the field diamond with its line under it (one per key in each view's icon manager): its vtable,
+/// for the type check. Its diamond SImage and SEndMapIcon's pin image are both held at kIconImage; the diamond is laid
+/// out kQuestIconSize wide and tall, its bottom on the line.
+inline constexpr std::uintptr_t kFieldQuestIconVTable = 0x1457C00C0;
+inline constexpr std::uint32_t  kIconImage            = 0x3B0;
+inline constexpr float          kQuestIconSize        = 24.0f;
+
 }  // namespace lss::facts

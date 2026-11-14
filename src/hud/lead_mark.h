@@ -13,8 +13,10 @@
 // (hud/minimap/column_area_icons HideIcon, hud/minimap/minimap HidePin); the game's own next tick shows it again where
 // it belongs. Re-added at every check (the game updates a key it holds in place, and a field end empties the store);
 // moved with the stop; removed when the verdict ends (the character brought to the stop, the setting's end, the player
-// letting go). Checked every 10 ticks per seat. Without this module the lead gate hands every needed walk to its AI.
-// Game thread.
+// letting go). Checked every 10 ticks per seat. In the owner's own view the marker is drawn larger: the diamond three
+// times the game's size (a render transform on its image, the line unchanged), the pin twice the scale the minimap run
+// gives it (the game's own pin setter, after that run; research/RE-lead-marker-size.md). Player 1's objective markers
+// keep the game's size. Without this module the lead gate hands every needed walk to its AI. Game thread.
 
 #include <cstdint>
 

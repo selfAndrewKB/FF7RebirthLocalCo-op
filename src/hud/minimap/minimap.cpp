@@ -20,6 +20,7 @@
 #include "platform/call_redirect.h"
 #include "platform/code_redirect.h"
 #include "platform/deferred_sites.h"
+#include "platform/game_vectors.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
@@ -145,6 +146,7 @@ using InitFormatFn   = void (*)(void* target, std::uint32_t sizeX, std::uint32_t
                               std::uint8_t forceLinearGamma);
 using UpdateNowFn    = void (*)(void* target, std::uint8_t clear);
 using ShouldUnloadFn = bool (*)(const void* piece, const float* centre);
+using SetIconScaleFn = void (*)(void* icon, platform::GameVector2D scale);
 
 struct Counts
 {
@@ -171,6 +173,7 @@ HolderUpdateFn         g_holderUpdate       = nullptr;
 NewTargetFn            g_newTarget          = nullptr;
 InitFormatFn           g_initFormat         = nullptr;
 UpdateNowFn            g_updateNow          = nullptr;
+SetIconScaleFn         g_setIconScale       = nullptr;  // null: a player's own pin keeps the game's size
 
 // The seats' entries in the circle's pool-0 slot (hud/passes/shared_slot.h): the hold, the names, the buffers.
 SharedLayerSlot g_slot{{L"minimap", 0, kPoolZeroVertexBuffer, kPoolZeroIndexBuffer, L"SEndNaviMapCircle",
@@ -183,6 +186,7 @@ bool          g_refused       = false;  // a check failed: the earlier behaviour
 void*          g_target[kPlayers]      = {};  // the seat's render target (rooted, kept for the process)
 bool           g_seatOn[kPlayers]      = {};  // the seat's minimap is used this frame
 bool           g_ranFor[kPlayers]      = {};  // the seat's holder run ran this frame
+bool           g_pinScaled[kPlayers]   = {};  // a pin was scaled after the seat's last holder run
 const wchar_t* g_lastWhy[kPlayers]     = {};
 float          g_centre[kPlayers][2]   = {};  // the seat's run's map centre (logged)
 bool           g_sizeDiffers[kPlayers] = {};
@@ -639,6 +643,14 @@ bool Install(const platform::GameImage& image) noexcept
         return false;
     }
     g_installed       = true;
+    if (const auto iconScale = platform::FindFunction(image, facts::kSetMapIconScale))
+    {
+        g_setIconScale = reinterpret_cast<SetIconScaleFn>(*iconScale);
+    }
+    else
+    {
+        platform::Log(L"minimap: the pin scale setter was not found; a player's own lead marker pin keeps the game's size");
+    }
     const bool queued = g_acquire.Install(image, &PlaceAcquire, true);  // outside the paint: the session's tick
     platform::Log(L"minimap: installed ({})", queued ? L"the acquire redirect follows on the game thread"
                                                     : L"no room to place the acquire redirect from the game thread");
@@ -753,7 +765,8 @@ void RunHolder(int seat) noexcept
     void* holder = Holder();
     if (isSeat)
     {
-        g_ranFor[seat] = false;
+        g_ranFor[seat]    = false;
+        g_pinScaled[seat] = false;
         if (!g_seatOn[seat] || holder == nullptr)
         {
             return;
@@ -822,36 +835,72 @@ void RunHolder(int seat) noexcept
     }
 }
 
-bool HidePin(std::uint64_t key) noexcept
+namespace {
+
+/// The holder's pin widget (an SEndMapIcon) for `key`, or 0.
+std::uintptr_t PinOf(std::uint64_t key) noexcept
 {
-    void* holder = Holder();
-    bool  hidden = false;
+    void*          holder = Holder();
+    std::uintptr_t pin    = 0;
     if (holder == nullptr || key == 0)
     {
-        return false;
+        return 0;
     }
     try
     {
         platform::ForEachSparseElement(reinterpret_cast<std::uintptr_t>(holder) + facts::kHolderEntries, facts::kHolderEntryElement,
                                        [&](std::uintptr_t element) {
-                                           std::uint64_t  name = 0;
-                                           std::uintptr_t icon = 0;
+                                           std::uint64_t name = 0;
                                            if (!platform::Read(element, name) || name != key)
                                            {
                                                return true;
                                            }
-                                           if (platform::Read(element + facts::kHolderEntryIcon, icon) && icon != 0)
-                                           {
-                                               hidden = widget_visibility::Set(icon, facts::kVisibilityHidden);
-                                           }
+                                           platform::Read(element + facts::kHolderEntryIcon, pin);
                                            return false;
                                        });
     }
     catch (...)
     {
+        return 0;
+    }
+    return pin;
+}
+
+}  // namespace
+
+bool HidePin(std::uint64_t key) noexcept
+{
+    const std::uintptr_t pin = PinOf(key);
+    return pin != 0 && widget_visibility::Set(pin, facts::kVisibilityHidden);
+}
+
+bool ScalePin(int seat, std::uint64_t key, float scale, float& gameScale) noexcept
+{
+    if (g_setIconScale == nullptr || !players::SeatIndex(seat) || !g_ranFor[seat] || g_pinScaled[seat])
+    {
         return false;
     }
-    return hidden;
+    const std::uintptr_t pin   = PinOf(key);
+    std::uintptr_t       image = 0;
+    if (pin == 0 || !Read(pin + facts::kIconImage, image) || image == 0)
+    {
+        return false;
+    }
+    // The run's own value: the matrix's first entry (the game sets x and y alike). Only a pin the game's run scaled
+    // itself is scaled again: its transform set to one of the game's values (1, or 0.5 with a kind-11 icon up). That
+    // is the game's own pin widget, the setter's only kind, and a value of the mod's never reads as the game's.
+    const std::uintptr_t attribute = image + facts::kWidgetRenderTransform;
+    std::uint8_t         set       = 0;
+    float                game      = 0.0f;
+    if (!Read(attribute + facts::kRenderTransformOptSet, set) || set == 0 || !Read(attribute, game) || !(game > 0.0f) ||
+        game > 1.0001f)
+    {
+        return false;
+    }
+    gameScale         = game;
+    g_pinScaled[seat] = platform::CallGuarded(g_setIconScale, reinterpret_cast<void*>(pin),
+                                              platform::GameVector2D{game * scale, game * scale});
+    return g_pinScaled[seat];
 }
 
 bool BeginPaint(int seat) noexcept
@@ -911,6 +960,10 @@ void EndOverlayRender() noexcept
     for (bool& ran : g_ranFor)
     {
         ran = false;
+    }
+    for (bool& scaled : g_pinScaled)
+    {
+        scaled = false;
     }
 }
 

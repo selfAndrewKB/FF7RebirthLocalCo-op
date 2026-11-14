@@ -1,0 +1,35 @@
+{
+  "build": "1.005",
+  "research_build": "1.004",
+  "date": "2026-11-14",
+  "doc": "Rebirth/Documentation/research/RE-lead-marker-size.md (section 7)",
+  "facts": [
+    {
+      "name": "SWidget_SetAttribute_RenderTransform",
+      "old": "0x140970390",
+      "new": "0x140B127E0",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "The IDA pass LEADSIZE on both databases: (widget, widget+0x1D0, const attribute*, reason), the setter SEndMapIcon_SetIconScale calls; the first 24 bytes identical."
+    },
+    {
+      "name": "SEndMapIcon_SetIconScale",
+      "old": "0x140E70F60",
+      "new": "0x140B12008",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "The IDA pass LEADSIZE on both databases: (icon, FVector2D by value), render transform {sx,0,0,sy} on *(icon+0x3B0); the prologue differs between builds (1.005 starts 40 55 48 8B EC)."
+    },
+    {
+      "name": "vtbl_SEndFieldQuestIcon",
+      "old": "0x1457C00C0",
+      "new": "0x14569EA60",
+      "bytes": "",
+      "same_semantics": true,
+      "confidence": "CONFIRMED",
+      "note": "The IDA pass LEADSIZE on both databases: the vtable MakeShared_SEndFieldQuestIcon stores (the name string SEndFieldQuestIcon); the type check of the field diamond widget."
+    }
+  ]
+}

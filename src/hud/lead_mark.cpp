@@ -34,6 +34,9 @@ constexpr float         kLineLength   = 60;    // cm: the diamond above a standi
 constexpr float         kVisibleRange = 5000;  // cm: the diamond shows within 50 m of the view's character
 constexpr std::uint32_t kCheckEvery   = 10;    // ticks
 constexpr float         kMovedCm      = 1;     // a stop further than this from the placed one is a new stop
+// The owner's marker drawn larger in their own view, so it is found at a glance in a view a fraction of the screen.
+constexpr float         kDiamondScale = 3.0f;  // the field diamond
+constexpr float         kPinScale     = 2.0f;  // the minimap pin
 
 /// MapIconParams (research/RE-lead-mark.md), 96 bytes: a plain objective mark at a world point.
 struct alignas(8) IconParams
@@ -69,6 +72,8 @@ struct Seat
     bool          placed    = false;
     float         at[3]     = {};
     std::uint32_t ticks     = 0;
+    bool          diamondLogged = false;  // the owner's diamond was first drawn larger (logged once per placing)
+    bool          pinLogged = false;      // the same for the pin
 };
 std::array<Seat, kSeatsBuilt + 1> g_seats;  // by seat ([0] unused)
 bool                              g_installed = false;
@@ -115,7 +120,28 @@ void Take(int seat, Seat& s, const wchar_t* why) noexcept
 {
     const bool removed = platform::CallGuarded(g_remove, s.key);
     platform::Log(L"lead mark: {}'s marker removed ({}){}", SeatName(seat), why, removed ? L"" : L" (the game's remove raised)");
-    s.placed = false;
+    s.placed        = false;
+    s.diamondLogged = false;
+    s.pinLogged     = false;
+}
+
+/// The owner's own marker drawn larger in their view: its diamond in `column`'s icon manager, its pin after their
+/// minimap run. Asked before every paint of that view (the pin's size is the game's again after each run).
+void Enlarge(int seat, Seat& s, int column) noexcept
+{
+    if (column_area_icons::ScaleIcon(column, s.key, kDiamondScale) && !s.diamondLogged)
+    {
+        s.diamondLogged = true;
+        platform::Log(L"lead mark: {}'s own marker's diamond is {:.0f} wide (the game's {:.0f})", SeatName(seat),
+                      facts::kQuestIconSize * kDiamondScale, facts::kQuestIconSize);
+    }
+    float game = 0.0f;
+    if (minimap::ScalePin(seat, s.key, kPinScale, game) && !s.pinLogged)
+    {
+        s.pinLogged = true;
+        platform::Log(L"lead mark: {}'s own marker's pin drawn at {:.1f} times the game's scale (the game's {:.2f})",
+                      SeatName(seat), kPinScale, game);
+    }
 }
 
 /// The marker of `s` withheld from a view: its diamond in `column`'s icon manager (and player 1's, never its owner's),
@@ -232,10 +258,18 @@ void BeforeColumnPaint(int column, int shown) noexcept
     }
     for (int seat = 1; seat <= kSeatsBuilt; ++seat)
     {
-        const Seat& s = g_seats[static_cast<std::size_t>(seat)];
-        if (s.placed && seat != shown)
+        Seat& s = g_seats[static_cast<std::size_t>(seat)];
+        if (!s.placed)
+        {
+            continue;
+        }
+        if (seat != shown)
         {
             Withhold(s, column);
+        }
+        else
+        {
+            Enlarge(seat, s, column);
         }
     }
 }

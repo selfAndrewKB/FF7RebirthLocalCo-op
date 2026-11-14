@@ -44,6 +44,13 @@ void RunHolder(int seat) noexcept;
 /// could not be set).
 bool HidePin(std::uint64_t key) noexcept;
 
+/// The pin of `key` drawn `scale` times the size `seat`'s holder run just gave it (the game's own pin scale setter, so
+/// its rule stays: 1, or 0.5 while a kind-11 icon is up). Once per run of that seat's holder, after it and before its
+/// paint; every later run sets the game's value again. False when the seat's run did not happen this frame, the pin
+/// was scaled after it already, the holder has no such pin, or the setter was not found. `gameScale` gets the value
+/// the run gave.
+bool ScalePin(int seat, std::uint64_t key, float scale, float& gameScale) noexcept;
+
 /// Around a seat's overlay render. True if the seat's minimap is painted in it (the minimap-once skip is
 /// then off for that pass).
 bool BeginPaint(int seat) noexcept;
