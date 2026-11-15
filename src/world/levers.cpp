@@ -529,8 +529,13 @@ void ExecTick(void* executer, float dt) noexcept
         g_execSeen[static_cast<std::size_t>(player)] = executer;
         try
         {
-            platform::LogDebug(L"levers: {}'s switch move on {} runs (their character {})", players::SeatName(player),
-                               players::NameOf(actor), players::NameOf(character));
+            const auto start = ReadField<std::uint64_t>(actor, facts::kStateManagedDefaultStart);
+            const auto end   = ReadField<std::uint64_t>(actor, facts::kStateManagedDefaultEnd);
+            platform::LogDebug(L"levers: {}'s switch move on {} runs (their character {}; the switch's default start trigger {}, "
+                               L"end {}: sent for the leader's type only, so not for this move)",
+                               players::SeatName(player), players::NameOf(actor), players::NameOf(character),
+                               start != 0 ? players::unreal::NameText(start) : std::wstring(L"none"),
+                               end != 0 ? players::unreal::NameText(end) : std::wstring(L"none"));
         }
         catch (...)
         {

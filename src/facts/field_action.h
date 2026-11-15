@@ -73,6 +73,10 @@ inline constexpr std::uint32_t kSwitchInRange    = 0x9E0;
 inline constexpr std::uint32_t kSwitchPressLatch = 0x9F0;
 inline constexpr std::uint32_t kSwitchPointShown = 0x9F1;
 inline constexpr std::uint32_t kSwitchCannotAct  = 0x9F3;
+// A state-managed field-action actor's default start and end state triggers (FName each): sent at the move's state enter
+// and exit only for a character whose tag is the party leader's player type, so never for a seat's member.
+inline constexpr std::uint32_t kStateManagedDefaultStart = 0x3BC;
+inline constexpr std::uint32_t kStateManagedDefaultEnd   = 0x3C4;
 // A switch executer: the character it runs on and the switch, each a weak reference.
 inline constexpr std::uint32_t kSwitchExecCharacter = 0x10;
 inline constexpr std::uint32_t kSwitchExecActor     = 0x58;
