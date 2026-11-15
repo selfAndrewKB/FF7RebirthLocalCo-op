@@ -145,6 +145,7 @@ add_library(LocalSplitScreen SHARED
     src/rides/chocobo_exits.cpp
     src/traversal/chocobo_climb.cpp
     src/traversal/chocobo_spots.cpp
+    src/traversal/cart_climb.cpp
     src/traversal/hooks.cpp
     src/hud/field/jet_gauges.cpp
     src/hud/field/wheelie_tops.cpp

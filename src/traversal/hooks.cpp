@@ -320,19 +320,6 @@ void SpendPressAtLeave(void* actor, int player) noexcept
     }
 }
 
-struct NotifyCall
-{
-    NotifyFn fn;
-    void*    actor;
-    void*    context;
-};
-
-void RunNotify(void* context) noexcept
-{
-    auto& call = *static_cast<NotifyCall*>(context);
-    call.fn(call.actor, call.context);
-}
-
 /// The game's notify for `notified`'s character (0 player 1, a seat, -1 no player's): a seat's inside the seat's
 /// primary scope and leader answer, the player named for the switch meanwhile (kNotifiedOther for a character no
 /// player plays: its answer is no player's wish). The pass that calls it runs in the character's own tick, outside
@@ -341,12 +328,11 @@ void CallNotify(NotifyFn original, void* actor, void* context, int notified) noe
 {
     const int saved = t_notified;
     t_notified      = notified >= 0 ? notified : kNotifiedOther;
-    NotifyCall call{original, actor, context};
     if (notified < 1)
     {
         original(actor, context);
     }
-    else if (!input::member_movement::InPrimaryScope(notified, players::generation::MemberOf(notified), &RunNotify, &call))
+    else if (!input::member_movement::NotifyInPrimaryScope(notified, original, actor, context))
     {
         if (!g_notifyScopeLogged)
         {

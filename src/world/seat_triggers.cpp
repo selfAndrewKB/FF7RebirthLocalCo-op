@@ -21,6 +21,7 @@
 #include "scopes/leader_scope.h"
 #include "scopes/primary_controller.h"
 #include "scopes/seat_ladder.h"
+#include "traversal/cart_climb.h"
 #include "traversal/hooks.h"
 #include "traversal/traversal_watch.h"
 #include "world/field_rules.h"
@@ -136,6 +137,11 @@ constexpr AdmittedClass kAdmitted[] = {
     // leader; the listed switches only (world/lever_rules.h), the rest of their levers in world/levers.
     {L"switch", facts::kSwitchAccessVTable, 0, facts::kSwitchAccessUnregister, false, false, {0x728, 0x730}, false,
      &levers::NoteSwitch, &levers::Ready, &levers::Admits},
+    // The mine-cart climbs (research/RE-cart-climb-seats.md): the shared register, an unregister override reading only
+    // the leader; carts in the climb mode only (a marker cart's press jumps the party leader), the rest in
+    // traversal/cart_climb.
+    {L"cart climb", facts::kCartJumpVTable, 0, facts::kCartJumpUnregister, false, false, {0x728, 0x730}, false, nullptr,
+     &traversal::cart_climb::Ready, &traversal::cart_climb::Admits},
 };
 constexpr std::size_t   kClassCount     = std::size(kAdmitted);
 constexpr std::uint32_t kZiplineEnterEffect = 0x770;  // u8 bUseEnterEffect: set = starts on approach, else a button prompt

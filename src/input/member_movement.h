@@ -65,6 +65,11 @@ std::uint8_t WithoutChocoboAnswer(std::uint8_t (*test)(const void* character), c
 /// runs the game's ride swap there). False, calling nothing, when the scope could not be held. Game thread.
 bool InPrimaryScope(int seat, const void* member, void (*call)(void* context), void* context) noexcept;
 
+/// A field-action actor's notify `notify(actor, context)` run inside `seat`'s primary-controller scope and the member's
+/// leader answer (InPrimaryScope), for a notify the game makes for the seat's member in the member's own tick, outside
+/// every scope. False, calling nothing, when the scope could not be held. Game thread.
+bool NotifyInPrimaryScope(int seat, void (*notify)(void* actor, void* context), void* actor, void* context) noexcept;
+
 /// The same with the seat's pad's buttons too, for a game call that also reads the merged pads' held keys (a chocobo
 /// launch pad's Accel). False, calling nothing, when a scope could not be held. Game thread.
 bool InPrimaryScopeWithButtons(int seat, const void* member, void (*call)(void* context), void* context) noexcept;

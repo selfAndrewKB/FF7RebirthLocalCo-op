@@ -499,6 +499,7 @@ src/
                             user-controlled player character) for one select
     widget_owner            Each seat's widgets tick in their owner's view (research/RE-p2-party-list-views.md)
   traversal/                climbing, vaulting and the rest of traversal
+    cart_climb              The mine-cart climbs for players 2 and 3 (research/RE-cart-climb-seats.md)
     chocobo_climb           A seat's player climbs chocobo walls with their own chocobo
     chocobo_spots           A seat's chocobo launches from the launch pads, jumps the jump boxes and takes the sliders
                             with its own rider

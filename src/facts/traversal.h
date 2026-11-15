@@ -42,6 +42,13 @@ inline constexpr std::uintptr_t kChocoboJumpPadUnregister = 0x143661B94;
 inline constexpr std::uintptr_t kChocoboJumpBoxUnregister = 0x143661B18;
 inline constexpr std::uintptr_t kChocoboSliderUnregister  = 0x143661C04;
 
+/// The mine-cart climb spots (AEndFieldActionCartJumpActor; RE-cart-climb-seats.md): their vtable, their unregister
+/// override (the leader's list, then the cart off the shared climb list), and the actor's bUseParkourControl byte (set:
+/// the cart is a climb the character's terrain detector finds through the shared list; clear: a marker whose press
+/// jumps the party leader).
+inline constexpr std::uintptr_t kCartJumpVTable         = 0x1466E9690;
+inline constexpr std::uintptr_t kCartJumpUnregister     = 0x14362D9D4;
+inline constexpr std::uint32_t  kCartJumpParkourControl = 0x721;
 /// The grappling gun's points (AEndFieldActionActorHookShotChild) and the hook ropes (AEndFieldActionHookRopeActor;
 /// RE-hooks-for-seats.md, RE-p2-zipline-rumble-hook-who.md): their vtables, the two FName globals of the hookshot
 /// point's presets (rpaHookShot, rpaHookShotPlayer: the field-action manager's point for the gun), and the one global

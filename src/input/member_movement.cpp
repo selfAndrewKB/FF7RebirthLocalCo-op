@@ -322,6 +322,29 @@ bool InPrimaryScope(int seat, const void* member, void (*call)(void* context), v
     return InSeatScopes(seat, seat_ladder::Primary, member, call, context);
 }
 
+namespace {
+
+struct NotifyCall
+{
+    void (*notify)(void* actor, void* context);
+    void* actor;
+    void* context;
+};
+
+void RunNotify(void* context) noexcept
+{
+    const auto& call = *static_cast<const NotifyCall*>(context);
+    call.notify(call.actor, call.context);
+}
+
+}  // namespace
+
+bool NotifyInPrimaryScope(int seat, void (*notify)(void* actor, void* context), void* actor, void* context) noexcept
+{
+    NotifyCall call{notify, actor, context};
+    return InPrimaryScope(seat, players::generation::MemberOf(seat), &RunNotify, &call);
+}
+
 bool InPrimaryScopeWithButtons(int seat, const void* member, void (*call)(void* context), void* context) noexcept
 {
     return InSeatScopes(seat, seat_ladder::Primary | seat_ladder::Buttons, member, call, context);

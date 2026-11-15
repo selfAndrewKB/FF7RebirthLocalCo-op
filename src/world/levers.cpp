@@ -12,6 +12,7 @@
 #include "platform/verified_code.h"
 #include "platform/vtable_entry.h"
 #include "players/actor_fields.h"
+#include "players/call_site.h"
 #include "players/describe.h"
 #include "players/generation.h"
 #include "players/object_fields.h"
@@ -370,19 +371,6 @@ void Unregister(void* actor) noexcept
     }
 }
 
-struct NotifyCall
-{
-    NotifyFn fn;
-    void*    actor;
-    void*    context;
-};
-
-void RunNotify(void* context) noexcept
-{
-    auto& call = *static_cast<NotifyCall*>(context);
-    call.fn(call.actor, call.context);
-}
-
 /// The game's notify for `notified`'s character (0 player 1, a seat, -1 no player's): a seat's with the seat's slot
 /// block held in the live manager, inside the seat's primary scope and leader answer, the player named for the setter
 /// meanwhile (kNotifiedOther for a character no player plays).
@@ -401,8 +389,7 @@ void CallNotify(NotifyFn original, void* actor, void* context, int notified, std
     {
         NoteNoCopy(notified, actor);
     }
-    NotifyCall call{original, actor, context};
-    if (!input::member_movement::InPrimaryScope(notified, players::generation::MemberOf(notified), &RunNotify, &call))
+    if (!input::member_movement::NotifyInPrimaryScope(notified, original, actor, context))
     {
         if (!g_scopeLogged)
         {
@@ -410,13 +397,14 @@ void CallNotify(NotifyFn original, void* actor, void* context, int notified, std
             try
             {
                 platform::LogWarning(L"levers: the switch {}'s notify for {}'s character ran outside their scope (it could "
-                                     L"not be held): its answers are player 1's (said once)",
+                                     L"not be held): its answers are player 1's, booked to no player (said once)",
                                      players::NameOf(actor), players::SeatName(notified));
             }
             catch (...)
             {
             }
         }
+        t_notified = kNotifiedOther;  // player 1's answers: no player's wish
         original(actor, context);
     }
     t_notified = saved;
@@ -556,15 +544,9 @@ void Install(const platform::GameImage& image) noexcept
     const auto tickSite    = image.Rebase(kSetterCallTick, 5);
     const auto endPlaySite = image.Rebase(kSetterCallEndPlay, 5);
     const auto setter      = platform::FindFunction(image, kSetter);
-    // Each return address is checked as a call of the setter: a byte E8 whose target is the setter.
-    const auto callsSetter = [&](std::optional<std::uintptr_t> site) noexcept {
-        std::uint8_t  op  = 0;
-        std::int32_t  rel = 0;
-        return site && setter && platform::CopyGuarded(&op, reinterpret_cast<const void*>(*site), 1) && op == 0xE8 &&
-               platform::CopyGuarded(&rel, reinterpret_cast<const void*>(*site + 1), sizeof(rel)) &&
-               *site + 5 + static_cast<std::intptr_t>(rel) == *setter;
-    };
-    bool ready = callsSetter(tickSite) && callsSetter(endPlaySite);
+    // Each return address is trusted only once its site is checked as a call of the setter.
+    bool ready = setter && tickSite && endPlaySite && players::call_site::Calls(*tickSite, *setter) &&
+                 players::call_site::Calls(*endPlaySite, *setter);
     if (ready)
     {
         g_tickReturn    = *tickSite + 5;

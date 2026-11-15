@@ -86,6 +86,7 @@
 #include "session/session.h"
 #include "traversal/chocobo_climb.h"
 #include "traversal/chocobo_spots.h"
+#include "traversal/cart_climb.h"
 #include "traversal/hooks.h"
 #include "traversal/traversal_camera.h"
 #include "traversal/traversal_watch.h"
@@ -270,6 +271,8 @@ constexpr std::array kModules{
     // the listed switches for the seats: the point, the press latch and the in-range byte every player's, the hold
     // their own
     Module{Call<&world::levers::Install>, &world::levers::Remove},
+    // the mine-cart climbs for the seats: the shared climb list keeps a cart while any player wishes it on
+    Module{Call<&traversal::cart_climb::Install>, &traversal::cart_climb::Remove},
 
     // The HUD's layout in split views (hud/layout/overlay_layout.h). Optional like the view point: without it the HUD
     // keeps the game's full-screen layout, cropped to each half; the layout scale (the contain rule) needs it.
@@ -534,6 +537,7 @@ void TickAfterSession(const Frame& frame) noexcept
     traversal::traversal_watch::Tick();
     world::seat_triggers::Tick();
     world::levers::Tick();  // a seat gone: its wishes and in-range marks dropped
+    traversal::cart_climb::Tick();  // a seat gone: its cart wishes dropped
     world::seat_switch_volumes::Tick();  // each seat's volumes left once it is gone; the summary
     world::story_boxes::Tick(frame.splitShown);  // the held-back story-box enters: replayed at the story's moment
     traversal::traversal_camera::Tick();  // each seat's idle camera holders; the collision watch (dev)

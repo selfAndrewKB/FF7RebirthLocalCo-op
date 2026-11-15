@@ -1,0 +1,19 @@
+{
+  "build": "1.005",
+  "research_build": "1.004",
+  "date": "2026-11-15",
+  "doc": "Rebirth/Documentation/research/RE-cart-climb-seats.md (sections 1, 4, 5, both builds side by side; the decompiles in research/.ida-mcp/cartjump/; the slots and bytes read from both exes)",
+  "facts": [
+    {"name": "vt_AEndFieldActionCartJumpActor", "old": "0x1466E9690", "new": "0x146576DA8", "bytes": "", "same_semantics": true, "confidence": "CONFIRMED", "note": "The pass CARTJUMP: the class's native vtable (the Blueprint SampleCartDoubleJump00 keeps it); its trigger slot holds the shared enter in both exes; the actor slots at or above +0x400 sit +8 from 1.004."},
+    {"name": "CartJump_Vt728_Unregister", "old": "0x14362D9D4", "new": "0x1433621E8", "bytes": "48895c240857b820000000e88899e0fe", "same_semantics": true, "confidence": "CONFIRMED", "note": "The leader's unregister from its controller list, then ParkourList_RemoveAll for the cart, then the marker off; at vt+0x728 / +0x730."},
+    {"name": "slot: CartJump notify (1.004 vt+0x748, 1.005 vt+0x750)", "old": "0x1466E9DD8", "new": "0x1465774F8", "bytes": "", "same_semantics": true, "confidence": "CONFIRMED", "note": "Holds CartJump_Vt748_Notify (below) in both exes."},
+    {"name": "CartJump_Vt748_Notify", "old": "0x14362DB48", "new": "0x14336235C", "bytes": "48895c240857b850000000e81498e0fe", "same_semantics": true, "confidence": "CONFIRMED", "note": "(actor, context): busy, can-act (the leader's state and the primary pawn), ordinary movement and approach (the primary pawn's stick) tests; ParkourList_AddUnique on a pass in climb mode, ParkourList_RemoveAll on a fail."},
+    {"name": "slot: CartJump follower enter (1.004 vt+0x6B0, 1.005 vt+0x6B8)", "old": "0x1466E9D40", "new": "0x146577460", "bytes": "", "same_semantics": true, "confidence": "CONFIRMED", "note": "Holds CartJump_Vt6B0_AIEnter_RequestJump (below) in both exes."},
+    {"name": "CartJump_Vt6B0_AIEnter_RequestJump", "old": "0x14362E0A4", "new": "0x14336268C", "bytes": "48895c24104889742418 57b820000000", "same_semantics": true, "confidence": "CONFIRMED", "note": "(actor, character): bOnlyUsePlayer clear, a target cart and the side check, then the jump state requested on the follower."},
+    {"name": "ParkourList_AddUnique_Global3C0", "old": "0x143CFD8FC", "new": "0x143A5EED4", "bytes": "48895c24084889742420 57b820000000", "same_semantics": true, "confidence": "CONFIRMED", "note": "(actor): under the list lock, TArray<FWeakObjectPtr>::AddUnique on FieldActionGlobal+0x3C0, then a stale-entry prune. 1.004 entry %16=C (the first instruction crosses: the redirect at the second, 48 89 6C 24 20), 1.005 %16=4 (fits)."},
+    {"name": "ParkourList_RemoveAll_Global3C0", "old": "0x143D01F20", "new": "0x1418506A4", "bytes": "48895c24084889742420 57b820000000", "same_semantics": true, "confidence": "CONFIRMED", "note": "(actor): under the list lock, RemoveAll of the cart's weak entries, then the prune. Entry %16=0 / %16=4: fits."},
+    {"name": "CartJump_Vt748_Notify's ParkourList_AddUnique call", "old": "0x14362DBFE", "new": "0x143362412", "bytes": "", "same_semantics": true, "confidence": "CONFIRMED", "note": "E8 F9 FC 6C 00 / E8 BD CA 6F 00; the mod knows the notify's add by this call's return address (checked as an E8 to the add at install)."},
+    {"name": "CartJump_Vt748_Notify's ParkourList_RemoveAll call", "old": "0x14362DC13", "new": "0x143362427", "bytes": "", "same_semantics": true, "confidence": "CONFIRMED", "note": "E8 08 43 6D 00 / E8 78 E2 4E FE; as above."},
+    {"name": "CartJump_Vt728_Unregister's ParkourList_RemoveAll call", "old": "0x14362DA33", "new": "0x143362247", "bytes": "", "same_semantics": true, "confidence": "CONFIRMED", "note": "E8 E8 44 6D 00 / E8 58 E4 4E FE; as above."}
+  ]
+}
