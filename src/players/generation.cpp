@@ -257,6 +257,20 @@ std::uint64_t MemberWeakOf(int seat) noexcept
     return SeatIndex(seat) ? g_seats[seat].memberWeak.load() : 0;
 }
 
+int PlayerOfCharacter(const void* character) noexcept
+{
+    if (character == nullptr)
+    {
+        return -1;
+    }
+    const int seat = SeatOfMember(character);
+    if (seat >= 1 && Active(seat))
+    {
+        return seat;
+    }
+    return character == actor_fields::Pawn(PlayerOneController()) ? 0 : -1;
+}
+
 int SeatOfMemberWeak(std::uint64_t weak) noexcept
 {
     if (weak == 0)

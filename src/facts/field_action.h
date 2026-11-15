@@ -44,14 +44,37 @@ inline constexpr std::uint32_t kFieldActionSlotHeld     = 0x48730;
 inline constexpr std::uint32_t kFieldActionSlotPressed  = 0x48738;
 inline constexpr std::uint32_t kFieldActionSlotExecuted = 0x48740;
 inline constexpr std::uint32_t kFieldActionPending      = 0x487D0;  // u8
+// The slots' block (labels, rows, slot entries, records with the elapsed hold, keys, locations, latches): one player's,
+// what a point's hold progress reads.
+inline constexpr std::uint32_t kFieldActionSlotBlock     = 0x48328;
+inline constexpr std::uint32_t kFieldActionSlotBlockSize = 0x48748 - 0x48328;
 
 // A point: its key (FName), the point-side range preset (FName rpa<Owner>), and its flags (0x02 slot target, 0x04
 // runner-up, 0x08 not usable from here: the update makes it no target, 0x10 disabled: the candidate query skips it).
 inline constexpr std::uint32_t kFieldActionPointKey    = 0x0C;
 inline constexpr std::uint32_t kFieldActionPointPreset = 0x44;
 inline constexpr std::uint32_t kFieldActionPointFlags  = 0x104;
+inline constexpr std::uint8_t  kFieldActionPointTargetBits = 0x06;  // slot target and runner-up: one player's selection
+inline constexpr std::uint8_t  kFieldActionPointNotUsable  = 0x08;
+inline constexpr std::uint8_t  kFieldActionPointDisabled   = 0x10;
 
 // A map element's entry, as AcquireEntry hands it out: element + 0x10 (the FName key is 0x10 bytes before the entry).
 inline constexpr std::uint32_t kFieldActionEntryKeyBack = 0x10;
+
+// The switches (AEndFieldActionSwitchAccessActor: levers, wall switches, lift panels; RE-further-player-levers.md): the
+// native vtable placed Blueprint switches keep, and the class's unregister override (the leave: the leader's list, the
+// point off, the in-range byte cleared). 1.005 through replaced-levers.json.
+inline constexpr std::uintptr_t kSwitchAccessVTable     = 0x1458716D8;
+inline constexpr std::uintptr_t kSwitchAccessUnregister = 0x1413E51BC;
+// The actor's own bytes, one per actor: in range (the register sets it, the unregister clears it), the press latch
+// (the point's press listener sets it when the hold completes; the point setter clears it on its on and off edges), the
+// point shown (the setter's own record of its last show), the "cannot act" answer of the last notify.
+inline constexpr std::uint32_t kSwitchInRange    = 0x9E0;
+inline constexpr std::uint32_t kSwitchPressLatch = 0x9F0;
+inline constexpr std::uint32_t kSwitchPointShown = 0x9F1;
+inline constexpr std::uint32_t kSwitchCannotAct  = 0x9F3;
+// A switch executer: the character it runs on and the switch, each a weak reference.
+inline constexpr std::uint32_t kSwitchExecCharacter = 0x10;
+inline constexpr std::uint32_t kSwitchExecActor     = 0x58;
 
 }  // namespace lss::facts

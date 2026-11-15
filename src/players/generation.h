@@ -92,6 +92,10 @@ int SeatOfController(const void* controller) noexcept;
 /// The seat whose member `member` is, or -1.
 int SeatOfMember(const void* member) noexcept;
 
+/// The player whose character character is: an active seat (its member), 0 (player 1's pawn), or -1 (an AI member,
+/// or none). Game thread.
+int PlayerOfCharacter(const void* character) noexcept;
+
 /// Once per engine tick, first thing, on the game thread: the identities the wrappers compare against on any thread,
 /// as the game's weak pointers (0 while there is none, or while the seat's generation is inactive). A member's follows
 /// SetMember at once; player 1's pawn is read here; `drivenChocobo[seat]` is chocobo_ride's (the chocobo the seat's

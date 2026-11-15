@@ -36,6 +36,7 @@
 #include "session/party_member.h"
 #include "traversal/hooks.h"
 #include "world/charapop_facts.h"
+#include "world/levers.h"
 #include "world/shop_talk.h"
 #include "world/vending.h"
 
@@ -93,11 +94,12 @@ constexpr std::uint8_t  kModeBlocksPoll     = 2;
 // FieldActionMgr: the per-player ranges, exchanged with the seat's copy around the pass.
 constexpr std::array<platform::OffsetRange, 5> kRanges{{
     {0x90, 0x2F8 - 0x90},          // candidates, the show-all timer, the trace-handle map
-    {0x48328, 0x48748 - 0x48328},  // labels, rows, slot entries, records, keys, locations, latches
+    {facts::kFieldActionSlotBlock, facts::kFieldActionSlotBlockSize},  // the slots' block
     {0x4874C, 4},                  // the far-marker sweep timer
     {0x487A0, 0x487D8 - 0x487A0},  // the pending execution
     {0x487E8, 1},                  // re-executed from pending this frame
 }};
+constexpr std::size_t kSlotBlockRange = 1;  // the slots' block: what a hold progress reads
 constexpr std::size_t kCopySize = [] {
     std::size_t size = 0;
     for (const platform::OffsetRange& range : kRanges)
@@ -127,9 +129,9 @@ using facts::kFieldActionMaxPoints;
 using facts::kFieldActionPointKey;
 using facts::kFieldActionPointPreset;
 using facts::kFieldActionPointFlags;
-constexpr std::uint8_t  kTargetBits     = 0x06;   // bit 1 slot target, bit 2 runner-up: carried per player
-constexpr std::uint8_t  kDisabledBit    = 0x10;   // the game's "point disabled": the candidate query skips it
-constexpr std::uint8_t  kNotUsableBit   = 0x08;   // the game's "not usable from here": the update makes it no target
+constexpr std::uint8_t  kTargetBits     = facts::kFieldActionPointTargetBits;  // carried per player
+constexpr std::uint8_t  kDisabledBit    = facts::kFieldActionPointDisabled;    // the candidate query skips it
+constexpr std::uint8_t  kNotUsableBit   = facts::kFieldActionPointNotUsable;   // the update makes it no target
 constexpr std::uint32_t kPointMarker    = 0x78;   // UFieldTargetWidget*, the point's marker: carried per player
 
 // The two maps whose points a seat's pass admits, both a stock TMap keyed by the point's FName at element +0
@@ -328,7 +330,7 @@ struct Doomed
 struct Counts
 {
     std::uint32_t passes = 0, polled = 0, filtered = 0, worldItems = 0, chests = 0, vending = 0, shopkeepers = 0, boxes = 0,
-                  hooks = 0, executed = 0, fieldResets = 0;
+                  hooks = 0, switches = 0, executed = 0, fieldResets = 0;
     std::uint32_t requests = 0, requestsSeatFirst = 0;  // visibility requests in the pass; those with the seat first
     std::uint32_t markersMade = 0, markersGone = 0, markersDestroyed = 0;  // the seat's made; gone by the game; the mod's
     std::array<std::uint32_t, kSkipCount> skips{};
@@ -447,6 +449,8 @@ bool SwapOut(Pickup& p) noexcept
     return !p.copy.Faulted();
 }
 
+thread_local int t_walking = 0;  // the mod's walks of the points holding the lock on this thread
+
 class SharedLock
 {
 public:
@@ -454,8 +458,13 @@ public:
         : lock_(reinterpret_cast<PSRWLOCK>(static_cast<std::uint8_t*>(mgr) + kFieldActionPointLock))
     {
         AcquireSRWLockShared(lock_);
+        ++t_walking;
     }
-    ~SharedLock() { ReleaseSRWLockShared(lock_); }
+    ~SharedLock()
+    {
+        --t_walking;
+        ReleaseSRWLockShared(lock_);
+    }
     SharedLock(const SharedLock&)            = delete;
     SharedLock& operator=(const SharedLock&) = delete;
 
@@ -788,33 +797,34 @@ void LogSelection(int seat, std::uint64_t key, bool seen) noexcept
     }
 }
 
-/// The bits a player's selection of a gun point gets for their view of it: off for them is the game's disabled bit,
-/// on carries the "not usable from here" bit as their own notify's answer left it. Added to `mask` and `set`.
-void AddGunView(traversal::hooks::GunPointView view, std::uint8_t& mask, std::uint8_t& set) noexcept
+/// The bits a player's selection of a shared point (a gun point, a switch's) gets for their view of it: off for them is
+/// the game's disabled bit, on carries the "not usable from here" bit as their own notify's answer left it. Added to
+/// `mask` and `set`.
+void AddView(field_rules::PointView view, std::uint8_t& mask, std::uint8_t& set) noexcept
 {
-    using traversal::hooks::GunPointView;
+    using field_rules::PointView;
     switch (view)
     {
-    case GunPointView::Off:
+    case PointView::Off:
         mask |= kDisabledBit;
         set |= kDisabledBit;
         break;
-    case GunPointView::NotUsable:
+    case PointView::NotUsable:
         mask |= kNotUsableBit;
         set |= kNotUsableBit;
         break;
-    case GunPointView::Usable:
+    case PointView::Usable:
         mask |= kNotUsableBit;
         break;
-    case GunPointView::NotTracked:
+    case PointView::NotTracked:
         break;
     }
 }
 
 /// Before the calls: each point's target bits and marker widget become the seat's (on every live point: the far-marker
 /// sweep walks them all). With `filter`, every point that is neither a WorldItem, a chest, a vending machine, a
-/// shopkeeper, the seat's own box nor a hook point gets the disabled bit (only where it is clear), and a gun point the
-/// seat's own view (AddGunView). Player 1's are kept for After. The seat's widgets whose point left since are doomed.
+/// shopkeeper, the seat's own box, a hook point nor a delivered switch's gets the disabled bit (only where it is clear),
+/// and a gun or switch point the seat's own view (AddView). Player 1's are kept for After. The seat's widgets whose point left since are doomed.
 void Before(Pickup& p, void* mgr, const std::uint8_t* items, const std::uint8_t* chests, bool filter) noexcept
 {
     g_saved.clear();
@@ -841,13 +851,19 @@ void Before(Pickup& p, void* mgr, const std::uint8_t* items, const std::uint8_t*
             const bool     box        = filter && boxKey != 0 && key == boxKey && !worldItem && !chest && !machine && !keeper;
             const bool     hook       = filter && !worldItem && !chest && !machine && !keeper && !box &&
                                         traversal::hooks::AdmitsPoint(key, ReadField<std::uint64_t>(point, kFieldActionPointPreset));
-            const bool     disable    = filter && !worldItem && !chest && !machine && !keeper && !box && !hook &&
+            const bool     lever      = filter && !worldItem && !chest && !machine && !keeper && !box && !hook &&
+                                        levers::AdmitsPoint(key);
+            const bool     disable    = filter && !worldItem && !chest && !machine && !keeper && !box && !hook && !lever &&
                                         (flags & kDisabledBit) == 0;
             std::uint8_t   mask       = disable ? kDisabledBit : 0;
             std::uint8_t   set        = mask;
             if (hook)
             {
-                AddGunView(traversal::hooks::GunPointViewFor(key, p.seat), mask, set);
+                AddView(traversal::hooks::GunPointViewFor(key, p.seat), mask, set);
+            }
+            if (lever)
+            {
+                AddView(levers::PointViewFor(key, p.seat), mask, set);
             }
             std::uintptr_t oneMarker  = 0;
             std::uintptr_t seatMarker = 0;
@@ -871,6 +887,7 @@ void Before(Pickup& p, void* mgr, const std::uint8_t* items, const std::uint8_t*
             p.counts.shopkeepers += keeper ? 1 : 0;
             p.counts.boxes += box ? 1 : 0;
             p.counts.hooks += hook ? 1 : 0;
+            p.counts.switches += lever ? 1 : 0;
             boxSeen = boxSeen || box;
             p.counts.filtered += disable ? 1 : 0;
             flags = static_cast<std::uint8_t>((flags & ~(kTargetBits | mask)) | (carried != p.bits.end() ? carried->second : 0) |
@@ -882,6 +899,7 @@ void Before(Pickup& p, void* mgr, const std::uint8_t* items, const std::uint8_t*
     {
         LogSelection(p.seat, boxKey, boxSeen);
         traversal::hooks::LogGunPointViews();
+        levers::LogPointViews();
     }
     for (const auto& [key, marker] : p.markers)
     {
@@ -1162,7 +1180,7 @@ void LogStatus() noexcept
         {
             platform::LogDebug(L"field pickup (60 s): {} pass(es) (poll open in {}), {} pickup(s) by {}, {} field reset(s) "
                           L"of {}'s copy; {} visibility request(s), {} with {} as the first local player; per "
-                          L"pass on average {} WorldItem point(s), {} chest point(s), {} vending machine(s), {} shopkeeper(s), {} own box point(s) and {} hook point(s) left open, {} other point(s) disabled for the pass; "
+                          L"pass on average {} WorldItem point(s), {} chest point(s), {} vending machine(s), {} shopkeeper(s), {} own box point(s), {} hook point(s) and {} switch point(s) left open, {} other point(s) disabled for the pass; "
                           L"skipped: scopes {}, member {}; WorldItem and chest lookups by {} ({} checked, {} mismatch(es)); {}'s "
                           L"marker widgets: {} now, {} made and {} destroyed by the game's own code, {} by the mod's call of "
                           L"its destroy; player 1's point markers now {}",
@@ -1173,6 +1191,7 @@ void LogStatus() noexcept
                           c.passes != 0 ? c.shopkeepers / c.passes : 0,
                           c.passes != 0 ? c.boxes / c.passes : 0,
                           c.passes != 0 ? c.hooks / c.passes : 0,
+                          c.passes != 0 ? c.switches / c.passes : 0,
                           c.passes != 0 ? c.filtered / c.passes : 0, c.skips[kSkipScopes],
                           c.skips[kSkipMember], g_hashTrusted ? L"the map's hash" : L"a walk of the map", g_hashChecked,
                           g_hashMismatches, who, p.markers.size(), c.markersMade, c.markersGone,
@@ -1217,6 +1236,7 @@ void Pass(Pickup& p, void* mgr, float dt) noexcept
     const bool input  = InputStep(p, mgr, root, dt);
     const bool update = input && platform::CallGuarded(g_update, mgr, dt);
     traversal::hooks::NotePressesAfter(p.seat);  // a gun point pressed in this pass: the seat's press
+    levers::NotePressesAfter(p.seat);
     After(p, mgr);
     const bool out = SwapOut(p);
     g_passSeat     = -1;
@@ -1328,7 +1348,11 @@ void OpenPlayerOneView(void* mgr) noexcept
             }
             if (mask == 0 && traversal::hooks::AdmitsPoint(key, ReadField<std::uint64_t>(point, kFieldActionPointPreset)))
             {
-                AddGunView(traversal::hooks::GunPointViewFor(key, 0), mask, set);
+                AddView(traversal::hooks::GunPointViewFor(key, 0), mask, set);
+            }
+            else if (mask == 0 && levers::AdmitsPoint(key))
+            {
+                AddView(levers::PointViewFor(key, 0), mask, set);
             }
             if (mask == 0 || g_oneViewCount == g_oneViews.size())
             {
@@ -1353,6 +1377,7 @@ void OpenPlayerOneView(void* mgr) noexcept
         }
     }
     traversal::hooks::LogGunPointViews();
+    levers::LogPointViews();
 }
 
 void ClosePlayerOneView(void* mgr) noexcept
@@ -1391,6 +1416,7 @@ void UpdateCall(void* mgr, float dt) noexcept
     reinterpret_cast<TickFn>(g_updateCall.Original())(mgr, dt);
     ClosePlayerOneView(mgr);
     traversal::hooks::NotePressesAfter(0);  // a gun point press no notify named yet: player 1's, from the game's input step
+    levers::NotePressesAfter(0);
     if (mgr == nullptr || !players::generation::OnGameThread())
     {
         return;
@@ -1757,18 +1783,122 @@ bool InPass() noexcept
     return g_passSeat >= 0;
 }
 
-SlotTargetHold::SlotTargetHold(int seat, const void* controller) noexcept : seat_(seat), controller_(controller)
+namespace {
+
+/// The seat's pickup record while its copy belongs to the live manager and no pass runs, else null (game thread).
+Pickup* LiveCopy(int seat) noexcept
 {
-    if (!players::generation::OnGameThread() || !players::SeatBuilt(seat) || g_passSeat >= 0 ||
-        ShootingKeyOf(controller) == 0)  // no box selected: no throw to gate, the live target left alone
+    if (!players::generation::OnGameThread() || !players::SeatBuilt(seat) || g_passSeat >= 0)
     {
-        return;
+        return nullptr;
     }
     Pickup& p = PickupOf(seat);
     if (p.copyOf == nullptr || p.broken || p.copyOf != PointerAt(Root(), kRootFieldAction))  // the copy's manager is gone
     {
+        return nullptr;
+    }
+    return &p;
+}
+
+/// On the live point keyed `key` in `mgr`, found and written under its lock: the target bits replaced by `bits`, the
+/// ones it held returned in `was`; with `read`, its flags. False (nothing written) when no point holds the key, or
+/// while a walk of the points holds the lock on this thread.
+bool WithPoint(void* mgr, std::uint64_t key, const std::uint8_t* bits, std::uint8_t* was, std::uint8_t* read) noexcept
+{
+    if (mgr == nullptr || key == 0 || t_walking != 0)
+    {
+        return false;
+    }
+    const SharedLock lock(mgr);
+    const auto*      node = PointerAt(mgr, kFieldActionPointList);
+    for (int n = 0; node != nullptr && n < kFieldActionMaxPoints; ++n, node = PointerAt(node, kFieldActionNodeNext))
+    {
+        auto* point = const_cast<std::uint8_t*>(node) + kFieldActionNodePoint;
+        if (ReadField<std::uint64_t>(point, kFieldActionPointKey) != key)
+        {
+            continue;
+        }
+        std::uint8_t& flags = point[kFieldActionPointFlags];
+        if (was != nullptr)
+        {
+            *was = static_cast<std::uint8_t>(flags & kTargetBits);
+        }
+        if (bits != nullptr)
+        {
+            flags = static_cast<std::uint8_t>((flags & ~kTargetBits) | *bits);
+        }
+        if (read != nullptr)
+        {
+            *read = flags;
+        }
+        return true;
+    }
+    return false;
+}
+
+void* LiveManager() noexcept
+{
+    return const_cast<std::uint8_t*>(PointerAt(Root(), kRootFieldAction));
+}
+
+}  // namespace
+
+SlotHold::SlotHold(int seat, std::uint64_t key) noexcept : key_(key)
+{
+    if (key == 0 || !players::generation::OnGameThread() || !players::SeatBuilt(seat) || g_passSeat >= 0 || t_walking != 0)
+    {
         return;
     }
+    mgr_ = LiveManager();
+    std::uint8_t seatBits = 0;
+    if (Pickup* p = LiveCopy(seat); p != nullptr)
+    {
+        const platform::OffsetRange& block = kRanges[kSlotBlockRange];
+        const auto*                  mine  = CopyAt(*p, block.offset);
+        const platform::ByteContext::Range range[] = {
+            {reinterpret_cast<std::uintptr_t>(static_cast<std::byte*>(p->copyOf) + block.offset), block.size, Kind::Hold}};
+        if (mine != nullptr && context_.Define(range))
+        {
+            std::memcpy(context_.Value(0).data(), mine, block.size);
+            held_ = context_.Open();
+        }
+        const auto carried = p->bits.find(key);
+        seatBits           = held_ && carried != p->bits.end() ? carried->second : 0;
+    }
+    // The point's target bits: the seat's carried ones while its block is held, none otherwise (a seat with no copy has
+    // no selection, so its hold reads 0, never player 1's). Player 1's go back at the end, to the point that holds the
+    // key then: the call may switch the point off and on.
+    bitsSet_ = WithPoint(mgr_, key, &seatBits, &oneBits_, nullptr);
+}
+
+SlotHold::~SlotHold()
+{
+    if (bitsSet_)
+    {
+        (void)WithPoint(mgr_, key_, &oneBits_, nullptr, nullptr);
+    }
+    if (held_)
+    {
+        (void)context_.Close();
+    }
+}
+
+bool PointFlagsOf(std::uint64_t key, std::uint8_t& flags) noexcept
+{
+    return players::generation::OnGameThread() && g_passSeat < 0 && WithPoint(LiveManager(), key, nullptr, nullptr, &flags);
+}
+SlotTargetHold::SlotTargetHold(int seat, const void* controller) noexcept : seat_(seat), controller_(controller)
+{
+    if (ShootingKeyOf(controller) == 0)  // no box selected: no throw to gate, the live target left alone
+    {
+        return;
+    }
+    Pickup* live = LiveCopy(seat);
+    if (live == nullptr)
+    {
+        return;
+    }
+    Pickup& p = *live;
     target_ = TakeFromCopy<std::uint64_t>(p, kFieldActionSlotTargets);
     const platform::ByteContext::Range range[] = {
         {reinterpret_cast<std::uintptr_t>(static_cast<std::byte*>(p.copyOf) + kFieldActionSlotTargets), sizeof(target_),

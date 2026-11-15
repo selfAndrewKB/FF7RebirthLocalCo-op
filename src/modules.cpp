@@ -100,6 +100,7 @@
 #include "world/charapop_centre.h"
 #include "world/charapop_near.h"
 #include "world/field_pickup.h"
+#include "world/levers.h"
 #include "world/nav_strand.h"
 #include "menu/coop_menu.h"
 #include "world/party_warp.h"
@@ -266,6 +267,9 @@ constexpr std::array kModules{
     Module{Call<&rides::chocobo_exits::Install>, &rides::chocobo_exits::Remove},
     // the grappling gun's points and the hook ropes for the seats (their moves' ticks are the climb context's)
     Module{Call<&traversal::hooks::Install>, &traversal::hooks::Remove},
+    // the listed switches for the seats: the point, the press latch and the in-range byte every player's, the hold
+    // their own
+    Module{Call<&world::levers::Install>, &world::levers::Remove},
 
     // The HUD's layout in split views (hud/layout/overlay_layout.h). Optional like the view point: without it the HUD
     // keeps the game's full-screen layout, cropped to each half; the layout scale (the contain rule) needs it.
@@ -529,6 +533,7 @@ void TickAfterSession(const Frame& frame) noexcept
     camera::camera_repair::Tick();
     traversal::traversal_watch::Tick();
     world::seat_triggers::Tick();
+    world::levers::Tick();  // a seat gone: its wishes and in-range marks dropped
     world::seat_switch_volumes::Tick();  // each seat's volumes left once it is gone; the summary
     world::story_boxes::Tick(frame.splitShown);  // the held-back story-box enters: replayed at the story's moment
     traversal::traversal_camera::Tick();  // each seat's idle camera holders; the collision watch (dev)

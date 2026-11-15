@@ -57,6 +57,8 @@
 // Per seat (players/seats.h): the seat comes from the move's character, the primary controller of the open scope, or
 // the climb context's player; the wishes are per actor and player; the handle copies per seat.
 
+#include "world/field_rules.h"
+
 #include <cstdint>
 
 namespace lss::platform {
@@ -86,22 +88,11 @@ bool AdmitsPoint(std::uint64_t key, std::uint64_t preset) noexcept;
 /// up since the last look was pressed in that update, by that player. Game thread.
 void NotePressesAfter(int player) noexcept;
 
-/// How a player's own selection is to see a gun point: the point is one for every player, on while any player's
-/// notify wishes it, and carries the game's "not usable from here" bit from one player's answer; each player's
-/// selection sees it as their own notify left it.
-enum class GunPointView : std::uint8_t
-{
-    NotTracked,  // not a gun point any player wishes on: left as it is
-    Off,         // their own notify wishes it off: the game's off for them (the disabled bit)
-    NotUsable,   // on, with the "not usable from here" bit their own notify's answer sets
-    Usable,      // on, the bit clear
-};
-
-/// The view of the gun point keyed `key` for `player` (0 player 1, a seat). Game thread; reads the game's memory
-/// only and notes the view in the mod's own table, with no call, allocation or log (it may run under the field-action
-/// manager's point lock); a change is said by LogGunPointViews. One press flag serves the point: a second player's
-/// press in the frame of another's is the game's one press, named to the first.
-GunPointView GunPointViewFor(std::uint64_t key, int player) noexcept;
+/// The view (world/field_rules.h) of the gun point keyed `key` for `player` (0 player 1, a seat). Game thread; reads
+/// the game's memory only and notes the view in the mod's own table, with no call, allocation or log (it may run under
+/// the field-action manager's point lock); a change is said by LogGunPointViews. One press flag serves the point: a
+/// second player's press in the frame of another's is the game's one press, named to the first.
+world::field_rules::PointView GunPointViewFor(std::uint64_t key, int player) noexcept;
 
 /// Each player's view of each gun point that changed since it was last said (Debug). Game thread, outside the lock.
 void LogGunPointViews() noexcept;

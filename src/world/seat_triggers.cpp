@@ -2,6 +2,7 @@
 
 #include "facts/controller.h"
 #include "facts/engine.h"
+#include "facts/field_action.h"
 #include "facts/party.h"
 #include "facts/traversal.h"
 #include "platform/build_value.h"
@@ -23,6 +24,7 @@
 #include "traversal/hooks.h"
 #include "traversal/traversal_watch.h"
 #include "world/field_rules.h"
+#include "world/levers.h"
 #include "world/seat_switch_volumes.h"
 
 #include <algorithm>
@@ -98,8 +100,9 @@ struct AdmittedClass
     bool           logsUseFields   = false;  // one-shot moves: the register's +0x848 / +0x86C, logged per delivery
     platform::PerBuild<std::uint32_t> unregisterSlot{0x728, 0x730};  // where `unregister` sits in the vtable
     bool           rides = false;  // chocobo climbs: delivered while the seat's player rides their own chocobo too
-    bool           notesKey = false;  // hook ropes: a delivered enter names the actor's point to the hooks module
+    void (*notes)(const void* actor) noexcept = nullptr;  // a delivered enter names the actor's point to its module
     bool (*ready)() noexcept = nullptr;  // the module holding the class's other levers is placed (else held back)
+    bool (*admits)(const void* actor) noexcept = nullptr;  // this actor of the class is a player 2's or 3's (else held back)
 };
 // The chocobo climb (research/RE-p2-chocobo-climb.md), launch pad, jump box and slider (RE-chocobo-exits-pads.md):
 // stored-character classes whose unregister override sits one slot past the others'. During a ride every player's
@@ -126,8 +129,13 @@ constexpr AdmittedClass kAdmitted[] = {
     // The grappling gun's points and the hook ropes (research/RE-hooks-for-seats.md): the shared register, an
     // unregister reading only the leader; the rest of their levers in traversal/hooks, delivered only while those are
     // placed (a delivery without them would put the actor's one point under two players' notifies).
-    {L"hookshot", facts::kHookShotVTable, 0, 0, false, false, {0x728, 0x730}, false, false, &traversal::hooks::GunReady},
-    {L"hook rope", facts::kHookRopeVTable, 0, 0, false, false, {0x728, 0x730}, false, true, &traversal::hooks::RopeReady},
+    {L"hookshot", facts::kHookShotVTable, 0, 0, false, false, {0x728, 0x730}, false, nullptr, &traversal::hooks::GunReady},
+    {L"hook rope", facts::kHookRopeVTable, 0, 0, false, false, {0x728, 0x730}, false, &traversal::hooks::NoteRope,
+     &traversal::hooks::RopeReady},
+    // The switches (research/RE-further-player-levers.md): the shared register, an unregister override reading only the
+    // leader; the listed switches only (world/lever_rules.h), the rest of their levers in world/levers.
+    {L"switch", facts::kSwitchAccessVTable, 0, facts::kSwitchAccessUnregister, false, false, {0x728, 0x730}, false,
+     &levers::NoteSwitch, &levers::Ready, &levers::Admits},
 };
 constexpr std::size_t   kClassCount     = std::size(kAdmitted);
 constexpr std::uint32_t kZiplineEnterEffect = 0x770;  // u8 bUseEnterEffect: set = starts on approach, else a button prompt
@@ -671,9 +679,9 @@ std::uintptr_t Deliver(int seat, bool enter, FilterFn original, void* manager, s
         }
     }
     ++(enter ? counts.deliveredEnters : counts.deliveredLeaves);
-    if (enter && alive && cls.notesKey)
+    if (enter && alive && cls.notes != nullptr)
     {
-        traversal::hooks::NoteRope(actor);  // the seat's pass admits the rope's point by its key from here on
+        cls.notes(actor);  // the seat's pass admits the actor's point by its key from here on
     }
     try
     {
@@ -748,6 +756,11 @@ std::uintptr_t Filter(bool enter, void* manager, std::uint64_t key, void* owner,
         if (cls >= 0 && kAdmitted[cls].ready != nullptr && !kAdmitted[cls].ready())
         {
             LogEvent(seat, enter, actor, passed, L"held back, the module its levers live in is not placed");
+            return 0;
+        }
+        if (cls >= 0 && kAdmitted[cls].admits != nullptr && !kAdmitted[cls].admits(actor))
+        {
+            LogEvent(seat, enter, actor, passed, L"held back, this one stays player 1's");
             return 0;
         }
         const auto verdict = field_rules::TriggerVerdictOf(

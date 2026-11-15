@@ -133,6 +133,7 @@ add_library(LocalSplitScreen SHARED
     src/camera/shoulder_scale.cpp
     src/input/walk_limits.cpp
     src/world/field_pickup.cpp
+    src/world/levers.cpp
     src/world/shooting_targets.cpp
     src/feedback/pad_rumble.cpp
     src/feedback/combat_rumble.cpp
@@ -391,6 +392,7 @@ lss_test(field_hold)
 lss_test(state_path)
 lss_test(lead_keep_rules)
 lss_test(low_health_rules)
+lss_test(lever_rules)
 lss_test(story_box_rules)
 lss_test(battle_rates_rules)
 lss_test(battle_warps_rules)

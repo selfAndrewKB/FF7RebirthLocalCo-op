@@ -95,6 +95,15 @@ inline void* Tags(const void* actor) noexcept
     return platform::ReadPointer(actor, facts::kActorTagsData);
 }
 
+/// An actor's first tag (a field-action actor's point key), or 0 when it has none.
+inline std::uint64_t FirstTag(const void* actor) noexcept
+{
+    const void* tags = Tags(actor);
+    return tags != nullptr && platform::ReadField<std::int32_t>(actor, facts::kActorTagsCount) > 0
+               ? platform::ReadField<std::uint64_t>(tags, 0)
+               : 0;
+}
+
 // --- an AI controller --------------------------------------------------------------------------------------------------
 
 /// An AI controller's active brain, or null.

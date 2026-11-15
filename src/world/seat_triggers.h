@@ -16,7 +16,8 @@
 // The actor is found by the key in the game's tag registry, as the routers find it. Admitted classes (ladders, climbing
 // walls, crawls, squeezes, beams, monkey bars, lifting ropes, spider moves, auto-start zip lines, pole slides, one-shot
 // moves, wall runs: research/RE-p2-traversal-classes.md; chocobo climbs, also while the seat's player rides their own
-// chocobo: research/RE-p2-chocobo-climb.md) go through the game's filter as that player: inside a LeaderScope
+// chocobo: research/RE-p2-chocobo-climb.md; the grappling gun's points and hook ropes: traversal/hooks; the listed
+// switches: world/levers) go through the game's filter as that player: inside a LeaderScope
 // of the seat's member and a primary-controller scope, so the spot registers on (and leaves) the seat's controller's
 // list and the enter/leave checks read the seat's tracker, with the seat's own entered flag (+0x2A1), and for pole
 // slides, one-shot moves and chocobo climbs the seat's own stored character, swapped in for the call. The wall-run move state's camera

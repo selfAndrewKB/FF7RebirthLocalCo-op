@@ -1,0 +1,20 @@
+{
+  "build": "1.005",
+  "research_build": "1.004",
+  "date": "2026-11-14",
+  "doc": "Rebirth/Documentation/research/RE-further-player-levers.md (section 8, both builds side by side; the decompiles in research/.ida-mcp/levers/)",
+  "facts": [
+    {"name": "vt_AEndFieldActionSwitchAccessActor", "old": "0x1458716D8", "new": "0x14567E3F0", "bytes": "", "same_semantics": true, "confidence": "CONFIRMED", "note": "The pass LEVERS: the class's native vtable; its actor slots at or above +0x400 sit +8 from 1.004."},
+    {"name": "slot: SwitchAccess register (1.004 vt+0x720, 1.005 vt+0x728)", "old": "0x145871DF8", "new": "0x14567EB18", "bytes": "", "same_semantics": true, "confidence": "CONFIRMED", "note": "Holds SwitchAccess_Vt720_RegisterWithLeaderPC_Set9E0_PointOn (below) in both exes."},
+    {"name": "SwitchAccess_Vt720_RegisterWithLeaderPC_Set9E0_PointOn", "old": "0x1413E5168", "new": "0x140D7F234", "bytes": "48895c240857b820000000e83cc93e01", "same_semantics": true, "confidence": "CONFIRMED", "note": "The leader (ResolvePartyLeaderWeakPtr), the in-range byte +0x9E0 = 1, the register on the leader's controller list."},
+    {"name": "slot: SwitchAccess unregister (1.004 vt+0x728, 1.005 vt+0x730)", "old": "0x145871E00", "new": "0x14567EB20", "bytes": "", "same_semantics": true, "confidence": "CONFIRMED", "note": "Holds SwitchAccess_Vt728_UnregisterLeader_PointOff_Clear9E0 (below) in both exes."},
+    {"name": "SwitchAccess_Vt728_UnregisterLeader_PointOff_Clear9E0", "old": "0x1413E51BC", "new": "0x140D7F428", "bytes": "48895c240857b820000000e848c73e01", "same_semantics": true, "confidence": "CONFIRMED", "note": "The leader's unregister, the point setter off, +0x9E0 = 0."},
+    {"name": "slot: SwitchAccess notify (1.004 vt+0x748, 1.005 vt+0x750)", "old": "0x145871E20", "new": "0x14567EB40", "bytes": "", "same_semantics": true, "confidence": "CONFIRMED", "note": "Holds SwitchAccess_Vt748_NotifyNear_StartOnHoldProgress (below) in both exes."},
+    {"name": "SwitchAccess_Vt748_NotifyNear_StartOnHoldProgress", "old": "0x140E83420", "new": "0x1410CE368", "bytes": "488bc448895808488968104889701848", "same_semantics": true, "confidence": "CONFIRMED", "note": "(actor, context): busy test, the point's decide and setter, the start of control state 8 on context+0x8 when the hold progress is above 0."},
+    {"name": "slot: SwitchAccessExecuter tick (+0x20)", "old": "0x145796F38", "new": "0x145679490", "bytes": "", "same_semantics": true, "confidence": "CONFIRMED", "note": "Holds SwitchAccessExecuter_Vt20_Tick_CallsVt88 (below) in both exes (executer vtable 0x145796F18 / 0x145679470)."},
+    {"name": "SwitchAccessExecuter_Vt20_Tick_CallsVt88", "old": "0x1407BA02C", "new": "0x141733FEC", "bytes": "4053b830000000e8887ba300482be080", "same_semantics": true, "confidence": "CONFIRMED", "note": "(executer, dt): the phase update (vt+0x88), which polls the switch's hold progress, while the actor weak +0x58 is valid."},
+    {"name": "SwitchAccess_SetFieldActionMgrPoint_HoldTime728", "old": "0x140E835F8", "new": "0x1410CE540", "bytes": "48895c24104889742418574154415541", "same_semantics": true, "confidence": "CONFIRMED", "note": "(actor, show, check, ng): the point on or off on a change of show (+0x9F1), the press latch +0x9F0 cleared on both edges, the point's not-usable bit from the primary controller's character and the leader. Entry %16=8 / %16=0: the first instruction inside one block in both builds."},
+    {"name": "SwitchAccess_Tick_Vt410's SetFieldActionMgrPoint call (the point-off request)", "old": "0x140E8302D", "new": "0x1410CDF75", "bytes": "", "same_semantics": true, "confidence": "CONFIRMED", "note": "E8 to the setter; the mod knows the actor's own off by this call's return address (checked as an E8 to the setter at install)."},
+    {"name": "SwitchAccess_EndPlay_PointOff's SetFieldActionMgrPoint call", "old": "0x141444DE0", "new": "0x140D85C5C", "bytes": "", "same_semantics": true, "confidence": "CONFIRMED", "note": "As above: an unconditional off for an actor leaving play."}
+  ]
+}

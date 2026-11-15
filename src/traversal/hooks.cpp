@@ -43,6 +43,9 @@ namespace {
 using traversal_camera::kMoveActor;
 using traversal_camera::kMoveCharacter;
 using traversal_camera::SeatOfCharacter;
+using world::field_rules::AnyOn;
+using world::field_rules::FirstOn;
+using world::field_rules::PointView;
 
 // The gun's functions, slots and call sites (research/RE-hooks-for-seats.md).
 constexpr std::uint8_t kShotPointBytes[] = {0x48, 0x8B, 0xC4, 0x48, 0x89, 0x58, 0x08, 0x48, 0x89, 0x70, 0x10, 0x48,
@@ -151,8 +154,8 @@ struct Wishes
     std::uint64_t actor = 0;  // the actor's weak value
     bool          wish[players::kMaxPlayers] = {};
     PointArgs     args[players::kMaxPlayers] = {};
-    GunPointView  view[players::kMaxPlayers] = {};        // each player's view as their selection last asked it
-    GunPointView  viewLogged[players::kMaxPlayers] = {};  // as last said
+    PointView  view[players::kMaxPlayers] = {};        // each player's view as their selection last asked it
+    PointView  viewLogged[players::kMaxPlayers] = {};  // as last said
 };
 /// A seat's copy of a gun point's camera handle, per actor.
 struct ActorHandle
@@ -204,26 +207,6 @@ int SeatNow() noexcept
     return players::SeatBuilt(seat) ? seat : 0;
 }
 
-/// A field-action actor's point key: its first tag, or 0.
-std::uint64_t KeyOf(const void* actor) noexcept
-{
-    const auto* tags = static_cast<const std::uint64_t*>(players::actor_fields::Tags(actor));
-    return tags != nullptr && ReadField<std::int32_t>(actor, facts::kActorTagsCount) > 0 ? ReadField<std::uint64_t>(tags, 0) : 0;
-}
-
-/// Whether any player wishes the point on.
-bool AnyWish(const Wishes& wishes) noexcept
-{
-    for (const bool wish : wishes.wish)
-    {
-        if (wish)
-        {
-            return true;
-        }
-    }
-    return false;
-}
-
 /// The wishes of `actor`, with a seat that left the game wishing nothing (its wish was never taken back by a call):
 /// its entry, else a free, dead or wishless one made its (an actor gone from play, or one nobody wishes on, gives
 /// its entry up; an actor's EndPlay switches its point off outside the redirects and leaves its wishes to this),
@@ -251,7 +234,7 @@ Wishes* WishesOf(std::array<Wishes, kMaxActors>& table, void* actor) noexcept
     }
     for (Wishes& wishes : table)
     {
-        if (wishes.actor == 0 || !AnyWish(wishes) || players::weak_object::ObjectOf(wishes.actor) == nullptr)
+        if (wishes.actor == 0 || !AnyOn(wishes.wish) || players::weak_object::ObjectOf(wishes.actor) == nullptr)
         {
             wishes = {weak};
             return &wishes;
@@ -260,34 +243,11 @@ Wishes* WishesOf(std::array<Wishes, kMaxActors>& table, void* actor) noexcept
     return nullptr;
 }
 
-/// A wishing player: 0 player 1, a seat, or -1 when nobody wishes the point on.
-int AWisher(const Wishes& wishes) noexcept
-{
-    for (int player = 0; player < static_cast<int>(players::kMaxPlayers); ++player)
-    {
-        if (wishes.wish[player])
-        {
-            return player;
-        }
-    }
-    return -1;
-}
-
 /// A wishing player's character: player 1's pawn, or the seat's member.
 void* CharacterOf(int wisher) noexcept
 {
     return wisher == 0 ? players::actor_fields::Pawn(players::generation::PlayerOneController())
                        : players::generation::MemberOf(wisher);
-}
-
-/// The player whose character `character` is: 0 player 1, a seat, or -1 (an AI member, or none).
-int PlayerOfCharacter(const void* character) noexcept
-{
-    if (character == nullptr)
-    {
-        return -1;
-    }
-    return character == CharacterOf(0) ? 0 : SeatOfCharacter(character);
 }
 
 /// The presser's entry for `actor`, made (in a free or dead entry) when `make`; null when none, or the table is full.
@@ -421,7 +381,7 @@ void ShotNotify(void* actor, void* context) noexcept
         original(actor, context);
         return;
     }
-    const int notified = PlayerOfCharacter(ReadPointer(context, facts::kNotifyContextCharacter));
+    const int notified = players::generation::PlayerOfCharacter(ReadPointer(context, facts::kNotifyContextCharacter));
     Presser*  presser  = nullptr;
     if (ReadField<std::uint8_t>(actor, facts::kHookShotPressFlag) != 0)
     {
@@ -475,7 +435,7 @@ void ShotNotify(void* actor, void* context) noexcept
 /// follows nobody; 0 is the game's own answer for a character with no controller holder).
 std::uint8_t ShotAIEnter(void* actor, void* character) noexcept
 {
-    const int player = players::generation::OnGameThread() ? PlayerOfCharacter(character) : -1;
+    const int player = players::generation::OnGameThread() ? players::generation::PlayerOfCharacter(character) : -1;
     if (player < 1)
     {
         return reinterpret_cast<AIEnterFn>(g_shotAIEnter.Original())(actor, character);
@@ -551,9 +511,9 @@ void ShotPointOr(void* actor, std::uint8_t show, std::uint8_t allAngle, std::uin
     {
         // A character no player plays: no player's wish. The players' switch stands (the first wisher's answer); with
         // no player wishing, the game's own call.
-        if (AnyWish(*wishes))
+        if (AnyOn(wishes->wish))
         {
-            const PointArgs& args = wishes->args[AWisher(*wishes)];
+            const PointArgs& args = wishes->args[FirstOn(wishes->wish)];
             g_shotPoint(actor, 1, args.allAngle, args.ng, args.r1, args.r2);
         }
         else
@@ -564,14 +524,14 @@ void ShotPointOr(void* actor, std::uint8_t show, std::uint8_t allAngle, std::uin
     }
     const int  player  = t_notified >= 0 ? t_notified : scopes::primary_controller::OpenSeat();
     const bool wish    = show != 0;
-    const bool wasAny  = AnyWish(*wishes);
+    const bool wasAny  = AnyOn(wishes->wish);
     const bool changed = wishes->wish[player] != wish;
     wishes->wish[player] = wish;
     if (wish)
     {
         wishes->args[player] = {allAngle, ng, r1, r2};
     }
-    const bool any = AnyWish(*wishes);
+    const bool any = AnyOn(wishes->wish);
     if (!any)
     {
         g_shotPoint(actor, 0, allAngle, ng, r1, r2);  // the last player's off: the game's own call
@@ -586,7 +546,7 @@ void ShotPointOr(void* actor, std::uint8_t show, std::uint8_t allAngle, std::uin
     {
         SpendPressAtLeave(actor, player);
     }
-    const PointArgs& args = wishes->args[AWisher(*wishes)];
+    const PointArgs& args = wishes->args[FirstOn(wishes->wish)];
     if (changed && wish && wasAny)
     {
         if (ReadField<std::uint8_t>(actor, facts::kHookShotPressFlag) != 0)
@@ -608,7 +568,7 @@ void ShotPointOr(void* actor, std::uint8_t show, std::uint8_t allAngle, std::uin
     g_shotPoint(actor, 1, args.allAngle, args.ng, args.r1, args.r2);
     if (changed && !wish)
     {
-        g_removePin(KeyOf(actor));
+        g_removePin(players::actor_fields::FirstTag(actor));
         LogWish(L"gun point", actor, player, wish, any, L" (their own pin removed: another player holds it)");
         return;
     }
@@ -639,8 +599,8 @@ void RopeActiveOr(void* actor, std::uint8_t on, void* character, std::uint8_t ng
     const bool wish    = on != 0;
     const bool changed = wishes->wish[player] != wish;
     wishes->wish[player] = wish;
-    const bool any    = AnyWish(*wishes);
-    const int  wisher = AWisher(*wishes);
+    const bool any    = AnyOn(wishes->wish);
+    const int  wisher = FirstOn(wishes->wish);
     // An on forwarded for another player's wish carries that player's character, not the leaving caller's.
     void* who = wish && character != nullptr ? character : wisher >= 0 ? CharacterOf(wisher) : character;
     original(actor, any ? 1 : 0, who, ngAllowed);
@@ -1098,32 +1058,32 @@ void NotePressesAfter(int player) noexcept
     }
 }
 
-GunPointView GunPointViewFor(std::uint64_t key, int player) noexcept
+PointView GunPointViewFor(std::uint64_t key, int player) noexcept
 {
     if (!g_gun || key == 0 || player < 0 || player >= static_cast<int>(players::kMaxPlayers) ||
         !players::generation::OnGameThread())
     {
-        return GunPointView::NotTracked;
+        return PointView::NotTracked;
     }
     for (Wishes& wishes : g_shotWishes)
     {
-        if (wishes.actor == 0 || !AnyWish(wishes))
+        if (wishes.actor == 0 || !AnyOn(wishes.wish))
         {
             continue;
         }
         const void* actor = players::weak_object::ObjectOf(wishes.actor);
-        if (actor == nullptr || KeyOf(actor) != key)
+        if (actor == nullptr || players::actor_fields::FirstTag(actor) != key)
         {
             continue;
         }
         const PointArgs&   args = wishes.args[player];
-        const GunPointView view = !wishes.wish[player]                      ? GunPointView::Off
-                                  : args.allAngle != 0 || args.ng != 0      ? GunPointView::NotUsable
-                                                                            : GunPointView::Usable;
+        const PointView view = !wishes.wish[player]                      ? PointView::Off
+                                  : args.allAngle != 0 || args.ng != 0      ? PointView::NotUsable
+                                                                            : PointView::Usable;
         wishes.view[player] = view;
         return view;
     }
-    return GunPointView::NotTracked;
+    return PointView::NotTracked;
 }
 
 void LogGunPointViews() noexcept
@@ -1136,8 +1096,8 @@ void LogGunPointViews() noexcept
     {
         for (int player = 0; player < static_cast<int>(players::kMaxPlayers); ++player)
         {
-            const GunPointView view = wishes.view[player];
-            if (view == GunPointView::NotTracked || view == wishes.viewLogged[player])
+            const PointView view = wishes.view[player];
+            if (view == PointView::NotTracked || view == wishes.viewLogged[player])
             {
                 continue;
             }
@@ -1146,8 +1106,8 @@ void LogGunPointViews() noexcept
             {
                 platform::LogDebug(L"hooks: {}'s selection sees the gun point {} {}", players::SeatName(player),
                                    players::NameOf(players::weak_object::ObjectOf(wishes.actor)),
-                                   view == GunPointView::Off         ? L"off (their own notify wishes it off)"
-                                   : view == GunPointView::NotUsable ? L"on, not usable from where they are (their own notify's answer)"
+                                   view == PointView::Off         ? L"off (their own notify wishes it off)"
+                                   : view == PointView::NotUsable ? L"on, not usable from where they are (their own notify's answer)"
                                                                      : L"on and usable");
             }
             catch (...)
@@ -1192,7 +1152,7 @@ void NoteRope(const void* actor) noexcept
     {
         return;
     }
-    const std::uint64_t key = KeyOf(actor);
+    const std::uint64_t key = players::actor_fields::FirstTag(actor);
     if (key == 0)
     {
         return;

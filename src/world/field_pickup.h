@@ -16,7 +16,8 @@
 //     own test), a vending machine (its point preset rpaVendingMachine; world/vending), a shopkeeper (the game's
 //     data names a shop action for its key; world/shop_talk) nor the seat's own box point (the point the seat's
 //     leader-action component adds for the breakable box Yuffie's throw selects, by the key that component holds;
-//     research/RE-yuffie-box-throw.md), and cleared again after: the seat's player is offered collectibles,
+//     research/RE-yuffie-box-throw.md), a hook point (traversal/hooks) nor a delivered switch's point (by its key,
+//     world/levers), and cleared again after: the seat's player is offered collectibles,
 //     materials, chests, vending machines, shopkeepers and their own box; talk, doors, scripts and menus stay player
 //     1's. A chest or machine the seat's player uses runs the game's own state (treasure, field action) on the seat's
 //     member (the listener asks for the leader, which the scope makes the seat's); a shopkeeper's press fires the
@@ -50,6 +51,7 @@
 // controller (never by its position). Shared: the scratch of a pass, player 1's markers as the last pass left them
 // and the doomed widgets.
 
+#include "facts/field_action.h"
 #include "platform/byte_scope.h"
 #include "players/seats.h"
 
@@ -113,6 +115,37 @@ int TakeMarked(std::uint64_t key) noexcept;
 /// player 1's, a seat (1..) that seat's, -1 neither (another owner's marker, or no seat has a copy). For
 /// hud/field_markers, which shows each half only its own player's.
 int MarkerOwner(const void* widget) noexcept;
+
+/// The seat's copy of the manager's slot block (the slots' targets, records, held latches: what the game's hold progress
+/// of a point reads) and the seat's carried target bits on the point keyed `key`, in the live manager for the length of
+/// a call, player 1's back after (a Hold range of platform/byte_scope.h; the point's two bits put back to the point that
+/// holds the key at the end, found again under the manager's lock). For a game call made for the seat's member outside
+/// its pass (a switch's notify and its executer's tick, world/levers). Without a copy of the live manager (Held false)
+/// the point's target bits are cleared for the call instead, so the seat's hold reads 0, never player 1's. A point the
+/// call itself adds gets no bits (it can hold no press yet). Nothing while a pass runs or a walk of the points holds the
+/// lock. Game thread.
+class SlotHold
+{
+public:
+    SlotHold(int seat, std::uint64_t key) noexcept;
+    ~SlotHold();
+    SlotHold(const SlotHold&)            = delete;
+    SlotHold& operator=(const SlotHold&) = delete;
+
+    bool Held() const noexcept { return held_; }
+
+private:
+    platform::ByteStore<1, facts::kFieldActionSlotBlockSize> context_;
+    void*                          mgr_     = nullptr;  // the live manager at the start
+    std::uint64_t                  key_     = 0;
+    std::uint8_t                   oneBits_ = 0;        // player 1's target bits on the point
+    bool                           bitsSet_ = false;    // the seat's bits are on the point
+    bool                           held_    = false;    // the seat's block is in the manager
+};
+
+/// The live point keyed `key`'s flags (facts/field_action.h). False when no point holds the key, inside a pass or a walk
+/// of the points (it takes the manager's point lock). Game thread.
+bool PointFlagsOf(std::uint64_t key, std::uint8_t& flags) noexcept;
 
 /// The seat's slot-0 target (its copy's) in the live manager for the length of a call, player 1's back after (a Hold
 /// range of platform/byte_scope.h): the member tick, where the seat's leader-action component compares its shooting

@@ -546,6 +546,12 @@ src/
                             tested on the host (tests/field_rules_test.cpp)
     interact_watch          Logs the game's field interactions (FieldActionMgr) around the seats' pickups
                             (research/RE-p2-field-interact.md)
+    lever_rules.h           Which switches (levers, wall switches, lift panels: the game's switch-access actors;
+                            world/levers.h) players 2 and 3 may use, and two small decisions of the module, as pure
+                            functions tested on the host
+    levers                  Players 2 and 3 work the game's switches (levers, wall switches, lift panels:
+                            AEndFieldActionSwitchAccessActor) with their own pad, on their own character, as player 1
+                            does
     nav_strand              Logs when a seat's character is stranded off the loaded navmesh and asks the game's follow
                             warp to bring it back
     party_warp              Brings a seat's player back to the party through the game's own follow warp
@@ -839,7 +845,7 @@ src/
     dev_tools               The development tools, behind one switch: the console (control/), the HUD trace
                             (hud/hud_trace.h), the position probe (hud/position_probe.h), the dump commands, and the
                             watches that only log: the rumble, ride, Wheelie, framing, …
-tests/                      107 host-side test programs (ctest), one per pure header or code stub; run without the game
+tests/                      108 host-side test programs (ctest), one per pure header or code stub; run without the game
 tools/                      the control scripts, the regression harness, the version match, this file
 ```
 

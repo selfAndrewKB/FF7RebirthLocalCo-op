@@ -98,6 +98,47 @@ constexpr TriggerVerdict TriggerVerdictOf(int classIndex, bool enterEffectOnly, 
     return enterEffectOnly && zipEnterEffect == 0 ? TriggerVerdict::PromptZipLine : TriggerVerdict::Deliver;
 }
 
+// ---- field_pickup: a point the players share ----
+
+/// How a player's own selection is to see a field-action point the players share (a gun point, a switch's point): the
+/// point is one for every player, on while any player's notify wishes it, and carries the game's "not usable from here"
+/// bit from one player's answer; each player's selection sees it as their own notify left it.
+enum class PointView : std::uint8_t
+{
+    NotTracked,  // not a shared point any player wishes on: left as it is
+    Off,         // their own notify wishes it off: the game's off for them (the disabled bit)
+    NotUsable,   // on, with the "not usable from here" bit their own notify's answer sets
+    Usable,      // on, the bit clear
+};
+
+/// Whether any player wishes a shared point on (one flag per player).
+template <std::size_t N>
+constexpr bool AnyOn(const bool (&wishes)[N]) noexcept
+{
+    for (const bool wish : wishes)
+    {
+        if (wish)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+/// The first player who wishes it on (0 player 1, a seat), or -1 when nobody does.
+template <std::size_t N>
+constexpr int FirstOn(const bool (&wishes)[N]) noexcept
+{
+    for (std::size_t player = 0; player < N; ++player)
+    {
+        if (wishes[player])
+        {
+            return static_cast<int>(player);
+        }
+    }
+    return -1;
+}
+
 // ---- scope_leaks: the input clock ----
 
 /// The seconds from which adding `deltaTime` the game's way (float added to double) lands exactly on `target`, if one

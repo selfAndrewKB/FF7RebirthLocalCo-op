@@ -42,6 +42,8 @@ namespace lss::world::story_boxes {
 
 namespace {
 
+using players::actor_fields::FirstTag;
+
 using platform::CallGuarded;
 using players::unreal::NameText;
 using RC::Unreal::UClass;
@@ -150,13 +152,6 @@ void* Root() noexcept
 {
     std::uintptr_t root = 0;
     return g_root != nullptr && platform::CopyGuarded(&root, g_root, sizeof(root)) ? reinterpret_cast<void*>(root) : nullptr;
-}
-
-/// An actor's first tag (0 without one).
-std::uint64_t FirstTag(const void* actor) noexcept
-{
-    const auto count = ReadField<std::int32_t>(actor, facts::kActorTagsCount);
-    return actor != nullptr && count > 0 ? ReadField<std::uint64_t>(players::actor_fields::Tags(actor), 0) : 0;
 }
 
 /// The box's layout object (0: the tag maps to none, as when its level is not loaded).
