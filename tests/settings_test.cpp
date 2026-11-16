@@ -64,8 +64,14 @@ void TableConsistent()
         EXPECT(std::wcscmp(rate->words[0], L"0.1") == 0 && std::wcscmp(rate->words[99], L"10.0") == 0);
         EXPECT(std::wstring_view(rate->section) == L"Battle");
     }
-    EXPECT(kLeadHolder.words.size() == 2 && std::wcscmp(kLeadHolder.fallback, L"guide") == 0 && kLeadHolder.experimental);
-    EXPECT(kBattleWarps.words.size() == 3 && std::wcscmp(kBattleWarps.fallback, L"players-stay") == 0);
+    EXPECT(kLeadHolder.words.size() == 2 && std::wcscmp(kLeadHolder.fallback, L"keeps") == 0 && kLeadHolder.experimental);
+    // The battle's gathering: on by default (the game's own warps); off keeps the players' characters where they are.
+    EXPECT(kBattleWarps.words.size() == 2 && std::wcscmp(kBattleWarps.fallback, L"on") == 0);
+    EXPECT(Judge(kBattleWarps, L"Off").word == L"off");
+    EXPECT(Judge(kBattleWarps, L"players-stay").source == Source::Invalid && Judge(kBattleWarps, L"players-stay").word == L"on");
+    // The battle multipliers: the file's words plain, the page's values read "times".
+    EXPECT(std::wcscmp(kEnemyHp.words[14], L"1.5") == 0 && std::wcscmp(kEnemyHp.wordLabels[14], L"x1.5") == 0);
+    EXPECT(std::wcscmp(kApGain.wordLabels[99], L"x10.0") == 0 && kApGain.wordLabels.size() == kApGain.words.size());
     // The slow-down: on or off, off by default (an open battle menu leaves the battle running).
     EXPECT(kMenuSlow.words.size() == 2 && std::wcscmp(kMenuSlow.fallback, L"off") == 0 && !kMenuSlow.experimental);
     EXPECT(std::wstring_view(kMenuSlow.section) == L"Battle");

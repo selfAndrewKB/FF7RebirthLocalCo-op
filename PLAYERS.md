@@ -50,7 +50,7 @@ The folder carries its own `enabled.txt`, so UE4SS's `mods.txt` needs no line fo
 
 The pause menu has a **Co-op** row above System, and the title menu one below Options. It opens a page of the game's
 own Options screen with the mod's options: how the screen splits for two and for three players, each view's field of
-view, which screen shows which player, who a battle moves at its start and end, the battle's rates (enemy damage, enemy
+view, which screen shows which player, whether a battle gathers the players at its start and end, the battle's rates (enemy damage, enemy
 and boss HP, the stagger gauge, EXP and AP) and more. Every option says what it does when you move onto it. A choice
 applies at once and is saved to `LocalSplitScreen.ini` in the mod's folder, which the mod writes itself with every
 option explained in it.
@@ -70,7 +70,7 @@ restart of the PC always returns your layout. If a game ever ends without puttin
 Monitors** button.
 
 A monitor you picked that is not connected is waited for, not replaced: with two of three connected the game uses those
-two, with fewer it stays in one window. A virtual monitor made by a streaming program (Apollo, Vibepollo) works like any
+two, with fewer it starts in split-screen mode. A virtual monitor made by a streaming program (Apollo, Vibepollo) works like any
 other and is recognised by its name, so give each device you stream to a name of its own.
 
 Leave `MultiMonitorSetup.exe` where it is and under that name: the mod starts it in the background to put your monitors

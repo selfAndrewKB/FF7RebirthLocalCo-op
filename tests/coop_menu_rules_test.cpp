@@ -5,6 +5,8 @@
 
 #include "expect.h"
 
+#include <algorithm>
+#include <cstddef>
 #include <cstdio>
 #include <cwchar>
 #include <set>
@@ -158,7 +160,14 @@ void LabelRoom()
     {
         if (IsSlider(*option))
         {
-            EXPECT(LabelShift(*option) == 2 * kGaugeCharWidth);  // the weights' words: "0.00" to "1.00"
+            // The weights' values "0.00" to "1.00" (two characters past the digits), the battle's rates "x0.1" to "x10.0" (three).
+            std::size_t longest = 0;
+            for (const wchar_t* label : option->wordLabels)
+            {
+                longest = std::max(longest, std::wcslen(label));
+            }
+            EXPECT(longest == 4 || longest == 5);
+            EXPECT(LabelShift(*option) == static_cast<float>(longest - kGaugeLabelDigits) * kGaugeCharWidth);
         }
     }
     constexpr const wchar_t* kShort[] = {L"1", L"10"};

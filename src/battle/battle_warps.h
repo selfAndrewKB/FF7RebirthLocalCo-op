@@ -10,12 +10,10 @@
 //     data's no-warp names) answers "excluded" for a member that stays; one call site redirected;
 //   - end: QueueBattleFinishTeleports' per-member placement returns at once for a member that stays, as its own
 //     early-outs do (no entry, no AI pause); one call site redirected.
-// The setting (LocalSplitScreen.ini [Battle] battle-warps, the console's `battle-warps`, the Co-op page):
-//   players-stay  every player's own character stays where it is; the game warps the members no player controls (the
-//                 default);
-//   off           no member the game gathers is warped (the leader's own return at the end excepted); a far member
-//                 the game controls walks in by its AI (unplayed);
-//   game          the game's warps for everyone.
+// The setting (LocalSplitScreen.ini [Battle] battle-warps, the console's `battle-warps`, the Co-op page's "Gather at
+// Battle Start/End"):
+//   on   the game's warps for everyone (the default);
+//   off  players 2 and 3's characters stay where they are; the game warps the members no player controls.
 // A member stays in the battle wherever it is: membership, the AI's in-battle flag and the enemy target lists come
 // from other code, and escape tests only the field leader (research/RE-p2-battle-gather-warp.md).
 // Logged: the setting (Info); each member the start or end keeps (Info, with its distance from player 1's

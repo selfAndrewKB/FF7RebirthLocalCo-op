@@ -31,14 +31,13 @@ namespace {
 using battle_warps_rules::Mode;
 
 // The words of the setting's row in the table, in the enum's order.
-constexpr auto& kModeWords = platform::settings::kBattleWarpsWords;
-static_assert(kModeWords.size() == 3 && std::wstring_view(kModeWords[static_cast<std::size_t>(Mode::PlayersStay)]) == L"players-stay" &&
-                  std::wstring_view(kModeWords[static_cast<std::size_t>(Mode::Off)]) == L"off" &&
-                  std::wstring_view(kModeWords[static_cast<std::size_t>(Mode::Game)]) == L"game",
+constexpr auto& kModeWords = platform::settings::kOnOffWords;
+static_assert(kModeWords.size() == 2 && std::wstring_view(kModeWords[static_cast<std::size_t>(Mode::Game)]) == L"on" &&
+                  std::wstring_view(kModeWords[static_cast<std::size_t>(Mode::PlayersStay)]) == L"off",
               "the table's words name the modes in the enum's order");
 
 // Game thread (the console and the page set it there; the redirects read it there).
-Mode g_mode = Mode::PlayersStay;
+Mode g_mode = Mode::Game;
 
 // Facts read from the database (research/RE-p2-battle-gather-warp.md; this build).
 // The exclusion set's test, bool(InlineActorArray16* set, AActor** element): a pure linear search with 16 callers, so
@@ -233,12 +232,9 @@ void SetMode(Mode mode, const wchar_t* why) noexcept
                 platform::Log(L"battle warps: the game warps the whole party at a battle's start and end ({})", why);
                 break;
             case Mode::PlayersStay:
-                platform::Log(L"battle warps: every player's own character stays where it is at a battle's start and "
+                platform::Log(L"battle warps: players 2 and 3's characters stay where they are at a battle's start and "
                               L"end; the game warps the members no player controls ({})",
                               why);
-                break;
-            case Mode::Off:
-                platform::Log(L"battle warps: no party member is warped at a battle's start or end ({})", why);
                 break;
         }
     }
@@ -289,8 +285,8 @@ void ForgetGather() noexcept
 bool Install(const platform::GameImage& image) noexcept
 {
     // The file's word is one of the table's (platform/settings.h); set before the redirects are placed.
-    const Mode fromFile =
-        ModeOf(platform::settings::Of(platform::settings::kBattleWarps).word).value_or(Mode::PlayersStay);
+    const Mode fromFile = ModeOf(platform::settings::Of(platform::settings::kBattleWarps).word)
+                              .value_or(ModeOf(platform::settings::kBattleWarps.fallback).value_or(Mode::Game));
     try
     {
         SetMode(fromFile, platform::settings::Why(platform::settings::kBattleWarps).c_str());
