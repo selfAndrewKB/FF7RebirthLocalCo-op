@@ -142,14 +142,16 @@ struct AiSnapshot
 
 enum class AiReadiness
 {
-    Ready,        // the base brain's FOLLOW, or BATTLE: the states the game hands a player
+    Ready,        // the base brain's FOLLOW, BATTLE, or a level setting that parks the member (a stay, a stand, a group's follow)
     Unread,
-    ScriptBrain,  // a story script's brain holds the member (a scene, a guide, a wait)
+    ScriptBrain,  // a script holds the member: a level's walk, lead or animation, or another brain (an event, a scene)
     NotFollow,    // the base brain, in another state
 };
 
-/// Whether a seat may take a member whose AI is `ai`. Only FOLLOW's hand-over cleanup removes the
-/// AI's catch-up modifiers, so nothing else is taken.
+/// Whether a seat may take a member whose AI is `ai`: the follow, a battle, or a level setting that parks it (a stay, a
+/// stand, a group's follow on brain 2 or 8), which a held member keeps for its player (field_hold.h Of); a script's
+/// walk, lead or animation, and any other brain's state, waits. A stay at the stop of a level's walk is taken too, so a
+/// player who left while riding such a walk and joins again before the level releases the member plays it at once.
 AiReadiness AssessAi(const AiSnapshot& ai) noexcept;
 
 const wchar_t* Describe(AiReadiness readiness) noexcept;

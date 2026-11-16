@@ -17,6 +17,10 @@ using namespace lss::session;
 using lss::facts::kAiStateBattle;
 using lss::facts::kAiStateFollow;
 using lss::facts::kAiStateLead;
+using lss::facts::kAiStateAnimation;
+using lss::facts::kAiStateDoNothing;
+using lss::facts::kAiStateMoveTo;
+using lss::facts::kAiStateStay;
 
 int g_member;
 int g_ai;
@@ -220,13 +224,25 @@ void TestStandIn()
 
 void TestAiReadiness()
 {
-    std::puts("ai: only the base brain's FOLLOW (or BATTLE) is taken; a script's walk, lead or animation is given back");
+    std::puts("ai: the base brain's FOLLOW, BATTLE or a level's stay or stand is taken; a script's walk, lead or animation waits");
     EXPECT(AssessAi({true, 0, kAiStateFollow}) == AiReadiness::Ready);
     EXPECT(AssessAi({true, 0, kAiStateBattle}) == AiReadiness::Ready);
     EXPECT(AssessAi({true, 2, kAiStateBattle}) == AiReadiness::Ready);
-    EXPECT(AssessAi({true, 17, 1}) == AiReadiness::ScriptBrain);              // a scene's DO_NOTHING
-    EXPECT(AssessAi({true, 3, kAiStateFollow}) == AiReadiness::ScriptBrain);  // a script's FollowActor
+    EXPECT(AssessAi({true, 2, kAiStateStay}) == AiReadiness::Ready);              // a level's stay (Sephiroth in Nibelheim)
+    EXPECT(AssessAi({true, 8, kAiStateStay}) == AiReadiness::Ready);              // a setting group's stay between steps
+    EXPECT(AssessAi({true, 2, kAiStateDoNothing}) == AiReadiness::Ready);         // the level's Stable setting: it stands
+    EXPECT(AssessAi({true, 8, kAiStateDoNothing}) == AiReadiness::Ready);
+    EXPECT(AssessAi({true, 8, kAiStateFollow}) == AiReadiness::Ready);            // a setting group's follow
+    EXPECT(AssessAi({true, 2, kAiStateMoveTo}) == AiReadiness::ScriptBrain);      // a level's run to a mark
+    EXPECT(AssessAi({true, 8, kAiStateMoveTo}) == AiReadiness::ScriptBrain);
+    EXPECT(AssessAi({true, 2, kAiStateLead}) == AiReadiness::ScriptBrain);        // a level's lead
+    EXPECT(AssessAi({true, 2, kAiStateAnimation}) == AiReadiness::ScriptBrain);   // a level's animation
+    EXPECT(AssessAi({true, 16, kAiStateStay}) == AiReadiness::ScriptBrain);       // an event command's brain
+    EXPECT(AssessAi({true, 2, 8}) == AiReadiness::ScriptBrain);                   // a level state not read for the take (WANDERING)
+    EXPECT(AssessAi({true, 17, kAiStateDoNothing}) == AiReadiness::ScriptBrain);  // a scene's park
+    EXPECT(AssessAi({true, 3, kAiStateFollow}) == AiReadiness::ScriptBrain);      // a script's FollowActor
     EXPECT(AssessAi({true, 0, kAiStateLead}) == AiReadiness::NotFollow);
+    EXPECT(AssessAi({true, 0, kAiStateStay}) == AiReadiness::NotFollow);          // the base brain takes only its follow
     EXPECT(AssessAi({}) == AiReadiness::Unread);
     using lss::session::field_hold::Hold;
     EXPECT(HoldOf({true, 2, kAiStateLead}) == Hold::Arrival);  // the level's lead (Corel, live)

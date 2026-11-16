@@ -7,7 +7,9 @@
 namespace lss::session {
 
 using facts::kAiStateBattle;
+using facts::kAiStateDoNothing;
 using facts::kAiStateFollow;
+using facts::kAiStateStay;
 
 static_assert(kNoStandIn == facts::kNoPlayerType, "no stand-in is the roster's none");
 
@@ -90,7 +92,12 @@ AiReadiness AssessAi(const AiSnapshot& ai) noexcept
     }
     if (ai.brainIndex != 0)
     {
-        return AiReadiness::ScriptBrain;
+        // A level setting that only parks the member (a stay, a stand, a group's follow) is the player's once held
+        // (field_hold::Of), so a join takes it the same way: the follow's catch-up speed-up is gone at its exit and a stay
+        // leaves nothing on the pawn (research/RE-p2-member-handover.md, joining in a level STAY). A level's walk, lead or
+        // animation, and every other brain (an event's, a speaker's, a scene's park) wait.
+        const bool parked = ai.state == kAiStateStay || ai.state == kAiStateDoNothing || ai.state == kAiStateFollow;
+        return field_hold::LevelBrain(ai.brainIndex) && parked ? AiReadiness::Ready : AiReadiness::ScriptBrain;
     }
     return ai.state == kAiStateFollow ? AiReadiness::Ready : AiReadiness::NotFollow;
 }
