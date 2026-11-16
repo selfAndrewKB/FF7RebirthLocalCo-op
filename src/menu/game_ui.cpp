@@ -190,4 +190,23 @@ catch (...)
     return false;
 }
 
+bool SlotPosition(void* slot, float& x, float& y) noexcept
+try
+{
+    static const auto getter = players::unreal::FindGetter(L"/Script/EndGame.EndCanvasPanelSlot:GetPosition", 8);
+    float             at[2]  = {};
+    if (slot == nullptr || !getter ||
+        !players::unreal::CallGetter(static_cast<RC::Unreal::UObject*>(slot), *getter, at, sizeof at))
+    {
+        return false;
+    }
+    x = at[0];
+    y = at[1];
+    return true;
+}
+catch (...)
+{
+    return false;
+}
+
 }  // namespace lss::menu::game_ui

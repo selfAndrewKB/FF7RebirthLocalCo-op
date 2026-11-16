@@ -58,5 +58,7 @@ enum class SlotVector
 bool IsCanvasSlot(void* slot) noexcept;
 /// `slot` (checked by IsCanvasSlot first) given (x, y) through SetPosition or SetSize. False if the call could not run.
 bool SetSlotVector(void* slot, SlotVector which, float x, float y) noexcept;
+/// `slot`'s (x, y) as its reflected GetPosition answers. False if the call could not run.
+bool SlotPosition(void* slot, float& x, float& y) noexcept;
 
 }  // namespace lss::menu::game_ui

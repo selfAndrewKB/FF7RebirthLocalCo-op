@@ -11,9 +11,12 @@
 
 #include <Unreal/NameTypes.hpp>
 
+#include <Unreal/FProperty.hpp>
+
 #include <algorithm>
 #include <atomic>
 #include <cmath>
+#include <cstring>
 #include <iterator>
 
 #ifndef WIN32_LEAN_AND_MEAN
@@ -260,6 +263,43 @@ bool NameGuarded(std::uint64_t name, wchar_t* out, std::size_t capacity) noexcep
 }
 
 }  // namespace
+
+std::optional<Getter> FindGetter(const wchar_t* path, std::int32_t minSize) noexcept
+{
+    auto* function = UObjectGlobals::StaticFindObject<UFunction*>(nullptr, nullptr, path);
+    if (function == nullptr || function->GetParmsSize() > kMaxGetterFrame)
+    {
+        return std::nullopt;
+    }
+    auto* property = function->FindProperty(RC::Unreal::FName(STR("ReturnValue"), RC::Unreal::FNAME_Find));
+    if (property == nullptr || property->GetSize() < minSize || property->GetOffset_Internal() < 0 ||
+        property->GetOffset_Internal() + property->GetSize() > function->GetParmsSize())
+    {
+        return std::nullopt;
+    }
+    return Getter{function, property->GetOffset_Internal(), property->GetSize()};
+}
+
+bool CallGetter(UObject* target, const Getter& getter, void* out, std::size_t length) noexcept
+{
+    alignas(16) std::uint8_t frame[kMaxGetterFrame]{};
+    if (length > static_cast<std::size_t>(getter.size) || !GuardedProcessEvent(target, getter.function, frame))
+    {
+        return false;
+    }
+    std::memcpy(out, frame + getter.offset, length);
+    return true;
+}
+
+UObject* ObjectProperty(UObject* object, const wchar_t* name)
+{
+    auto* property = object->GetPropertyByNameInChain(name);
+    if (property == nullptr || property->GetSize() != static_cast<std::int32_t>(sizeof(void*)))
+    {
+        return nullptr;
+    }
+    return *object->GetValuePtrByPropertyNameInChain<UObject*>(name);
+}
 
 std::wstring NameText(std::uint64_t name) noexcept
 {

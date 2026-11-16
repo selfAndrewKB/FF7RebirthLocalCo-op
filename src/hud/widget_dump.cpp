@@ -63,41 +63,9 @@ using platform::CopyGuarded;
 
 // ---- dump widgets, dump slots ------------------------------------------------------------------
 
-/// A reflected UWidget function with no inputs, and where its return value sits in the frame.
-struct Getter
-{
-    UFunction*   function = nullptr;
-    std::int32_t offset   = -1;
-    std::int32_t size     = 0;
-};
-
-std::optional<Getter> FindGetter(const wchar_t* path, std::int32_t minSize) noexcept
-{
-    auto* function = UObjectGlobals::StaticFindObject<UFunction*>(nullptr, nullptr, path);
-    if (function == nullptr || function->GetParmsSize() > static_cast<std::int32_t>(kFrame))
-    {
-        return std::nullopt;
-    }
-    auto* property = function->FindProperty(RC::Unreal::FName(STR("ReturnValue"), RC::Unreal::FNAME_Find));
-    if (property == nullptr || property->GetSize() < minSize || property->GetOffset_Internal() < 0 ||
-        property->GetOffset_Internal() + property->GetSize() > function->GetParmsSize())
-    {
-        return std::nullopt;
-    }
-    return Getter{function, property->GetOffset_Internal(), property->GetSize()};
-}
-
-/// Calls `getter` on `widget` and copies `length` bytes of its return value into `out`.
-bool Call(UObject* widget, const Getter& getter, void* out, std::size_t length) noexcept
-{
-    alignas(16) std::uint8_t frame[kFrame]{};
-    if (length > static_cast<std::size_t>(getter.size) || !GuardedProcessEvent(widget, getter.function, frame))
-    {
-        return false;
-    }
-    std::memcpy(out, frame + getter.offset, length);
-    return true;
-}
+using players::unreal::CallGetter;
+using players::unreal::FindGetter;
+using players::unreal::ObjectProperty;
 
 struct Row
 {
@@ -116,17 +84,6 @@ std::wstring Describe(UObject* object)
         return L"(none)";
     }
     return std::wstring(object->GetClassPrivate()->GetName()) + L" '" + std::wstring(object->GetName()) + L"'";
-}
-
-/// A reflected object-pointer property of `object`, or null.
-UObject* ObjectProperty(UObject* object, const wchar_t* name)
-{
-    auto* property = object->GetPropertyByNameInChain(name);
-    if (property == nullptr || property->GetSize() != static_cast<std::int32_t>(sizeof(void*)))
-    {
-        return nullptr;
-    }
-    return *object->GetValuePtrByPropertyNameInChain<UObject*>(name);
 }
 
 void WalkSlots(UObject* widget, int depth, int& lines)
@@ -184,7 +141,7 @@ void LogPlacement(UObject* widget)
     static const auto geometry  = FindGetter(STR("/Script/UMG.Widget:GetCachedGeometry"), 20);
     bool  visible = false;
     float geom[5] = {};
-    if (!isVisible || !geometry || !Call(widget, *isVisible, &visible, 1) || !Call(widget, *geometry, geom, sizeof(geom)))
+    if (!isVisible || !geometry || !CallGetter(widget, *isVisible, &visible, 1) || !CallGetter(widget, *geometry, geom, sizeof(geom)))
     {
         return;
     }
@@ -690,14 +647,14 @@ int DumpWidgets() noexcept
         for (UObject* widget : widgets)
         {
             bool visible = false;
-            if (!Call(widget, *isVisible, &visible, 1) || !visible)
+            if (!CallGetter(widget, *isVisible, &visible, 1) || !visible)
             {
                 continue;
             }
             float want[2] = {};
             // FGeometry begins Size, Scale, AbsolutePosition (UE4 Layout/Geometry.h); read as floats.
             float geom[5] = {};
-            if (!Call(widget, *desired, want, sizeof(want)) || !Call(widget, *geometry, geom, sizeof(geom)))
+            if (!CallGetter(widget, *desired, want, sizeof(want)) || !CallGetter(widget, *geometry, geom, sizeof(geom)))
             {
                 continue;
             }

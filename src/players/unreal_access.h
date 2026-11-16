@@ -67,6 +67,26 @@ bool CallWithString(UObject* target, RC::Unreal::UFunction* function, std::int32
     return called;
 }
 
+/// A reflected function with no inputs, and where its return value sits in the frame.
+struct Getter
+{
+    RC::Unreal::UFunction* function = nullptr;
+    std::int32_t           offset   = -1;
+    std::int32_t           size     = 0;
+};
+inline constexpr std::int32_t kMaxGetterFrame = 256;
+
+/// The reflected function at `path` ("/Script/UMG.Widget:GetDesiredSize") with a ReturnValue of at least `minSize`
+/// bytes, in a frame of at most kMaxGetterFrame bytes; empty when missing.
+std::optional<Getter> FindGetter(const wchar_t* path, std::int32_t minSize) noexcept;
+
+/// Calls `getter` on `target` and copies `length` bytes of its return value into `out`. False if `length` is more than
+/// the value or the call raised an exception.
+bool CallGetter(UObject* target, const Getter& getter, void* out, std::size_t length) noexcept;
+
+/// A reflected object-pointer property of `object` by name (its class chain), or null.
+UObject* ObjectProperty(UObject* object, const wchar_t* name);
+
 /// The running game instance (FF7R's UEndGameInstance), or null before the game has one.
 UObject* GameInstance() noexcept;
 

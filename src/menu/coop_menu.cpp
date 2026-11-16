@@ -6,6 +6,7 @@
 #include "menu/coop_page_open.h"
 #include "menu/coop_slider.h"
 #include "menu/game_ui.h"
+#include "menu/help_spacing.h"
 #include "menu/title_row.h"
 #include "platform/build_value.h"
 #include "platform/call_redirect.h"
@@ -253,6 +254,7 @@ void Tick() noexcept
     }
     coop_page::Tick();
     coop_page_open::Tick();
+    help_spacing::Tick(coop_page::IsOpen());
 }
 
 #if LSS_DEV

@@ -96,6 +96,7 @@ add_library(LocalSplitScreen SHARED
     src/scopes/leader_answer.cpp
     src/world/nav_strand.cpp
     src/menu/game_ui.cpp
+    src/menu/help_spacing.cpp
     src/menu/coop_page.cpp
     src/menu/coop_page_open.cpp
     src/menu/coop_menu.cpp
