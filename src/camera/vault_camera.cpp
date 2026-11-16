@@ -10,6 +10,7 @@
 #include "platform/guarded.h"
 #include "platform/log.h"
 #include "platform/verified_code.h"
+#include "platform/vtable_entry.h"
 #include "players/actor_fields.h"
 #include "players/generation.h"
 #include "players/object_fields.h"
@@ -33,6 +34,15 @@ namespace {
 // +0x6). research/RE-p2-chocobo-jump-camera.md.
 constexpr std::uintptr_t kCoreCall = 0x1416E8F52;
 using CoreFn = std::uint8_t (*)(const void* character);
+
+// FEndBehaviorVaultExtraAction::Begin itself, through its vtable slot: called by PushAction from the vault state's
+// Enter, on the game thread. The same first bytes in both builds.
+constexpr std::uint8_t kBeginBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x48, 0x89, 0x74,
+                                        0x24, 0x18, 0x55, 0x57, 0x41, 0x56, 0x48, 0x8D};
+constexpr platform::SlotFact kBeginSlot{
+    L"the vault action's Begin slot", 0x145CCED90,
+    {L"FEndBehaviorVaultExtraAction::Begin", 0x1416E8E50, kBeginBytes}};
+using BeginFn = std::uint8_t (*)(void* action);
 
 // FEndBehaviorVaultExtraAction::End (vtable +0x120), on the animation worker:
 // `mov cl, 0Fh; call PrimaryPCM_FieldOp_DeactivateModule`, the action in rbx (mov rbx, rcx at entry). One block in
@@ -61,6 +71,7 @@ using OperatorDeactivateFn = void (*)(void* op, std::uint8_t slot);
 // Set once at install.
 platform::CallRedirect g_coreCall;
 platform::CallRedirect g_endCall;
+platform::VTableEntry  g_begin;
 OperatorDeactivateFn   g_operatorDeactivate = nullptr;
 std::optional<platform::GameImage> g_image;
 
@@ -146,6 +157,57 @@ std::uint8_t VaultCoreTest(const void* character) noexcept
     {
     }
     return answer;
+}
+
+struct BeginCall
+{
+    BeginFn      begin;
+    void*        action;
+    std::uint8_t result = 0;
+};
+
+/// The vault's Begin. A vault the game chains straight after another (a cart's second step) is begun outside the
+/// member's tick, where the player-core test answers no for a seat's member and the install would go to player 1's
+/// camera. A seat's member's vault begun outside that seat's scope runs in it, as the member's own vaults do: its vault
+/// camera then goes on the seat's camera, as player 1's chained vault gets his. Inside another seat's scope the seat's
+/// is refused (seats never nest) and the Begin runs as called, logged. Every other Begin is the game's as called.
+std::uint8_t Begin(void* action) noexcept
+{
+    const auto original = reinterpret_cast<BeginFn>(g_begin.Original());
+    if (!players::generation::OnGameThread() || !players::generation::AnyActive())
+    {
+        return original(action);
+    }
+    const auto weak = ReadField<std::uint64_t>(action, kActionCharacter);
+    const int  seat = weak != 0 ? players::generation::SeatOfMemberWeak(weak) : -1;
+    if (!players::SeatBuilt(seat) || !players::generation::Active(seat) ||
+        scopes::primary_controller::Is(players::generation::ControllerOf(seat)))
+    {
+        return original(action);
+    }
+    BeginCall call{original, action};
+    const bool scoped = input::member_movement::InPrimaryScope(
+        seat, players::generation::MemberOf(seat),
+        [](void* context) noexcept {
+            auto& begun  = *static_cast<BeginCall*>(context);
+            begun.result = begun.begin(begun.action);
+        },
+        &call);
+    if (!scoped)
+    {
+        call.result = original(action);
+    }
+    try
+    {
+        platform::LogDebug(L"vault camera: {}'s member's vault begins outside their scope (a vault chained after another): {}",
+                           players::SeatName(seat),
+                           scoped ? L"begun in their primary scope, as their own vaults are"
+                                  : L"their scope could not be held; begun as the game called it (no vault camera)");
+    }
+    catch (...)
+    {
+    }
+    return call.result;
 }
 
 std::uintptr_t Research(std::uintptr_t live) noexcept
@@ -277,6 +339,14 @@ void Install(const platform::GameImage& image) noexcept
                           L"ends player 1's on his; each logged)"
                         : L"the vault's end UNAVAILABLE (its call or the action register differs; player 2's or 3's on-foot "
                           L"vault camera stays on that player's camera, and its end clears player 1's slot 15)");
+
+    // The chained vault's Begin needs the End above: its camera goes on the seat's camera, which only L2 ends.
+    const bool begun = ended && platform::ReplaceSlot(image, kBeginSlot, reinterpret_cast<std::uintptr_t>(&Begin), g_begin);
+    platform::Log(L"vault camera: {}",
+                  begun ? L"a vault chained after another (a cart's second step) begins in player 2's or 3's scope, as their "
+                          L"own vaults do (their vault camera on their camera, as player 1's)"
+                        : L"the chained vault's begin UNAVAILABLE (player 2's or 3's second vault in a row, as on a cart, runs "
+                          L"on the follow camera)");
 }
 
 void Remove() noexcept
@@ -288,6 +358,10 @@ void Remove() noexcept
     if (!g_endCall.Restore())
     {
         platform::Log(L"vault camera: the vault end's call was changed after us; left in place (it passes through)");
+    }
+    if (g_begin.Original() != 0 && !g_begin.Restore())
+    {
+        platform::Log(L"vault camera: the vault's Begin slot was changed after us; left in place (it passes through)");
     }
 }
 

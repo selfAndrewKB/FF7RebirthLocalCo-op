@@ -20,8 +20,14 @@
 // Lever L2: the End's `call PrimaryPCM_FieldOp_DeactivateModule(15)` goes through a stub that passes the action (rbx).
 // When the action's character (its weak value, compared, never resolved off the game thread) is a seat's member or
 // chocobo, the game's FEndModularCameraOperator::DeactivateModule runs on that seat's Field operator instead; every
-// other vault ends as the game ends it. Without it, a seat's vault camera stayed active on the seat's camera (live
-// 22:20:06) and the End deactivated player 1's slot 15.
+// other vault ends as the game ends it. Without it, a seat's vault camera stayed active on the seat's camera and the
+// End deactivated player 1's slot 15.
+//
+// The chained vault: a vault the game starts straight after another (a cart's second step) is begun on the game
+// thread outside the member's tick, so for a seat's member the test answered no and that step ran on the follow
+// camera, pulled into the ledge, while player 1's chained vault gets the vault camera. The vault's Begin slot runs a
+// seat's member's Begin begun outside the seat's scope inside it (input::member_movement::InPrimaryScope), as the
+// member's own vaults run: the camera goes on the seat's camera and L2 ends it there. Placed only with L2.
 // Per seat (players/seats.h): the cached Field operator; the seat comes from the vaulting character (its member, or
 // its chocobo: chocobo_ride::SeatDriving).
 // Install, Remove and Tick: game thread. The End's handler: any thread (the animation worker in practice).
@@ -30,7 +36,8 @@
 
 namespace lss::camera::vault_camera {
 
-/// Redirects the vault Begin's IsUCPC_Core call (checked call and callee; logs the outcome).
+/// Redirects the vault Begin's IsUCPC_Core call and the End's deactivate, and replaces the Begin slot (checked calls,
+/// callees and slot; logs each outcome).
 void Install(const platform::GameImage& image) noexcept;
 
 void Remove() noexcept;
