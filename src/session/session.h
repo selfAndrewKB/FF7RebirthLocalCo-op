@@ -159,6 +159,10 @@ public:
         return In() && phase_ == Phase::Playing && member_ == nullptr && waitingForSlot_;
     }
 
+    /// The seat's slot as the game's party has it now (quiet): its character, and why it is not to take yet. Empty
+    /// before the game is ready.
+    party_member::SlotChoice SlotNow(void* playerOneController) const noexcept;
+
     /// A script took the seat's member (a level's walk or lead, an event's walk, an animation: session/field_hold.h) to
     /// its AI with the game's own hand: the member stays the seat's and its controller's leader, the player rides along
     /// with their own camera on it, and plays it again when nothing holds it; after a level's walk it must finish, when
@@ -328,6 +332,7 @@ public:
     bool          RejoinPending(int seat) const noexcept;
     bool          PlaysMember(int seat) const noexcept;
     bool          WaitsForMember(int seat) const noexcept;
+    party_member::SlotChoice SlotNow(int seat) const noexcept;  // Seat::SlotNow, with player 1's controller now
     bool          StandsAside(int seat) const noexcept;
     const void*   LocalPlayer(int seat) const noexcept;  // null while out
     std::uint32_t JoinCount(int seat) const noexcept;

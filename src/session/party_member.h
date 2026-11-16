@@ -39,6 +39,7 @@ using SlotWait = session::SlotWait;
 struct SlotChoice
 {
     void*          member  = nullptr;  // the member to take; null while waiting
+    void*          character = nullptr;  // the slot's character, also while it waits (null with no slot)
     SlotWait       wait    = SlotWait::NoSlot;
     std::uint8_t   type    = 0xFF;     // the slot's player type (0xFF with no slot)
     std::int32_t   ordinal = -1;

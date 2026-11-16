@@ -238,8 +238,8 @@ inline constexpr Option kLeadHolder{  // session/lead_gate
     L"view on it) or keeps (the default: the player keeps it, the stop marked in that player's view, its AI finishing the "
     L"arrival within 2 m of the stop)",
     true, L"Scripted Sequences", kLeadHolderLabels,
-    L"Determines whether additional players get to control their selected characters during certain scripted segments. "
-    L"AI-controlled: The game takes over and automatically drives the party members as required. Player-controlled: the "
+    L"Determines whether additional players get to control their selected characters during certain scripted segments.\r\n"
+    L"AI-controlled: The game takes over and automatically drives the party members as required.\r\nPlayer-controlled: the "
     L"player directs the party member to marked locations."};
 /// Every option, in the order the settings file lists them.
 inline constexpr std::array kOptions{&kMultiMonitor,     &kMonitors,      &kColumnOrder,

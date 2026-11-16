@@ -205,6 +205,9 @@ void FileTextFromTable()
     EXPECT(text.find(L"; on | off (the default: off)") != std::wstring::npos);
     EXPECT(text.find(L"; vertical | horizontal (the default: horizontal)") != std::wstring::npos);
     EXPECT(text.find(L"LocalSplitScreen (FF7 Rebirth)") != std::wstring::npos);
+    // A help's line breaks (the Co-op page's) are spaces in the file: no line starts with the help's words.
+    EXPECT(std::wstring_view(kLeadHolder.menuHelp).find(L"\r\n") != std::wstring_view::npos);
+    EXPECT(Count(text, L"\r\nAI-controlled") == 0 && Count(text, L"\r\nPlayer-controlled") == 0);
     std::size_t lineStart = 0;
     bool        ascii     = true, narrow = true;
     for (std::size_t at = 0; at < text.size(); ++at)

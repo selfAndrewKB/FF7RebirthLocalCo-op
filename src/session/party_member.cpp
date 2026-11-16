@@ -482,6 +482,7 @@ SlotChoice ChooseSlot(int seat, void* playerOneController, std::uint8_t standIn,
         return choice;
     }
     choice.type               = read.type;
+    choice.character          = read.character;
     choice.ordinal            = read.ordinal;
     choice.standsIn           = read.standsIn;
     choice.fieldLeaderInstead = read.fieldLeaderInstead;

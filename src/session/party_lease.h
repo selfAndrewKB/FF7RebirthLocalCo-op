@@ -234,6 +234,10 @@ enum class SlotWait
 /// AI began: None, or the first reason in that order.
 SlotWait SlotWaitOf(Eligibility verdict, AiReadiness readiness, bool linkBusy, bool inFieldAction) noexcept;
 
+/// The slot's member is in the party and with the game's AI until the game releases it (a script, a field action, a
+/// synergy partner on its approach); the other waits (not free by the member test, no slot, unread) name no character.
+bool OnGameAi(SlotWait wait) noexcept;
+
 // ---- the take and the swap, awaited over the following ticks ----
 
 enum class TakeOutcome

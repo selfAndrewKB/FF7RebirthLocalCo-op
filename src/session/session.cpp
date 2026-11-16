@@ -446,7 +446,7 @@ void Seat::RetakeWhenFree() noexcept
     {
         return;
     }
-    const auto choice = party_member::ChooseSlot(seat_, playerOneController_, standIn_, false);
+    const auto choice = SlotNow(playerOneController_);
     void*      free   = choice.member;
     if (free == nullptr)
     {
@@ -1127,7 +1127,13 @@ void Seat::LogGaveUp(outside_join::Reason reason) noexcept
 /// A party member the seat could take, by the game's own member test (null if none). Quiet.
 void* Seat::FreeMember(void* playerOneController) const noexcept
 {
-    return party_member::GameReady() ? party_member::ChooseSlot(seat_, playerOneController, standIn_, false).member : nullptr;
+    return SlotNow(playerOneController).member;
+}
+
+party_member::SlotChoice Seat::SlotNow(void* playerOneController) const noexcept
+{
+    return party_member::GameReady() ? party_member::ChooseSlot(seat_, playerOneController, standIn_, false)
+                                     : party_member::SlotChoice{};
 }
 
 /// The seat is out, and waits for a party member to be free before it joins.
@@ -1686,6 +1692,12 @@ bool Session::WaitsForMember(int seat) const noexcept
 {
     const Seat* s = At(seat);
     return s != nullptr && s->WaitsForMember();
+}
+
+party_member::SlotChoice Session::SlotNow(int seat) const noexcept
+{
+    const Seat* s = At(seat);
+    return s != nullptr ? s->SlotNow(players::generation::PlayerOneController()) : party_member::SlotChoice{};
 }
 
 bool Session::StandsAside(int seat) const noexcept

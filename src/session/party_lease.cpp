@@ -183,6 +183,11 @@ SlotWait SlotWaitOf(Eligibility verdict, AiReadiness readiness, bool linkBusy, b
     return SlotWait::None;
 }
 
+bool OnGameAi(SlotWait wait) noexcept
+{
+    return wait == SlotWait::AiNotReady || wait == SlotWait::LinkPartner || wait == SlotWait::FieldAction;
+}
+
 TakeOutcome TakeOutcomeOf(bool acquired, std::uint32_t ticks, std::uint32_t takeTicks) noexcept
 {
     if (acquired)

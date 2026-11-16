@@ -332,6 +332,10 @@ void TestSlotWait()
     EXPECT(SlotWaitOf(Eligibility::Eligible, AiReadiness::Ready, true, true) == SlotWait::LinkPartner);
     EXPECT(SlotWaitOf(Eligibility::Eligible, AiReadiness::NotFollow, false, true) == SlotWait::AiNotReady);
     EXPECT(SlotWaitOf(Eligibility::PlayerOnes, AiReadiness::Ready, false, true) == SlotWait::NotEligible);
+    // The waits whose member the game's AI has (named on player 1's window), and the rest (not named).
+    EXPECT(OnGameAi(SlotWait::AiNotReady) && OnGameAi(SlotWait::LinkPartner) && OnGameAi(SlotWait::FieldAction));
+    EXPECT(!OnGameAi(SlotWait::None) && !OnGameAi(SlotWait::NoSlot) && !OnGameAi(SlotWait::NotEligible) &&
+           !OnGameAi(SlotWait::Unread));
 }
 
 void TestIsPartnerOf()
