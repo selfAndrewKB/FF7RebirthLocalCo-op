@@ -37,7 +37,7 @@ static_assert(kModeWords.size() == 2 && std::wstring_view(kModeWords[static_cast
               "the table's words name the modes in the enum's order");
 
 // Game thread (the console and the page set it there; the redirects read it there).
-Mode g_mode = Mode::Game;
+Mode g_mode = Mode::PlayersStay;
 
 // Facts read from the database (research/RE-p2-battle-gather-warp.md; this build).
 // The exclusion set's test, bool(InlineActorArray16* set, AActor** element): a pure linear search with 16 callers, so
@@ -286,7 +286,7 @@ bool Install(const platform::GameImage& image) noexcept
 {
     // The file's word is one of the table's (platform/settings.h); set before the redirects are placed.
     const Mode fromFile = ModeOf(platform::settings::Of(platform::settings::kBattleWarps).word)
-                              .value_or(ModeOf(platform::settings::kBattleWarps.fallback).value_or(Mode::Game));
+                              .value_or(ModeOf(platform::settings::kBattleWarps.fallback).value_or(Mode::PlayersStay));
     try
     {
         SetMode(fromFile, platform::settings::Why(platform::settings::kBattleWarps).c_str());
