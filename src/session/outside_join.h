@@ -13,6 +13,8 @@
 //           backstop), or every tick while a look window is open (armed by the game's party changes; the window is
 //           the session's, shared with its in-game retake, and counts down here only while the field is ready).
 //           kTries joins that do not add the seat's player end the wait.
+// The pause-family menu holds either wait without restarting its settle: the field runs under it, so a party change
+// made in the menu joins the waiting player as the menu closes.
 //
 // A wait that ends without the seat's player reports why, for the one log line the session writes.
 
@@ -31,6 +33,14 @@ enum class Mode
     None,
     Rejoin,
     Await,
+};
+
+/// Whether a join may run now (OutsideJoin::Tick).
+enum class Readiness
+{
+    NotReady,  // a load, the field's entry: the settle restarts
+    Held,      // only the pause-family menu refuses a new player: no join, the settle kept
+    Ready,
 };
 
 enum class Action
@@ -76,9 +86,11 @@ public:
     /// The seat joined, or a leave was asked for: no wait.
     void End() noexcept;
 
-    /// Once per tick while the seat is out. `ready`: the field runs and the party is built (a join before that would
-    /// be undone). `looks`: the look window's ticks left, counted down here while an Await is ready.
-    Step Tick(Clock::time_point now, bool refuseJoins, bool ready, std::uint32_t& looks) noexcept;
+    /// Once per tick while the seat is out. `ready`: Ready when the field runs and the party is built (a join before
+    /// that would be undone); Held while only the pause-family menu refuses a new player (the field is fine: no join,
+    /// and the settle is kept, so the join comes as the menu closes); NotReady otherwise (a load, the field's entry:
+    /// the settle restarts). `looks`: the look window's ticks left, counted down here while an Await is ready.
+    Step Tick(Clock::time_point now, bool refuseJoins, Readiness ready, std::uint32_t& looks) noexcept;
 
     /// After a TryJoin's join: Rejoin ends once the seat is in; Await counts a join that left the seat out and gives
     /// up at kTries. `wasMode` is the mode the TryJoin came from: a join that changed the wait (a rejoin's join found no

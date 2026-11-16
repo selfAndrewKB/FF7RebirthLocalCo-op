@@ -23,7 +23,7 @@ void OutsideJoin::End() noexcept
     mode_ = Mode::None;
 }
 
-Step OutsideJoin::Tick(Clock::time_point now, bool refuseJoins, bool ready, std::uint32_t& looks) noexcept
+Step OutsideJoin::Tick(Clock::time_point now, bool refuseJoins, Readiness ready, std::uint32_t& looks) noexcept
 {
     Step step;
     switch (mode_)
@@ -44,9 +44,9 @@ Step OutsideJoin::Tick(Clock::time_point now, bool refuseJoins, bool ready, std:
                 step.reason = Reason::RejoinRefused;
                 break;
             }
-            if (!ready)
+            if (ready != Readiness::Ready)
             {
-                settle_ = 0;
+                settle_ = ready == Readiness::Held ? settle_ : 0;
                 break;
             }
             if (++settle_ < kSettleTicks)
@@ -72,9 +72,9 @@ Step OutsideJoin::Tick(Clock::time_point now, bool refuseJoins, bool ready, std:
                 step.reason = Reason::AwaitRefused;
                 break;
             }
-            if (!ready)
+            if (ready != Readiness::Ready)
             {
-                settle_ = 0;
+                settle_ = ready == Readiness::Held ? settle_ : 0;
                 break;
             }
             if (settle_ < kSettleTicks)

@@ -519,13 +519,15 @@ void TickAfterSession(const Frame& frame) noexcept
         g_ownColumns[static_cast<std::size_t>(seat)] = frame.shown.OwnColumn(seat);
     }
     // By seat, whether the seat's player plays a member (index 0 unused): the world modules' per-seat passes. And the
-    // pad slots a player holds (a seat's controller id is its seat), whose Start reaches the game.
+    // pad slots whose player is in the game (a seat's controller id is its seat), whose Start reaches the game: a join
+    // that waits outside, or a rejoin, has no player there yet, so its pad's Start stays the mod's (it says the wait
+    // again) and never pauses player 1's game.
     std::array<bool, players::kMaxPlayers> plays{};
     std::uint32_t                          playing = 1;
     for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
     {
         plays[seat] = frame.seats[seat].PlaysMember();
-        playing |= frame.seats[seat].state != players::SeatState::Out ? 1u << seat : 0u;
+        playing |= players::InGame(frame.seats[seat].state) ? 1u << seat : 0u;
     }
     input::pad_table::SetPlaying(playing);
     input::walk_limits::Tick();  // after the session's tick: a take's copy is overwritten this frame

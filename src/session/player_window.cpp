@@ -721,8 +721,13 @@ try
                 g_notes[static_cast<std::size_t>(seat)] = {};
                 g_redraw                                = true;
             }
-            g_waitSaid[static_cast<std::size_t>(seat)] = false;  // a join still waiting is said again in the field
         }
+    }
+    const bool pending = std::any_of(g_joinPending.begin(), g_joinPending.end(), [](bool p) { return p; });
+    if (frame.single || (pending && views::WholeScreenShown()))
+    {
+        // A menu or a scene (with or without the views made one): a join still waiting is said again in the field.
+        g_waitSaid = {};
     }
     if (frame.screens != g_lastScreens)
     {
@@ -774,7 +779,9 @@ try
             }
             continue;
         }
-        if (seat < 0)
+        // A pad that plays no one, or whose player waits outside the game (no player there yet): its Start is the mod's
+        // (a join, a take-back, or the wait said again).
+        if (seat < 0 || (seat >= 1 && g_session != nullptr && !g_session->In(seat)))
         {
             if ((e.pressed & pad::kStart) != 0 && g_session != nullptr)
             {

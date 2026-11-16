@@ -26,7 +26,7 @@ bool Is(const Step& step, Action action, Reason reason = Reason::None)
 }
 
 /// Ticks `count` times, ready, and returns the last step.
-Step Ticks(OutsideJoin& wait, int count, std::uint32_t& looks, Clock::time_point now = kT0, bool ready = true)
+Step Ticks(OutsideJoin& wait, int count, std::uint32_t& looks, Clock::time_point now = kT0, Readiness ready = Readiness::Ready)
 {
     Step last;
     for (int i = 0; i < count; ++i)
@@ -42,18 +42,18 @@ void TestRejoinSettlesThenTries()
     OutsideJoin   wait;
     std::uint32_t looks = 0;
     EXPECT(wait.Current() == Mode::None);
-    EXPECT(Is(wait.Tick(kT0, false, true, looks), Action::None));  // nothing pending
+    EXPECT(Is(wait.Tick(kT0, false, Readiness::Ready, looks), Action::None));  // nothing pending
 
     wait.BeginRejoin(kT0);
     EXPECT(wait.Current() == Mode::Rejoin);
     EXPECT(Is(Ticks(wait, kSettleTicks - 1, looks), Action::None));
-    const Step first = wait.Tick(kT0 + 1s, false, true, looks);
+    const Step first = wait.Tick(kT0 + 1s, false, Readiness::Ready, looks);
     EXPECT(Is(first, Action::TryJoin) && first.attempt == 1);
     EXPECT(Is(wait.AfterJoin(Mode::Rejoin, false), Action::None));
     EXPECT(wait.Current() == Mode::Rejoin);
 
     EXPECT(Is(Ticks(wait, 100, looks), Action::None));
-    EXPECT(Is(wait.Tick(kT0, false, false, looks), Action::None));  // not ready: the settle restarts
+    EXPECT(Is(wait.Tick(kT0, false, Readiness::NotReady, looks), Action::None));  // not ready: the settle restarts
     EXPECT(Is(Ticks(wait, kSettleTicks - 1, looks), Action::None));
     const Step second = Ticks(wait, 1, looks);
     EXPECT(Is(second, Action::TryJoin) && second.attempt == 2);
@@ -67,7 +67,7 @@ void TestRejoinSettlesThenTries()
     }
     EXPECT(Is(Ticks(wait, kSettleTicks, looks), Action::GiveUp, Reason::RejoinTriesExhausted));
     EXPECT(wait.Current() == Mode::None);
-    EXPECT(Is(wait.Tick(kT0, false, true, looks), Action::None));
+    EXPECT(Is(wait.Tick(kT0, false, Readiness::Ready, looks), Action::None));
 }
 
 void TestRejoinEndsWhenInOrOnTime()
@@ -81,16 +81,16 @@ void TestRejoinEndsWhenInOrOnTime()
     EXPECT(wait.Current() == Mode::None);
 
     wait.BeginRejoin(kT0);
-    EXPECT(Is(wait.Tick(kT0 + kRejoinWait, false, true, looks), Action::None));  // exactly the wait: still on
-    EXPECT(Is(wait.Tick(kT0 + kRejoinWait + 1ms, false, true, looks), Action::GiveUp, Reason::RejoinTimedOut));
+    EXPECT(Is(wait.Tick(kT0 + kRejoinWait, false, Readiness::Ready, looks), Action::None));  // exactly the wait: still on
+    EXPECT(Is(wait.Tick(kT0 + kRejoinWait + 1ms, false, Readiness::Ready, looks), Action::GiveUp, Reason::RejoinTimedOut));
     EXPECT(wait.Current() == Mode::None);
 
     wait.BeginRejoin(kT0);
-    EXPECT(Is(wait.Tick(kT0, true, true, looks), Action::GiveUp, Reason::RejoinRefused));
+    EXPECT(Is(wait.Tick(kT0, true, Readiness::Ready, looks), Action::GiveUp, Reason::RejoinRefused));
     EXPECT(wait.Current() == Mode::None);
 
     wait.BeginRejoin(kT0);
-    EXPECT(Is(wait.Tick(kT0 + kRejoinWait + 1s, true, true, looks), Action::GiveUp, Reason::RejoinTimedOut));  // time first
+    EXPECT(Is(wait.Tick(kT0 + kRejoinWait + 1s, true, Readiness::Ready, looks), Action::GiveUp, Reason::RejoinTimedOut));  // time first
 }
 
 void TestAwaitSlowCheck()
@@ -107,7 +107,7 @@ void TestAwaitSlowCheck()
     EXPECT(Is(Ticks(wait, kAwaitCheckTicks - 1, looks), Action::None));
     EXPECT(Is(Ticks(wait, 1, looks), Action::TryJoin));
 
-    EXPECT(Is(wait.Tick(kT0, false, false, looks), Action::None));  // not ready: the settle restarts
+    EXPECT(Is(wait.Tick(kT0, false, Readiness::NotReady, looks), Action::None));  // not ready: the settle restarts
     EXPECT(Is(Ticks(wait, kSettleTicks, looks), Action::None));
     EXPECT(Is(Ticks(wait, kAwaitCheckTicks, looks), Action::TryJoin));
 }
@@ -123,10 +123,31 @@ void TestAwaitFromTheField()
     EXPECT(Is(first, Action::TryJoin) && !first.looking);
     EXPECT(Is(Ticks(wait, kAwaitCheckTicks - 1, looks), Action::None));
     EXPECT(Is(Ticks(wait, 1, looks), Action::TryJoin));
-    EXPECT(Is(wait.Tick(kT0, false, false, looks), Action::None));  // not ready after all: the settle runs in full
+    EXPECT(Is(wait.Tick(kT0, false, Readiness::NotReady, looks), Action::None));  // not ready after all: the settle runs in full
     EXPECT(Is(Ticks(wait, kSettleTicks - 1, looks), Action::None));
     EXPECT(Is(Ticks(wait, 1, looks), Action::None));
     EXPECT(Is(Ticks(wait, kAwaitCheckTicks - 1, looks), Action::None));
+    EXPECT(Is(Ticks(wait, 1, looks), Action::TryJoin));
+}
+
+void TestMenuHoldsWithoutResettle()
+{
+    std::puts("await: the pause menu holds the join and keeps the settle; the look window tries as the menu closes");
+    OutsideJoin   wait;
+    std::uint32_t looks = 0;
+    wait.BeginAwait(true);
+    EXPECT(Is(Ticks(wait, 1, looks), Action::TryJoin));
+    EXPECT(Is(Ticks(wait, 200, looks, kT0, Readiness::Held), Action::None));  // a menu: no join meanwhile
+    looks = 2;  // a party change made in the menu
+    const Step step = Ticks(wait, 1, looks);
+    EXPECT(Is(step, Action::TryJoin) && step.looking);  // the first tick after the menu: no settle again
+    EXPECT(Is(wait.Tick(kT0, false, Readiness::NotReady, looks), Action::None));  // a load does restart it
+    EXPECT(Is(Ticks(wait, 1, looks), Action::None));
+
+    // A rejoin: the menu neither counts toward its settle nor restarts it.
+    wait.BeginRejoin(kT0);
+    EXPECT(Is(Ticks(wait, kSettleTicks - 1, looks), Action::None));
+    EXPECT(Is(Ticks(wait, 50, looks, kT0, Readiness::Held), Action::None));
     EXPECT(Is(Ticks(wait, 1, looks), Action::TryJoin));
 }
 
@@ -138,7 +159,7 @@ void TestAwaitLookWindow()
     wait.BeginAwait();
     Ticks(wait, kSettleTicks, looks);
     looks = 3;
-    EXPECT(Is(wait.Tick(kT0, false, false, looks), Action::None));
+    EXPECT(Is(wait.Tick(kT0, false, Readiness::NotReady, looks), Action::None));
     EXPECT(looks == 3);  // not ready: the window keeps its ticks
     Ticks(wait, kSettleTicks, looks);
     EXPECT(looks == 3);  // the settle does not count down either
@@ -171,7 +192,7 @@ void TestAwaitEnds()
     EXPECT(wait.Current() == Mode::None);
 
     wait.BeginAwait();
-    EXPECT(Is(wait.Tick(kT0, true, true, looks), Action::GiveUp, Reason::AwaitRefused));
+    EXPECT(Is(wait.Tick(kT0, true, Readiness::Ready, looks), Action::GiveUp, Reason::AwaitRefused));
     EXPECT(wait.Current() == Mode::None);
 }
 
@@ -206,6 +227,7 @@ int main()
     TestRejoinEndsWhenInOrOnTime();
     TestAwaitSlowCheck();
     TestAwaitFromTheField();
+    TestMenuHoldsWithoutResettle();
     TestAwaitLookWindow();
     TestAwaitEnds();
     TestJoinThatChangesTheWait();

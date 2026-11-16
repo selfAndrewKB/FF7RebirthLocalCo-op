@@ -1043,9 +1043,12 @@ const wchar_t* Seat::NotReadyToJoin() const noexcept
     return views::LocalPlayerRefused();
 }
 
-bool Seat::ReadyToJoinOutside() const noexcept
+outside_join::Readiness Seat::ReadyToJoinOutside() const noexcept
 {
-    return NotReadyToJoin() == nullptr;
+    const wchar_t* why = NotReadyToJoin();
+    return why == nullptr                      ? outside_join::Readiness::Ready
+           : why == views::LocalPlayerRefused() ? outside_join::Readiness::Held  // one literal, compared by address
+                                                : outside_join::Readiness::NotReady;
 }
 
 /// The seat is out and wants back in (session/outside_join.h says when): the normal join once the new

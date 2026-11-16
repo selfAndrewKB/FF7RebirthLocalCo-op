@@ -217,7 +217,7 @@ private:
     void RetakeWhenFree() noexcept;
     bool MemberDestroyed() noexcept;
     const wchar_t* NotReadyToJoin() const noexcept;  // null when a join may run, else why not
-    bool ReadyToJoinOutside() const noexcept;
+    outside_join::Readiness ReadyToJoinOutside() const noexcept;  // NotReadyToJoin as the outside wait reads it
     void OutsideTick() noexcept;
     void LogGaveUp(outside_join::Reason reason) noexcept;
     void* FreeMember(void* playerOneController) const noexcept;
