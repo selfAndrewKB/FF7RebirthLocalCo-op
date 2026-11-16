@@ -56,7 +56,8 @@ bool KeptMark(const void* member, float point[3]) noexcept;
 void SetMarking(bool on) noexcept;
 
 /// `member`'s current walk on the level's brains moves on at a trigger (not its arrival) the box state row `boxStateRow`
-/// sends (that state lists it and its Status names it): the walk is the one into that box. No census: two row reads.
+/// sends (that state's Status names it, whether or not it lists it): the walk is the one into that box. No census: two
+/// row reads.
 /// False when not installed or unread. Game thread.
 bool WalksIntoBox(const void* member, std::uint64_t boxStateRow) noexcept;
 

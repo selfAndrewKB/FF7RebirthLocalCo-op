@@ -45,6 +45,11 @@ void Remove() noexcept;
 /// session/lead_gate asks it of a level walk's way out (OwnBoxAhead). Game thread.
 bool ArmedOwnBox(std::uint64_t object, const void* member) noexcept;
 
+/// The current state row (FName bits) of layout object `object`'s trigger slot (attribute 1, through the game's slot
+/// lookup): for a story box, the state whose Status names the trigger it sends. 0 when none, unread or not installed.
+/// session/lead_gate compares its Status with a walk's exits. Game thread.
+std::uint64_t TriggerStateRow(std::uint64_t object) noexcept;
+
 /// The placed shape of the box of layout object `object` that `member` walked into and whose enter waits. False when
 /// none waits for it (the character never entered that box) or its shape was not read.
 bool HeldShape(const void* member, std::uint64_t object, story_box_rules::Box& out) noexcept;

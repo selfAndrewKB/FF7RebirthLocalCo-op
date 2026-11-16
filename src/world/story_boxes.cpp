@@ -222,15 +222,18 @@ Sends WouldSend(std::uint64_t object) noexcept
     return CallGuarded(g_offCode, off, slot) && off == facts::kSlotOff ? Sends::Off : Sends::Trigger;
 }
 
-/// The box object's sending state's current row (its slot 1's; 0 when none).
-std::uint64_t BoxStateRow(std::uint64_t object) noexcept
+}  // namespace
+
+std::uint64_t TriggerStateRow(std::uint64_t object) noexcept
 {
-    void* manager = players::actor_fields::RootGameState(Root());
+    void* manager = g_installed ? players::actor_fields::RootGameState(Root()) : nullptr;
     void* slot    = nullptr;
     return manager != nullptr && CallGuarded(g_findSlot, slot, manager, object, facts::kBoxSlotAttribute) && slot != nullptr
                ? ReadField<std::uint64_t>(slot, facts::kSlotState)
                : 0;
 }
+
+namespace {
 
 const wchar_t* SendsText(Sends sends, bool inside) noexcept
 {
@@ -662,7 +665,7 @@ try
             state.inCinema         = state.seated && !splitShown;
             // The level's walk into this very box is its moment only once its AI has the character (the guide's hand
             // marks the entry AwaitRun); before that hand, polled less often than this tick, it is no release.
-            state.levelMoves = session::lead_gate::OnLevelMove(member) && !session::lead_gate::WalksIntoBox(member, BoxStateRow(w.object));
+            state.levelMoves = session::lead_gate::OnLevelMove(member) && !session::lead_gate::WalksIntoBox(member, TriggerStateRow(w.object));
             state.playerOneReached = w.shaped && haveOne && rules::Reaches(w.shape, one);
             state.awaitsRun        = w.awaitsRun;
             state.ranIn            = w.ranIn;

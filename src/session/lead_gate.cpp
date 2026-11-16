@@ -469,31 +469,52 @@ struct Census
     std::wstring  text;
 };
 
-/// The walk row's exits: its triggers other than the arrival (the steps it moves on at besides arriving).
-std::vector<std::uint64_t> ExitsOf(const std::byte* self, std::uint64_t arrival)
+/// The walk row's exits (its triggers other than the arrival: the steps it moves on at besides arriving), with their
+/// names read once for the Status compares.
+struct Exits
 {
-    std::vector<std::uint64_t> exits = RowTriggers(self);
-    std::erase_if(exits, [arrival](std::uint64_t t) { return t == 0 || t == arrival; });
+    std::vector<std::uint64_t> ids;
+    std::vector<std::wstring>  names;
+};
+
+Exits ExitsOf(const std::byte* self, std::uint64_t arrival)
+{
+    Exits exits;
+    exits.ids = RowTriggers(self);
+    std::erase_if(exits.ids, [arrival](std::uint64_t t) { return t == 0 || t == arrival; });
+    exits.names.reserve(exits.ids.size());
+    for (const std::uint64_t exit : exits.ids)
+    {
+        exits.names.push_back(Name(exit));
+    }
     return exits;
 }
 
-/// `row` is a box's sending state for one of `exits`: it lists the trigger and its Status names it.
-bool SendsOneOf(const std::byte* row, const std::vector<std::uint64_t>& exits)
+/// `row` names one of the exits as its Status: as a box's trigger state, the trigger the box sends. Whether that state
+/// also lists the trigger varies with the box (research/RE-own-box-runs.md), so only the name counts.
+bool NamesOneOf(const std::byte* row, const Exits& exits)
+{
+    if (row == nullptr)
+    {
+        return false;
+    }
+    const std::wstring status = RowStatus(row);
+    return std::ranges::any_of(exits.names, [&status](const std::wstring& name) { return _wcsicmp(status.c_str(), name.c_str()) == 0; });
+}
+
+/// `row` waits for one of the exits or names one: its object may be the box that sends it (a box's switch state can
+/// wait for the trigger it sends; its trigger state names it).
+bool WaitsForOrNamesOneOf(const std::byte* row, const Exits& exits)
 {
     if (row == nullptr)
     {
         return false;
     }
     const std::vector<std::uint64_t> listens = RowTriggers(row);
-    const std::wstring               status  = RowStatus(row);
-    for (const std::uint64_t exit : exits)
-    {
-        if (std::find(listens.begin(), listens.end(), exit) != listens.end() && _wcsicmp(status.c_str(), Name(exit).c_str()) == 0)
-        {
-            return true;
-        }
-    }
-    return false;
+    const bool waits = std::ranges::any_of(exits.ids, [&listens](std::uint64_t exit) {
+        return std::find(listens.begin(), listens.end(), exit) != listens.end();
+    });
+    return waits || NamesOneOf(row, exits);
 }
 
 /// The arrival trigger of `move` (its own, else its row's string argument 2).
@@ -502,23 +523,25 @@ std::uint64_t ArrivalOf(const Move& move, const std::byte* self) noexcept
     return move.trigger != 0 ? move.trigger : MappedNameAt(self + facts::kStateRowStringArgs, facts::kStateRowTriggerArg);
 }
 
-/// The member's walk step moves on at a trigger (other than its arrival) that a member-only story box of the member's
-/// own sends, and the box is armed: the level expects the walk to carry the member into that box, on the clock of
-/// whatever else runs meanwhile; held by its player, it may come too late and the step stalls. A box's sending state
-/// lists the trigger it sends and its Status names it (research/RE-member-story-boxes.md); world/story_boxes checks the box's
-/// group and that it is switched on. 0 when none.
+/// The member's walk step moves on at a trigger (other than its arrival) that a story box of the member's own sends (its
+/// group lists the member and not the party leader), and the box is armed: the level expects the walk to carry the member
+/// into that box, on the clock of whatever else runs meanwhile; held by its player, it may come too late and the step
+/// stalls. Only an active object that waits for an exit or names one is asked, which spares the game reads for the rest;
+/// the box's own trigger state (its slot 1, through the game's slot lookup) must name the exit, and world/story_boxes
+/// checks the box's group and that it is switched on (research/RE-member-story-boxes.md, RE-own-box-runs.md). 0 when none.
 std::uint64_t OwnBoxAhead(const std::vector<Slot>& slots, const std::byte* self, std::uint64_t selfObject,
                           std::uint64_t arrival, const void* member)
 {
-    const std::vector<std::uint64_t> exits = ExitsOf(self, arrival);
-    if (exits.empty())
+    const Exits exits = ExitsOf(self, arrival);
+    if (exits.ids.empty())
     {
         return 0;
     }
     for (const Slot& s : slots)
     {
-        if (s.object != selfObject && SendsOneOf(Row(g_stateRow, s.state), exits) &&
-            world::story_boxes::ArmedOwnBox(s.object, member))
+        if (s.object != selfObject && WaitsForOrNamesOneOf(Row(g_stateRow, s.state), exits) &&
+            world::story_boxes::ArmedOwnBox(s.object, member) &&
+            NamesOneOf(Row(g_stateRow, world::story_boxes::TriggerStateRow(s.object)), exits))
         {
             return s.object;
         }
@@ -942,7 +965,7 @@ try
         return false;
     }
     const std::byte* self = Row(g_stateRow, move.row);
-    return self != nullptr && SendsOneOf(Row(g_stateRow, boxStateRow), ExitsOf(self, ArrivalOf(move, self)));
+    return self != nullptr && NamesOneOf(Row(g_stateRow, boxStateRow), ExitsOf(self, ArrivalOf(move, self)));
 }
 catch (...)
 {
