@@ -84,7 +84,7 @@ namespace {
 namespace Hook = RC::Unreal::Hook;
 using lss::platform::Log;
 
-constexpr const wchar_t* kVersion = L"0.159.0";  // built against the Nexus UE4SS (c0a8d4c)
+constexpr const wchar_t* kVersion = L"0.160.0";  // built against the Nexus UE4SS (c0a8d4c)
 
 /// How often the seats' status lines are written while a seat is in.
 constexpr ULONGLONG kStatusIntervalMs = 10'000;
@@ -470,7 +470,8 @@ private:
                 break;
             case lss::players::PlayerIntent::ToggleMonitorMode:
                 LogAction(L"three-player monitor mode (Ctrl+F3)",
-                          lss::modules::SetMonitorMode(!lss::views::window_span::Held()));
+                          lss::modules::SetMonitorMode(!lss::views::window_span::Held() &&
+                                                       !lss::views::window_span::WaitsForMenu()));
                 break;
             case lss::players::PlayerIntent::ToggleWindowSpan:
                 LogAction(L"window span (Ctrl+F2)",

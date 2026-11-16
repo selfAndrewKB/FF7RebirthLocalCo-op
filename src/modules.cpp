@@ -731,6 +731,10 @@ Result SetMonitorMode(bool on) noexcept
                 views::window_span::Held() ? L"the three-player monitor mode is on and waits for its row of monitors (the log says what is missing)"
                                            : L"the three-player monitor mode could not be switched on (the log says why)"};
     }
+    if (views::window_span::WaitsForMenu())
+    {
+        return {true, L"the three-player monitor mode is on once the menu closes"};
+    }
     return {true, L"the row of monitors, player 1's picture in every column no player has"};
 }
 

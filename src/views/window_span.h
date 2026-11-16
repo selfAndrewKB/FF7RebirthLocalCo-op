@@ -53,11 +53,16 @@ void Leave(const wchar_t* why) noexcept;
 
 /// The three-player monitor mode on (the span entered over the row, or re-shaped to it, and held whatever the
 /// players; with no row now, the mode waits for one) or off (the span left). False (logged) when the mode could not
-/// span now.
+/// span now. Switched on while the engine refuses a local player (views::LocalPlayerRefused: the pause-family menu),
+/// the mode waits for that to pass and spans then (WaitsForMenu): the row's mirror views could not fill its columns
+/// before, and the menu would stretch over the whole row meanwhile.
 bool Hold(bool on) noexcept;
 
-/// The monitor mode is on (spanned, or waiting for its row).
+/// The monitor mode is on (spanned, or waiting for its row); not while it waits for the menu to close (WaitsForMenu).
 bool Held() noexcept;
+
+/// The monitor mode was switched on in the pause-family menu and spans once it closes.
+bool WaitsForMenu() noexcept;
 
 /// The settings file's multi-monitor word applied (platform/settings.h kMultiMonitor; `why` names the source for the
 /// log): on = the three-player monitor mode held from the game's first steady frame (the window unchanged for half a
@@ -65,16 +70,16 @@ bool Held() noexcept;
 /// it is on. Any other word is refused with a warning.
 void SetPreset(const std::wstring& word, const wchar_t* why) noexcept;
 
-/// The multi-monitor option's word as the live state reads: on while the three-player monitor mode is held or its
-/// try from the file is pending, else off.
+/// The multi-monitor option's word as the live state reads: on while the three-player monitor mode is held, its try
+/// from the file is pending or it waits for the menu to close, else off.
 std::wstring Preset();
 
 /// The columns the mode holds (views/columns.h Wanted's `held`): the row's columns while on and spanned, else 0.
 std::int32_t HeldColumns() noexcept;
 
-/// Each tick, with the columns the frame shows (views/columns.h): leaves when one is left and the mode is off,
-/// re-shapes the window when the count changed, finishes a move of monitors, holds the rect, watches the desktop; the
-/// Debug status.
+/// Each tick, with the columns the frame shows (views/columns.h): switches the mode on once the menu it waits for has
+/// closed, leaves when one is left and the mode is off, re-shapes the window when the count changed, finishes a move of
+/// monitors, holds the rect, watches the desktop; the Debug status.
 void Tick(std::int32_t columns) noexcept;
 
 /// The span is in (or its monitors are being moved).

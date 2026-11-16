@@ -9,6 +9,7 @@
 #include "views/monitor_row.h"
 #include "views/span_desktop.h"
 #include "views/window_span_rules.h"
+#include "views/whole_screen.h"
 
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
@@ -23,6 +24,7 @@
 #include <format>
 #include <functional>
 #include <optional>
+#include <utility>
 #include <vector>
 
 namespace lss::views::window_span {
@@ -80,6 +82,10 @@ std::uint32_t g_reshapes    = 0;      // re-shapes for a change of columns while
 // (the wait itself is the pure rule in views/window_span_rules.h).
 bool       g_presetPending = false;
 PresetWait g_presetWait;
+
+// Switched on while the engine refuses a local player (the pause-family menu): the row waits for that to pass, since its
+// mirror views could not fill the columns before and the menu would stretch over the whole row meanwhile.
+bool g_waitsForMenu = false;
 
 void Forget() noexcept
 {
@@ -469,7 +475,9 @@ catch (...)
 /// Out: the mode's span, refused or lost, is tried again when the desktop changes.
 void StepOut() noexcept
 {
-    if (g_held && g_retry && ++g_outTicks % kHoldTicks == 0 && span_desktop::Shape() != g_triedShape)
+    // Never inside the pause-family menu: its mirror views could not fill the columns (Hold's wait).
+    if (g_held && g_retry && ++g_outTicks % kHoldTicks == 0 && span_desktop::Shape() != g_triedShape &&
+        LocalPlayerRefused() == nullptr)
     {
         g_triedShape = span_desktop::Shape();
         platform::Log(L"window span: the desktop changed; the three-player monitor mode tries its row again");
@@ -535,7 +543,8 @@ bool Enter(std::int32_t count) noexcept
 
 void Leave(const wchar_t* why) noexcept
 {
-    const bool held = g_held;
+    const bool waited = std::exchange(g_waitsForMenu, false);
+    const bool held   = g_held || waited;
     g_held    = false;
     g_retry   = false;
     g_rowLost = false;
@@ -543,7 +552,8 @@ void Leave(const wchar_t* why) noexcept
     {
         if (held)
         {
-            platform::Log(L"window span: {}: the three-player monitor mode is off (it was waiting for its row)", why);
+            platform::Log(L"window span: {}: the three-player monitor mode is off (it was waiting for {})", why,
+                          waited ? L"the menu to close" : L"its row");
         }
         return;
     }
@@ -559,6 +569,10 @@ bool Hold(bool on) noexcept
     g_presetPending = false;  // either way the file's try is answered: off beats it, on is it
     if (!on)
     {
+        if (std::exchange(g_waitsForMenu, false))
+        {
+            platform::Log(L"window span: the three-player monitor mode is switched off before the menu closed");
+        }
         if (g_held)
         {
             Leave(L"the three-player monitor mode is switched off");
@@ -574,6 +588,17 @@ bool Hold(bool on) noexcept
         platform::Log(L"window span: not installed; no three-player monitor mode");
         return false;
     }
+    if (const wchar_t* refused = LocalPlayerRefused(); refused != nullptr)
+    {
+        if (!std::exchange(g_waitsForMenu, true))
+        {
+            platform::Log(L"window span: the three-player monitor mode is on once the menu closes ({}): its mirror views "
+                          L"could not fill the row's columns before",
+                          refused);
+        }
+        return true;
+    }
+    g_waitsForMenu = false;
     g_held = true;
     const bool spanned = In() ? (g_columns == kModeColumns || g_mostColumns == g_columns ||
                                  Span(kModeColumns, L"the three-player monitor mode"))
@@ -595,6 +620,11 @@ bool Hold(bool on) noexcept
 bool Held() noexcept
 {
     return g_held;
+}
+
+bool WaitsForMenu() noexcept
+{
+    return g_waitsForMenu;
 }
 
 std::int32_t HeldColumns() noexcept
@@ -640,7 +670,7 @@ void SetPreset(const std::wstring& word, const wchar_t* why) noexcept
 
 std::wstring Preset()
 {
-    return g_held || g_presetPending ? L"on" : L"off";
+    return g_held || g_presetPending || g_waitsForMenu ? L"on" : L"off";
 }
 
 void Tick(std::int32_t wanted) noexcept
@@ -648,6 +678,12 @@ void Tick(std::int32_t wanted) noexcept
     if (g_presetPending)
     {
         PresetTick();
+    }
+    if (g_waitsForMenu && LocalPlayerRefused() == nullptr)
+    {
+        g_waitsForMenu = false;
+        platform::Log(L"window span: the menu is closed; the three-player monitor mode is switched on now");
+        Hold(true);
     }
     if (!In())
     {
@@ -663,7 +699,8 @@ void Tick(std::int32_t wanted) noexcept
     }
     if (!g_held && wanted < 2)
     {
-        Leave(L"one column is left (no other player is in)");
+        // The players' span ends; a mode switched on in the menu still comes on once the menu closes.
+        LeaveSpan(L"one column is left (no other player is in)");
         return;
     }
     // The window follows the columns as far as the row reaches: a row of two monitors holds two columns for three
@@ -719,7 +756,9 @@ std::wstring Reading()
     }
     if (!In())
     {
-        return g_held ? L"out; the three-player monitor mode waits for its row" : L"out";
+        return g_waitsForMenu ? L"out; the three-player monitor mode waits for the menu to close"
+               : g_held       ? L"out; the three-player monitor mode waits for its row"
+                              : L"out";
     }
     return std::format(L"{}{}: {} columns (the row gives {} at most), the row has {} monitor(s), the window's client area {} "
                        L"(the row {}; {} mode), re-applies {}, re-shapes {}{}",
