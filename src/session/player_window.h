@@ -1,19 +1,24 @@
 #pragma once
 
-// Each player's own window: joining, and leaving, by pad (the rules: session/player_window_rules.h; the text:
-// session/player_window_text.h).
+// Each player's own window: joining, the player number, where the view is, and leaving, by pad (the rules:
+// session/player_window_rules.h; the text: session/player_window_text.h).
 //
 // A pad is its player: the pad table's slot N is player N's (input/pad_table), so a person's own pad stays theirs.
-// Start on a pad that plays no one (the pad table holds that Start back from the game) adds a player on that pad: the
-// session's join (the Ctrl+F7 path) on the lowest seat no player holds, made before the session's tick (RunRequests)
+// Start on a pad that plays no one (the pad table holds that Start back from the game) first takes back the lowest
+// player whose pad is gone (input/pad_presence; the pad moved onto that player's slot), so a pad that died and came back
+// on another XInput number plays its player again. Otherwise it adds a player on that pad: the session's join (the Ctrl+F7 path) on the lowest seat no player holds, made before the session's tick (RunRequests)
 // with the pad moved onto the new player's slot; the new player's window opens. During a menu or a scene the Start is
 // remembered and joins once the field shows again. A join whose member is busy waits as Ctrl+F7's does; both are said
 // on player 1's window for a while.
 // View held a second on a player's pad opens that player's window, in their own view only (the game's own message
 // window, hud/view_window; the engine's font, hud/view_prompt, where none can be shown). Only that pad then reads idle
-// to the game; everyone else plays on. In it: LB/RB move the view one screen left or right, swapped with what is there
-// (the screen order changed and saved: the setting column-order); A, Start, a B tap or View held again close it; B held
-// a second takes player 2 or 3 out of the game (player 1 is refused, said on its window).
+// to the game; everyone else plays on. In it, two independent changes, each a swap: the d-pad's left/right trade
+// player numbers with the nearest player that way (the two pads trade slots and the two screens trade numbers, so each
+// person keeps their pad, their screen and their open window, and plays the other number's character: player 1's is
+// the game's party leader, in the field or in a fight; held while a join or leave is on its way); LB/RB move the view
+// one screen left or right, swapped with what is there. A move or a trade changes the screen order and saves it (the
+// setting column-order). A, Start, a B tap or View held again close it; B held a second takes player 2 or 3 out of the
+// game (player 1 is refused, said on its window).
 // The views becoming one (a scene, a menu) close every window.
 // On the title screen a pad that presses a button becomes player 1's (its pad moved onto slot 0), so the person who
 // starts the game plays player 1 on their own pad; the game's save-data notice at the top right, the title's one

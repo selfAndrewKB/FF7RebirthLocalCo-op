@@ -9,8 +9,8 @@
 // otherwise draws the last device's, a keyboard's keycaps after a key press), the character in the game's yellow,
 // lines joined by CR LF as the game's own strings are. The plain form is the same lines in words, for the fallback
 // drawn on the engine's canvas (hud/view_prompt) when no game window can be opened. A window says, top to bottom: its
-// player's number and character; then a line for each key the player can press, or a note for a while (a join that
-// waits, a refusal).
+// player's number, between the d-pad's left and right while it can be traded, and character; then a line for each
+// other key the player can press, or a note for a while (a join that waits, a refusal).
 
 #include <array>
 #include <cstddef>
@@ -60,6 +60,7 @@ struct Window
     int          seat       = 0;      // 0 player 1's
     std::wstring name;                // the character in capitals ("TIFA")
     bool         open       = false;  // the player's window is open: its keys show (else only a note does)
+    bool         canTrade   = false;  // another player is in: the d-pad's left/right trade player numbers
     bool         canMove    = false;  // more than one screen: LB/RB move the view
     bool         startJoins = false;  // a seat is free: Start on another pad adds a player (said on player 1's)
     Note         note       = Note::None;
@@ -113,14 +114,20 @@ inline ScreenText TextFor(const Window& w)
     const auto yellow = [](const std::wstring& text) { return L"<color=yellow>" + text + L"</color>"; };
     const auto player = PlayerName(w.seat);
 
+    const bool        trade = w.canTrade && w.open;
     std::vector<Line> lines;
-    lines.push_back({player + L"    " + yellow(w.name), player + L"    " + w.name});
+    lines.push_back({(trade ? icon(L"left") + L" " + player + L" " + icon(L"right") : player) + L"    " + yellow(w.name),
+                     (trade ? L"<  " + player + L"  >" : player) + L"    " + w.name});
     if (w.note != Note::None)
     {
         lines.push_back({NoteText(w.note, w.about), NoteText(w.note, w.about)});
     }
     else if (w.open)
     {
+        if (w.canTrade)
+        {
+            lines.push_back({L"", L"Left/Right: player number"});  // the game window shows the arrows beside the number
+        }
         if (w.canMove)
         {
             lines.push_back({icon(L"L1") + L" " + icon(L"R1") + L" Move my view", L"LB/RB: move my view"});

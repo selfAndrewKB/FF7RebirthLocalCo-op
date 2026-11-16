@@ -314,8 +314,8 @@ src/
                             member no human holds
     party_switch_rules.h    The battle switch's rules in co-op (session/party_switch.h), as pure functions over what the
                             game reports; tested on the host
-    player_window           Each player's own window: joining, and leaving, by pad (the rules:
-                            session/player_window_rules.h; the text: session/player_window_text.h)
+    player_window           Each player's own window: joining, the player number, where the view is, and leaving, by pad
+                            (the rules: session/player_window_rules.h; the text: session/player_window_text.h)
     player_window_rules.h   The pure rules of the player windows (session/player_window)
     player_window_text.h    What a player's window says (session/player_window; the rules:
                             session/player_window_rules.h)

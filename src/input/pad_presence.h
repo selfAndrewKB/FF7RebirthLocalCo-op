@@ -6,12 +6,21 @@
 //   pads      the connected set, and per pad the packet number with the time since it last changed (a connected
 //             pad that reports nothing is still "connected"; its packet number stands still)
 // A change of the connected set logs at Debug. Each poll's set goes to input/pad_table's RecheckAnswering, which
-// has the engine read again a slot whose pad answers while the engine counts it empty. Game thread only; nothing here
-// reads or writes game memory.
+// has the engine read again a slot whose pad answers while the engine counts it empty, and its gone pads to the player
+// windows (a spare pad's Start takes back a player whose pad is gone). Game thread only; nothing here reads or writes
+// game memory.
 
 #include "platform/dev_switch.h"
 
+#include <cstdint>
+
 namespace lss::input::pad_presence {
+
+/// The XInput users whose pad is gone (bit N: user N): connected at an earlier poll and not at the last one, a second
+/// old at most. A user no pad has answered since the start (a keyboard player 1's slot) is never gone. One poll decides:
+/// a pad that drops for under a second counts as gone for that second (a spare pad's Start then could take its player;
+/// accepted, as such a Start is rare). Game thread.
+std::uint32_t GoneUsers() noexcept;
 
 /// Once per frame on the game thread; asks XInput once a second.
 void Tick() noexcept;
