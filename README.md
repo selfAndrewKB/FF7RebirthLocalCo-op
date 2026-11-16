@@ -487,6 +487,7 @@ src/
     player_hits             The seats' hits, and the hits they take, count as the player's
                             (research/RE-p2-enemy-target-bias.md)
     shortcut_follow         The shortcut tables followed on the other controller (RE-p2-shortcut-refresh.md)
+    summon_seats            Summons for players 2 and 3 (research/RE-summon-seats.md)
     synergy_partner         Synergy skills and synergy abilities with a human's character as the partner
                             (research/RE-p2-synergy-skills.md, research/RE-p2-synergy-abilities.md)
     synergy_rules.h         The synergy partner's decisions (battle/synergy_partner.h) as pure functions over values

@@ -162,6 +162,7 @@ add_library(LocalSplitScreen SHARED
     src/camera/camera_override.cpp
     src/camera/attack_cameras.cpp
     src/camera/attack_framing.cpp
+    src/battle/summon_seats.cpp
     src/battle/synergy_partner.cpp
     src/camera/seat_camera_effects.cpp
     src/camera/camera_access.cpp

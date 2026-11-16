@@ -72,7 +72,6 @@ platform::EntryRedirect g_rebuildShortcuts;
 platform::CallRedirect  g_statusShortcutsCall, g_itemShortcutsCall;
 ShortcutsFn             g_ctrlShortcuts     = nullptr;  // the game's rebuild of one controller's tables
 SelecterShortcutsFn     g_selecterShortcuts = nullptr;  // 1.004: the status-menu call's target
-std::uintptr_t          g_lastGame          = 0;        // the game's controller, as last read outside a seat's scope
 int                     g_shortcutLines     = 0;
 std::optional<platform::GameImage> g_image;  // for the logged return addresses
 /// What Find found, for the redirects (placed at once, or on 1.005 from the game thread).
@@ -94,16 +93,10 @@ int SeatOf(std::uintptr_t controller) noexcept
     return command_menu::SeatOfController(reinterpret_cast<const void*>(controller));
 }
 
-/// The game's controller: the UI system's slot, or inside a seat's scope (the slot names the seat's) the one last
-/// read outside it.
+/// The game's controller (player 1's), also inside a seat's scope.
 std::uintptr_t GameController() noexcept
 {
-    const auto slot = ReadAt<std::uintptr_t>(command_menu::UiSystem() + kUICommandController);
-    if (slot != 0 && SeatOf(slot) < 1)
-    {
-        g_lastGame = slot;
-    }
-    return g_lastGame;
+    return reinterpret_cast<std::uintptr_t>(command_menu::PlayerOneCommandController());
 }
 
 /// The command ids (record +56) of the six assignable shortcuts in `row` of a controller's set, as text.
@@ -299,11 +292,6 @@ void Place(const platform::GameImage& image, platform::DeferredSites& placement)
                   menus ? L"yes" : L"NO", platform::RunningBuild() == platform::BuildIndex::V1005 ? L"(1.005 calls the wrapper)"
                                                                                                  : (status ? L"yes" : L"NO"),
                   items ? L"yes" : L"NO");
-}
-
-void NoteGameController() noexcept
-{
-    GameController();
 }
 
 void Remove() noexcept

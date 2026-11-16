@@ -328,6 +328,17 @@ int SeatOfController(const void* controller) noexcept
     return -1;
 }
 
+void* PlayerOneCommandController() noexcept
+{
+    static std::uintptr_t lastOutside = 0;  // game thread: the slot's value as last read outside a seat's scope
+    const auto            slot        = ReadAt<std::uintptr_t>(g_endUISystem + kUICommandController);
+    if (slot == 0 || SeatOfController(reinterpret_cast<const void*>(slot)) < 1)
+    {
+        lastOutside = slot;  // none (a load, the field's exit): a controller the game rebuilds is never answered stale
+    }
+    return reinterpret_cast<void*>(lastOutside);
+}
+
 /// The game's call may be made again on `seat`'s controller: it is built, we are on the game thread, the call was
 /// made on the game's controller (the UI system's slot names it, and it is no seat's), and, when the call needs the
 /// seat's member (Setup stores the leader's type), the seat plays.
@@ -779,7 +790,7 @@ void SeatTick(int seat) noexcept
         return;
     }
     WatchLifecycle(seat);
-    shortcut_follow::NoteGameController();  // kept for a shortcut rebuild that runs in a seat's scope
+    (void)PlayerOneCommandController();  // noted outside the seats' scopes, for the calls made inside one
     if (mine.current)
     {
         Watch(seat);

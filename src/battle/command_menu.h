@@ -50,4 +50,8 @@ void* Controller(int seat) noexcept;
 /// The seat whose controller `controller` is, or -1 (player 1's, the game's, is no seat's): "ours" is any seat's.
 int SeatOfController(const void* controller) noexcept;
 
+/// Player 1's command controller (the game's): the UI system's slot, or inside a seat's scope (the slot then names the
+/// seat's) the one last read outside it, which each seat's tick notes. Null before the game has one. Game thread.
+void* PlayerOneCommandController() noexcept;
+
 }  // namespace lss::battle::command_menu

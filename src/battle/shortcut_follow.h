@@ -21,8 +21,6 @@ void Find(const platform::GameImage& image) noexcept;
 /// Places the follows through the controller's placement (each optional). Logged.
 void Place(const platform::GameImage& image, platform::DeferredSites& placement) noexcept;
 
-/// Notes the game's controller outside every seat's scope (each tick): a rebuild that runs inside one names the game's.
-void NoteGameController() noexcept;
 
 /// Puts the follows' entry and calls back (one changed after us is left in place, logged).
 void Remove() noexcept;

@@ -14,6 +14,7 @@
 #include "battle/lock_on.h"
 #include "battle/menu_tint.h"
 #include "battle/player_hits.h"
+#include "battle/summon_seats.h"
 #include "battle/synergy_partner.h"
 #include "battle/target_coin.h"
 #include "battle/widget_owner.h"
@@ -190,6 +191,8 @@ constexpr std::array kModules{
     Module{Call<&battle::battle_rates::Install>, &battle::battle_rates::Remove},
     // each seat's command controller: built, follows the game's
     Module{Call<&battle::command_menu::Install>, &battle::command_menu::Remove},
+    // a seat's menu offers Summon by the party's gauge, as player 1's
+    Module{Call<&battle::summon_seats::Install>, &battle::summon_seats::Remove},
     // the battle's command locks reach it by the game's setters
     Module{Call<&battle::command_locks::Install>, &battle::command_locks::Remove},
     // ticked in battle; each seat's attack, guard and dodge
