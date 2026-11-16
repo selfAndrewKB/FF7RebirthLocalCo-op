@@ -137,6 +137,10 @@ constexpr AdmittedClass kAdmitted[] = {
     // leader; the listed switches only (world/lever_rules.h), the rest of their levers in world/levers.
     {L"switch", facts::kSwitchAccessVTable, 0, facts::kSwitchAccessUnregister, false, false, {0x728, 0x730}, false,
      &levers::NoteSwitch, &levers::Ready, &levers::Admits},
+    // The communication towers' terminals (research/RE-tower-activation.md): the switch's sibling, the same kind of
+    // register and unregister; terminals with the tower flag only, the rest of their levers in world/levers.
+    {L"tower", facts::kOneShotAccessVTable, 0, facts::kOneShotAccessUnregister, false, false, {0x728, 0x730}, false,
+     &levers::NoteTower, &levers::TowerReady, &levers::AdmitsTower},
     // The mine-cart climbs (research/RE-cart-climb-seats.md): the shared register, an unregister override reading only
     // the leader; carts in the climb mode only (a marker cart's press jumps the party leader), the rest in
     // traversal/cart_climb.

@@ -20,6 +20,7 @@
 #include "players/unreal_access.h"
 #include "players/weak_object.h"
 #include "scopes/primary_controller.h"
+#include "traversal/traversal_facts.h"
 #include "world/field_pickup.h"
 #include "world/lever_rules.h"
 
@@ -27,7 +28,9 @@
 #include <cstddef>
 #include <cstdint>
 #include <format>
+#include <span>
 #include <string>
+#include <type_traits>
 
 #include <intrin.h>
 
@@ -36,6 +39,19 @@ namespace lss::world::levers {
 namespace {
 
 using field_rules::PointView;
+
+/// The two classes this module carries: the switches and the tower terminals.
+enum class Kind : std::uint8_t
+{
+    Switch,
+    Tower,
+};
+constexpr std::size_t kKinds = 2;
+
+constexpr std::size_t IndexOf(Kind kind) noexcept
+{
+    return static_cast<std::size_t>(kind);
+}
 
 // The switch class's slots, the executer's tick slot and the point setter (research/RE-further-player-levers.md).
 constexpr std::uint8_t kNotifyBytes[] = {0x48, 0x8B, 0xC4, 0x48, 0x89, 0x58, 0x08, 0x48,
@@ -60,40 +76,103 @@ constexpr platform::SlotFact kExecTickSlot{L"the switch executer's tick slot", 0
 constexpr std::uint8_t kSetterBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x48, 0x89, 0x74,
                                          0x24, 0x18, 0x57, 0x41, 0x54, 0x41, 0x55, 0x41};
 constexpr platform::FunctionFact kSetter{L"SwitchAccess_SetFieldActionMgrPoint_HoldTime728", 0x140E835F8, kSetterBytes};
-// The setter's two callers whose off is the actor's own, never a player's wish: the actor tick's (its point-off request)
+// The setter's callers whose off is the actor's own, never a player's wish: the actor tick's (its point-off request)
 // and EndPlay's (an unconditional off for an actor leaving play). Known by the return address.
-constexpr std::uintptr_t kSetterCallTick    = 0x140E8302D;
-constexpr std::uintptr_t kSetterCallEndPlay = 0x141444DE0;
+constexpr std::uintptr_t kSetterOwnOffs[] = {0x140E8302D, 0x141444DE0};
 
-// Every listed switch can hold a record at once; the refused ring remembers switches not on the list, so the name test
-// runs once per actor.
-constexpr std::size_t kMaxSwitches = lever_rules::kSwitches.size();
+// The tower terminal class's slots, its executer's tick slot and its point setter (research/RE-tower-activation.md).
+constexpr std::uint8_t kTowerNotifyBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x6C,
+                                              0x24, 0x10, 0x48, 0x89, 0x74, 0x24, 0x18, 0x57};
+constexpr platform::SlotFact kTowerNotifySlot{L"the tower terminal's notify slot", 0x1458728F0,
+                                              {L"OneShotAccess_Vt748_NotifyNear_StartOnHoldProgress", 0x1436A13AC,
+                                               kTowerNotifyBytes}};
+constexpr std::uint8_t kTowerRegisterBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x74,
+                                                0x24, 0x10, 0x57, 0xB8, 0x20, 0x00, 0x00, 0x00};
+constexpr platform::SlotFact kTowerRegisterSlot{L"the tower terminal's register slot", 0x1458728C8,
+                                                {L"OneShotAccess_Vt720_RegisterWithLeaderPC_StoreLeader8B0", 0x1436A0A70,
+                                                 kTowerRegisterBytes}};
+constexpr std::uint8_t kTowerUnregisterBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x57, 0xB8, 0x20,
+                                                  0x00, 0x00, 0x00, 0xE8, 0x80, 0xE3, 0xA0, 0xFE};
+constexpr platform::SlotFact kTowerUnregisterSlot{L"the tower terminal's unregister slot", 0x1458728D0,
+                                                  {L"OneShotAccess_Vt728_UnregisterLeader_PointOff_Clear8B0",
+                                                   facts::kOneShotAccessUnregister, kTowerUnregisterBytes}};
+// The executer's tick is the one other executers share: only the tower executer's slot is replaced.
+constexpr platform::SlotFact kTowerExecTickSlot{L"the tower terminal executer's tick slot", 0x146706CF0,
+                                                traversal::traversal_camera::kSharedTick};
+// The setter's entry: mov [rsp+10h],rbx (the 5 bytes replaced), inside one 16-byte block.
+constexpr std::uint8_t kTowerSetterBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x48, 0x89, 0x74,
+                                              0x24, 0x18, 0x57, 0xB8, 0x70, 0x01, 0x00, 0x00};
+constexpr platform::FunctionFact kTowerSetter{L"OneShotAccess_SetFieldActionMgrPoint", 0x141445AC0, kTowerSetterBytes};
+// The actor's own offs: its tick's point-off request (which the executer's end asks for), EndPlay's, the wake timer's
+// (never on a tower; checked all the same, a site the research named).
+constexpr std::uintptr_t kTowerSetterOwnOffs[] = {0x1436AA034, 0x141444FE1, 0x1436A0653};
+// The one call outside a notify that is a player's: the unregister's off (that player's leave). The actor's state
+// update ends in the decide, which calls the setter outside any notify on every actor tick: such a call is the actor's,
+// never a player's wish.
+constexpr std::uintptr_t kTowerSetterLeaves[] = {0x1436A0BE2};
+
+/// What differs between the two classes: their words in the log, their slots and setter, and the actor's own fields.
+struct KindFacts
+{
+    const wchar_t*                  word;
+    const platform::SlotFact&       notify;
+    const platform::SlotFact&       registerSlot;
+    const platform::SlotFact&       unregister;
+    const platform::SlotFact&       execTick;
+    const platform::FunctionFact&   setter;
+    std::span<const std::uintptr_t> ownOffs;
+    // Empty: a call outside a notify is the open scope's player's (the switch: only its unregister calls so). Else the
+    // only such calls that are a player's; any other outside a notify is the actor's own.
+    std::span<const std::uintptr_t> leaves;
+    std::uint32_t                   inRange;      // the switch's byte; the tower's registered character (a weak)
+    bool                            inRangeWeak;  // the tower's: an 8-byte weak, not a byte
+    std::uint32_t                   latch;
+    std::uint32_t                   pointShown;
+};
+const std::array<KindFacts, kKinds> kKindFacts{{
+    {L"switch", kNotifySlot, kRegisterSlot, kUnregisterSlot, kExecTickSlot, kSetter, kSetterOwnOffs, {},
+     facts::kSwitchInRange, false, facts::kSwitchPressLatch, facts::kSwitchPointShown},
+    {L"tower", kTowerNotifySlot, kTowerRegisterSlot, kTowerUnregisterSlot, kTowerExecTickSlot, kTowerSetter,
+     kTowerSetterOwnOffs, kTowerSetterLeaves, facts::kOneShotAccessRegistered, true, facts::kOneShotAccessPressLatch,
+     facts::kOneShotAccessPointShown},
+}};
+constexpr std::size_t kMaxOwnOffs = 4;
+constexpr std::size_t kMaxLeaves  = 2;
+
+// Every listed switch and a few towers can hold a record at once; the refused ring remembers actors of the classes
+// that are not players 2's and 3's, so the admit test runs once per actor. The delivered points' keys have room for
+// every listed switch and every tower terminal (the hub table names 43).
+constexpr std::size_t kMaxRecords  = lever_rules::kSwitches.size() + 6;
+constexpr std::size_t kMaxKeys     = lever_rules::kSwitches.size() + 48;
 constexpr std::size_t kRefusedRing = 16;
 
-using NotifyFn     = void (*)(void* actor, void* context);
-using RegisterFn   = std::uint8_t (*)(void* actor);
-using UnregisterFn = void (*)(void* actor);
-using ExecTickFn   = void (*)(void* executer, float dt);
-using SetterFn     = void (*)(void* actor, std::uint8_t show, std::uint8_t check, std::uint8_t ng);
+using NotifyFn       = void (*)(void* actor, void* context);
+using UnregisterFn   = void (*)(void* actor);
+using ExecTickFn     = void (*)(void* executer, float dt);
+using SwitchSetterFn = void (*)(void* actor, std::uint8_t show, std::uint8_t check, std::uint8_t ng);
+using TowerSetterFn  = void (*)(void* actor, std::uint8_t show, std::uint8_t notUsable);
 
-/// The setter's arguments after `show`, as a wishing player's own call last passed them.
+/// The setter's arguments after `show`, as a wishing player's own call last passed them (the tower's one argument in
+/// `check`).
 struct SetterArgs
 {
     std::uint8_t check = 0;
     std::uint8_t ng    = 0;
 };
 
-/// One listed switch's shared state, per player: the point wished on, the arguments and the point's bits their own call
-/// left, in range, the view their selection last asked; and its press: who pressed, the latch as last looked at, and
-/// which players' notifies were said to run with it down.
-struct Switch
+/// One switch's or tower's shared state, per player: the point wished on, the arguments and the point's bits their own
+/// call left, in range (and for a tower, the character their register stored), the view their selection last asked;
+/// and its press: who pressed, the latch as last looked at, and which players' notifies were said to run with it down.
+struct Record
 {
     std::uint64_t actor = 0;  // the actor's weak value
     std::uint64_t key   = 0;  // its point's key (its first tag)
-    bool          wish[players::kMaxPlayers]    = {};
-    SetterArgs    args[players::kMaxPlayers]    = {};
-    std::uint8_t  bits[players::kMaxPlayers]    = {};
-    bool          inRange[players::kMaxPlayers] = {};
+    Kind          kind  = Kind::Switch;
+    bool          wish[players::kMaxPlayers]      = {};
+    SetterArgs    args[players::kMaxPlayers]      = {};
+    std::uint8_t  bits[players::kMaxPlayers]      = {};
+    bool          inRange[players::kMaxPlayers]   = {};
+    std::uint64_t rangeWeak[players::kMaxPlayers] = {};  // a tower's: the registered character each player's register left
     PointView     view[players::kMaxPlayers]       = {};
     PointView     viewLogged[players::kMaxPlayers] = {};
     int           presser   = -1;
@@ -101,16 +180,22 @@ struct Switch
     std::uint8_t  downSaid  = 0;  // by player bit, for the current press
 };
 
-platform::VTableEntry   g_notify, g_register, g_unregister, g_execTick;
-platform::EntryRedirect g_setter;
-std::uintptr_t          g_tickReturn = 0, g_endPlayReturn = 0;  // live return addresses of the actor's own off calls
-bool                    g_ready = false;
+/// One class's replaced slots and redirect, and its actor's own off calls by live return address.
+struct KindHooks
+{
+    platform::VTableEntry                   notify, registerSlot, unregister, execTick;
+    platform::EntryRedirect                 setter;
+    std::array<std::uintptr_t, kMaxOwnOffs> ownOffReturns{};
+    std::array<std::uintptr_t, kMaxLeaves>  leaveReturns{};
+    bool                                    ready = false;
+};
+std::array<KindHooks, kKinds> g_hooks;
 
 // Game thread.
-std::array<Switch, kMaxSwitches>        g_switches{};
-std::array<std::uint64_t, kMaxSwitches> g_keys{};  // delivered switches' point keys
+std::array<Record, kMaxRecords>         g_records{};
+std::array<std::uint64_t, kMaxKeys>     g_keys{};  // delivered actors' point keys
 std::size_t                             g_nextKey = 0;
-std::array<std::uint64_t, kRefusedRing> g_refused{};  // weak values of switch actors not on the list
+std::array<std::uint64_t, kRefusedRing> g_refused{};  // weak values of actors not players 2's and 3's
 std::size_t                             g_nextRefused = 0;
 bool                                    g_fullLogged = false, g_scopeLogged = false;
 std::array<bool, players::kMaxPlayers>  g_noCopySaid{};  // by seat: a call ran without its slot copy (said once)
@@ -124,26 +209,47 @@ using field_rules::FirstOn;
 using players::actor_fields::FirstTag;
 using players::generation::PlayerOfCharacter;
 
-bool Idle(const Switch& s) noexcept
+const KindFacts& FactsOf(Kind kind) noexcept
 {
-    return !AnyOn(s.wish) && !AnyOn(s.inRange) && s.presser < 0 && s.lastLatch == 0;
+    return kKindFacts[IndexOf(kind)];
 }
 
-/// The record of `actor`: its entry (its key read again while it had none), else (with `make`, for a listed switch) a
-/// free, dead or idle one made its; null when none, the actor is not listed or has no weak value.
-Switch* SwitchOf(const void* actor, bool make) noexcept
+KindHooks& HooksOf(Kind kind) noexcept
+{
+    return g_hooks[IndexOf(kind)];
+}
+
+bool AnyReady() noexcept
+{
+    return HooksOf(Kind::Switch).ready || HooksOf(Kind::Tower).ready;
+}
+
+bool Idle(const Record& r) noexcept
+{
+    return !AnyOn(r.wish) && !AnyOn(r.inRange) && r.presser < 0 && r.lastLatch == 0;
+}
+
+bool AdmitsOf(Kind kind, const void* actor) noexcept
+{
+    return kind == Kind::Switch ? Admits(actor) : AdmitsTower(actor);
+}
+
+/// The record of `actor`: its entry (its key read again while it had none), else (with `make`, for an actor of `kind`
+/// players 2 and 3 may use) a free, dead or idle one made its; null when none, the actor is not admitted or has no weak
+/// value.
+Record* RecordOf(const void* actor, bool make, Kind kind) noexcept
 {
     const std::uint64_t weak = players::weak_object::WeakOf(const_cast<void*>(actor));
     if (weak == 0)
     {
         return nullptr;
     }
-    for (Switch& s : g_switches)
+    for (Record& r : g_records)
     {
-        if (s.actor == weak)
+        if (r.actor == weak)
         {
-            s.key = s.key != 0 ? s.key : FirstTag(actor);
-            return &s;
+            r.key = r.key != 0 ? r.key : FirstTag(actor);
+            return &r;
         }
     }
     if (!make)
@@ -157,18 +263,18 @@ Switch* SwitchOf(const void* actor, bool make) noexcept
             return nullptr;
         }
     }
-    if (!Admits(actor))
+    if (!AdmitsOf(kind, actor))
     {
         g_refused[g_nextRefused] = weak;
         g_nextRefused            = (g_nextRefused + 1) % kRefusedRing;
         return nullptr;
     }
-    for (Switch& s : g_switches)
+    for (Record& r : g_records)
     {
-        if (s.actor == 0 || Idle(s) || players::weak_object::ObjectOf(s.actor) == nullptr)
+        if (r.actor == 0 || Idle(r) || players::weak_object::ObjectOf(r.actor) == nullptr)
         {
-            s = {weak, FirstTag(actor)};
-            return &s;
+            r = {weak, FirstTag(actor), kind};
+            return &r;
         }
     }
     if (!g_fullLogged)
@@ -176,9 +282,9 @@ Switch* SwitchOf(const void* actor, bool make) noexcept
         g_fullLogged = true;
         try
         {
-            platform::LogWarning(L"levers: no room to record the players' state of the switch {}: the game's own calls stand "
+            platform::LogWarning(L"levers: no room to record the players' state of the {} {}: the game's own calls stand "
                                  L"for it (said once)",
-                                 players::NameOf(actor));
+                                 FactsOf(kind).word, players::NameOf(actor));
         }
         catch (...)
         {
@@ -188,7 +294,7 @@ Switch* SwitchOf(const void* actor, bool make) noexcept
 }
 
 /// A seat's call made without its copy of the slots (its first pass not run yet): its hold reads 0. Said once a seat.
-void NoteNoCopy(int seat, const void* actor) noexcept
+void NoteNoCopy(int seat, const void* actor, Kind kind) noexcept
 {
     if (g_noCopySaid[static_cast<std::size_t>(seat)])
     {
@@ -197,46 +303,78 @@ void NoteNoCopy(int seat, const void* actor) noexcept
     g_noCopySaid[static_cast<std::size_t>(seat)] = true;
     try
     {
-        platform::LogDebug(L"levers: {} has no copy of the prompt slots for the switch {} yet: their hold reads 0 there (said "
+        platform::LogDebug(L"levers: {} has no copy of the prompt slots for the {} {} yet: their hold reads 0 there (said "
                            L"once)",
-                           players::SeatName(seat), players::NameOf(actor));
+                           players::SeatName(seat), FactsOf(kind).word, players::NameOf(actor));
     }
     catch (...)
     {
     }
 }
-/// The in-range byte as the OR of the players in range.
-void WriteInRange(void* actor, const Switch& s) noexcept
+
+/// The in-range field as the players in range have it: a switch's byte as their OR; a tower's registered character as
+/// the first player in range's (cleared with nobody in range, as the game's leave leaves it).
+void WriteInRange(void* actor, const Record& r) noexcept
 {
-    const std::uint8_t any = AnyOn(s.inRange) ? 1 : 0;
-    (void)platform::WriteGuarded(static_cast<std::uint8_t*>(actor) + facts::kSwitchInRange, &any, sizeof(any));
+    const KindFacts& f   = FactsOf(r.kind);
+    auto*            dst = static_cast<std::uint8_t*>(actor) + f.inRange;
+    if (!f.inRangeWeak)
+    {
+        const std::uint8_t any = AnyOn(r.inRange) ? 1 : 0;
+        (void)platform::WriteGuarded(dst, &any, sizeof(any));
+        return;
+    }
+    // The first player in range whose character still lives: a stale one would hide the point from everyone.
+    std::uint64_t weak = 0;
+    for (std::size_t player = 0; player < players::kMaxPlayers && weak == 0; ++player)
+    {
+        if (r.inRange[player] && players::weak_object::ObjectOf(r.rangeWeak[player]) != nullptr)
+        {
+            weak = r.rangeWeak[player];
+        }
+    }
+    (void)platform::WriteGuarded(dst, &weak, sizeof(weak));
+}
+
+/// The in-range field read as "this player's register took": a switch's byte set, a tower's registered character
+/// valid (its weak value in `weak`).
+bool InRangeRead(const void* actor, Kind kind, std::uint64_t& weak) noexcept
+{
+    const KindFacts& f = FactsOf(kind);
+    if (!f.inRangeWeak)
+    {
+        weak = 0;
+        return ReadField<std::uint8_t>(actor, f.inRange) != 0;
+    }
+    weak = ReadField<std::uint64_t>(actor, f.inRange);
+    return weak != 0 && players::weak_object::ObjectIn(actor, f.inRange) != nullptr;
 }
 
 /// A presser whose wish goes off while the point stays on for another player (they walked away, or left the game): the
 /// game's off edge, which clears the press latch, is what the OR of the wishes holds back here, so its clear is made in
 /// its stead; otherwise the pending press would hold the other player's notifies for as long as they stay.
-void SpendPressAtLeave(void* actor, Switch& s, int player) noexcept
+void SpendPressAtLeave(void* actor, Record& r, int player) noexcept
 {
-    if (s.presser != player)
+    if (r.presser != player)
     {
         return;
     }
     constexpr std::uint8_t kOff = 0;
-    (void)platform::WriteGuarded(static_cast<std::uint8_t*>(actor) + facts::kSwitchPressLatch, &kOff, sizeof(kOff));
-    s.presser   = -1;
-    s.lastLatch = 0;
+    (void)platform::WriteGuarded(static_cast<std::uint8_t*>(actor) + FactsOf(r.kind).latch, &kOff, sizeof(kOff));
+    r.presser   = -1;
+    r.lastLatch = 0;
     try
     {
-        platform::LogDebug(L"levers: {}'s press on {} is spent with their leave (the point stays on for another player: the "
-                           L"latch cleared as the game's off would)",
-                           players::SeatName(player), players::NameOf(actor));
+        platform::LogDebug(L"levers: {}'s press on the {} {} is spent with their leave (the point stays on for another "
+                           L"player: the latch cleared as the game's off would)",
+                           players::SeatName(player), FactsOf(r.kind).word, players::NameOf(actor));
     }
     catch (...)
     {
     }
 }
 
-void LogWish(const void* actor, int player, bool wish, bool any, const wchar_t* done) noexcept
+void LogWish(const void* actor, Kind kind, int player, bool wish, bool any, const wchar_t* done) noexcept
 {
     if (!platform::Enabled(platform::Level::Debug))
     {
@@ -244,12 +382,46 @@ void LogWish(const void* actor, int player, bool wish, bool any, const wchar_t* 
     }
     try
     {
-        platform::LogDebug(L"levers: {}'s wish for the switch {} is {}; the point {}{}", players::SeatName(player),
-                           players::NameOf(actor), wish ? L"on" : L"off", any ? L"on" : L"off", done);
+        platform::LogDebug(L"levers: {}'s wish for the {} {} is {}; the point {}{}", players::SeatName(player),
+                           FactsOf(kind).word, players::NameOf(actor), wish ? L"on" : L"off", any ? L"on" : L"off", done);
     }
     catch (...)
     {
     }
+}
+
+/// The game's point setter of `kind`, with a wishing player's arguments.
+void CallSetter(Kind kind, void* actor, std::uint8_t show, SetterArgs args) noexcept
+{
+    const std::uintptr_t original = HooksOf(kind).setter.Original();
+    if (kind == Kind::Switch)
+    {
+        reinterpret_cast<SwitchSetterFn>(original)(actor, show, args.check, args.ng);
+    }
+    else
+    {
+        reinterpret_cast<TowerSetterFn>(original)(actor, show, args.check);
+    }
+}
+
+template <std::size_t N>
+bool Among(const std::array<std::uintptr_t, N>& returns, std::uintptr_t caller) noexcept
+{
+    for (const std::uintptr_t at : returns)
+    {
+        if (at != 0 && at == caller)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+/// A setter call outside any notify that is no player's: with leave sites named, every caller but those (the
+/// actor's state update's decide, on each actor tick).
+bool ActorsOwnOutsideNotify(Kind kind, std::uintptr_t caller) noexcept
+{
+    return t_notified == kNotifiedNone && !FactsOf(kind).leaves.empty() && !Among(HooksOf(kind).leaveReturns, caller);
 }
 
 /// The point setter, from the notify's decide (on or off) and the unregister (off): the caller's wish recorded for the
@@ -258,123 +430,192 @@ void LogWish(const void* actor, int player, bool wish, bool any, const wchar_t* 
 /// own context (the setter reads the primary controller's character and the party leader for the point's "not usable"
 /// bit), and the bits it leaves on the point are noted as that player's view. The actor's own off calls (its tick's
 /// point-off request, its EndPlay) go to the game as they are: the point comes back with the next wishing notify.
-void SetterOr(void* actor, std::uint8_t show, std::uint8_t check, std::uint8_t ng) noexcept
+void SetterOr(Kind kind, void* actor, std::uint8_t show, SetterArgs args, std::uintptr_t caller) noexcept
 {
-    const auto original = reinterpret_cast<SetterFn>(g_setter.Original());
-    const auto caller   = reinterpret_cast<std::uintptr_t>(_ReturnAddress());
-    if (actor == nullptr || !players::generation::OnGameThread() || caller == g_tickReturn || caller == g_endPlayReturn)
+    if (actor == nullptr || !players::generation::OnGameThread() || Among(HooksOf(kind).ownOffReturns, caller))
     {
-        original(actor, show, check, ng);
+        CallSetter(kind, actor, show, args);
         return;
     }
-    Switch* s = SwitchOf(actor, true);  // player 1's wish recorded alone too: a seat joining later ORs with it
-    if (s == nullptr)
+    Record* r = RecordOf(actor, true, kind);  // player 1's wish recorded alone too: a seat joining later ORs with it
+    if (r == nullptr)
     {
-        original(actor, show, check, ng);  // a switch not on the list: the game's alone
+        CallSetter(kind, actor, show, args);  // an actor players 2 and 3 do not use: the game's alone
         return;
     }
-    if (t_notified == kNotifiedOther)
+    const bool actorsOwn = ActorsOwnOutsideNotify(kind, caller);
+    if (actorsOwn && show == 0)
     {
-        // A character no player plays: no player's wish. The players' setter stands; with no player wishing, the game's.
-        if (const int wisher = FirstOn(s->wish); wisher >= 0)
+        // The actor's own decide says off (in use, done, unavailable): the game's, as in single player. Its off edge
+        // clears the press latch; a player still wishing puts the point back at their next notify.
+        CallSetter(kind, actor, 0, args);
+        r->presser   = -1;
+        r->lastLatch = 0;
+        return;
+    }
+    if (t_notified == kNotifiedOther || actorsOwn)
+    {
+        // A character no player plays, or the actor's own update: no player's wish. The players' setter stands; with
+        // no player wishing, the game's.
+        if (const int wisher = FirstOn(r->wish); wisher >= 0)
         {
-            original(actor, 1, s->args[wisher].check, s->args[wisher].ng);
+            CallSetter(kind, actor, 1, r->args[wisher]);
         }
         else
         {
-            original(actor, show, check, ng);
+            CallSetter(kind, actor, show, args);
         }
         return;
     }
     const int  player  = t_notified >= 0 ? t_notified : scopes::primary_controller::OpenSeat();
     const bool wish    = show != 0;
-    const bool changed = s->wish[player] != wish;
-    s->wish[player]    = wish;
+    const bool changed = r->wish[player] != wish;
+    r->wish[player]    = wish;
     if (wish)
     {
-        s->args[player] = {check, ng};
+        r->args[player] = args;
     }
-    if (!AnyOn(s->wish))
+    if (!AnyOn(r->wish))
     {
-        original(actor, 0, check, ng);  // the last player's off: the game's own call
-        s->presser   = -1;              // the off edge clears the game's latch: no press is pending
-        s->lastLatch = 0;
+        CallSetter(kind, actor, 0, args);  // the last player's off: the game's own call
+        r->presser   = -1;                 // the off edge clears the game's latch: no press is pending
+        r->lastLatch = 0;
         if (changed)
         {
-            LogWish(actor, player, wish, false, L" (the game's off)");
+            LogWish(actor, kind, player, wish, false, L" (the game's off)");
         }
         return;
     }
     if (changed && !wish)
     {
-        SpendPressAtLeave(actor, *s, player);
+        SpendPressAtLeave(actor, *r, player);
     }
     if (wish)
     {
-        original(actor, 1, check, ng);
+        CallSetter(kind, actor, 1, args);
         std::uint8_t flags = 0;
-        if (field_pickup::PointFlagsOf(s->key, flags))
+        if (field_pickup::PointFlagsOf(r->key, flags))
         {
-            s->bits[player] = flags;
+            r->bits[player] = flags;
         }
     }
     else
     {
-        const SetterArgs& args = s->args[FirstOn(s->wish)];
-        original(actor, 1, args.check, args.ng);
+        CallSetter(kind, actor, 1, r->args[FirstOn(r->wish)]);
     }
     if (changed)
     {
-        LogWish(actor, player, wish, true, wish ? L"" : L" (another player holds it)");
+        LogWish(actor, kind, player, wish, true, wish ? L"" : L" (another player holds it)");
     }
 }
+
+void SwitchSetter(void* actor, std::uint8_t show, std::uint8_t check, std::uint8_t ng) noexcept
+{
+    SetterOr(Kind::Switch, actor, show, {check, ng}, reinterpret_cast<std::uintptr_t>(_ReturnAddress()));
+}
+
+void TowerSetter(void* actor, std::uint8_t show, std::uint8_t notUsable) noexcept
+{
+    SetterOr(Kind::Tower, actor, show, {notUsable, 0}, reinterpret_cast<std::uintptr_t>(_ReturnAddress()));
+}
+
+/// Before the game's register: the actor's record, made if new, and its in-range field cleared; false when the actor is
+/// not tracked (the game's register runs alone).
+template <Kind K>
+bool BeforeRegister(void* actor) noexcept
+{
+    if (actor == nullptr || !players::generation::OnGameThread() || RecordOf(actor, true, K) == nullptr)
+    {
+        return false;
+    }
+    const KindFacts&        f      = FactsOf(K);
+    constexpr std::uint64_t kClear = 0;
+    const std::size_t       width  = f.inRangeWeak ? sizeof(std::uint64_t) : sizeof(std::uint8_t);
+    return platform::WriteGuarded(static_cast<std::uint8_t*>(actor) + f.inRange, &kClear, width);
+}
+
+/// After the game's register: whether this player's took, and the field as the players in range have it.
+template <Kind K>
+void AfterRegister(void* actor) noexcept
+{
+    if (Record* r = RecordOf(actor, false, K); r != nullptr)
+    {
+        const int     player = scopes::primary_controller::OpenSeat();
+        std::uint64_t weak   = 0;
+        r->inRange[player]   = InRangeRead(actor, K, weak);
+        r->rangeWeak[player] = r->inRange[player] ? weak : 0;
+        WriteInRange(actor, *r);
+        if constexpr (K == Kind::Tower)
+        {
+            try
+            {
+                platform::LogDebug(L"levers: {} is at the tower {} (hub {}): their register {}", players::SeatName(player),
+                                   players::NameOf(actor),
+                                   players::unreal::NameText(ReadField<std::uint64_t>(actor, facts::kOneShotAccessHubId)),
+                                   r->inRange[player] ? L"took" : L"did not take (the leader is no player character)");
+            }
+            catch (...)
+            {
+            }
+        }
+    }
+}
+
+/// What the class's register returns: the switch's a byte, the tower's nothing (its caller reads none).
+template <Kind K>
+using RegisterResult = std::conditional_t<K == Kind::Switch, std::uint8_t, void>;
 
 /// The class's register (the trigger's enter): the game's, as the open scope's player (a seat's inside its delivery,
-/// player 1 outside any), run with the in-range byte down so the byte it leaves says whether this player's register
-/// took (the game sets it only when the leader is a player character); then written as the OR of the players in range.
-std::uint8_t Register(void* actor) noexcept
+/// player 1 outside any), run with the in-range field cleared so what it leaves says whether this player's register
+/// took (the game sets it only when the leader is a player character); then written as the players in range have it.
+template <Kind K>
+RegisterResult<K> Register(void* actor) noexcept
 {
-    const auto original = reinterpret_cast<RegisterFn>(g_register.Original());
-    Switch*    s        = actor != nullptr && players::generation::OnGameThread() ? SwitchOf(actor, true) : nullptr;
-    if (s == nullptr)
+    const auto original = reinterpret_cast<RegisterResult<K> (*)(void*)>(HooksOf(K).registerSlot.Original());
+    const bool tracked  = BeforeRegister<K>(actor);
+    if constexpr (std::is_void_v<RegisterResult<K>>)
     {
-        return original(actor);
+        original(actor);
+        if (tracked)
+        {
+            AfterRegister<K>(actor);
+        }
     }
-    std::uint8_t* inRange = static_cast<std::uint8_t*>(actor) + facts::kSwitchInRange;
-    constexpr std::uint8_t kDown = 0;
-    if (!platform::WriteGuarded(inRange, &kDown, sizeof(kDown)))
+    else
     {
-        return original(actor);
+        const auto result = original(actor);
+        if (tracked)
+        {
+            AfterRegister<K>(actor);
+        }
+        return result;
     }
-    const auto result = original(actor);
-    if ((s = SwitchOf(actor, false)) != nullptr)
-    {
-        s->inRange[scopes::primary_controller::OpenSeat()] = ReadField<std::uint8_t>(actor, facts::kSwitchInRange) != 0;
-        WriteInRange(actor, *s);
-    }
-    return result;
 }
 
-/// The class's unregister (the trigger's leave; its point off goes through SetterOr): the game's, then the in-range
-/// byte as the OR of the players still in range.
+/// The class's unregister (the trigger's leave; its point off goes through the setter's OR): the game's, then the
+/// in-range field as the players still in range have it. The game turns the point off before it clears the registered
+/// character, so a "another player holds it" setter call inside still finds the field valid; it is written back after.
+template <Kind K>
 void Unregister(void* actor) noexcept
 {
-    reinterpret_cast<UnregisterFn>(g_unregister.Original())(actor);
+    reinterpret_cast<UnregisterFn>(HooksOf(K).unregister.Original())(actor);
     if (actor == nullptr || !players::generation::OnGameThread())
     {
         return;
     }
-    if (Switch* s = SwitchOf(actor, false); s != nullptr)
+    if (Record* r = RecordOf(actor, false, K); r != nullptr)
     {
-        s->inRange[scopes::primary_controller::OpenSeat()] = false;
-        WriteInRange(actor, *s);
+        const int player     = scopes::primary_controller::OpenSeat();
+        r->inRange[player]   = false;
+        r->rangeWeak[player] = 0;
+        WriteInRange(actor, *r);
     }
 }
 
 /// The game's notify for `notified`'s character (0 player 1, a seat, -1 no player's): a seat's with the seat's slot
 /// block held in the live manager, inside the seat's primary scope and leader answer, the player named for the setter
 /// meanwhile (kNotifiedOther for a character no player plays).
-void CallNotify(NotifyFn original, void* actor, void* context, int notified, std::uint64_t key) noexcept
+void CallNotify(NotifyFn original, void* actor, void* context, int notified, std::uint64_t key, Kind kind) noexcept
 {
     const int saved = t_notified;
     t_notified      = notified >= 0 ? notified : kNotifiedOther;
@@ -387,7 +628,7 @@ void CallNotify(NotifyFn original, void* actor, void* context, int notified, std
     const field_pickup::SlotHold slots(notified, key);
     if (!slots.Held())
     {
-        NoteNoCopy(notified, actor);
+        NoteNoCopy(notified, actor, kind);
     }
     if (!input::member_movement::NotifyInPrimaryScope(notified, original, actor, context))
     {
@@ -396,9 +637,9 @@ void CallNotify(NotifyFn original, void* actor, void* context, int notified, std
             g_scopeLogged = true;
             try
             {
-                platform::LogWarning(L"levers: the switch {}'s notify for {}'s character ran outside their scope (it could "
+                platform::LogWarning(L"levers: the {} {}'s notify for {}'s character ran outside their scope (it could "
                                      L"not be held): its answers are player 1's, booked to no player (said once)",
-                                     players::NameOf(actor), players::SeatName(notified));
+                                     FactsOf(kind).word, players::NameOf(actor), players::SeatName(notified));
             }
             catch (...)
             {
@@ -411,80 +652,83 @@ void CallNotify(NotifyFn original, void* actor, void* context, int notified, std
 }
 
 /// A latch seen up for the first time: `player` pressed (`how` ends the line).
-void NoteRise(Switch& s, int player, const void* actor, const wchar_t* how) noexcept
+void NoteRise(Record& r, int player, const void* actor, const wchar_t* how) noexcept
 {
-    s.presser   = player;
-    s.lastLatch = 1;
-    s.downSaid  = 0;
+    r.presser   = player;
+    r.lastLatch = 1;
+    r.downSaid  = 0;
     try
     {
-        platform::LogDebug(L"levers: {} pressed the switch {}{}", players::SeatName(player), players::NameOf(actor), how);
+        platform::LogDebug(L"levers: {} pressed the {} {}{}", players::SeatName(player), FactsOf(r.kind).word,
+                           players::NameOf(actor), how);
     }
     catch (...)
     {
     }
 }
 
-/// The switch's notify: the game's (CallNotify), with the press latch down for a call whose character is not the
+/// The class's notify: the game's (CallNotify), with the press latch down for a call whose character is not the
 /// presser's (lever_rules::LatchDownFor). A latch up that no seat's pass named is player 1's (a seat's press runs
 /// inside its pass, which names it at once; player 1's in the game's own input step, which may come before this
 /// notify and the game's update). The latch goes back up after unless the point went off inside the call (its off edge
 /// clears the latch; one put back then would outlive the point and fire a press nobody made at the next on).
+template <Kind K>
 void Notify(void* actor, void* context) noexcept
 {
-    const auto original = reinterpret_cast<NotifyFn>(g_notify.Original());
+    const auto original = reinterpret_cast<NotifyFn>(HooksOf(K).notify.Original());
     if (actor == nullptr || !players::generation::OnGameThread() || !players::generation::AnyActive())
     {
         original(actor, context);
         return;
     }
-    const int      notified = PlayerOfCharacter(ReadPointer(context, facts::kNotifyContextCharacter));
-    Switch*        s        = SwitchOf(actor, true);
-    const auto     key      = s != nullptr ? s->key : FirstTag(actor);
-    std::uint8_t*  latch    = static_cast<std::uint8_t*>(actor) + facts::kSwitchPressLatch;
-    if (s != nullptr && *latch != 0 && s->lastLatch == 0)
+    const KindFacts& f        = FactsOf(K);
+    const int        notified = PlayerOfCharacter(ReadPointer(context, facts::kNotifyContextCharacter));
+    Record*          r        = RecordOf(actor, true, K);
+    const auto       key      = r != nullptr ? r->key : FirstTag(actor);
+    std::uint8_t*    latch    = static_cast<std::uint8_t*>(actor) + f.latch;
+    if (r != nullptr && *latch != 0 && r->lastLatch == 0)
     {
-        NoteRise(*s, 0, actor, L" (named at the first notify after the game's own input step)");
+        NoteRise(*r, 0, actor, L" (named at the first notify after the game's own input step)");
     }
-    if (s != nullptr && s->presser >= 1 && !players::generation::Active(s->presser))
+    if (r != nullptr && r->presser >= 1 && !players::generation::Active(r->presser))
     {
-        SpendPressAtLeave(actor, *s, s->presser);  // the presser left the game with their press pending
+        SpendPressAtLeave(actor, *r, r->presser);  // the presser left the game with their press pending
     }
-    const int pressed = s != nullptr && *latch != 0 ? s->presser : -1;
+    const int pressed = r != nullptr && *latch != 0 ? r->presser : -1;
     if (!lever_rules::LatchDownFor(pressed, notified))
     {
-        CallNotify(original, actor, context, notified, key);
+        CallNotify(original, actor, context, notified, key, K);
         return;
     }
     constexpr std::uint8_t kOff = 0, kOn = 1;
     if (!platform::WriteGuarded(latch, &kOff, sizeof(kOff)))
     {
-        CallNotify(original, actor, context, notified, key);
+        CallNotify(original, actor, context, notified, key, K);
         return;
     }
-    CallNotify(original, actor, context, notified, key);
-    const bool pointOn = ReadField<std::uint8_t>(actor, facts::kSwitchPointShown) != 0;
-    s                  = SwitchOf(actor, false);  // the call may have made the record idle and another taken it
+    CallNotify(original, actor, context, notified, key, K);
+    const bool pointOn = ReadField<std::uint8_t>(actor, f.pointShown) != 0;
+    r                  = RecordOf(actor, false, K);  // the call may have made the record idle and another taken it
     if (pointOn)
     {
         (void)platform::WriteGuarded(latch, &kOn, sizeof(kOn));
     }
-    if (s == nullptr)
+    if (r == nullptr)
     {
         return;
     }
-    s->lastLatch = pointOn ? 1 : 0;
-    s->presser   = pointOn ? s->presser : -1;
+    r->lastLatch = pointOn ? 1 : 0;
+    r->presser   = pointOn ? r->presser : -1;
     const auto bit = static_cast<std::uint8_t>(1u << (notified >= 0 ? notified : players::kMaxPlayers));
-    if ((s->downSaid & bit) != 0 || !platform::Enabled(platform::Level::Debug))
+    if ((r->downSaid & bit) != 0 || !platform::Enabled(platform::Level::Debug))
     {
         return;
     }
-    s->downSaid |= bit;
+    r->downSaid |= bit;
     try
     {
-        platform::LogDebug(L"levers: the switch {}'s press is {}'s: the notify for {}'s character runs with the latch down{}",
-                           players::NameOf(actor), players::SeatName(pressed),
+        platform::LogDebug(L"levers: the {} {}'s press is {}'s: the notify for {}'s character runs with the latch down{}",
+                           f.word, players::NameOf(actor), players::SeatName(pressed),
                            notified >= 0 ? players::SeatName(notified) : L"no player",
                            pointOn ? L"" : L" (the point went off inside: the latch stays down)");
     }
@@ -493,12 +737,13 @@ void Notify(void* actor, void* context) noexcept
     }
 }
 
-/// The switch executer's tick (its phase update polls the hold progress): a seat's member's with the seat's slot block
+/// The class's executer tick (its phase update polls the hold progress): a seat's member's with the seat's slot block
 /// held in the live manager for the call, so the hold the seat's pass keeps is the one it polls. Each seat's executer
-/// is logged as it starts and as its switch completes.
+/// is logged as it starts.
+template <Kind K>
 void ExecTick(void* executer, float dt) noexcept
 {
-    const auto original = reinterpret_cast<ExecTickFn>(g_execTick.Original());
+    const auto original = reinterpret_cast<ExecTickFn>(HooksOf(K).execTick.Original());
     if (executer == nullptr || !players::generation::OnGameThread() || !players::generation::AnyActive())
     {
         original(executer, dt);
@@ -519,9 +764,10 @@ void ExecTick(void* executer, float dt) noexcept
         {
             const auto start = ReadField<std::uint64_t>(actor, facts::kStateManagedDefaultStart);
             const auto end   = ReadField<std::uint64_t>(actor, facts::kStateManagedDefaultEnd);
-            platform::LogDebug(L"levers: {}'s switch move on {} runs (their character {}; the switch's default start trigger {}, "
-                               L"end {}: sent for the leader's type only, so not for this move)",
-                               players::SeatName(player), players::NameOf(actor), players::NameOf(character),
+            platform::LogDebug(L"levers: {}'s {} move on {} runs (their character {}; the default start trigger {}, end {}: "
+                               L"sent for the leader's type only, so not for this move)",
+                               players::SeatName(player), FactsOf(K).word, players::NameOf(actor),
+                               players::NameOf(character),
                                start != 0 ? players::unreal::NameText(start) : std::wstring(L"none"),
                                end != 0 ? players::unreal::NameText(end) : std::wstring(L"none"));
         }
@@ -532,60 +778,134 @@ void ExecTick(void* executer, float dt) noexcept
     const field_pickup::SlotHold slots(player, FirstTag(actor));
     if (!slots.Held())
     {
-        NoteNoCopy(player, actor);
+        NoteNoCopy(player, actor, K);
     }
     original(executer, dt);
 }
 
-}  // namespace
-
-void Install(const platform::GameImage& image) noexcept
+void RemoveKind(Kind kind) noexcept
 {
-    const auto tickSite    = image.Rebase(kSetterCallTick, 5);
-    const auto endPlaySite = image.Rebase(kSetterCallEndPlay, 5);
-    const auto setter      = platform::FindFunction(image, kSetter);
-    // Each return address is trusted only once its site is checked as a call of the setter.
-    bool ready = setter && tickSite && endPlaySite && players::call_site::Calls(*tickSite, *setter) &&
-                 players::call_site::Calls(*endPlaySite, *setter);
-    if (ready)
+    KindHooks& h = HooksOf(kind);
+    h.ready      = false;
+    if (h.setter.IsInstalled())
     {
-        g_tickReturn    = *tickSite + 5;
-        g_endPlayReturn = *endPlaySite + 5;
+        (void)h.setter.Restore();
     }
-    ready = ready && platform::InstallAtEntryOrSecond(g_setter, image, kSetter, reinterpret_cast<std::uintptr_t>(&SetterOr)) &&
-            platform::ReplaceSlot(image, kRegisterSlot, reinterpret_cast<std::uintptr_t>(&Register), g_register) &&
-            platform::ReplaceSlot(image, kUnregisterSlot, reinterpret_cast<std::uintptr_t>(&Unregister), g_unregister) &&
-            platform::ReplaceSlot(image, kNotifySlot, reinterpret_cast<std::uintptr_t>(&Notify), g_notify) &&
-            platform::ReplaceSlot(image, kExecTickSlot, reinterpret_cast<std::uintptr_t>(&ExecTick), g_execTick);
-    if (!ready)
-    {
-        Remove();
-        platform::LogWarning(L"levers: NOT placed (a slot, the setter or one of its callers is not as the research read it): "
-                             L"switches stay player 1's");
-        return;
-    }
-    g_ready = true;
-    platform::Log(L"levers: ready; players 2 and 3 work the listed switches ({} of them) on their own character, with their "
-                  L"own hold (the point takes every player's wish, the press latch is the presser's, the in-range byte "
-                  L"every player's)",
-                  lever_rules::kSwitches.size());
-}
-
-void Remove() noexcept
-{
-    g_ready = false;
-    if (g_setter.IsInstalled())
-    {
-        (void)g_setter.Restore();
-    }
-    for (platform::VTableEntry* slot : {&g_notify, &g_register, &g_unregister, &g_execTick})
+    for (platform::VTableEntry* slot : {&h.notify, &h.registerSlot, &h.unregister, &h.execTick})
     {
         if (slot->Original() != 0)
         {
             (void)slot->Restore();
         }
     }
-    g_switches.fill({});
+    h.ownOffReturns.fill(0);
+    h.leaveReturns.fill(0);
+}
+
+/// One class's hooks, all or none: each own-off return address trusted only once its site is checked as a call of
+/// the setter.
+template <Kind K>
+bool InstallKind(const platform::GameImage& image, std::uintptr_t setterHook) noexcept
+{
+    const KindFacts& f      = FactsOf(K);
+    KindHooks&       h      = HooksOf(K);
+    const auto       setter = platform::FindFunction(image, f.setter);
+    bool ready = setter.has_value() && f.ownOffs.size() <= kMaxOwnOffs && f.leaves.size() <= kMaxLeaves;
+    for (std::size_t i = 0; ready && i < f.ownOffs.size(); ++i)
+    {
+        const auto site    = image.Rebase(f.ownOffs[i], 5);
+        ready              = site && players::call_site::Calls(*site, *setter);
+        h.ownOffReturns[i] = ready ? *site + 5 : 0;
+    }
+    for (std::size_t i = 0; ready && i < f.leaves.size(); ++i)
+    {
+        const auto site   = image.Rebase(f.leaves[i], 5);
+        ready             = site && players::call_site::Calls(*site, *setter);
+        h.leaveReturns[i] = ready ? *site + 5 : 0;
+    }
+    ready = ready && platform::InstallAtEntryOrSecond(h.setter, image, f.setter, setterHook) &&
+            platform::ReplaceSlot(image, f.registerSlot, reinterpret_cast<std::uintptr_t>(&Register<K>), h.registerSlot) &&
+            platform::ReplaceSlot(image, f.unregister, reinterpret_cast<std::uintptr_t>(&Unregister<K>), h.unregister) &&
+            platform::ReplaceSlot(image, f.notify, reinterpret_cast<std::uintptr_t>(&Notify<K>), h.notify) &&
+            platform::ReplaceSlot(image, f.execTick, reinterpret_cast<std::uintptr_t>(&ExecTick<K>), h.execTick);
+    if (!ready)
+    {
+        RemoveKind(K);
+        return false;
+    }
+    h.ready = true;
+    return true;
+}
+
+/// A delivered actor of `kind` (its first tag is its point's key): the seats' passes admit that point from here on.
+void NoteDelivered(const void* actor, Kind kind) noexcept
+{
+    if (!HooksOf(kind).ready || actor == nullptr || !players::generation::OnGameThread())
+    {
+        return;
+    }
+    (void)RecordOf(actor, true, kind);
+    const std::uint64_t key = FirstTag(actor);
+    if (key == 0)
+    {
+        return;
+    }
+    for (const std::uint64_t noted : g_keys)
+    {
+        if (noted == key)
+        {
+            return;
+        }
+    }
+    const std::uint64_t dropped = g_keys[g_nextKey];
+    g_keys[g_nextKey]           = key;
+    g_nextKey                   = (g_nextKey + 1) % kMaxKeys;
+    try
+    {
+        platform::LogDebug(L"levers: the {} {} is delivered: its point is a player 2's or 3's press from here on{}",
+                           FactsOf(kind).word, players::NameOf(actor),
+                           dropped != 0 ? std::format(L" (the oldest noted point {} forgotten)", players::unreal::NameText(dropped))
+                                        : std::wstring());
+    }
+    catch (...)
+    {
+    }
+}
+
+}  // namespace
+
+void Install(const platform::GameImage& image) noexcept
+{
+    if (InstallKind<Kind::Switch>(image, reinterpret_cast<std::uintptr_t>(&SwitchSetter)))
+    {
+        platform::Log(L"levers: switches ready; players 2 and 3 work the listed switches ({} of them) on their own "
+                      L"character, with their own hold (the point takes every player's wish, the press latch is the "
+                      L"presser's, the in-range byte every player's)",
+                      lever_rules::kSwitches.size());
+    }
+    else
+    {
+        platform::LogWarning(L"levers: switches NOT placed (a slot, the setter or one of its callers is not as the research "
+                             L"read it): switches stay player 1's");
+    }
+    if (InstallKind<Kind::Tower>(image, reinterpret_cast<std::uintptr_t>(&TowerSetter)))
+    {
+        platform::Log(L"levers: towers ready; players 2 and 3 activate the communication towers' terminals on their own "
+                      L"character (the point takes every player's wish, the press latch is the presser's, the registered "
+                      L"character is a player's in range)");
+    }
+    else
+    {
+        platform::LogWarning(L"levers: towers NOT placed (a slot, the setter or one of its callers is not as the research "
+                             L"read it): the towers stay player 1's");
+    }
+}
+
+void Remove() noexcept
+{
+    RemoveKind(Kind::Switch);
+    RemoveKind(Kind::Tower);
+    g_records.fill({});
     g_keys.fill(0);
     g_refused.fill(0);
     g_execSeen.fill(nullptr);
@@ -595,16 +915,16 @@ void Remove() noexcept
 
 void Tick() noexcept
 {
-    if (!g_ready || !players::generation::OnGameThread())
+    if (!AnyReady() || !players::generation::OnGameThread())
     {
         return;
     }
-    for (Switch& s : g_switches)
+    for (Record& r : g_records)
     {
-        void* actor = s.actor != 0 ? players::weak_object::ObjectOf(s.actor) : nullptr;
+        void* actor = r.actor != 0 ? players::weak_object::ObjectOf(r.actor) : nullptr;
         if (actor == nullptr)
         {
-            s = {};
+            r = {};
             continue;
         }
         bool wished = false, marked = false;
@@ -614,30 +934,31 @@ void Tick() noexcept
             {
                 continue;
             }
-            wished             = wished || s.wish[seat];
-            marked             = marked || s.inRange[seat];
-            s.wish[seat]       = false;
-            s.inRange[seat]    = false;
-            s.args[seat]       = {};
-            s.bits[seat]       = 0;
-            s.view[seat]       = PointView::NotTracked;
-            s.viewLogged[seat] = PointView::NotTracked;
-            if (s.presser == seat)
+            wished             = wished || r.wish[seat];
+            marked             = marked || r.inRange[seat];
+            r.wish[seat]       = false;
+            r.inRange[seat]    = false;
+            r.rangeWeak[seat]  = 0;
+            r.args[seat]       = {};
+            r.bits[seat]       = 0;
+            r.view[seat]       = PointView::NotTracked;
+            r.viewLogged[seat] = PointView::NotTracked;
+            if (r.presser == seat)
             {
-                SpendPressAtLeave(actor, s, seat);
+                SpendPressAtLeave(actor, r, seat);
             }
         }
         if (marked)
         {
-            WriteInRange(actor, s);
+            WriteInRange(actor, r);
         }
-        if (wished && !AnyOn(s.wish) && ReadField<std::uint8_t>(actor, facts::kSwitchPointShown) != 0)
+        if (wished && !AnyOn(r.wish) && ReadField<std::uint8_t>(actor, FactsOf(r.kind).pointShown) != 0)
         {
-            reinterpret_cast<SetterFn>(g_setter.Original())(actor, 0, 0, 0);
+            CallSetter(r.kind, actor, 0, {});
             try
             {
-                platform::LogDebug(L"levers: the switch {}'s point is off: the player who wished it on left the game",
-                                   players::NameOf(actor));
+                platform::LogDebug(L"levers: the {} {}'s point is off: the player who wished it on left the game",
+                                   FactsOf(r.kind).word, players::NameOf(actor));
             }
             catch (...)
             {
@@ -648,7 +969,12 @@ void Tick() noexcept
 
 bool Ready() noexcept
 {
-    return g_ready;
+    return HooksOf(Kind::Switch).ready;
+}
+
+bool TowerReady() noexcept
+{
+    return HooksOf(Kind::Tower).ready;
 }
 
 bool Admits(const void* actor) noexcept
@@ -667,43 +993,24 @@ bool Admits(const void* actor) noexcept
     return false;
 }
 
+bool AdmitsTower(const void* actor) noexcept
+{
+    return actor != nullptr && ReadField<std::uint8_t>(actor, facts::kOneShotAccessTower) != 0;
+}
+
 void NoteSwitch(const void* actor) noexcept
 {
-    if (!g_ready || actor == nullptr || !players::generation::OnGameThread())
-    {
-        return;
-    }
-    (void)SwitchOf(actor, true);
-    const std::uint64_t key = FirstTag(actor);
-    if (key == 0)
-    {
-        return;
-    }
-    for (const std::uint64_t noted : g_keys)
-    {
-        if (noted == key)
-        {
-            return;
-        }
-    }
-    const std::uint64_t dropped = g_keys[g_nextKey];
-    g_keys[g_nextKey]           = key;
-    g_nextKey                   = (g_nextKey + 1) % kMaxSwitches;
-    try
-    {
-        platform::LogDebug(L"levers: the switch {} is delivered: its point is a player 2's or 3's press from here on{}",
-                           players::NameOf(actor),
-                           dropped != 0 ? std::format(L" (the oldest noted switch {} forgotten)", players::unreal::NameText(dropped))
-                                        : std::wstring());
-    }
-    catch (...)
-    {
-    }
+    NoteDelivered(actor, Kind::Switch);
+}
+
+void NoteTower(const void* actor) noexcept
+{
+    NoteDelivered(actor, Kind::Tower);
 }
 
 bool AdmitsPoint(std::uint64_t key) noexcept
 {
-    if (!g_ready || key == 0)
+    if (!AnyReady() || key == 0)
     {
         return false;
     }
@@ -719,47 +1026,47 @@ bool AdmitsPoint(std::uint64_t key) noexcept
 
 void NotePressesAfter(int player) noexcept
 {
-    if (!g_ready || !players::generation::OnGameThread())
+    if (!AnyReady() || !players::generation::OnGameThread())
     {
         return;
     }
-    for (Switch& s : g_switches)
+    for (Record& r : g_records)
     {
-        const void* actor = s.actor != 0 ? players::weak_object::ObjectOf(s.actor) : nullptr;
+        const void* actor = r.actor != 0 ? players::weak_object::ObjectOf(r.actor) : nullptr;
         if (actor == nullptr)
         {
             continue;
         }
-        const std::uint8_t latch = ReadField<std::uint8_t>(actor, facts::kSwitchPressLatch);
-        if (latch != 0 && s.lastLatch == 0)
+        const std::uint8_t latch = ReadField<std::uint8_t>(actor, FactsOf(r.kind).latch);
+        if (latch != 0 && r.lastLatch == 0)
         {
-            NoteRise(s, player, actor, L"");
+            NoteRise(r, player, actor, L"");
         }
         else if (latch == 0)
         {
-            s.presser = -1;
+            r.presser = -1;
         }
-        s.lastLatch = latch;
+        r.lastLatch = latch;
     }
 }
 
 PointView PointViewFor(std::uint64_t key, int player) noexcept
 {
-    if (!g_ready || key == 0 || player < 0 || player >= static_cast<int>(players::kMaxPlayers) ||
+    if (!AnyReady() || key == 0 || player < 0 || player >= static_cast<int>(players::kMaxPlayers) ||
         !players::generation::OnGameThread())
     {
         return PointView::NotTracked;
     }
-    for (Switch& s : g_switches)
+    for (Record& r : g_records)
     {
-        if (s.actor == 0 || s.key != key || !AnyOn(s.wish))
+        if (r.actor == 0 || r.key != key || !AnyOn(r.wish))
         {
             continue;
         }
-        const PointView view = !s.wish[player]                      ? PointView::Off
-                               : (s.bits[player] & facts::kFieldActionPointNotUsable) != 0 ? PointView::NotUsable
-                                                                     : PointView::Usable;
-        s.view[player] = view;
+        const PointView view = !r.wish[player]                                            ? PointView::Off
+                               : (r.bits[player] & facts::kFieldActionPointNotUsable) != 0 ? PointView::NotUsable
+                                                                                          : PointView::Usable;
+        r.view[player] = view;
         return view;
     }
     return PointView::NotTracked;
@@ -767,24 +1074,24 @@ PointView PointViewFor(std::uint64_t key, int player) noexcept
 
 void LogPointViews() noexcept
 {
-    if (!g_ready || !players::generation::OnGameThread() || !platform::Enabled(platform::Level::Debug))
+    if (!AnyReady() || !players::generation::OnGameThread() || !platform::Enabled(platform::Level::Debug))
     {
         return;
     }
-    for (Switch& s : g_switches)
+    for (Record& r : g_records)
     {
         for (int player = 0; player < static_cast<int>(players::kMaxPlayers); ++player)
         {
-            const PointView view = s.view[player];
-            if (view == PointView::NotTracked || view == s.viewLogged[player])
+            const PointView view = r.view[player];
+            if (view == PointView::NotTracked || view == r.viewLogged[player])
             {
                 continue;
             }
-            s.viewLogged[player] = view;
+            r.viewLogged[player] = view;
             try
             {
-                platform::LogDebug(L"levers: {}'s selection sees the switch {} {}", players::SeatName(player),
-                                   players::NameOf(players::weak_object::ObjectOf(s.actor)),
+                platform::LogDebug(L"levers: {}'s selection sees the {} {} {}", players::SeatName(player),
+                                   FactsOf(r.kind).word, players::NameOf(players::weak_object::ObjectOf(r.actor)),
                                    view == PointView::Off         ? L"off (their own notify wishes it off)"
                                    : view == PointView::NotUsable ? L"on, not usable from where they are (their own call's answer)"
                                                                   : L"on and usable");

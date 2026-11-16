@@ -36,6 +36,13 @@
 // game's. Game thread. Logged: Info at install, Debug per delivered switch, per presser, per executer phase seen, per
 // view change.
 //
+// The communication towers' terminals (AEndFieldActionOneShotAccessActor with bTower set; research/RE-tower-activation.md)
+// are the switch's sibling class and go the same way, each part through the tower class's own slots, setter and fields:
+// a tap instead of a hold, and in place of the in-range byte the character that registered (a weak reference the point
+// shows only while valid; written back as a player's in range after another player's leave clears it). The hub's
+// activation and what it shows are the game's, for every player alike. Every terminal with the tower flag is admitted;
+// the class's other actors (life springs, story terminals) stay player 1's.
+//
 // Per seat (players/seats.h): the seat comes from the notified character, the executer's character or the open scope;
 // the wishes, views and in-range marks are per actor and player.
 
@@ -49,24 +56,34 @@ class GameImage;
 
 namespace lss::world::levers {
 
-/// Replaces the class's slots and the executer's tick slot and redirects the point setter; all or none (logged).
+/// Per class (the switches, the towers): replaces the class's slots and its executer's tick slot and redirects its
+/// point setter; all or none of a class (logged).
 void Install(const platform::GameImage& image) noexcept;
 void Remove() noexcept;
 
 /// Each engine tick, game thread: a seat that left the game wishes nothing and is in range of nothing (its notify and
-/// leave never come); a switch nobody wishes on any more gets the game's off.
+/// leave never come); a switch or tower nobody wishes on any more gets the game's off.
 void Tick() noexcept;
 
-/// The levers are placed (world/seat_triggers delivers a seat's switch enter only then).
+/// The switches' hooks are placed (world/seat_triggers delivers a seat's switch enter only then).
 bool Ready() noexcept;
+
+/// The towers' hooks are placed (world/seat_triggers delivers a seat's tower enter only then).
+bool TowerReady() noexcept;
 
 /// The switch `actor` is one players 2 and 3 may use (world/lever_rules.h, by its name or its point's key).
 bool Admits(const void* actor) noexcept;
 
+/// The one-shot access actor `actor` is a communication tower's terminal (its tower flag set): players 2 and 3 may use it.
+bool AdmitsTower(const void* actor) noexcept;
+
 /// A delivered switch's actor (its first tag is its point's key): the seats' passes admit that point from here on.
 void NoteSwitch(const void* actor) noexcept;
 
-/// Whether a field-action point is a noted switch's (by `key`): the seat's pass leaves it open. Game thread.
+/// A delivered tower terminal's actor, the same way.
+void NoteTower(const void* actor) noexcept;
+
+/// Whether a field-action point is a noted switch's or tower's (by `key`): the seat's pass leaves it open. Game thread.
 bool AdmitsPoint(std::uint64_t key) noexcept;
 
 /// After a selection update ran for `player` (0: the game's own; a seat: its pass): a switch whose press latch came up

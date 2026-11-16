@@ -77,8 +77,24 @@ inline constexpr std::uint32_t kSwitchCannotAct  = 0x9F3;
 // and exit only for a character whose tag is the party leader's player type, so never for a seat's member.
 inline constexpr std::uint32_t kStateManagedDefaultStart = 0x3BC;
 inline constexpr std::uint32_t kStateManagedDefaultEnd   = 0x3C4;
-// A switch executer: the character it runs on and the switch, each a weak reference.
+// A switch executer: the character it runs on and the switch, each a weak reference. A tower terminal's executer keeps
+// them at the same offsets.
 inline constexpr std::uint32_t kSwitchExecCharacter = 0x10;
 inline constexpr std::uint32_t kSwitchExecActor     = 0x58;
+
+// The communication towers' terminals (AEndFieldActionOneShotAccessActor with bTower set; RE-tower-activation.md): the
+// native vtable placed Blueprint terminals keep, and the class's unregister override (the leave: the leader's list, the
+// point off, the registered character cleared). 1.005 through replaced-towers.json.
+inline constexpr std::uintptr_t kOneShotAccessVTable     = 0x1458721A8;
+inline constexpr std::uintptr_t kOneShotAccessUnregister = 0x1436A0BA0;
+// The actor's own fields, one per actor: the hub row it activates (FName), the tower flag (bool; the class's other
+// actors, life springs and story terminals, leave it clear), the character that registered (a weak reference the
+// register sets to the party leader and the unregister clears; the point shows only while it is valid), the press latch
+// (the point's listener sets it; the setter clears it on its edges; the executer's end clears it), the point shown.
+inline constexpr std::uint32_t kOneShotAccessHubId      = 0x718;
+inline constexpr std::uint32_t kOneShotAccessTower      = 0x8A0;
+inline constexpr std::uint32_t kOneShotAccessRegistered = 0x8B0;
+inline constexpr std::uint32_t kOneShotAccessPressLatch = 0x8E0;
+inline constexpr std::uint32_t kOneShotAccessPointShown = 0x8E1;
 
 }  // namespace lss::facts

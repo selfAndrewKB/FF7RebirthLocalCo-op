@@ -43,6 +43,9 @@ inline constexpr std::uint8_t kRopeStartBytes[]   = {0x48, 0x89, 0x5C, 0x24, 0x1
 inline constexpr std::uint8_t kRopeEndBytes[]     = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x48, 0x89, 0x74,
                                               0x24, 0x18, 0x48, 0x89, 0x7C, 0x24, 0x20, 0x55};
 inline constexpr std::uint8_t kSharedTickBytes[]  = {0x40, 0x53, 0xB8, 0x30, 0x00, 0x00, 0x00};  // then E8 __chkstk
+/// The executers' shared Tick (vt+0x20, calls the class's phase update at vt+0x80): several executer vtables hold it, so
+/// a module replaces it in its own executer's vtable only.
+inline constexpr platform::FunctionFact kSharedTick{L"FieldActionExecuter_Tick_Vt20_Shared", 0x1436827D0, kSharedTickBytes};
 inline constexpr std::uint8_t kOneShotStartBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x48, 0x89, 0x74,
                                                0x24, 0x18, 0x48, 0x89, 0x7C, 0x24, 0x20, 0x41};
 inline constexpr std::uint8_t kOneShotEndBytes[]   = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x48, 0x89, 0x74,
@@ -111,7 +114,7 @@ inline constexpr ExecClass kExecClasses[] = {
     {L"lifting rope", facts::kLiftingRopeVTable, 0x58, 0x58, 0x7E8, 16, false, true, TickRule::Whole,
      {L"the rope executer's Start slot", 0x1466FF520, {L"LiftingRopeExecuter_Start_Vt10", 0x14366B55C, kRopeStartBytes}},
      {L"the rope executer's End slot", 0x1466FF528, {L"LiftingRopeExecuter_End_Vt18", 0x14366E374, kRopeEndBytes}},
-     {L"the rope executer's Tick slot", 0x1466FF530, {L"FieldActionExecuter_Tick_Vt20_Shared", 0x1436827D0, kSharedTickBytes}}},
+     {L"the rope executer's Tick slot", 0x1466FF530, kSharedTick}},
     // Every one-shot type (squeeze, crouch, door steps, point to point) is this one class (type at actor+0x710); the
     // camera (squeeze and crouch only) goes on in the Tick's phase update behind IsUCPC_Core, with no handle: the
     // actor's flag +0x88C records it. Start runs unscoped for the leader: its only leader read records a non-leader's
@@ -119,7 +122,7 @@ inline constexpr ExecClass kExecClasses[] = {
     {L"one-shot move", facts::kOneShotMoveVTable, 0x58, 0x58, 0, 0, false, true, TickRule::Whole,
      {L"the one-shot executer's Start slot", 0x146706C50, {L"OneShotMoveExecuter_Start_Vt10", 0x143693618, kOneShotStartBytes}},
      {L"the one-shot executer's End slot", 0x146706C58, {L"OneShotMoveExecuter_End_Vt18", 0x143695630, kOneShotEndBytes}},
-     {L"the one-shot executer's Tick slot", 0x146706C60, {L"FieldActionExecuter_Tick_Vt20_Shared", 0x1436827D0, kSharedTickBytes}},
+     {L"the one-shot executer's Tick slot", 0x146706C60, kSharedTick},
      0, ExitCall::None, 0x88C},
 };
 inline constexpr std::size_t kExecCount = std::size(kExecClasses);
