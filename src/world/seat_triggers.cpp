@@ -123,28 +123,28 @@ constexpr AdmittedClass kAdmitted[] = {
     {L"pole slide", facts::kPoleSlideVTable, 0x758, 0x1433773E8},
     {L"one-shot move", facts::kOneShotMoveVTable, 0x840, 0x1433D85BC, false, true},
     {L"wall run", facts::kWallRunVTable},
-    {L"chocobo climb", facts::kChocoboClimbVTable, 0x738, 0x143397238, false, false, {0x738, 0x740}, true},
-    {L"chocobo launch pad", facts::kChocoboJumpPadVTable, 0x734, facts::kChocoboJumpPadUnregister, false, false, {0x738, 0x740}, true},
-    {L"chocobo jump box", facts::kChocoboJumpBoxVTable, 0x7A0, facts::kChocoboJumpBoxUnregister, false, false, {0x738, 0x740}, true},
-    {L"chocobo slider", facts::kChocoboSliderVTable, 0x760, facts::kChocoboSliderUnregister, false, false, {0x738, 0x740}, true},
+    {L"chocobo climb", facts::kChocoboClimbVTable, 0x738, 0x143397238, false, false, {0x740, 0x738}, true},
+    {L"chocobo launch pad", facts::kChocoboJumpPadVTable, 0x734, facts::kChocoboJumpPadUnregister, false, false, {0x740, 0x738}, true},
+    {L"chocobo jump box", facts::kChocoboJumpBoxVTable, 0x7A0, facts::kChocoboJumpBoxUnregister, false, false, {0x740, 0x738}, true},
+    {L"chocobo slider", facts::kChocoboSliderVTable, 0x760, facts::kChocoboSliderUnregister, false, false, {0x740, 0x738}, true},
     // The grappling gun's points and the hook ropes (research/RE-hooks-for-seats.md): the shared register, an
     // unregister reading only the leader; the rest of their levers in traversal/hooks, delivered only while those are
     // placed (a delivery without them would put the actor's one point under two players' notifies).
-    {L"hookshot", facts::kHookShotVTable, 0, 0, false, false, {0x728, 0x730}, false, nullptr, &traversal::hooks::GunReady},
-    {L"hook rope", facts::kHookRopeVTable, 0, 0, false, false, {0x728, 0x730}, false, &traversal::hooks::NoteRope,
+    {L"hookshot", facts::kHookShotVTable, 0, 0, false, false, {0x730, 0x728}, false, nullptr, &traversal::hooks::GunReady},
+    {L"hook rope", facts::kHookRopeVTable, 0, 0, false, false, {0x730, 0x728}, false, &traversal::hooks::NoteRope,
      &traversal::hooks::RopeReady},
     // The switches (research/RE-further-player-levers.md): the shared register, an unregister override reading only the
     // leader; the listed switches only (world/lever_rules.h), the rest of their levers in world/levers.
-    {L"switch", facts::kSwitchAccessVTable, 0, facts::kSwitchAccessUnregister, false, false, {0x728, 0x730}, false,
+    {L"switch", facts::kSwitchAccessVTable, 0, facts::kSwitchAccessUnregister, false, false, {0x730, 0x728}, false,
      &levers::NoteSwitch, &levers::Ready, &levers::Admits},
     // The communication towers' terminals (research/RE-tower-activation.md): the switch's sibling, the same kind of
     // register and unregister; terminals with the tower flag only, the rest of their levers in world/levers.
-    {L"tower", facts::kOneShotAccessVTable, 0, facts::kOneShotAccessUnregister, false, false, {0x728, 0x730}, false,
+    {L"tower", facts::kOneShotAccessVTable, 0, facts::kOneShotAccessUnregister, false, false, {0x730, 0x728}, false,
      &levers::NoteTower, &levers::TowerReady, &levers::AdmitsTower},
     // The mine-cart climbs (research/RE-cart-climb-seats.md): the shared register, an unregister override reading only
     // the leader; carts in the climb mode only (a marker cart's press jumps the party leader), the rest in
     // traversal/cart_climb.
-    {L"cart climb", facts::kCartJumpVTable, 0, facts::kCartJumpUnregister, false, false, {0x728, 0x730}, false, nullptr,
+    {L"cart climb", facts::kCartJumpVTable, 0, facts::kCartJumpUnregister, false, false, {0x730, 0x728}, false, nullptr,
      &traversal::cart_climb::Ready, &traversal::cart_climb::Admits},
 };
 constexpr std::size_t   kClassCount     = std::size(kAdmitted);
@@ -152,7 +152,7 @@ constexpr std::uint32_t kZiplineEnterEffect = 0x770;  // u8 bUseEnterEffect: set
 constexpr std::uint32_t kOneShotUseA     = 0x848;  // OneShotMove fields its register resets [UNKNOWN meaning]: logged
 constexpr std::uint32_t kOneShotUseB     = 0x86C;
 inline constexpr platform::PerBuild<std::uint32_t> kEnterSlot{0x718, 0x710};
-constexpr std::size_t   kVtableSpan = 0x750;  // the slots read below, the climb's unregister (1.005 +0x740) included
+constexpr std::size_t   kVtableSpan = 0x750;  // the slots read below, the climb's unregister (+0x740) included
 constexpr std::uint64_t kNoWeak = 0x00000000FFFFFFFFull;  // FWeakObjectPtr reset: index -1, serial 0
 
 // The wall-run move state's camera pick (research/RE-p2-traversal-classes.md): LeaderActionComp_FindWallRunActorEntered_Flag2A1(lac) returns the
