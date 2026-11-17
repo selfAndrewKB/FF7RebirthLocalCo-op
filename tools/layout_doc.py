@@ -47,7 +47,7 @@ ORDER = ['platform', 'facts', 'players', 'session', 'scopes', 'camera', 'input',
 OTHER = [
     ('setup/', 'the Multi Monitor Setup app'),
     ('tests/', 'host tests, run without the game'),
-    ('tools/', 'build lock, deploy, console client, regression runner, version matching'),
+    ('tools/', 'build lock, deploy, console client, regression runner, version matching, releases'),
 ]
 MISSING = '(no description: add one to tools/layout_doc.py)'
 WIDTH = 120

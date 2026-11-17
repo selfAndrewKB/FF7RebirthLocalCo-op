@@ -13,14 +13,15 @@ Local split-screen co-op for up to three players in FINAL FANTASY VII REBIRTH, a
 
 ## Installing
 
-1. Copy `LocalSplitScreen.dll` to `<game>\End\Binaries\Win64\ue4ss\Mods\LocalSplitScreen\dlls\main.dll`.
-2. Copy `MultiMonitorSetup.exe` into `Mods\LocalSplitScreen\`.
-3. Add `LocalSplitScreen : 1` to `Mods\mods.txt`, or put an empty `enabled.txt` in the mod's folder.
+1. Unpack UE4SS into `<game>\End\Binaries\Win64\`: `dwmapi.dll` beside the game's exe, and the `ue4ss` folder.
+2. Unpack the mod's zip into the same folder. It holds the mod, in `ue4ss\Mods\LocalSplitScreen\`, and replaces the
+   loader's `UE4SS-settings.ini` and `Mods\mods.txt` with its own copies, one line changed in each: UE4SS's GUI
+   console off (with it on, the game crashed at start) and the loader's bundled Lua split-screen mod off. Keep a copy of
+   those two files if you changed them.
+3. Optional, to play across multiple monitors: put `MultiMonitorSetup.exe` from the GitHub release in
+   `ue4ss\Mods\LocalSplitScreen\`.
 
-`tools/relaunch.ps1 -Deploy -Label <name>` copies both files and starts the game. The build also makes a `UE4SS.dll`,
-which is only there to link the mod against; the game keeps the Nexus one.
-
-The mod writes its settings to `LocalSplitScreen.ini` in its folder.
+The mod writes its settings to `LocalSplitScreen.ini` in that folder.
 
 ## Building
 
@@ -41,6 +42,11 @@ compiles UE4SS and takes a while; later ones only rebuild the mod. If CMake cann
 
 `tools/build_locked.ps1 -Tests` builds and runs the tests in one step, and makes parallel builds wait their turn.
 
+`tools/relaunch.ps1 -Deploy -Label <name>` installs a build: `LocalSplitScreen.dll` as
+`ue4ss\Mods\LocalSplitScreen\dlls\main.dll` and `MultiMonitorSetup.exe` in that folder. It quits a running game first,
+through the mod, and starts the game again. `-GameDir` names the game's `Win64` folder, `-Build` another DLL than the
+development build's.
+
 The default build is the development build. It adds a console on `127.0.0.1:4419` (`python tools/remote.py shell`;
 `help` lists the commands) and extra logging. The players' build leaves those out:
 
@@ -49,7 +55,8 @@ cmake -S . -B build-release -G "Visual Studio 17 2022" -DLSS_DEV_TOOLS=OFF
 python package.py
 ```
 
-`package.py` runs the tests, builds the players' build and zips the mod folder into `dist/`.
+`package.py` runs the tests on the development build (so `build` must be configured too), builds the players' build
+and zips the mod into `dist/`; `--nexus` leaves the setup app out.
 
 ## Game versions
 
@@ -58,6 +65,14 @@ its addresses are translated through the tables in `src/platform/builds/`, and o
 per-build values. Every address is checked against the game's code at start-up. If a check fails, that feature stays
 off and the log says why. On an unknown version everything that does not match stays off. `tools/version_match/README.md`
 covers adding a version.
+
+The mod tells the versions apart by the PE header of `ff7rebirth_.exe` (`src/platform/build_translation.cpp`). The
+Steam builds:
+
+| Version | `ff7rebirth_.exe` | SHA-256 |
+|---|---|---|
+| 1.005 | 124,317,952 bytes | `752807180C4ED919667FF0EC163046410187E873888DD75248E78AAA72E363DC` |
+| 1.004, deprecated | 126,263,624 bytes | `76BD4D539878A8759433F1CD7C7B47D5E3ABDA0EF41572A664D2D606A9F09DC8` |
 
 ## Project map
 
@@ -87,7 +102,7 @@ src/
   ue4ss_compat/     header shims for the UE4SS version the mod builds against
 setup/              the Multi Monitor Setup app
 tests/              host tests, run without the game
-tools/              build lock, deploy, console client, regression runner, version matching
+tools/              build lock, deploy, console client, regression runner, version matching, releases
 ```
 
 `tools/layout_doc.py` writes this map, and a test fails when it is out of date. Each module's header comment says what

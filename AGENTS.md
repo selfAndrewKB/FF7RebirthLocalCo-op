@@ -210,7 +210,10 @@ per-session cap: a cap once silenced the failure lines it shared a counter with.
 
 - Build: `.\tools\build_locked.ps1 -Tests` (the development DLL, the setup app and the host tests, under the build
   lock); README.md, Building, has the plain CMake steps. Every change builds clean and passes the tests.
-- The player's build is configured with `-DLSS_DEV_TOOLS=OFF`; `python package.py` builds it and makes the release zip.
+- The players' build is configured with `-DLSS_DEV_TOOLS=OFF`; `python package.py` builds it and makes the release
+  zip; `--nexus` makes the Nexus Mods one, without the setup app (Nexus holds uploads with programs in them for a
+  manual check). `python tools/release.py vX.Y.Z --notes "..."` makes both from a tag and creates the GitHub release
+  (the zip and the setup app attached) with the maintainer's own description, when the maintainer asks.
 - Regression: `python -I tools\regression\run.py` (`--build release` for the player's build), with the game closed and
   port 4419 free; no builds during a run.
 - **Review before every commit** by a separate reviewing agent, given the diff, this file and the question "what is

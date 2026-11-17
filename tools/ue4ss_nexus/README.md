@@ -53,13 +53,30 @@ sources over https. If the configure cannot pick a Rust toolchain for corrosion,
 - `Unreal-CMakeLists.txt`: the submodule's own CMake file from its later commit `f55ddc7` (sources unchanged), plus
   the `String` link.
 
+## The loader's files the mod's zip carries
+
+`config/` holds the Nexus zip's `UE4SS-settings.ini`, `Mods/mods.txt` and `LICENSE` unchanged. `package.py` packs the
+first two into the release zip under `ue4ss/`, so they replace the loader's on unpacking, with one line changed in each:
+
+- `GuiConsoleEnabled = 0`. The zip ships UE4SS's GUI window on (`GraphicsAPI = opengl`). With it on, a fresh install
+  crashed within a minute of start: an access violation in the OpenGL driver with `opengl32.dll` on the stack and no
+  game or mod frame (dump `crash_2026_11_17_20_25_39.dmp`). The maintainer's folder has always had it off.
+- `SplitScreenMod : 0`. The zip turns UE4SS's example Lua split-screen mod on (UE4SS's own template has it off). At
+  start it sets the engine's split-screen and gamepad-offset flags, and `Ctrl+Y` makes it create an engine player. The
+  regression passed with it on, GUI off, as the maintainer's folder does (15 of 16, the same failure); it stays off
+  because its key makes a second split screen.
+
+A fresh install made of the Nexus zip, the mod's zip and nothing else of ours (the zip's `VTableLayout.ini`, the mod's
+default settings) was checked that way. Update `config/` when the Nexus upload changes.
+
 ## The loader's own files
 
 The Nexus zip's `UE4SS_Signatures` (FName and FText constructors, GNatives, GUObjectArray) are the ones this loader
 needs: with the signature scripts written for `e31aaaa6`, `c0a8d4c` fails its scans ("did not return a valid address
 for FName::FName") and the game stops at start-up. Both game folders hold the zip's set since 2026-10-25 (the old set
 as `UE4SS_Signatures.e31aaaa6`); `VTableLayout.ini` and `UE4SS-settings.ini` stayed ours (the layout names the same
-slots). C++ mods built against `e31aaaa6` (KismetDebugger, EventViewer, TowerHider, the old split-screen mods) do not
+slots; the settings file is the older loader's, with more keys, the object array cache on and the GUI off), while a
+player runs the zip's layout and the settings file the mod's zip carries. C++ mods built against `e31aaaa6` (KismetDebugger, EventViewer, TowerHider, the old split-screen mods) do not
 load under this DLL (error 0x7f, a missing import) and are logged as "not installable"; they need a rebuild from
 this checkout's `cppmods` if wanted.
 
