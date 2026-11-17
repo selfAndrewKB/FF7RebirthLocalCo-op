@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.18)
 
-# LocalSplitScreen — two-player split-screen for FINAL FANTASY VII REBIRTH, as a UE4SS C++ mod.
+# LocalSplitScreen — split-screen co-op for FINAL FANTASY VII REBIRTH, as a UE4SS C++ mod.
 #
 # Design:   Rebirth/Documentation/SPLITSCREEN-ARCHITECTURE.md
 # Rules:    Rebirth/Documentation/SPLITSCREEN-REBUILD-PHILOSOPHY.md
@@ -485,7 +485,7 @@ lss_test(seat_state)
 lss_test(columns)
 # The facts rule (tests/facts_once.py): no engine address declared in two files, no per-build pair with equal halves.
 add_test(NAME facts_once COMMAND python "${CMAKE_CURRENT_SOURCE_DIR}/tests/facts_once.py" "${CMAKE_CURRENT_SOURCE_DIR}/src")
-# The README's Layout is generated from the modules' header comments (tools/layout_doc.py): out of date fails.
+# The README's project map is written by tools/layout_doc.py: out of date fails.
 add_test(NAME layout_doc COMMAND python -I "${CMAKE_CURRENT_SOURCE_DIR}/tools/layout_doc.py" --check)
 
 get_property(LSS_TEST_TARGETS GLOBAL PROPERTY LSS_TEST_TARGETS)

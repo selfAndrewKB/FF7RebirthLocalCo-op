@@ -175,8 +175,8 @@ per-session cap: a cap once silenced the failure lines it shared a counter with.
 - **Delete what has served.** A one-shot probe comes out in the change that uses its answer. Dead code is deleted, not
   kept "just in case". A development watch is not a one-shot probe: it stays.
 - **Nothing kept by hand that restates the code.** Generate it or drop it. The settings file is written by the mod from
-  `src/platform/settings.h`; the README's Layout section is generated from each module's first comment by
-  `tools/layout_doc.py`, and a test says when it is out of date.
+  `src/platform/settings.h`; the README's project map is written by `tools/layout_doc.py`, and a test says when
+  it is out of date.
 - **New features ship on by default,** with their logging. Options go in the settings table, never in ad-hoc toggles.
 - **Comments say what the code does and why,** in plain sentences that stay true as the code ages. A comment has no
   dates, version numbers or history ("used to", "now", "until"), no quotes of or credit to people, no mention of the
