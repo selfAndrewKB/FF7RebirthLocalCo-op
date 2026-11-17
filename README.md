@@ -911,8 +911,8 @@ cmake --build build-release --config Game__Shipping__Win64 --target LocalSplitSc
 
 The player's build keeps the settings table's command entries, which the Co-op page sets its rows through; the console
 and every other command are left out. `python package.py` runs the host tests, builds the player's build and zips it
-into `dist/` (`dlls/main.dll`, the setup app, `enabled.txt`, `PLAYERS.md` as its README); `--no-build` zips what is
-built. `PLAYERS.md` is the players' guide.
+into `dist/` (`dlls/main.dll`, the setup app, `enabled.txt`, the licence and its exception); `--no-build` zips what is
+built.
 
 ## Installing
 
