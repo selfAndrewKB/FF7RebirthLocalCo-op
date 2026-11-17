@@ -17,7 +17,7 @@ HERE = pathlib.Path(__file__).resolve().parents[1]
 REMAKE = HERE.parents[1] / "Remake" / "LocalSplitScreen"
 
 # The Remake commit the copies were taken from (the adapted files are compared with their twins as of this commit).
-REMAKE_COMMIT = "9dcada2"
+REMAKE_COMMIT = "f1a1681"
 
 # Kept identical to Remake's file of the same path.
 IDENTICAL = [
