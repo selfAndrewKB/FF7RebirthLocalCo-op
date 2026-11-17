@@ -39,48 +39,47 @@ namespace {
 using Addr                       = platform::PerBuild<std::uintptr_t>;
 constexpr std::uintptr_t kIdaBase = 0x140000000;
 
-constexpr Addr kSubmitSlot{0x14697C560, 0x1468018F8};  // FD3D12CommandListManager vtable [1] (.rdata)
-constexpr Addr kSubmitFn{0x140D00E88, 0x140AE0798};    // what it holds
-constexpr Addr kSignalSlot{0x14697C0B0, 0x1468013C8};  // context vtable +0x108: signal a GPU fence, no flush
-constexpr Addr kSignalFn{0x140A4B804, 0x140ADFC1C};
-constexpr Addr kHintVtable{facts::kSubmitCommandsHintVTable, 0x145AD4AB0};  // FRHICommandSubmitCommandsHint
-constexpr Addr kHintExecute{facts::kSubmitCommandsHintExecute, 0x140AE3E90};
-constexpr Addr kBatchingMode{0x1470B9E34, 0x146EECFAC};       // D3D12.CommandListBatchingMode (int)
-constexpr Addr kNiagaraHint{0x1492AF9C4, 0x1490E8C48};        // fx.NiagaraGpuSubmitCommandHint (int)
-constexpr platform::PerBuild<std::uint32_t> kPendingNum{0xD8, 0x88};  // device: PendingCommandLists.Num
+constexpr Addr kSubmitSlot{0x1468018F8, 0x14697C560};  // FD3D12CommandListManager vtable [1] (.rdata)
+constexpr Addr kSubmitFn{0x140AE0798, 0x140D00E88};    // what it holds
+constexpr Addr kSignalSlot{0x1468013C8, 0x14697C0B0};  // context vtable +0x108: signal a GPU fence, no flush
+constexpr Addr kSignalFn{0x140ADFC1C, 0x140A4B804};
+constexpr Addr kHintVtable{facts::kSubmitCommandsHintVTable, 0x146602920};  // FRHICommandSubmitCommandsHint
+constexpr Addr kHintExecute{facts::kSubmitCommandsHintExecute, 0x140D00988};
+constexpr Addr kBatchingMode{0x146EECFAC, 0x1470B9E34};       // D3D12.CommandListBatchingMode (int)
+constexpr Addr kNiagaraHint{0x1490E8C48, 0x1492AF9C4};        // fx.NiagaraGpuSubmitCommandHint (int)
+constexpr platform::PerBuild<std::uint32_t> kPendingNum{0x88, 0xD8};  // device: PendingCommandLists.Num
 
 // L1: the return address in the function that called the submit.
-constexpr Addr kL1FlushSingle{0x140D00CA9, 0x140AE32DE};  // FlushCommands
-constexpr Addr kL1FlushMerged{0x140D00D5A, 0x140AE338F};  // FlushCommands, with the device's pending lists
-constexpr Addr kL1HintSingle{0x140D00A9F, 0x140AE351A};   // RHISubmitCommandsHint
-constexpr Addr kL1HintMerged{0x140D00B5A, 0x140AE35C7};
-constexpr Addr kL1Batch{0x14090D336, 0x140AE0A02};        // SubmitAndFreeContextContainer
-// A single list on the second copy manager (device +0x170), closed then submitted with wait: the return address inside
-// 1.005: found live (called up to once per frame; the build table has it). Not identified in 1.004
-// (0: logged as unknown there).
-constexpr Addr kL1CopyWait{0, 0x140ADFCBD};
+constexpr Addr kL1FlushSingle{0x140AE32DE, 0x140D00CA9};  // FlushCommands
+constexpr Addr kL1FlushMerged{0x140AE338F, 0x140D00D5A};  // FlushCommands, with the device's pending lists
+constexpr Addr kL1HintSingle{0x140AE351A, 0x140D00A9F};   // RHISubmitCommandsHint
+constexpr Addr kL1HintMerged{0x140AE35C7, 0x140D00B5A};
+constexpr Addr kL1Batch{0x140AE0A02, 0x14090D336};        // SubmitAndFreeContextContainer
+// A single list on the second copy manager (device +0x170), closed then submitted with wait: the return address inside,
+// found live (called up to once per frame). Not identified in 1.004 (0: logged as unknown there).
+constexpr Addr kL1CopyWait{0x140ADFCBD, 0};
 
 // L2 under RHISubmitCommandsHint.
 // Every hint node (Execute tail-jumps), from either of the walker's node calls: the whole walker's range (1.005 also
 // calls nodes through a cached `call r9`; found live).
-constexpr Addr kWalkerBegin{0x140812430, 0x140873400};
-constexpr Addr kWalkerEnd{0x1408127C1, 0x140874BCF};
-constexpr Addr kL2BeginTransitions{0x1428EE3FA, 0x14252A0F6};
-constexpr Addr kL2EndTransitions{0x1428EE531, 0x14087108E};
-constexpr Addr kL2FenceFlush{0x14162919F, 0x141674373};
+constexpr Addr kWalkerBegin{0x140873400, 0x140812430};
+constexpr Addr kWalkerEnd{0x140874BCF, 0x1408127C1};
+constexpr Addr kL2BeginTransitions{0x14252A0F6, 0x1428EE3FA};
+constexpr Addr kL2EndTransitions{0x14087108E, 0x1428EE531};
+constexpr Addr kL2FenceFlush{0x141674373, 0x14162919F};
 // L2 under FlushCommands.
-constexpr Addr kL2Present{0x140DF5DC2, 0x140ADDF5A};
-constexpr Addr kL2Dlss{0x14137E695, 0x141344C75};
-constexpr Addr kL2BeginFrame{0x140D01008, 0x140A495A0};
-constexpr Addr kL2EndFrameGap{0x140D01211, 0x140A497A9};
-constexpr Addr kL2EndFrameFlush{0x140D012A7, 0x140A49843};
-constexpr Addr kL2QueryResult{0x140840051, 0x1407887ED};
-constexpr Addr kL2FlushWaitAll[] = {{0x14248C60C, 0x142237274}, {0x14248C630, 0x142237298}};
-constexpr Addr kL2Profiler[]     = {{0x142A4D240, 0x1426BABD8}, {0x142A4D45A, 0x1426BADF2}};
+constexpr Addr kL2Present{0x140ADDF5A, 0x140DF5DC2};
+constexpr Addr kL2Dlss{0x141344C75, 0x14137E695};
+constexpr Addr kL2BeginFrame{0x140A495A0, 0x140D01008};
+constexpr Addr kL2EndFrameGap{0x140A497A9, 0x140D01211};
+constexpr Addr kL2EndFrameFlush{0x140A49843, 0x140D012A7};
+constexpr Addr kL2QueryResult{0x1407887ED, 0x140840051};
+constexpr Addr kL2FlushWaitAll[] = {{0x142237274, 0x14248C60C}, {0x142237298, 0x14248C630}};
+constexpr Addr kL2Profiler[]     = {{0x1426BABD8, 0x142A4D240}, {0x1426BADF2, 0x142A4D45A}};
 constexpr std::uintptr_t kL2Upload1004[] = {0x140DF536E, 0x14248A548, 0x1429D75D2, 0x142AC6E79, 0x14493422C,
                                             0x144935457, 0x144935842, 0x144935BDC, 0x144937ABC, 0x144937FAA,
                                             0x1449384F8, 0x144938CAE, 0x144939A9B};
-constexpr std::uintptr_t kL2Upload1005[] = {0x140ADEA03, 0x140AE1C55, 0x14262C2AC, 0x142730BE6, 0x1446B76EF,
+constexpr std::uintptr_t kL2Upload[] = {0x140ADEA03, 0x140AE1C55, 0x14262C2AC, 0x142730BE6, 0x1446B76EF,
                                             0x1446C985A, 0x1446CA8A4, 0x1446CAC91, 0x1446CB02F, 0x1446CCF98,
                                             0x1446CD474, 0x1446CD9C8, 0x1446CE163, 0x1446CEF5D};
 
@@ -368,10 +367,10 @@ struct HintSite
 };
 
 std::array<HintSite, 4> g_hints = {{
-    {L"SE RDG passes", {0x14251391E, 0x1427CE170}, reinterpret_cast<const void*>(&HintThunk<1>)},
-    {L"Niagara", {0x140CF7344, 0x140C8269E}, reinterpret_cast<const void*>(&HintThunk<2>)},
-    {L"async compute", {0x14494ED29, 0x1446E75A7}, reinterpret_cast<const void*>(&HintThunk<3>)},
-    {L"ME async end", {0x1424D183B, 0x1447DE481}, reinterpret_cast<const void*>(&HintThunk<4>)},
+    {L"SE RDG passes", {0x1427CE170, 0x14251391E}, reinterpret_cast<const void*>(&HintThunk<1>)},
+    {L"Niagara", {0x140C8269E, 0x140CF7344}, reinterpret_cast<const void*>(&HintThunk<2>)},
+    {L"async compute", {0x1446E75A7, 0x14494ED29}, reinterpret_cast<const void*>(&HintThunk<3>)},
+    {L"ME async end", {0x1447DE481, 0x1424D183B}, reinterpret_cast<const void*>(&HintThunk<4>)},
 }};
 
 /// Points one producer's `lea rax,[hint vtable]` at a copy whose slot 0 is its thunk. The rel32 must lie in one
@@ -469,11 +468,11 @@ void FillLive(std::uintptr_t base) noexcept
         v.flushWaitAll[i] = LiveOf(kL2FlushWaitAll[i]);
         v.profiler[i]     = LiveOf(kL2Profiler[i]);
     }
-    const bool v1005 = platform::RunningBuild() == platform::BuildIndex::V1005;
-    v.uploadCount    = v1005 ? std::size(kL2Upload1005) : std::size(kL2Upload1004);
+    const bool v1004 = platform::RunningBuild() == platform::BuildIndex::V1004;
+    v.uploadCount    = v1004 ? std::size(kL2Upload1004) : std::size(kL2Upload);
     for (std::size_t i = 0; i < v.uploadCount; ++i)
     {
-        v.upload[i] = LiveOf(v1005 ? kL2Upload1005[i] : kL2Upload1004[i]);
+        v.upload[i] = LiveOf(v1004 ? kL2Upload1004[i] : kL2Upload[i]);
     }
     v.pendingNum = kPendingNum;
 }

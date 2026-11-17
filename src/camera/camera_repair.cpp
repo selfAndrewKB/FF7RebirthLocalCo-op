@@ -34,9 +34,9 @@ using Clock = std::chrono::steady_clock;
 // AEndPlayerCameraManager::ResetCameraToField_Cut: the camera-cut bit, the collision and occlusion state
 // cleared, the operators reset, and the Reset module re-armed on the primary camera's current operator. 31 game
 // callers (player warps, fast travel). research/RE-p2-chocobo-warp-camera.md.
-constexpr std::uint8_t kResetBytes[] = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0xD8,
-                                        0xAE, 0x80, 0x00, 0x48, 0x2B, 0xE0, 0x8A, 0xD9};
-constexpr platform::FunctionFact kReset{L"PrimaryPCM_ResetCameraToField", 0x1418A404C, kResetBytes};
+constexpr std::uint8_t kResetBytes[] = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0xB0,
+                                        0x85, 0xD3, 0x00, 0x48, 0x2B, 0xE0, 0x8A, 0xD9};
+constexpr platform::FunctionFact kReset{L"PrimaryPCM_ResetCameraToField", 0x1414335C4, kResetBytes};
 using ResetFn = void (*)(std::uint8_t force);
 
 // The Field operator (camera manager +0x2CB0) and its modules.

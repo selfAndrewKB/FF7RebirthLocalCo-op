@@ -28,8 +28,8 @@ namespace {
 // The game state through the game's own getter, which also checks its class (null otherwise): it
 // reads g_AEndGameMode +0x288, takes no arguments, and changes nothing.
 constexpr std::uint8_t   kGetEndGameStateBytes[] = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8,
-                                                    0x70, 0x0A, 0x68, 0x01, 0x48, 0x2B, 0xE0, 0x48};
-constexpr platform::FunctionFact kGetEndGameState{L"the EndGameState getter", 0x140A2E4B4, kGetEndGameStateBytes};
+                                                    0x24, 0xAA, 0x8B, 0x01, 0x48, 0x2B, 0xE0, 0x48};
+constexpr platform::FunctionFact kGetEndGameState{L"the EndGameState getter", 0x1408B1150, kGetEndGameStateBytes};
 constexpr std::uint32_t  kState    = 0x278;  // uint8: the EndGameState state (+0x279 is its history)
 constexpr std::uint32_t  kMenuKind = 0x3BC;  // uint8: EEndSystemPauseMenuKind
 
@@ -48,28 +48,28 @@ constexpr std::int32_t kSkippableSceneId = 12;
 
 // The job board: EndUISystem's slot +0x1E8 (a static) points to the board's 8-byte FWeakObjectPtr;
 // the board's script command keeps running while the game's FWeakObjectPtr_IsValid says it is valid.
-constexpr std::uintptr_t kJobBoardSlot          = 0x1493498C8;
-constexpr std::uint8_t   kWeakIsValidBytes[]    = {0x44, 0x8B, 0x49, 0x04, 0x45, 0x33, 0xC0, 0x45,
-                                                   0x85, 0xC9, 0x74, 0x4F, 0x8B, 0x01, 0x85, 0xC0};
-constexpr platform::FunctionFact kWeakIsValid{L"FWeakObjectPtr_IsValid", 0x1418EB3D4, kWeakIsValidBytes};
+constexpr std::uintptr_t kJobBoardSlot          = 0x149186338;
+constexpr std::uint8_t   kWeakIsValidBytes[]    = {0x44, 0x8B, 0x41, 0x04, 0x45, 0x85, 0xC0, 0x74,
+                                                   0x53, 0x8B, 0x01, 0x85, 0xC0, 0x78, 0x4D, 0x3B};
+constexpr platform::FunctionFact kWeakIsValid{L"FWeakObjectPtr_IsValid", 0x140834A60, kWeakIsValidBytes};
 
 // The pause-menu family (research/RE-p2-menu-census.md): UEndMenuAPI::IsPauseMenuClosed, the game's own
 // EndUI_NoBlockingWidgetAlive thunk (bool fn(), true = closed). It only reads; its EndUISystem__Get would build the UI
 // system if it did not exist, so it is called only once the system's slot 27 (written by its constructor) is set.
 constexpr std::uint8_t   kPauseMenuClosedBytes[] = {0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8};
-constexpr platform::FunctionFact kPauseMenuClosed{L"UEndMenuAPI::IsPauseMenuClosed", 0x140806908,
+constexpr platform::FunctionFact kPauseMenuClosed{L"UEndMenuAPI::IsPauseMenuClosed", 0x1408A5B6C,
                                                   kPauseMenuClosedBytes};
-constexpr std::uintptr_t kUiSlot27               = 0x1493497B8;  // EndUISystem[27], the pause-menu widget's holder
+constexpr std::uintptr_t kUiSlot27               = 0x149186228;  // EndUISystem[27], the pause-menu widget's holder
 
 // The script menus with their own EndUISystem slot (E2): each static points at a heap holder; the weak pointers and
 // fields below are the ones the game's own "still open" tests read. FWeakObjectPtr::Get for the widget fields.
-constexpr std::uintptr_t kUiSlot54 = 0x149349890;  // jukebox: weak +0
-constexpr std::uintptr_t kUiSlot56 = 0x1493498A0;  // chocobo carriage: byte +0x20 = open (the widget is reused)
-constexpr std::uintptr_t kUiSlot57 = 0x1493498A8;  // point warp: weak +0, open while the widget's i32 +0x3D8 != 0
-constexpr std::uintptr_t kUiSlot68 = 0x149349900;  // Queen's Blood NPC deck: weak +0 (reused; z +0x2A8 != -1)
-constexpr std::uintptr_t kUiSlot72 = 0x149349920;  // chocobo stable +0, race menu +8 (byte +0x3D8 5 = done), select +0x10
-constexpr std::uintptr_t kUiSlot78 = 0x149349950;  // Queen's Blood card challenge: weak +0
-constexpr std::uintptr_t kUiSlot82 = 0x149349970;  // 3D Brawler select +0, winner +8 (no game test; z +0x2A8 != -1)
+constexpr std::uintptr_t kUiSlot54 = 0x149186300;  // jukebox: weak +0
+constexpr std::uintptr_t kUiSlot56 = 0x149186310;  // chocobo carriage: byte +0x20 = open (the widget is reused)
+constexpr std::uintptr_t kUiSlot57 = 0x149186318;  // point warp: weak +0, open while the widget's i32 +0x3D8 != 0
+constexpr std::uintptr_t kUiSlot68 = 0x149186370;  // Queen's Blood NPC deck: weak +0 (reused; z +0x2A8 != -1)
+constexpr std::uintptr_t kUiSlot72 = 0x149186390;  // chocobo stable +0, race menu +8 (byte +0x3D8 5 = done), select +0x10
+constexpr std::uintptr_t kUiSlot78 = 0x1491863C0;  // Queen's Blood card challenge: weak +0
+constexpr std::uintptr_t kUiSlot82 = 0x1491863E0;  // 3D Brawler select +0, winner +8 (no game test; z +0x2A8 != -1)
 constexpr std::uint32_t  kCarriageShown  = 0x20;
 constexpr std::uint32_t  kWidgetState    = 0x3D8;
 constexpr std::uint32_t  kWidgetZOrder   = 0x2A8;  // -1 once the game's RemoveFromParent took it off its overlay
@@ -112,9 +112,9 @@ constexpr std::uint32_t  kEncounterState = 0x3D558;
 // EndStateMachine's current row (+0x18, into a static table in the exe; the state id is the row's first i32: 2 load ..
 // 7 play .. 8 result .. 11 retry or finish, 0 done, 1 unused; research/RE-p2-minigames.md); the G-Bike manager actor's weak pointer (a
 // static FWeakObjectPtr).
-constexpr std::uintptr_t kFrogManager  = 0x14939BCC0;
+constexpr std::uintptr_t kFrogManager  = 0x1491D84E8;
 constexpr std::uint32_t  kFrogStateRow = 0x18;
-constexpr std::uintptr_t kGBikeManager = 0x1470C6CF0;
+constexpr std::uintptr_t kGBikeManager = 0x146EF9F10;
 // The minigame-only maps (the game state's location): views/whole_screen_rules.h.
 
 // The game state's current location (an 8-byte FName; +0x30C requested, +0x314 previous) and the
@@ -124,11 +124,11 @@ constexpr std::uint32_t  kLocation  = 0x304;  // the title's name: views/whole_s
 // The cutscene manager (a pointer global; the game creates the manager on first use, so the check
 // below is called only once it exists) and the game's own "a sequence of type 0 or 2 plays". The
 // check takes no arguments, writes nothing, and walks the manager's list on the game thread.
-constexpr std::uintptr_t kCutsceneManager     = 0x1490FEB30;
+constexpr std::uintptr_t kCutsceneManager     = 0x148F32308;
 constexpr std::uint32_t  kSkipping            = 0xA60;  // uint8: a cutscene skip under way
-constexpr std::uint8_t   kIsAnyPlayingBytes[] = {0xB8, 0x38, 0x00, 0x00, 0x00, 0xE8, 0x7A, 0xDA,
-                                                 0x65, 0x01, 0x48, 0x2B, 0xE0, 0xE8, 0x32, 0x00};
-constexpr platform::FunctionFact kIsAnyPlaying{L"the cutscene manager's IsAnyPlaying", 0x140A514AC, kIsAnyPlayingBytes};
+constexpr std::uint8_t   kIsAnyPlayingBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x18, 0x48, 0x89, 0x6C,
+                                                 0x24, 0x20, 0x56, 0x57, 0x41, 0x56, 0xB8, 0x30};
+constexpr platform::FunctionFact kIsAnyPlaying{L"the cutscene manager's IsAnyPlaying", 0x140A63A00, kIsAnyPlayingBytes};
 
 using GetEndGameStateFn = void* (*)();
 using IsAnyPlayingFn    = bool (*)();

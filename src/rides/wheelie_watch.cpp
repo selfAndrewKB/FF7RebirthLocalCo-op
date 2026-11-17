@@ -72,9 +72,9 @@ constexpr std::int32_t  kTableEntries    = 15;
 // brake as the move state's slot 11 writes them.
 using facts::kScooterCharacterVTable;
 // 1.005 moved these Square Enix character fields by +0x20 (RE-1005-player-two.md).
-constexpr platform::PerBuild<std::uint32_t> kScooterRider    = {0x2210, 0x2230};
+constexpr platform::PerBuild<std::uint32_t> kScooterRider    = {0x2230, 0x2210};
 using facts::kScooterRidden;
-constexpr platform::PerBuild<std::uint32_t> kScooterParked   = {0x2319, 0x2339};
+constexpr platform::PerBuild<std::uint32_t> kScooterParked   = {0x2339, 0x2319};
 using facts::kScooterExcluded;
 using facts::kCharacterControlHolder;
 constexpr std::uint32_t  kHolderAccel      = 0x2C0;

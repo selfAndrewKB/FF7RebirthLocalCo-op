@@ -24,20 +24,20 @@ namespace {
 // Facts read from the database (research/RE-p2-command-menu.md; this build).
 // The chooser's HP call: Party_GetHpByType (facts/party.h).
 using facts::kPartyHp;
-constexpr std::uintptr_t kChooserHpCall = 0x141836901;
+constexpr std::uintptr_t kChooserHpCall = 0x141909E45;
 // FieldCommandCtrl_IsMemberCommandable(ctrl, ordinal, flag): gated at its first instruction, which
 // covers its five callers (one call site straddles a code block; battle/command_rules_code.h).
 constexpr std::uint8_t kCommandableBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x74, 0x24, 0x10, 0x44, 0x88, 0x44,
-                                              0x24, 0x18, 0x57, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0x02, 0x7B, 0x23, 0x01};
-constexpr platform::FunctionFact kCommandable{L"FieldCommandCtrl_IsMemberCommandable", 0x140E77414, kCommandableBytes};
-constexpr std::uintptr_t         kCommandableResume = 0x140E77419;  // after the replaced instruction
+                                              0x24, 0x18, 0x57, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0xD6, 0x70, 0x8D, 0x01};
+constexpr platform::FunctionFact kCommandable{L"FieldCommandCtrl_IsMemberCommandable", 0x140894A90, kCommandableBytes};
+constexpr std::uintptr_t         kCommandableResume = 0x140894A95;  // after the replaced instruction
 constexpr std::int32_t           kMenuOrdinals      = 8;            // command-menu ordinals searched for the member
 // Party_GetCommandOrdinalType(unused, ordinal): the member type at a command-menu ordinal.
 constexpr std::uint8_t kOrdinalTypeBytes[] = {0x48, 0x8B, 0xC4, 0x48, 0x89, 0x58, 0x08, 0x48, 0x89, 0x70, 0x18, 0x48, 0x89,
                                               0x78, 0x20, 0x89, 0x50, 0x10, 0x55, 0x41, 0x54, 0x41, 0x55, 0x41, 0x56, 0x41,
-                                              0x57, 0x48, 0x8B, 0xEC, 0xB8, 0x30, 0x00, 0x00, 0x00, 0xE8, 0x6C, 0xFD, 0x66,
+                                              0x57, 0x48, 0x8B, 0xEC, 0xB8, 0x30, 0x00, 0x00, 0x00, 0xE8, 0x70, 0xC4, 0x7B,
                                               0x01};
-constexpr platform::FunctionFact kOrdinalType{L"Party_GetCommandOrdinalType", 0x140A3F19C, kOrdinalTypeBytes};
+constexpr platform::FunctionFact kOrdinalType{L"Party_GetCommandOrdinalType", 0x1409AF6E8, kOrdinalTypeBytes};
 
 using HpFn          = std::uint32_t (*)(std::uint8_t type);
 using OrdinalTypeFn = std::uint8_t (*)(void* unused, std::int32_t ordinal);

@@ -662,15 +662,16 @@ bool PlaceSeatHolders(const platform::GameImage& image) noexcept
     bool       installed = false;
     if (installAt)
     {
-        // 1.005's entry instruction crosses a 16-byte block: the redirect goes on the second (the first is a store
-        // into the caller's home area, and no branch lands on the second; research/RE-p2-traversal-climb-holder.md).
-        installed = platform::RunningBuild() == platform::BuildIndex::V1005
-                        ? g_installEntry.InstallAtSecondInstruction(*installAt, install.first(kInstallFirst),
-                                                                    install.subspan(kInstallFirst, kInstallSecond),
-                                                                    reinterpret_cast<std::uintptr_t>(&HolderInstall))
-                        : g_installEntry.Install(*installAt,
+        // The entry instruction crosses a 16-byte block: the redirect goes on the second (the first is a store into
+        // the caller's home area, and no branch lands on the second; research/RE-p2-traversal-climb-holder.md). In
+        // 1.004 the entry fits one block.
+        installed = platform::RunningBuild() == platform::BuildIndex::V1004
+                        ? g_installEntry.Install(*installAt,
                                                  image.EntryInstruction(kInstall.address, install.first(kInstallFirst)),
-                                                 reinterpret_cast<std::uintptr_t>(&HolderInstall));
+                                                 reinterpret_cast<std::uintptr_t>(&HolderInstall))
+                        : g_installEntry.InstallAtSecondInstruction(*installAt, install.first(kInstallFirst),
+                                                                    install.subspan(kInstallFirst, kInstallSecond),
+                                                                    reinterpret_cast<std::uintptr_t>(&HolderInstall));
     }
     const auto getFirst = kGetModule.entryBytes.first(kGetModuleFirst);
     const auto getAt    = platform::FindFunction(image, kGetModule);

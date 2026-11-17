@@ -38,18 +38,18 @@ namespace {
 // combination definitions); the battle tick runs each combination's mode every tick, whose leader read runs once, when
 // both enemies are ready. A combination entry holds the enemies as FWeakObjectPtrs at +0x30 + 8 * index, the indices
 // (u8) at +0x54 (A) and +0x55 (B).
-constexpr std::uintptr_t kRegisterPairCall = 0x14336B027;  // in EnemyCombination_ResolvePairByRowAndRegister
-constexpr std::uintptr_t kRegisterPair     = 0x14341EC20;  // (?, enemy A, enemy B, request*, target*): 5 integer args
-constexpr std::uintptr_t kStartLeaderCall  = 0x1433892CD;  // in EnemyCombination_Start_TargetModeLeader; crosses both
-constexpr std::uintptr_t kMode1LeaderCall  = 0x1433883FC;  // crosses both
-constexpr std::uintptr_t kMode2LeaderCall  = 0x14338759A;
+constexpr std::uintptr_t kRegisterPairCall = 0x143080383;  // in EnemyCombination_ResolvePairByRowAndRegister
+constexpr std::uintptr_t kRegisterPair     = 0x14313A7CC;  // (?, enemy A, enemy B, request*, target*): 5 integer args
+constexpr std::uintptr_t kStartLeaderCall  = 0x14309FF7D;  // in EnemyCombination_Start_TargetModeLeader; crosses both
+constexpr std::uintptr_t kMode1LeaderCall  = 0x14309EF2C;  // crosses both
+constexpr std::uintptr_t kMode2LeaderCall  = 0x14309E0BA;
 // Both modes, both builds: void(manager, entry, float dt in xmm2); first instruction mov [rsp+18h],rbx.
 constexpr std::uint8_t kModeBytes[]  = {0x48, 0x89, 0x5C, 0x24, 0x18, 0x48, 0x89, 0x4C,
                                         0x24, 0x08, 0x55, 0x56, 0x57, 0x41, 0x54, 0x41};
 // EnemyCombination_Mode2_TargetLeader
-constexpr platform::FunctionFact kMode2{L"EnemyCombination_Mode2_TargetLeader", 0x1433871F4, kModeBytes};
+constexpr platform::FunctionFact kMode2{L"EnemyCombination_Mode2_TargetLeader", 0x14309DD10, kModeBytes};
 // EnemyCombination_Mode1_TargetLeaderElseOther
-constexpr platform::FunctionFact kMode1{L"EnemyCombination_Mode1_TargetLeaderElseOther", 0x143388060, kModeBytes};
+constexpr platform::FunctionFact kMode1{L"EnemyCombination_Mode1_TargetLeaderElseOther", 0x14309EB90, kModeBytes};
 constexpr std::size_t  kModeFirst    = 5;
 constexpr std::uint32_t kEntryEnemies = 0x30, kEntryIndexA = 0x54, kEntryIndexB = 0x55;
 
@@ -57,37 +57,37 @@ constexpr std::uint32_t kEntryEnemies = 0x30, kEntryIndexA = 0x54, kEntryIndexB 
 // BossDmgPhase_TryTimedReaction each frame once its timer runs out, until it fires; the leader read comes after every
 // early return, so it runs once per phase change. The slot is the function's only reference.
 constexpr std::uint8_t kBossTickBytes[] = {0x40, 0x53, 0xB8, 0x30, 0x00, 0x00, 0x00, 0xE8,
-                                           0xE4, 0x55, 0x2F, 0x01, 0x48, 0x2B, 0xE0, 0xC5};
-constexpr platform::SlotFact kBossTickSlot{L"the BossBase controller's actor Tick slot (+0x468)", 0x1457DB468,
-                                           {L"BossCtrl_Vt468_Tick_TimedDmgPhase", 0x140DB9940, kBossTickBytes}};
-constexpr std::uintptr_t     kPhaseLeaderCall = 0x14319BA3C;  // in BossDmgPhase_TryTimedReaction; crosses on 1.004
+                                           0x58, 0x6E, 0x5F, 0x01, 0x48, 0x2B, 0xE0, 0xC5};
+constexpr platform::SlotFact kBossTickSlot{L"the BossBase controller's actor Tick slot (+0x468)", 0x145676E20,
+                                           {L"BossCtrl_Vt468_Tick_TimedDmgPhase", 0x140B74D1C, kBossTickBytes}};
+constexpr std::uintptr_t     kPhaseLeaderCall = 0x142EA1258;  // in BossDmgPhase_TryTimedReaction; crosses on 1.004
 // E5 the damage-phase gate a boss re-runs once at the end of a party summon's cut scene (game thread), with the leader
 // as the attacker. (ctrl); the slot is its only reference.
 constexpr std::uint8_t kAfterSummonBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x57, 0xB8, 0x30,
-                                              0x02, 0x00, 0x00, 0xE8, 0x70, 0xB9, 0x84, 0x00};
+                                              0x02, 0x00, 0x00, 0xE8, 0x7C, 0xAD, 0x71, 0x01};
 constexpr platform::SlotFact kAfterSummonSlot{
-    L"the BossBase controller's after-summon slot (+0xAB0)", 0x1457DBAB0,
-    {L"BossCtrl_VtAB0_AfterSummonCutscene_DmgPhaseAsLeader", 0x1418635B0, kAfterSummonBytes}};
-constexpr std::uintptr_t kAfterSummonLeaderCall = 0x1418635D3;
+    L"the BossBase controller's after-summon slot (+0xAB0)", 0x145677468,
+    {L"BossCtrl_VtAB0_AfterSummonCutscene_DmgPhaseAsLeader", 0x140A50DF4, kAfterSummonBytes}};
+constexpr std::uintptr_t kAfterSummonLeaderCall = 0x140A50E17;
 
 // E6 the reaction player-type filter, char(manager, causer, event info, lists): its only three calls (the causer in
 // rdx; only al is live after each), and its leader read, compared only for equality with the causer.
-constexpr std::uintptr_t kFilter           = 0x141464EFC;  // EnemyTrans_MatchEntry_ReactionPlayerType_LeaderPtr
+constexpr std::uintptr_t kFilter           = 0x140DBF03C;  // EnemyTrans_MatchEntry_ReactionPlayerType_LeaderPtr
 constexpr std::size_t    kFilterCalls      = 3;
 constexpr std::uintptr_t kFilterCall[kFilterCalls] = {
-    0x141464E47,  // EnemyTrans_MatchEntry_Wrapper (guard / avoid)
-    0x142A4F599,  // EnemyTrans_TryTransitionsForCharacter_A (RequestReactionCounter...); crosses on 1.005
-    0x14319ACC2,  // EnemyTrans_TryTransitionsForCharacter_B
+    0x140DBEFD3,  // EnemyTrans_MatchEntry_Wrapper (guard / avoid)
+    0x142763BFD,  // EnemyTrans_TryTransitionsForCharacter_A (RequestReactionCounter...); crosses on 1.005
+    0x142E9FF72,  // EnemyTrans_TryTransitionsForCharacter_B
 };
-constexpr std::uintptr_t kFilterLeaderCall = 0x141464FFC;  // crosses on 1.004
+constexpr std::uintptr_t kFilterLeaderCall = 0x140DBF140;  // crosses on 1.004
 
 // E7 Reno's mine: RenoMine_SetState (15 callers; no usable entry) first calls the mine's part getter right after its
 // state gate, then (with no target) reads the leader's TYPE and dereferences that type's character without a null
 // check. The getter call records the mine; the read takes it. Never redirect the state-13/14 test call between them
 // (its caller keeps using rcx).
-constexpr std::uintptr_t kMinePartCall = 0x1431B9490;  // crosses on 1.005
-constexpr std::uintptr_t kMinePart     = 0x1431B46E8;  // u64(mine)
-constexpr std::uintptr_t kMineTypeCall = 0x1431B9664;  // call UEndPartyAPI_GetPartyLeaderType, u8()
+constexpr std::uintptr_t kMinePartCall = 0x142EC035C;  // crosses on 1.005
+constexpr std::uintptr_t kMinePart     = 0x142EBB738;  // u64(mine)
+constexpr std::uintptr_t kMineTypeCall = 0x142EC0530;  // call UEndPartyAPI_GetPartyLeaderType, u8()
 using facts::kGetPartyLeaderType;
 // The mine: u8 state at +0x4F0 (15 or more: none); +0x10 an object whose +0x10 is an FWeakObjectPtr to its AI controller.
 constexpr std::uint32_t kMineState = 0x4F0, kMineObject = 0x10, kMineObjectController = 0x10;
@@ -101,17 +101,17 @@ constexpr std::uint8_t kArmsBeginBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 
                                             0x24, 0x10, 0x56, 0x57, 0x41, 0x54, 0x41, 0x56};
 constexpr std::uint8_t kArmsTickBytes[]  = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x74,
                                             0x24, 0x10, 0x57, 0xB8, 0x30, 0x00, 0x00, 0x00};
-constexpr platform::SlotFact kArmsBeginSlot{L"Crimson Mare's arms state Begin slot (+0x10)", 0x145CD8220,
-                                            {L"CrimsonMareArmsState_Vt10_Begin", 0x1433A5F5C, kArmsBeginBytes}};
-constexpr platform::SlotFact kArmsTickSlot{L"Crimson Mare's arms state Tick slot (+0x30)", 0x145CD8240,
-                                           {L"CrimsonMareArmsState_Vt30_Tick", 0x1433B0DE0, kArmsTickBytes}};
-constexpr std::uintptr_t kPurgeArmCall = 0x143262031;  // in the rocket-punch notify; crosses on 1.005
-constexpr std::uintptr_t kPurgeArm     = 0x1433A71A4;  // CrimsonMareArms_PurgeArm_MoveLeaderLockToArm(arms, u8, u8)
+constexpr platform::SlotFact kArmsBeginSlot{L"Crimson Mare's arms state Begin slot (+0x10)", 0x145B41A80,
+                                            {L"CrimsonMareArmsState_Vt10_Begin", 0x1430BDC54, kArmsBeginBytes}};
+constexpr platform::SlotFact kArmsTickSlot{L"Crimson Mare's arms state Tick slot (+0x30)", 0x145B41AA0,
+                                           {L"CrimsonMareArmsState_Vt30_Tick", 0x1430C8B30, kArmsTickBytes}};
+constexpr std::uintptr_t kPurgeArmCall = 0x142F7298D;  // in the rocket-punch notify; crosses on 1.005
+constexpr std::uintptr_t kPurgeArm     = 0x1430BEEA4;  // CrimsonMareArms_PurgeArm_MoveLeaderLockToArm(arms, u8, u8)
 constexpr std::size_t    kArmReads     = 3;
 constexpr std::uintptr_t kArmReadCall[kArmReads] = {
-    0x14339E05F,  // PickArmTarget_LeaderFirst (each frame per waiting arm); crosses both
-    0x1433AC6B4,  // SetArmState (the game caches it); crosses on 1.005
-    0x1433AA57A,  // SyncRelease_ReactionFromLeader; crosses on 1.005
+    0x1430B59CF,  // PickArmTarget_LeaderFirst (each frame per waiting arm); crosses both
+    0x1430C433D,  // SetArmState (the game caches it); crosses on 1.005
+    0x1430C222E,  // SyncRelease_ReactionFromLeader; crosses on 1.005
 };
 constexpr std::uint32_t kArmsBoss = 0x30;
 

@@ -32,20 +32,20 @@ namespace {
 // PrimaryPC_SetByte890(layer cl, value dl): the primary controller's +0x890[layer] (a leaf). Its entry instruction sits
 // inside one block in 1.005 only (1.004 %16 = 0xC): the write log (dev tools) is 1.005's.
 constexpr std::uint8_t kSetterBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x57, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8};
-constexpr platform::FunctionFact kSetter{L"PrimaryPC_SetByte890", 0x1408A801C, kSetterBytes};
+constexpr platform::FunctionFact kSetter{L"PrimaryPC_SetByte890", 0x140945300, kSetterBytes};
 using SetterFn = void (*)(std::uint8_t layer, std::uint8_t value);
 
 // The game's own layer-2 clear (the event commands' too): SetByte890(2, 6) + SetByte8A4(2, 0) on the primary; its gate
 // reads the field leader, not the primary controller.
 constexpr std::uint8_t kClearBytes[] = {0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8};
-constexpr platform::FunctionFact kClear{L"PrimaryPC_ClearMoveTypeLayer2_IfFieldLeaderPC", 0x1412E4484, kClearBytes};
+constexpr platform::FunctionFact kClear{L"PrimaryPC_ClearMoveTypeLayer2_IfFieldLeaderPC", 0x140FA64B8, kClearBytes};
 using ClearFn = void (*)();
 
 // The walk step: phase-table entry 4 of the walk-only behavior action (move rcx, event dl, dt xmm2).
 constexpr std::uint8_t kPhaseFourBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x48, 0x89, 0x74,
                                             0x24, 0x18, 0x48, 0x89, 0x7C, 0x24, 0x20, 0x41};
-const platform::SlotFact kPhaseFour{L"the walk step's phase-4 handler (phase table entry 4)", 0x1470B98C0,
-                                    {L"FieldActMove58DFA88_Phase4_WalkCapL2", 0x1432A4C74, kPhaseFourBytes}};
+const platform::SlotFact kPhaseFour{L"the walk step's phase-4 handler (phase table entry 4)", 0x146EECA40,
+                                    {L"FieldActMove58DFA88_Phase4_WalkCapL2", 0x142FB7C24, kPhaseFourBytes}};
 using PhaseFn = facts::PhaseHandlerFn;
 using facts::kPhaseEnter;
 using facts::kPhaseExit;
@@ -53,8 +53,8 @@ using facts::kPhaseExit;
 // Red XIII's chain door: Begin sets Walk (game thread), End clears it (anim worker).
 constexpr std::uint8_t kRedDoorEndBytes[] = {0x48, 0x8B, 0xC4, 0x48, 0x89, 0x58, 0x10, 0x48,
                                              0x89, 0x70, 0x18, 0x48, 0x89, 0x78, 0x20, 0x55};
-const platform::SlotFact kRedDoorEnd{L"the chain-door action's End slot (+0x120)", 0x145CE5898,
-                                     {L"RedChainDoorAction_End_Vt120_ClearL2", 0x1432BDE98, kRedDoorEndBytes}};
+const platform::SlotFact kRedDoorEnd{L"the chain-door action's End slot (+0x120)", 0x145B4F6B0,
+                                     {L"RedChainDoorAction_End_Vt120_ClearL2", 0x142FCF498, kRedDoorEndBytes}};
 using EndFn = std::uintptr_t (*)(void* action, std::uintptr_t second);
 
 constexpr std::uint32_t kActionCharacter = 0x450;  // FWeakObjectPtr {index, serial}
@@ -159,7 +159,7 @@ void Setter(std::uint8_t layer, std::uint8_t value) noexcept
     if (layer == 2 && players::generation::AnyActive())
     {
         const auto caller = reinterpret_cast<std::uintptr_t>(_ReturnAddress());
-        const auto where  = g_image ? g_image->ResearchAddress(caller) : caller;
+        const auto where  = g_image ? g_image->SourceAddress(caller) : caller;
         const int  who    = PrimaryNow();
         const auto key    = ((where & 0xFFFFFFFFFFull) << 16) | (std::uint64_t{value} << 8) | static_cast<std::uint64_t>(who);
         try

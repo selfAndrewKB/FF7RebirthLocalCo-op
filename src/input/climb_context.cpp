@@ -48,30 +48,30 @@ constexpr std::uint8_t kClimbFinishBytes[]   = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x
 constexpr std::uint8_t kBarsFinishBytes[]    = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00};
 constexpr std::uint8_t kSpiderFinishBytes[]  = {0xB8, 0x28, 0x00, 0x00, 0x00};
 constexpr std::uint8_t kEdgeStopTickBytes[]  = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00};
-constexpr std::uint8_t kDodgeTickBytes[]     = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x57, 0xB8, 0x50, 0x00, 0x00, 0x00};
+constexpr std::uint8_t kDodgeTickBytes[]     = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x74, 0x24, 0x10, 0x48};
 constexpr std::uint8_t kCameraGetterBytes[]  = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x6C,
                                                 0x24, 0x10, 0x57, 0xB8, 0x80, 0x00, 0x00, 0x00};
 constexpr std::uint8_t kKeyValueBytes[]      = {0xB8, 0x38, 0x00, 0x00, 0x00};
 constexpr std::uint8_t kPressedBytes[]       = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x57, 0xB8, 0x40, 0x00, 0x00, 0x00};
 constexpr std::size_t  kFirst                = 5;  // each redirected entry's first instruction
 
-const platform::FunctionFact kCameraGetter{L"GetEndPlayerCameraManager", 0x140A60C50, kCameraGetterBytes};
-const platform::FunctionFact kKeyValue{L"SquareInput__GetAggregatedKeyValue", 0x1407C8310, kKeyValueBytes};
-const platform::FunctionFact kPressedImpl{L"SquareInput_ActionTableF8_IsPressed_Impl", 0x1408062E0, kPressedBytes};
-const platform::FunctionFact kPressedGlobal{L"SquareInput_IsActionPressed_Global", 0x14080619C, kPressedBytes};
+const platform::FunctionFact kCameraGetter{L"GetEndPlayerCameraManager", 0x1407643E8, kCameraGetterBytes};
+const platform::FunctionFact kKeyValue{L"SquareInput__GetAggregatedKeyValue", 0x1409F5CD8, kKeyValueBytes};
+const platform::FunctionFact kPressedImpl{L"SquareInput_ActionTableF8_IsPressed_Impl", 0x1410D8198, kPressedBytes};
+const platform::FunctionFact kPressedGlobal{L"SquareInput_IsActionPressed_Global", 0x1410D813C, kPressedBytes};
 using facts::kInputKeyCopy;
 // The landing after a high drop (research/RE-landing-roll.md): the edge-stop action's phase-6 handler, phase table
 // entry 6 (move rcx, event dl, dt xmm2); 1.005 through replaced-landing-roll.json.
 constexpr std::uint8_t kLandingBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x48, 0x89, 0x74,
                                           0x24, 0x18, 0x55, 0x57, 0x41, 0x56, 0x48, 0x8D};
 const platform::SlotFact kLandingPhase{L"the landing's phase-6 handler (the edge-stop action's phase table entry 6)",
-                                       0x1470B98D0,
-                                       {L"FieldActMove58DFA88_Phase6_LandingRoll_SteerToInputDir", 0x1432A875C, kLandingBytes}};
-constexpr std::uintptr_t     kHoldSelectCall = 0x1416368D5;  // ClimbingMove's Tick: call TickHoldSelect
-constexpr std::uintptr_t     kHoldSelect     = 0x141635E70;  // ClimbingMove_TickHoldSelect_PrimaryPCMBasis
+                                       0x146EECA50,
+                                       {L"FieldActMove58DFA88_Phase6_LandingRoll_SteerToInputDir", 0x142FBAD44, kLandingBytes}};
+constexpr std::uintptr_t     kHoldSelectCall = 0x1413E3835;  // ClimbingMove's Tick: call TickHoldSelect
+constexpr std::uintptr_t     kHoldSelect     = 0x1410D0130;  // ClimbingMove_TickHoldSelect_PrimaryPCMBasis
 
 // The hold-select's three actions (FKey24 statics: the FName first).
-constexpr std::uintptr_t   kActionKeys[]    = {facts::kKeyDodge, 0x1491E4508, 0x1491E4A30};
+constexpr std::uintptr_t   kActionKeys[]    = {facts::kKeyDodge, 0x14901C5E8, 0x14901CB10};
 constexpr std::size_t      kActionCount     = std::size(kActionKeys);
 using facts::kKeySize;
 
@@ -111,55 +111,55 @@ struct MoveClass
     bool               holder      = true;   // a climb the seats' own climb holders depend on (TicksPlaced)
 };
 // The hookshot move's Tick slot holds the behaviour action's shared tick thunk; the rope's its own tick.
-constexpr std::uint8_t kHookShotTickBytes[] = {0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8, 0x86, 0x54, 0x85, 0x00, 0x48, 0x2B,
+constexpr std::uint8_t kHookShotTickBytes[] = {0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8, 0x52, 0xCC, 0x84, 0x00, 0x48, 0x2B,
                                                0xE0, 0x48, 0x83, 0xC4};
 constexpr std::uint8_t kRopeTickBytes[]     = {0x48, 0x89, 0x5C, 0x24, 0x18, 0x55, 0x56, 0x57, 0x41, 0x56, 0x41, 0x57,
                                                0x48, 0x8B, 0xEC, 0xB8};
 constexpr MoveClass kMoves[] = {
     {L"climbing wall",
-     {L"ClimbingMove's Tick slot (+0x10)", 0x145833778, {L"ClimbingMove_Tick_Vt10_CamRot", 0x141636878, kTickBytes}},
-     {L"ClimbingMove's Finish slot (+0xA8)", 0x145833810,
-      {L"EndBehaviorAction_Finish_CallsEndVt120", 0x1416E9604, kClimbFinishBytes}},
+     {L"ClimbingMove's Tick slot (+0x10)", 0x1457BA588, {L"ClimbingMove_Tick_Vt10_CamRot", 0x1413E37D8, kTickBytes}},
+     {L"ClimbingMove's Finish slot (+0xA8)", 0x1457BA620,
+      {L"EndBehaviorAction_Finish_CallsEndVt120", 0x1415BAF4C, kClimbFinishBytes}},
      true, Kind::Climb},
     {L"monkey bars",
-     {L"MonkeyBarsMove's Tick slot (+0x10)", 0x146695A18,
-      {L"MonkeyBarsMove_Tick_Vt10_CamRotIfPlayer", 0x1432FABC0, kTickBytes}},
-     {L"MonkeyBarsMove's Finish slot (+0xA8)", 0x146695AB0, {L"MonkeyBarsMove_Finish_VtA8", 0x1432E91B8, kBarsFinishBytes}},
+     {L"MonkeyBarsMove's Tick slot (+0x10)", 0x146522CC8,
+      {L"MonkeyBarsMove_Tick_Vt10_CamRotIfPlayer", 0x143009B48, kTickBytes}},
+     {L"MonkeyBarsMove's Finish slot (+0xA8)", 0x146522D60, {L"MonkeyBarsMove_Finish_VtA8", 0x142FF7FCC, kBarsFinishBytes}},
      false, Kind::Climb},
     {L"spider wall",
-     {L"SpiderMoveMove's Tick slot (+0x10)", 0x146696CF8,
-      {L"SpiderMoveMove_Tick_Vt10_CamRotIfPlayer", 0x143312EDC, kTickBytes}},
-     {L"SpiderMoveMove's Finish slot (+0xA8)", 0x146696D90,
-      {L"EndBehaviorAction_VtA8_Thunk_Finish", 0x1416E95EC, kSpiderFinishBytes}},
+     {L"SpiderMoveMove's Tick slot (+0x10)", 0x146523948,
+      {L"SpiderMoveMove_Tick_Vt10_CamRotIfPlayer", 0x143022554, kTickBytes}},
+     {L"SpiderMoveMove's Finish slot (+0xA8)", 0x1465239E0,
+      {L"EndBehaviorAction_VtA8_Thunk_Finish", 0x1415BAF34, kSpiderFinishBytes}},
      false, Kind::Climb},
     // Not a climb: the ledge lean, the step after an edge stop and the walk step (one action class). Only its stick and
     // camera basis become the player's; the identity stays the game's (phases 7-10 not read).
     {L"edge stop (ledge lean)",
-     {L"FieldActMove58DFA88's Tick slot (+0x10)", 0x1458DFA98,
-      {L"FieldActMove58DFA88_Tick_Vt10", 0x141860338, kEdgeStopTickBytes}},
-     {L"FieldActMove58DFA88's Finish slot (+0xA8)", 0x1458DFB30,
-      {L"EndBehaviorAction_Finish_CallsEndVt120", 0x1416E9604, kClimbFinishBytes}},
+     {L"FieldActMove58DFA88's Tick slot (+0x10)", 0x1457464D8,
+      {L"FieldActMove58DFA88_Tick_Vt10", 0x1418EFCA4, kEdgeStopTickBytes}},
+     {L"FieldActMove58DFA88's Finish slot (+0xA8)", 0x145746570,
+      {L"EndBehaviorAction_Finish_CallsEndVt120", 0x1415BAF4C, kClimbFinishBytes}},
      false, Kind::EdgeStop},
     // The field dodge (research/RE-dodge-steer.md): each phase turns the character toward the player's stick in the
     // player's camera, gated by the leader test. Its Tick body is shared with another class: the slot is replaced.
     {L"field dodge",
-     {L"FieldDodgeMove's Tick slot (+0x10)", 0x145CCB490, {L"FieldDodgeMove_Tick_Vt10", 0x14328EA5C, kDodgeTickBytes}},
-     {L"FieldDodgeMove's Finish slot (+0xA8)", 0x145CCB528,
-      {L"FieldDodgeMove_Finish_VtA8", 0x1432959EC, kClimbFinishBytes}},
+     {L"FieldDodgeMove's Tick slot (+0x10)", 0x145B36218, {L"FieldDodgeMove_Tick_Vt10", 0x14105FFC4, kDodgeTickBytes}},
+     {L"FieldDodgeMove's Finish slot (+0xA8)", 0x145B362B0,
+      {L"FieldDodgeMove_Finish_VtA8", 0x14192AA5C, kClimbFinishBytes}},
      false, Kind::Steered},
     // The grappling gun's flight and the hook rope's swing (research/RE-hooks-for-seats.md): their phases read the
     // player test, the merged stick and the primary camera manager on the worker, as the climbs do; the gun's flight
     // adds its rumble there too. Their Begin and End slots are traversal/hooks', which asks whether these are placed
     // (MovePlaced); the climb holders do not depend on them.
     {L"hookshot",
-     {L"HookShotMove's Tick slot (+0x10)", 0x146694810, {L"EndBehaviorAction_Vt10_Thunk_Tick", 0x141859AA0, kHookShotTickBytes}},
-     {L"HookShotMove's Finish slot (+0xA8)", 0x1466948A8,
-      {L"EndBehaviorAction_Finish_CallsEndVt120", 0x1416E9604, kClimbFinishBytes}},
+     {L"HookShotMove's Tick slot (+0x10)", 0x146521198, {L"EndBehaviorAction_Vt10_Thunk_Tick", 0x14191EF24, kHookShotTickBytes}},
+     {L"HookShotMove's Finish slot (+0xA8)", 0x146521230,
+      {L"EndBehaviorAction_Finish_CallsEndVt120", 0x1415BAF4C, kClimbFinishBytes}},
      false, Kind::Climb, true, false},
     {L"hook rope",
-     {L"HookRopeMove's Tick slot (+0x10)", 0x146694A90, {L"HookRopeMove_Tick_Vt10", 0x1432E1458, kRopeTickBytes}},
-     {L"HookRopeMove's Finish slot (+0xA8)", 0x146694B28,
-      {L"EndBehaviorAction_Finish_CallsEndVt120", 0x1416E9604, kClimbFinishBytes}},
+     {L"HookRopeMove's Tick slot (+0x10)", 0x1465214F8, {L"HookRopeMove_Tick_Vt10", 0x142FF0388, kRopeTickBytes}},
+     {L"HookRopeMove's Finish slot (+0xA8)", 0x146521590,
+      {L"EndBehaviorAction_Finish_CallsEndVt120", 0x1415BAF4C, kClimbFinishBytes}},
      false, Kind::Climb, false, false},
 };
 constexpr std::size_t kMoveCount  = std::size(kMoves);

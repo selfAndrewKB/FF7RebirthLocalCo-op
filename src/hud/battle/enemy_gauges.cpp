@@ -62,46 +62,46 @@ constexpr std::uint32_t kHalfSource  = 0x298;
 constexpr std::uint32_t kHalfBounds  = 0x1E0;
 // c is the owner's UCapsuleComponent (ACharacter::CapsuleComponent +0x298): +0x4AC CapsuleRadius, +0x4A8 CapsuleHalfHeight.
 // 1.005: UPrimitiveComponent shrank by 0x10; UpdateEntries reads [rax+49Ch] and [rax+498h].
-constexpr platform::PerBuild<std::uint32_t> kHalfScaleXY = {0x4AC, 0x49C};
-constexpr platform::PerBuild<std::uint32_t> kHalfScaleZ  = {0x4A8, 0x498};
+constexpr platform::PerBuild<std::uint32_t> kHalfScaleXY = {0x49C, 0x4AC};
+constexpr platform::PerBuild<std::uint32_t> kHalfScaleZ  = {0x498, 0x4A8};
 
 // EndUI__MF8_ProjectEntryByWidget: its entry checked, then its second instruction replaced.
 constexpr std::uint8_t   kByWidgetPrologue[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x4C, 0x89, 0x44, 0x24, 0x18, 0x55, 0x56,
                                                 0x57, 0x41, 0x54, 0x41, 0x55, 0x41, 0x56, 0x41, 0x57, 0x48, 0x8D, 0x6C};
-constexpr platform::FunctionFact kByWidget{L"EndUI__MF8_ProjectEntryByWidget", 0x14176201C, kByWidgetPrologue};
-constexpr std::uintptr_t kByWidgetSite   = 0x141762021;
-constexpr std::uintptr_t kByWidgetResume = 0x141762026;
+constexpr platform::FunctionFact kByWidget{L"EndUI__MF8_ProjectEntryByWidget", 0x141814774, kByWidgetPrologue};
+constexpr std::uintptr_t kByWidgetSite   = 0x141814779;
+constexpr std::uintptr_t kByWidgetResume = 0x14181477E;
 
 // The tick's one call to EndUI__MF8_ProjectEntry_Targeted: rcx mgr, rdx widget, r8 &key
 // {source, controller} (the callee releases one weak reference), r9 &loc, then scratch, halfSize,
 // skipLeaderClamp on the stack.
-constexpr std::uintptr_t kTargetedCall = 0x140DBA664;
+constexpr std::uintptr_t kTargetedCall = 0x140975578;
 constexpr std::uint8_t   kTargetedPrologue[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x48, 0x89, 0x6C, 0x24, 0x18, 0x56, 0x57,
-                                                0x41, 0x56, 0xB8, 0x30, 0x00, 0x00, 0x00, 0xE8, 0x7C, 0x85, 0x64, 0x01};
-constexpr platform::FunctionFact kTargeted{L"EndUI__MF8_ProjectEntry_Targeted", 0x140A6699C, kTargetedPrologue};
+                                                0x41, 0x56, 0xB8, 0x30, 0x00, 0x00, 0x00, 0xE8, 0xE0, 0xC6, 0x1F, 0x01};
+constexpr platform::FunctionFact kTargeted{L"EndUI__MF8_ProjectEntry_Targeted", 0x140F6F488, kTargetedPrologue};
 
 // The tick's one call to EndUI__MF8_IsEntryForcedTargeted_DecTimer15C(p) (bar-targeted R1), made for
 // every entry it places: case (d) of the targeted rule. Never called by the mod (it decrements a timer).
-constexpr std::uintptr_t kForcedCall = 0x140DBA287;
+constexpr std::uintptr_t kForcedCall = 0x1409753FD;
 constexpr std::uint8_t   kForcedPrologue[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x6C, 0x24, 0x10, 0x48, 0x89, 0x74,
                                               0x24, 0x18, 0x57, 0x41, 0x56, 0x41, 0x57, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8,
-                                              0x0E, 0x86, 0x23, 0x01};
-constexpr platform::FunctionFact kForced{L"EndUI__MF8_IsEntryForcedTargeted_DecTimer15C", 0x140E76904, kForcedPrologue};
+                                              0x16, 0x44, 0x96, 0x01};
+constexpr platform::FunctionFact kForced{L"EndUI__MF8_IsEntryForcedTargeted_DecTimer15C", 0x14080774C, kForcedPrologue};
 
 // EndUI__MF8_ApplyYOffsetLerp_SetPosition(unused, widget, p): one step of the ease on World dt, then
 // the gauge at its cached point plus the offset.
 constexpr std::uint8_t   kYStepPrologue[] = {0x48, 0x85, 0xD2, 0x0F, 0x84, 0x86, 0x00, 0x00, 0x00, 0x48, 0x89, 0x5C, 0x24,
-                                             0x08, 0x57, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0x0B, 0x3E, 0x52, 0x01};
-constexpr platform::FunctionFact kYStep{L"EndUI__MF8_ApplyYOffsetLerp_SetPosition", 0x140B8B10C, kYStepPrologue};
+                                             0x08, 0x57, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0xEB, 0x5E, 0x7F, 0x01};
+constexpr platform::FunctionFact kYStep{L"EndUI__MF8_ApplyYOffsetLerp_SetPosition", 0x140975C7C, kYStepPrologue};
 
 // EndUI__MF8_LeaderDistanceScaleLerp(unused, widget, owner, float* state, unused, caseC): eases a
 // gauge's size (p+0x38) toward one set by its enemy's distance from the leader (read through
 // ResolvePartyLeaderWeakPtr: a LeaderScope answers it), then writes the widget's render scale
 // (+0x98/+0x9C) and applies it (RE-p2-bar-targeted.md).
 constexpr std::uint8_t   kScaleStepPrologue[] = {0x48, 0x85, 0xD2, 0x0F, 0x84, 0x98, 0x01, 0x00, 0x00, 0x48, 0x89, 0x5C, 0x24, 0x08,
-                                                 0x48, 0x89, 0x74, 0x24, 0x10, 0x57, 0xB8, 0x80, 0x00, 0x00, 0x00, 0xE8, 0xB6, 0x3F,
-                                                 0x52, 0x01};
-constexpr platform::FunctionFact kScaleStep{L"EndUI__MF8_LeaderDistanceScaleLerp", 0x140B8AF5C, kScaleStepPrologue};
+                                                 0x48, 0x89, 0x74, 0x24, 0x10, 0x57, 0xB8, 0x80, 0x00, 0x00, 0x00, 0xE8, 0xE2, 0x70,
+                                                 0x7F, 0x01};
+constexpr platform::FunctionFact kScaleStep{L"EndUI__MF8_LeaderDistanceScaleLerp", 0x140974A80, kScaleStepPrologue};
 // The render-transform apply after the scale write: facts::kApplyRenderTransform (shared with the wrangle targets).
 constexpr std::uint32_t  kScale       = 0x38;   // p: the gauge's size state
 constexpr std::uint32_t  kRenderScale = 0x98;   // widget: render scale x, y
@@ -597,7 +597,7 @@ struct PendingOwnTargets
 PendingOwnTargets g_pending;
 
 /// 1.005, on the game thread between its ticks: the forced-targeted call placed (it crosses a 16-byte block), then
-/// the seats' own targeted look and sizes turned on as at install on the research build.
+/// the seats' own targeted look and sizes turned on as at install on 1.004.
 void PlaceOwnTargets() noexcept
 {
     const PendingOwnTargets pending = g_pending;
@@ -664,15 +664,15 @@ bool Install(const platform::GameImage& image) noexcept
     const auto scaleStep  = platform::FindFunction(image, kScaleStep);
     const auto apply      = platform::FindFunction(image, facts::kApplyRenderTransform);
     const bool sizes      = scaleStep && apply;
-    if (ownChecks && platform::RunningBuild() == platform::BuildIndex::V1005)
+    if (ownChecks && platform::RunningBuild() != platform::BuildIndex::V1004)
     {
-        // The forced-targeted call crosses a 16-byte block in 1.005: it is placed from the game thread, between its
+        // The forced-targeted call crosses a 16-byte block: it is placed from the game thread, between its
         // ticks (platform/game_thread_sites.h); the size step's checks are made now.
         g_pending = {*forcedSite, *forced, *yStep, sizes ? *scaleStep : 0, sizes ? *apply : 0};
         if (platform::game_thread_sites::Queue(&PlaceOwnTargets))
         {
             platform::Log(L"enemy gauges: ready (each gauge placed again in each player's view; players 2 and 3's own targets follow "
-                          L"once the game thread places their call (1.005: it crosses a 16-byte block))");
+                          L"once the game thread places their call (it crosses a 16-byte block))");
             return true;
         }
         g_pending = {};

@@ -28,38 +28,38 @@ namespace lss::feedback::seat_ffb_managers {
 namespace {
 
 // 1.004 addresses; 1.005 through replaced-ffb-manager.json (every fact read from both exes).
-constexpr std::uintptr_t kGlobal       = 0x1490FEE18;  // g_EndFFBMgr: the singleton EndFFBMgr_Get makes and returns
+constexpr std::uintptr_t kGlobal       = 0x148F325E8;  // g_EndFFBMgr: the singleton EndFFBMgr_Get makes and returns
 constexpr std::uint8_t   kCtorBytes[]  = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x57, 0xB8, 0x20, 0x00, 0x00, 0x00};
-constexpr platform::FunctionFact kCtor{L"EndFFBMgr_Ctor", 0x1437DBAE0, kCtorBytes};  // EndFFBMgr_Ctor(memory) -> memory
+constexpr platform::FunctionFact kCtor{L"EndFFBMgr_Ctor", 0x143516D84, kCtorBytes};  // EndFFBMgr_Ctor(memory) -> memory
 // The component constructor's only call, in the AEndPlayerController constructor. The manager's constructor loads its
 // effect list with FObjectFinder, which only a constructor may use: a seat's manager is made inside this call.
-constexpr std::uintptr_t kCompCtorCall = 0x143D05AB7;
-constexpr std::uintptr_t kCompCtor     = 0x1437DBC78;  // EndFFBComp_Ctor_PC758(component, owner) -> component
+constexpr std::uintptr_t kCompCtorCall = 0x143A674D7;
+constexpr std::uintptr_t kCompCtor     = 0x143516F1C;  // EndFFBComp_Ctor_PC758(component, owner) -> component
 constexpr std::uint8_t   kBuildTracksBytes[] = {0x48, 0x89, 0x5C, 0x24};
 // EndFFBMgr_BuildTracks90_FFBTr0to15(mgr): FNames only, no loads
-constexpr platform::FunctionFact kBuildTracks{L"EndFFBMgr_BuildTracks90_FFBTr0to15", 0x1437E0568, kBuildTracksBytes};
+constexpr platform::FunctionFact kBuildTracks{L"EndFFBMgr_BuildTracks90_FFBTr0to15", 0x14351B8B8, kBuildTracksBytes};
 constexpr std::uint8_t   kTickBytes[]  = {0x40, 0x53, 0xB8, 0x30, 0x00, 0x00, 0x00};
 // EndFFBMgr_Tick(mgr, dt xmm1): its state machine
-constexpr platform::FunctionFact kTick{L"EndFFBMgr_Tick", 0x140C91268, kTickBytes};
+constexpr platform::FunctionFact kTick{L"EndFFBMgr_Tick", 0x14097236C, kTickBytes};
 constexpr std::uint8_t   kRequestBytes[] = {0x33, 0xC0, 0x4C, 0x8B, 0xC9, 0x48, 0x89, 0x41, 0x20, 0x39, 0x41, 0x08};
 // EndStateMachine_RequestStateById(machine, id) -> found
-constexpr platform::FunctionFact kRequest{L"EndStateMachine_RequestStateById", 0x140A0BE80, kRequestBytes};
+constexpr platform::FunctionFact kRequest{L"EndStateMachine_RequestStateById", 0x140C9A160, kRequestBytes};
 constexpr std::uint8_t   kEntryBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08,   // mov [rsp+8],rbx (crosses a block: 1.005 MuteAll)
                                           0x48, 0x89, 0x6C, 0x24, 0x10};  // mov [rsp+10h],rbp
 // EndFFBMgr_MuteAll_PrimaryPC(mgr, mute): fades, menus, states
-constexpr platform::FunctionFact kMuteAll{L"EndFFBMgr_MuteAll_PrimaryPC", 0x1411F6AA4, kEntryBytes};
+constexpr platform::FunctionFact kMuteAll{L"EndFFBMgr_MuteAll_PrimaryPC", 0x140FE11BC, kEntryBytes};
 // EndFFBMgr_SetEnabled531(mgr, on): the Vibration option
-constexpr platform::FunctionFact kSetEnabled{L"EndFFBMgr_SetEnabled531", 0x1422DE548, kEntryBytes};
+constexpr platform::FunctionFact kSetEnabled{L"EndFFBMgr_SetEnabled531", 0x1421E13B8, kEntryBytes};
 // The registry's TArray<component*> helpers, as BeginPlay (AddUnique, inline) and the component's destructor use them.
 constexpr std::uint8_t   kContainsBytes[] = {0x4C, 0x8B, 0x01, 0x48, 0x63, 0x41, 0x08, 0x49, 0x8D, 0x0C, 0xC0, 0x4C};
 // Contains(array, &element) -> bool
-constexpr platform::FunctionFact kContains{L"TArray Contains(array, &element)", 0x140786200, kContainsBytes};
+constexpr platform::FunctionFact kContains{L"TArray Contains(array, &element)", 0x140A6A1C8, kContainsBytes};
 constexpr std::uint8_t   kGrowBytes[]  = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x48, 0x89, 0x4C, 0x24, 0x08, 0x55, 0x56};
 // grow after Num++ (array); a first allocation holds 4
-constexpr platform::FunctionFact kGrow{L"TArray grow after Num++", 0x1420DE464, kGrowBytes};
-constexpr std::uint8_t   kRemoveAllBytes[] = {0x48, 0x89, 0x54, 0x24, 0x10, 0x41, 0x54, 0x41, 0x55};
+constexpr platform::FunctionFact kGrow{L"TArray grow after Num++", 0x14218D854, kGrowBytes};
+constexpr std::uint8_t   kRemoveAllBytes[] = {0x48, 0x8B, 0xC4, 0x48, 0x89, 0x58, 0x08, 0x48, 0x89};
 // RemoveAll(array, &&element) -> removed
-constexpr platform::FunctionFact kRemoveAll{L"TArray RemoveAll(array, &&element)", 0x1420DD440, kRemoveAllBytes};
+constexpr platform::FunctionFact kRemoveAll{L"TArray RemoveAll(array, &&element)", 0x142192ACC, kRemoveAllBytes};
 
 constexpr std::size_t   kManagerSize  = 0x538;  // the getter's FMemory_Malloc(0x538)
 constexpr std::uint32_t kComponent    = 0x758;  // the controller's force-feedback component (embedded)

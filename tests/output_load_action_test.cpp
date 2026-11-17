@@ -1,10 +1,10 @@
 // Host-side tests for the restored load-action rule, run without the game.
 //
 // The bytes the mod writes near the game (renderer/output_load_action_code.h) are EXECUTED here, in
-// a small harness that recreates their surroundings in the game: the game's own `setz al; add al,1`
-// on the comparison of Views[0] with the view, rcx pointing at the family, and a frame deep enough
-// for the store to [rsp+610h]. Every combination of "first in its family" and "additional family"
-// is checked, together with the jump encoding the redirect relies on.
+// small harnesses that recreate their surroundings in the game, for both builds: the game's own `setz al; add al,1`
+// on the comparison of Views[0] with the view, then the view in r14 and an rbp frame for the store to [rbp+0E0h]
+// (1.004: rcx pointing at the family, and a frame deep enough for the store to [rsp+610h]). Every combination of
+// "first in its family" and "additional family" is checked, together with the jump encoding the redirect relies on.
 
 #include "facts/engine.h"
 #include "platform/code_redirect.h"
@@ -22,10 +22,11 @@ namespace {
 
 using lss::platform::EncodeJump;
 using lss::renderer::kFirstUnlessAdditionalLoadAction;
+using lss::renderer::kFirstUnlessAdditionalLoadAction1004;
 using lss::renderer::kLoadActionClear;
 using lss::renderer::kLoadActionLoad;
 
-/// uint8_t harness(const uint8_t* family, uintptr_t viewsFirst, uintptr_t view):
+/// Game version 1.004's shape. uint8_t harness(const uint8_t* family, uintptr_t viewsFirst, uintptr_t view):
 ///     sub rsp, 618h ; cmp rdx, r8 ; setz al ; add al, 1 (the game's computation) ;
 ///     <the mod's bytes, ending with the store to [rsp+610h]> ; jmp next ;
 ///     next: movzx eax, byte [rsp+610h] ; add rsp, 618h ; ret
@@ -44,7 +45,7 @@ public:
                                          0x48, 0x81, 0xC4, 0x18, 0x06, 0x00, 0x00,        // add rsp, 618h
                                          0xC3};                                           // ret
         std::vector<std::uint8_t> code(prologue, prologue + sizeof(prologue));
-        code.insert(code.end(), std::begin(kFirstUnlessAdditionalLoadAction), std::end(kFirstUnlessAdditionalLoadAction));
+        code.insert(code.end(), std::begin(kFirstUnlessAdditionalLoadAction1004), std::end(kFirstUnlessAdditionalLoadAction1004));
 
         // The jump back, placed where the redirect appends it, to the instruction after the store.
         const auto from = page_.At() + code.size();
@@ -70,7 +71,7 @@ private:
 
 void TestTheStockRule()
 {
-    std::puts("load action: clear only for the first view of a main family");
+    std::puts("load action (1.004's code): clear only for the first view of a main family");
     const ExecutableHarness harness;
     EXPECT(harness.Run(true, false) == kLoadActionClear);   // one player, or player 1's family
     EXPECT(harness.Run(true, true) == kLoadActionLoad);     // a seat's family keeps the earlier families' columns
@@ -78,19 +79,19 @@ void TestTheStockRule()
     EXPECT(harness.Run(false, true) == kLoadActionLoad);
 }
 
-/// A stand-in for the game's code around the site, with the same instructions and the store at the
+/// A stand-in for game version 1.004's code around the site, with the same instructions and the store at the
 /// same offset in its 16-byte block (the store is 7 bytes into its block):
 ///     nop x8 ; sub rsp, 618h ; cmp rdx, r8 ; setz al ; add al, 1 ;
 ///     mov [rsp+610h], al   <- the redirected instruction, at page+0x17
 ///     movzx eax, byte [rsp+610h] ; add rsp, 618h ; ret
-class GameLikeCode
+class GameLikeCode1004
 {
 public:
     static constexpr std::size_t kStoreOffset  = 0x17;
     static constexpr std::size_t kResumeOffset = kStoreOffset + 7;
     static constexpr std::uint8_t kStore[]     = {0x88, 0x84, 0x24, 0x10, 0x06, 0x00, 0x00};
 
-    GameLikeCode()
+    GameLikeCode1004()
     {
         const std::uint8_t code[] = {
             0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90,  // nop x8
@@ -122,14 +123,14 @@ private:
 
 void TestRedirectInstallsRunsAndRestores()
 {
-    std::puts("redirect: replaces the store, applies the rule, and restores the game's behaviour");
-    const GameLikeCode game;
+    std::puts("redirect (1.004): replaces the store, applies the rule, and restores the game's behaviour");
+    const GameLikeCode1004 game;
     EXPECT(game.Run(true, true) == kLoadActionClear);  // the shipped behaviour: ignores the flag
 
     {
         lss::platform::CodeRedirect redirect;
-        EXPECT(redirect.Install(game.At(GameLikeCode::kStoreOffset), GameLikeCode::kStore,
-                                kFirstUnlessAdditionalLoadAction, game.At(GameLikeCode::kResumeOffset)));
+        EXPECT(redirect.Install(game.At(GameLikeCode1004::kStoreOffset), GameLikeCode1004::kStore,
+                                kFirstUnlessAdditionalLoadAction1004, game.At(GameLikeCode1004::kResumeOffset)));
         EXPECT(game.Run(true, false) == kLoadActionClear);
         EXPECT(game.Run(true, true) == kLoadActionLoad);
         EXPECT(game.Run(false, false) == kLoadActionLoad);
@@ -144,30 +145,30 @@ void TestRedirectInstallsRunsAndRestores()
 void TestRedirectRefusesWhatItDoesNotRecognise()
 {
     std::puts("redirect: refuses different bytes, a site crossing its block, or a second install");
-    const GameLikeCode game;
+    const GameLikeCode1004 game;
     const std::uint8_t other[] = {0x88, 0x84, 0x24, 0x10, 0x06, 0x00, 0x01};
     lss::platform::CodeRedirect redirect;
-    EXPECT(!redirect.Install(game.At(GameLikeCode::kStoreOffset), other, kFirstUnlessAdditionalLoadAction,
-                             game.At(GameLikeCode::kResumeOffset)));
-    EXPECT(!redirect.Install(game.At(0x0C), GameLikeCode::kStore, kFirstUnlessAdditionalLoadAction,
-                             game.At(GameLikeCode::kResumeOffset)));  // 0x0C..0x12 crosses 0x10
+    EXPECT(!redirect.Install(game.At(GameLikeCode1004::kStoreOffset), other, kFirstUnlessAdditionalLoadAction1004,
+                             game.At(GameLikeCode1004::kResumeOffset)));
+    EXPECT(!redirect.Install(game.At(0x0C), GameLikeCode1004::kStore, kFirstUnlessAdditionalLoadAction1004,
+                             game.At(GameLikeCode1004::kResumeOffset)));  // 0x0C..0x12 crosses 0x10
     EXPECT(game.Run(true, true) == kLoadActionClear);                 // untouched
 
-    EXPECT(redirect.Install(game.At(GameLikeCode::kStoreOffset), GameLikeCode::kStore,
-                            kFirstUnlessAdditionalLoadAction, game.At(GameLikeCode::kResumeOffset)));
-    EXPECT(!redirect.Install(game.At(GameLikeCode::kStoreOffset), GameLikeCode::kStore,
-                             kFirstUnlessAdditionalLoadAction, game.At(GameLikeCode::kResumeOffset)));
+    EXPECT(redirect.Install(game.At(GameLikeCode1004::kStoreOffset), GameLikeCode1004::kStore,
+                            kFirstUnlessAdditionalLoadAction1004, game.At(GameLikeCode1004::kResumeOffset)));
+    EXPECT(!redirect.Install(game.At(GameLikeCode1004::kStoreOffset), GameLikeCode1004::kStore,
+                             kFirstUnlessAdditionalLoadAction1004, game.At(GameLikeCode1004::kResumeOffset)));
     EXPECT(redirect.Restore());
 }
 
-/// Game version 1.005's surroundings (RE-1005-core-facts.md): an rbp frame, r14 = the view whose first field is the
+/// The source build's surroundings (RE-1005-core-facts.md): an rbp frame, r14 = the view whose first field is the
 /// family, rcx live across the store (the game passes it to a call right after), the store `mov [rbp+0E0h], al` one
-/// byte into its 16-byte block (as the 1.005 store is):
+/// byte into its 16-byte block (as the game's store is):
 ///     push rbp ; push r14 ; sub rsp, 108h ; mov rbp, rsp ; mov r14, r9 ; cmp rdx, r8 ; setz al ; add al, 1 ; nop x9 ;
 ///     mov [rbp+0E0h], al   <- the redirected instruction, at page+0x21
 ///     mov [r14+8], rcx     (hands rcx back, to prove the redirect left it alone)
 ///     movzx eax, byte [rbp+0E0h] ; add rsp, 108h ; pop r14 ; pop rbp ; ret
-class GameLikeCode1005
+class GameLikeCode
 {
 public:
     static constexpr std::size_t kStoreOffset  = 0x21;
@@ -180,7 +181,7 @@ public:
     };
     using Fn = std::uint8_t (*)(std::uintptr_t rcx, std::uintptr_t viewsFirst, std::uintptr_t view, View* r14);
 
-    GameLikeCode1005()
+    GameLikeCode()
     {
         const std::uint8_t code[] = {
             0x55,                                      // push rbp
@@ -223,24 +224,24 @@ private:
     lss::test::ExecutablePage page_;
 };
 
-void TestRedirect1005()
+void TestRedirect()
 {
-    std::puts("1.005: the redirect applies the rule through [r14], stores to [rbp+0E0h], leaves rcx, and restores");
-    const GameLikeCode1005 game;
+    std::puts("redirect: applies the rule through [r14], stores to [rbp+0E0h], leaves rcx, and restores");
+    const GameLikeCode game;
     bool                   kept = false;
     EXPECT(game.Run(true, true, kept) == kLoadActionClear && kept);  // the shipped behaviour: ignores the flag
 
     lss::platform::CodeRedirect redirect;
-    EXPECT(redirect.Install(game.At(GameLikeCode1005::kStoreOffset), lss::facts::kOutputLoadActionStoreBytes1005,
-                            lss::renderer::kFirstUnlessAdditionalLoadAction1005, game.At(GameLikeCode1005::kResumeOffset)));
+    EXPECT(redirect.Install(game.At(GameLikeCode::kStoreOffset), lss::facts::kOutputLoadActionStoreBytes,
+                            lss::renderer::kFirstUnlessAdditionalLoadAction, game.At(GameLikeCode::kResumeOffset)));
     EXPECT(game.Run(true, false, kept) == kLoadActionClear && kept);
     EXPECT(game.Run(true, true, kept) == kLoadActionLoad && kept);
     EXPECT(game.Run(false, false, kept) == kLoadActionLoad && kept);
     EXPECT(game.Run(false, true, kept) == kLoadActionLoad && kept);
-    // The research build's store bytes are not 1.005's: the redirect refuses them.
+    // 1.004's store bytes are not this build's: the redirect refuses them.
     lss::platform::CodeRedirect wrong;
-    EXPECT(!wrong.Install(game.At(GameLikeCode1005::kStoreOffset), GameLikeCode::kStore, kFirstUnlessAdditionalLoadAction,
-                          game.At(GameLikeCode1005::kStoreOffset + 7)));
+    EXPECT(!wrong.Install(game.At(GameLikeCode::kStoreOffset), GameLikeCode1004::kStore, kFirstUnlessAdditionalLoadAction1004,
+                          game.At(GameLikeCode::kStoreOffset + 7)));
     EXPECT(redirect.Restore());
     EXPECT(game.Run(true, true, kept) == kLoadActionClear && kept);
 }
@@ -266,7 +267,7 @@ int main()
     TestTheStockRule();
     TestRedirectInstallsRunsAndRestores();
     TestRedirectRefusesWhatItDoesNotRecognise();
-    TestRedirect1005();
+    TestRedirect();
     TestJumpEncoding();
 
     return lss::test::Report();

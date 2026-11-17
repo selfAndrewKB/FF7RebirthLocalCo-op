@@ -52,22 +52,22 @@ namespace {
 
 // Facts read from the database (research/RE-p2-command-menu.md; this build).
 using facts::kMalloc;
-constexpr std::uint8_t kCtorBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x74, 0x24, 0x10, 0x48,
-                                       0x89, 0x7C, 0x24, 0x18, 0x55, 0x41, 0x56, 0x41, 0x57, 0x48, 0x8B,
-                                       0xEC, 0xB8, 0x50, 0x00, 0x00, 0x00, 0xE8, 0xBB, 0x64, 0x6A, 0xFE};
-constexpr platform::FunctionFact kCtor{L"FieldCommandCtrl__Ctor", 0x143A08A54, kCtorBytes};
+constexpr std::uint8_t kCtorBytes[] = {0x48, 0x8B, 0xC4, 0x48, 0x89, 0x58, 0x08, 0x48, 0x89, 0x70, 0x10,
+                                       0x48, 0x89, 0x78, 0x18, 0x4C, 0x89, 0x70, 0x20, 0x55, 0x48, 0x8B,
+                                       0xEC, 0xB8, 0x50, 0x00, 0x00, 0x00, 0xE8, 0x3F, 0x14, 0xA2, 0xFE};
+constexpr platform::FunctionFact kCtor{L"FieldCommandCtrl__Ctor", 0x14374A720, kCtorBytes};
 constexpr std::uint8_t kSetupBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x20, 0x48, 0x89, 0x54, 0x24, 0x10, 0x55,
                                         0x56, 0x57, 0x41, 0x54, 0x41, 0x55, 0x41, 0x56, 0x41, 0x57, 0x48,
-                                        0x8B, 0xEC, 0xB8, 0x40, 0x00, 0x00, 0x00, 0xE8, 0x1A, 0x3E, 0xB2, 0x00};
-constexpr platform::FunctionFact kSetup{L"FieldCommandCtrl__SetupMenuWidgets", 0x14158B0F4, kSetupBytes};
+                                        0x8B, 0xEC, 0xB8, 0x40, 0x00, 0x00, 0x00, 0xE8, 0x72, 0xFE, 0xD6, 0x00};
+constexpr platform::FunctionFact kSetup{L"FieldCommandCtrl__SetupMenuWidgets", 0x1413FBCEC, kSetupBytes};
 // The game's only calls of Setup and ResetAll on its controller (research/RE-p2-command-menu-levers.md): every
 // path (field entry and exit steps, the fade-deferred Setup in MasterHUD_Tick, the Blueprint thunks, the
 // menu-close re-Setup) ends at one of them. Both redirected; each call is made again on each seat's
 // controller (Setup while the seat plays, ResetAll always). Each call's five bytes lie inside one aligned
 // 16-byte block.
-constexpr std::uintptr_t kSetupCall    = 0x140F52378;  // in SetupFieldCommandOrDefer
-constexpr std::uintptr_t kResetAllCall = 0x140F52301;  // in ClearFieldCommandSetupPending
-constexpr std::uintptr_t kResetAll     = 0x140F51D00;  // FieldCommandCtrl_ResetAll(ctrl)
+constexpr std::uintptr_t kSetupCall    = 0x1413FBBF8;  // in SetupFieldCommandOrDefer
+constexpr std::uintptr_t kResetAllCall = 0x1413FBB81;  // in ClearFieldCommandSetupPending
+constexpr std::uintptr_t kResetAll     = 0x140839B80;  // FieldCommandCtrl_ResetAll(ctrl)
 // The Members panel's rebuild from the party: FieldCommandCtrl_RefreshFieldMenu(ctrl) fills the
 // party list's display array from the party manager's battle members. Setup calls it only when it creates
 // the field menu; every later rebuild (field step 9 after a load, party changes, the party menu, scripted
@@ -76,29 +76,29 @@ constexpr std::uintptr_t kResetAll     = 0x140F51D00;  // FieldCommandCtrl_Reset
 // branch lands inside it), is replaced; the rebuild also reads EndUISystem[23], so a seat's rebuild runs
 // in that seat's focus scope.
 constexpr std::uint8_t kRefreshBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x57, 0xB8, 0x20, 0x00, 0x00,
-                                          0x00, 0xE8, 0xC0, 0x64, 0x4A, 0x01, 0x48, 0x2B, 0xE0, 0x48, 0x8B, 0xF9};
-constexpr platform::FunctionFact kRefresh{L"FieldCommandCtrl_RefreshFieldMenu", 0x140C08A60, kRefreshBytes};
+                                          0x00, 0xE8, 0x34, 0xCC, 0x17, 0x01, 0x48, 0x2B, 0xE0, 0x48, 0x8B, 0xF9};
+constexpr platform::FunctionFact kRefresh{L"FieldCommandCtrl_RefreshFieldMenu", 0x140FEEF3C, kRefreshBytes};
 constexpr std::size_t            kRefreshFirst = 5;
-// In 1.005 that first instruction crosses a 16-byte block, so the entry cannot be redirected there; its only two
-// callers are redirected instead, each inside one block (RE-1005-battle-2.md): EndUI23_RefreshFieldMenu's tail jump
-// and Setup's call (the same two as in this build).
-constexpr std::uintptr_t kRefreshTailCall  = 0x140C08A59;  // jmp, in EndUI23_RefreshFieldMenu
-constexpr std::uintptr_t kRefreshSetupCall = 0x142A77DF9;  // call, in Setup's cold chunk
+// That first instruction crosses a 16-byte block, so the entry cannot be redirected; its only two callers are
+// redirected instead, each inside one block (RE-1005-battle-2.md): EndUI23_RefreshFieldMenu's tail jump and Setup's
+// call. In 1.004 the entry fits one block and is redirected itself.
+constexpr std::uintptr_t kRefreshTailCall  = 0x140FEEF35;  // jmp, in EndUI23_RefreshFieldMenu
+constexpr std::uintptr_t kRefreshSetupCall = 0x1426A7C55;  // call, in Setup's cold chunk
 // The in-field squad switch: LB/RB in the field command menu (PartyList360_CycleSquad_ApplyAndShow)
 // and the squad picked by index (PartyList360_SelectSquad_ApplyAndShow) apply the squad to the party, then
 // lay out the Members panel of the controller that took the key directly, never through the rebuild above.
 // Their one layout call each, LayoutFieldMenuCells(ctrl, 1, 0, 1), is redirected; after it, each seat's
 // controller rebuilds its panel from the party (already changed). Each call inside one aligned 16-byte block.
-constexpr std::uintptr_t kLayoutCells = 0x1408057E0;
-constexpr std::array<std::uintptr_t, 2> kSquadLayoutCalls{0x143A49EDB, 0x143A49DC3};  // cycle (LB/RB), by index
+constexpr std::uintptr_t kLayoutCells = 0x140891854;
+constexpr std::array<std::uintptr_t, 2> kSquadLayoutCalls{0x14378EF4F, 0x14378EE37};  // cycle (LB/RB), by index
 
 constexpr std::size_t kControllerSize = 0x798;
 // The key guide (EndUISystem[53]): the game builds its one with FMemory_Malloc(0x38) and KeyGuide53__Ctor
 // (EndUISystem__Ctor); a seat's is built the same way (research/RE-p2-command-menu-views.md). Its widget
 // (FWeakObjectPtr at +4) is created by the game's own ShowMode the first time the seat's controller drives it.
-constexpr std::uint8_t kKeyGuideCtorBytes[] = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0xE0,
-                                               0x0F, 0x69, 0xFE, 0x48, 0x2B, 0xE0, 0x48, 0x8B, 0xD9};
-constexpr platform::FunctionFact kKeyGuideCtor{L"KeyGuide53__Ctor", 0x143A1DF44, kKeyGuideCtorBytes};
+constexpr std::uint8_t kKeyGuideCtorBytes[] = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0x84,
+                                               0xB9, 0xA0, 0xFE, 0x48, 0x2B, 0xE0, 0x48, 0x8B, 0xD9};
+constexpr platform::FunctionFact kKeyGuideCtor{L"KeyGuide53__Ctor", 0x1437601F0, kKeyGuideCtorBytes};
 constexpr std::size_t   kKeyGuideSize   = 0x38;
 using facts::kUICommandController;  // the UI system's slots (facts/hud.h)
 using facts::kUIKeyGuide;
@@ -601,18 +601,18 @@ void Watch(int seat) noexcept
                      now.context.layerCount));
 }
 
-/// One call site redirected: at install on the research build, from the game thread on 1.005.
+/// One call site redirected: from the game thread, or at install on 1.004.
 template <class Fn>
 bool Place(platform::CallRedirect& call, std::uintptr_t site, std::uintptr_t target, Fn* with) noexcept
 {
     return g_placement.Place(call, site, target, reinterpret_cast<std::uintptr_t>(with));
 }
 
-/// The Members panel rebuild followed at every caller: its entry redirected, or on 1.005 (where that entry crosses a
-/// block) its two calls.
+/// The Members panel rebuild followed at every caller: its two calls (its entry crosses a block), or on 1.004 its
+/// entry.
 bool InstallRefresh(const platform::GameImage& image, std::uintptr_t refresh) noexcept
 {
-    if (platform::RunningBuild() != platform::BuildIndex::V1005)
+    if (platform::RunningBuild() == platform::BuildIndex::V1004)
     {
         return g_refresh.Install(refresh, image.EntryInstruction(kRefresh.address, std::span<const std::uint8_t>(kRefreshBytes, kRefreshFirst)),
                                  reinterpret_cast<std::uintptr_t>(&RefreshCall));
@@ -623,7 +623,7 @@ bool InstallRefresh(const platform::GameImage& image, std::uintptr_t refresh) no
            Place(g_refreshSetupCall, *call, refresh, &RefreshCall);
 }
 
-/// The redirects, from what Install found (its checks passed). At install on the research build; on 1.005 from
+/// The redirects, from what Install found (its checks passed). At install on 1.004; otherwise from
 /// the game thread.
 bool PlaceSites(const platform::GameImage& image) noexcept
 {

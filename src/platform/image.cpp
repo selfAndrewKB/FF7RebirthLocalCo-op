@@ -59,10 +59,10 @@ std::optional<GameImage> GameImage::Locate() noexcept
     {
         warned = true;
         LogWarning(L"unknown game build (timestamp 0x{:08X}, image size 0x{:X}, checksum 0x{:08X}): addresses are used "
-                   L"as the research build's, and every check decides",
+                   L"as the source build's, and every check decides",
                    nt->FileHeader.TimeDateStamp, nt->OptionalHeader.SizeOfImage, nt->OptionalHeader.CheckSum);
     }
-    SetRunningBuild(build != nullptr ? build->index : BuildIndex::Research);
+    SetRunningBuild(build != nullptr ? build->index : BuildIndex::Source);
     return GameImage(base, nt->OptionalHeader.SizeOfImage, build);
 }
 
@@ -92,6 +92,26 @@ std::optional<std::uintptr_t> GameImage::Rebase(std::uintptr_t idaAddress, std::
     return base_ + offset;
 }
 
+std::optional<std::uintptr_t> GameImage::OwnAddress(BuildIndex build, std::uintptr_t idaAddress,
+                                                    std::span<const std::uint8_t> bytes, std::size_t length) const noexcept
+{
+    const std::size_t span = bytes.size() > length ? bytes.size() : length;
+    if (RunningBuild() != build || idaAddress < kIdaImageBase || idaAddress - kIdaImageBase >= size_ ||
+        span > size_ - (idaAddress - kIdaImageBase))
+    {
+        return std::nullopt;
+    }
+    const std::uintptr_t live = base_ + (idaAddress - kIdaImageBase);
+    if (!IsReadable(live, span) ||
+        (!bytes.empty() && std::memcmp(reinterpret_cast<const void*>(live), bytes.data(), bytes.size()) != 0))
+    {
+        LogDebug(L"{}: the bytes at its own IDA 0x{:X} are not the expected", build_ != nullptr ? build_->name : L"?",
+                 idaAddress);
+        return std::nullopt;
+    }
+    return live;
+}
+
 bool GameImage::BytesMatch(std::uintptr_t idaAddress, std::span<const std::uint8_t> expected) const noexcept
 {
     const auto live = Rebase(idaAddress, expected.size());
@@ -106,14 +126,14 @@ bool GameImage::BytesMatch(std::uintptr_t idaAddress, std::span<const std::uint8
             MatchesTranslated(*build_, static_cast<std::uint32_t>(idaAddress - kIdaImageBase), expected, bytes);
         if (!matches && Enabled(Level::Debug))
         {
-            // Which byte first differs from the research build's (moved fields included), for re-finding it in IDA.
+            // Which byte first differs from the source build's (moved fields included), for re-finding it in IDA.
             std::size_t at = 0;
             while (at < bytes.size() && bytes[at] == expected[at])
             {
                 ++at;
             }
-            LogDebug(L"{}: the {} bytes at IDA 0x{:X} (live 0x{:X}) are not the research build's; first difference at "
-                     L"+{} (live 0x{:02X}, research 0x{:02X})",
+            LogDebug(L"{}: the {} bytes at IDA 0x{:X} (live 0x{:X}) are not the source build's; first difference at "
+                     L"+{} (live 0x{:02X}, source 0x{:02X})",
                      build_->name, expected.size(), idaAddress, *live - base_ + kIdaImageBase, at,
                      at < bytes.size() ? bytes[at] : 0, at < expected.size() ? expected[at] : 0);
         }
@@ -137,29 +157,29 @@ std::optional<std::uintptr_t> GameImage::RipTarget(std::uintptr_t               
 }
 
 std::span<const std::uint8_t> GameImage::EntryInstruction(std::uintptr_t idaAddress,
-                                                          std::span<const std::uint8_t> researchFirst) const noexcept
+                                                          std::span<const std::uint8_t> sourceFirst) const noexcept
 {
     if (!Translating() || idaAddress < kIdaImageBase || idaAddress - kIdaImageBase > 0xFFFFFFFFu)
     {
-        return researchFirst;
+        return sourceFirst;
     }
     const ReplacedAddress* replaced =
         FindReplacedAddress(*build_, static_cast<std::uint32_t>(idaAddress - kIdaImageBase));
     if (replaced == nullptr)
     {
-        return researchFirst;  // matched through a range: the instruction's bytes are the research build's
+        return sourceFirst;  // matched through a range: the instruction's bytes are the source build's
     }
-    if (replaced->firstInstruction != researchFirst.size() || replaced->bytes.size() < researchFirst.size())
+    if (replaced->firstInstruction != sourceFirst.size() || replaced->bytes.size() < sourceFirst.size())
     {
-        Log(L"{}: the first instruction at IDA 0x{:X} is not as long as the research build's ({} bytes); no entry "
+        Log(L"{}: the first instruction at IDA 0x{:X} is not as long as the source build's ({} bytes); no entry "
             L"redirect there",
-            build_->name, idaAddress, researchFirst.size());
+            build_->name, idaAddress, sourceFirst.size());
         return {};
     }
-    return replaced->bytes.first(researchFirst.size());
+    return replaced->bytes.first(sourceFirst.size());
 }
 
-std::uintptr_t GameImage::ResearchAddress(std::uintptr_t live) const noexcept
+std::uintptr_t GameImage::SourceAddress(std::uintptr_t live) const noexcept
 {
     if (live < base_ || live - base_ >= size_)
     {
@@ -168,9 +188,9 @@ std::uintptr_t GameImage::ResearchAddress(std::uintptr_t live) const noexcept
     const auto rva = static_cast<std::uint32_t>(live - base_);
     if (Translating())
     {
-        if (const auto research = ResearchRva(*build_, rva))
+        if (const auto source = SourceRva(*build_, rva))
         {
-            return kIdaImageBase + *research;
+            return kIdaImageBase + *source;
         }
     }
     return kIdaImageBase + rva;

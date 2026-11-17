@@ -9,9 +9,11 @@
 // platform/code_redirect.h. While the skip byte is set (a seat's pass), the code jumps over the
 // block to the instruction after the submit, doing first what that code needs from the block:
 //
-// Circle (SEndNaviMapCircle, the site `mov rcx,[r15+1C0h]`, to the instruction after the submit): xmm13 = 0. rcx is
-// loaded by the replaced instruction, so it is free before it; the code after the submit reloads rcx
-// and rax first. Flags are not read before the next call on either path.
+// Circle (SEndNaviMapCircle, the site `vmovq rdx,xmm0`, still before the resize, acquire, paint and submit, to the
+// instruction after the submit): xmm13 = 0. rdx is loaded by the replaced instruction, so it is free before it, and rcx
+// (already loaded with [r15+1C0h], the resize's argument) is kept for the stock path. The code after the submit also
+// reads a stack slot the block writes: `vmovss xmm7,[rsp+40h]`, 1.0f stored inside the block, so the skip stores 1.0f
+// there too. Flags are not read before the next call on either path.
 //
 // Octagon (SEndNaviMapOctagon, the site `vmovss [rsp+78h],xmm15`, to the instruction after the submit): the two
 // stores at the site, then xmm13 = 0. rax was last written before the site and is not read before the
@@ -19,12 +21,9 @@
 //
 // Each path counts itself in the fields (lock inc): the skips and the stock paints per widget.
 //
-// Game version 1.005 (research/RE-1005-hud-2.md), circle only: the research site crosses a 16-byte block, so
-// the site is the next instruction, `vmovq rdx,xmm0`, still before the resize, acquire, paint and submit
-// (to the instruction after the submit). rdx is loaded by the replaced instruction, so it is free before it, and rcx
-// (already loaded with [r15+1C0h], the resize's argument) is kept for the stock path. The code after the submit
-// also reads a stack slot the block writes: `vmovss xmm7,[rsp+40h]`, 1.0f stored inside the block (1.004 loads its
-// 1.0f from .rdata after the submit), so the skip stores 1.0f there too.
+// Game version 1.004, circle only: the site is the instruction before, `mov rcx,[r15+1C0h]` (in 1.005 it crosses a
+// 16-byte block). rcx is loaded by the replaced instruction, so it is free before it; the code after the submit
+// reloads rcx and rax first, and loads its 1.0f from .rdata after the submit, so nothing is stored for it.
 
 #include <array>
 #include <cstddef>
@@ -45,14 +44,14 @@ struct MinimapOnceFields
 static_assert(offsetof(MinimapOnceFields, circleSkipped) == 0x08 && offsetof(MinimapOnceFields, octagonSkipped) == 0x10 &&
               offsetof(MinimapOnceFields, circlePainted) == 0x18 && offsetof(MinimapOnceFields, octagonPainted) == 0x20);
 
-inline constexpr std::size_t kCircleSkipCodeSize     = 51;
+inline constexpr std::size_t kCircleSkipCodeSize     = 57;
 inline constexpr std::size_t kOctagonSkipCodeSize    = 62;
-inline constexpr std::size_t kCircleSkipCodeSize1005 = 57;
+inline constexpr std::size_t kCircleSkipCodeSize1004 = 51;
 
 /// The instruction each site replaces, as the research read it.
-inline constexpr std::uint8_t kCircleSiteBytes[]     = {0x49, 0x8B, 0x8F, 0xC0, 0x01, 0x00, 0x00};  // mov rcx,[r15+1C0h]
+inline constexpr std::uint8_t kCircleSiteBytes[]     = {0xC4, 0xE1, 0xF9, 0x7E, 0xC2};              // vmovq rdx,xmm0
 inline constexpr std::uint8_t kOctagonSiteBytes[]    = {0xC5, 0x7A, 0x11, 0x7C, 0x24, 0x78};        // vmovss [rsp+78h],xmm15
-inline constexpr std::uint8_t kCircleSiteBytes1005[] = {0xC4, 0xE1, 0xF9, 0x7E, 0xC2};              // vmovq rdx,xmm0
+inline constexpr std::uint8_t kCircleSiteBytes1004[] = {0x49, 0x8B, 0x8F, 0xC0, 0x01, 0x00, 0x00};  // mov rcx,[r15+1C0h]
 
 namespace detail {
 inline void PutQword(std::uint8_t* at, std::uint64_t value) noexcept
@@ -61,11 +60,11 @@ inline void PutQword(std::uint8_t* at, std::uint64_t value) noexcept
 }
 }  // namespace detail
 
-/// `afterSubmit` is the live address of the instruction after the circle's submit call.
-inline std::array<std::uint8_t, kCircleSkipCodeSize> CircleSkipCode(const MinimapOnceFields& fields,
-                                                                     std::uintptr_t afterSubmit) noexcept
+/// Game version 1.004's circle (above). `afterSubmit` is the live address of the instruction after its submit call.
+inline std::array<std::uint8_t, kCircleSkipCodeSize1004> CircleSkipCode1004(const MinimapOnceFields& fields,
+                                                                             std::uintptr_t afterSubmit) noexcept
 {
-    std::array<std::uint8_t, kCircleSkipCodeSize> code = {
+    std::array<std::uint8_t, kCircleSkipCodeSize1004> code = {
         0x48, 0xB9, 0, 0, 0, 0, 0, 0, 0, 0,        //  0: mov  rcx, &fields
         0x80, 0x39, 0x00,                          // 10: cmp  byte [rcx], 0     the skip byte
         0x74, 0x18,                                // 13: je   stock (39)
@@ -81,11 +80,11 @@ inline std::array<std::uint8_t, kCircleSkipCodeSize> CircleSkipCode(const Minima
     return code;
 }
 
-/// Game version 1.005's circle (above). `afterSubmit` is the live address of the instruction after its submit call.
-inline std::array<std::uint8_t, kCircleSkipCodeSize1005> CircleSkipCode1005(const MinimapOnceFields& fields,
-                                                                             std::uintptr_t afterSubmit) noexcept
+/// `afterSubmit` is the live address of the instruction after the circle's submit call.
+inline std::array<std::uint8_t, kCircleSkipCodeSize> CircleSkipCode(const MinimapOnceFields& fields,
+                                                                     std::uintptr_t afterSubmit) noexcept
 {
-    std::array<std::uint8_t, kCircleSkipCodeSize1005> code = {
+    std::array<std::uint8_t, kCircleSkipCodeSize> code = {
         0x48, 0xBA, 0, 0, 0, 0, 0, 0, 0, 0,              //  0: mov  rdx, &fields
         0x80, 0x3A, 0x00,                                // 10: cmp  byte [rdx], 0     the skip byte
         0x74, 0x20,                                      // 13: je   stock (47)

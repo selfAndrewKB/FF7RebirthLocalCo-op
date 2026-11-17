@@ -59,32 +59,32 @@ namespace {
 
 // FieldTick's `call TriggerTracker_DiffAndDispatchEnterLeave(ctx, tracker, &overlaps, &keys, &map)` (E8 inside one block
 // in both builds). `keys` and `map` are the field tick's scratch structures, reset before each tracker.
-constexpr std::uintptr_t kDispatchCall    = 0x140A562B1;
-constexpr std::uint8_t   kDispatchBytes[] = {0x48, 0x85, 0xD2, 0x0F, 0x84, 0xE2, 0x06, 0x00, 0x00, 0x48, 0x8B, 0xC4,
-                                             0x48, 0x89, 0x58, 0x20, 0x4C, 0x89, 0x40, 0x18, 0x48, 0x89, 0x48, 0x08};
-constexpr platform::FunctionFact kDispatch{L"TriggerTracker_DiffAndDispatchEnterLeave", 0x140A42FAC, kDispatchBytes};
+constexpr std::uintptr_t kDispatchCall    = 0x140935A31;
+constexpr std::uint8_t   kDispatchBytes[] = {0x48, 0x85, 0xD2, 0x0F, 0x84, 0xD9, 0x01, 0x00, 0x00, 0x48, 0x89, 0x5C,
+                                             0x24, 0x20, 0x4C, 0x89, 0x44, 0x24, 0x18, 0x48, 0x89, 0x4C, 0x24, 0x08};
+constexpr platform::FunctionFact kDispatch{L"TriggerTracker_DiffAndDispatchEnterLeave", 0x1409362C0, kDispatchBytes};
 using DispatchFn = std::uintptr_t (*)(void* context, void* tracker, void* overlaps, void* keys, void* map);
 
 // The diff's calls of TriggerMgr_OnTrackerEnter_Filter / _Leave_Filter(manager, FName key, owner, weak actor): `owner`
 // is the tracker's owner, the trigger actor. 1.004 enter +0x6 of its block, leave +0xD (crosses); 1.005 enter
 // +0xD (crosses), leave +0xB.
-constexpr std::uintptr_t kEnterFilterCall = 0x140A43416;
-constexpr std::uintptr_t kLeaveFilterCall = 0x140A4352D;
+constexpr std::uintptr_t kEnterFilterCall = 0x1409369BD;
+constexpr std::uintptr_t kLeaveFilterCall = 0x14093690B;
 constexpr std::uint8_t   kEnterFilterBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x6C, 0x24, 0x10, 0x48, 0x89,
-                                                0x74, 0x24, 0x18, 0x57, 0xB8, 0x30, 0x00, 0x00, 0x00, 0xE8, 0xB6, 0x07};
+                                                0x74, 0x24, 0x18, 0x57, 0xB8, 0x30, 0x00, 0x00, 0x00, 0xE8, 0x7A, 0x6D};
 constexpr std::uint8_t   kLeaveFilterBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x6C, 0x24, 0x10, 0x48, 0x89,
-                                                0x74, 0x24, 0x18, 0x57, 0xB8, 0x30, 0x00, 0x00, 0x00, 0xE8, 0xF2, 0x09};
-constexpr platform::FunctionFact kEnterFilter{L"TriggerMgr_OnTrackerEnter_Filter", 0x1409DE760, kEnterFilterBytes};
-constexpr platform::FunctionFact kLeaveFilter{L"TriggerMgr_OnTrackerLeave_Filter", 0x1409DE524, kLeaveFilterBytes};
+                                                0x74, 0x24, 0x18, 0x57, 0xB8, 0x30, 0x00, 0x00, 0x00, 0xE8, 0x2A, 0x6B};
+constexpr platform::FunctionFact kEnterFilter{L"TriggerMgr_OnTrackerEnter_Filter", 0x141174DEC, kEnterFilterBytes};
+constexpr platform::FunctionFact kLeaveFilter{L"TriggerMgr_OnTrackerLeave_Filter", 0x14117503C, kLeaveFilterBytes};
 // The 4th argument differs (research/RE-p2-traversal-L1.md): the enter's is an FOverlapResult* (weak actor at +0) or null,
 // the leave's a plain AActor* (0 if the tracker's weak had gone stale).
 using FilterFn = std::uintptr_t (*)(void* manager, std::uint64_t key, void* owner, void* actorArg);
 
 // Traversal L1 (research/RE-p2-traversal-L1.md). The routers find a field-action actor by the key, the overlapped
 // actor's Tags[0], in Square Enix's tag registry; the mod looks it up the same way.
-constexpr std::uint8_t kFindActorBytes[] = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0xF0, 0x88, 0x2D, 0x01,
-                                            0x48, 0x2B, 0xE0, 0x48, 0x8B, 0xD9, 0xE8, 0xB9, 0xD5, 0xAB, 0xFF, 0x48};
-constexpr platform::FunctionFact kFindActor{L"EndActorTagRegistry_FindActorByTag", 0x140DD6634, kFindActorBytes};
+constexpr std::uint8_t kFindActorBytes[] = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0x34, 0x31, 0x22, 0x01,
+                                            0x48, 0x2B, 0xE0, 0x48, 0x8B, 0xD9, 0xE8, 0xAD, 0xCB, 0x98, 0xFF, 0x48};
+constexpr platform::FunctionFact kFindActor{L"EndActorTagRegistry_FindActorByTag", 0x140F48A40, kFindActorBytes};
 using FindActorFn = void* (*)(const std::uint64_t* key);
 
 // The classes admitted for the seats (research/RE-p2-traversal-classes.md): native vtables, which placed Blueprint
@@ -99,7 +99,7 @@ struct AdmittedClass
     std::uintptr_t unregister = 0;   // that class's unregister override, checked at its slot
     bool           enterEffectOnly = false;  // zip lines: only the auto-start kind (bUseEnterEffect +0x770)
     bool           logsUseFields   = false;  // one-shot moves: the register's +0x848 / +0x86C, logged per delivery
-    platform::PerBuild<std::uint32_t> unregisterSlot{0x728, 0x730};  // where `unregister` sits in the vtable
+    platform::PerBuild<std::uint32_t> unregisterSlot{0x730, 0x728};  // where `unregister` sits in the vtable
     bool           rides = false;  // chocobo climbs: delivered while the seat's player rides their own chocobo too
     void (*notes)(const void* actor) noexcept = nullptr;  // a delivered enter names the actor's point to its module
     bool (*ready)() noexcept = nullptr;  // the module holding the class's other levers is placed (else held back)
@@ -120,10 +120,10 @@ constexpr AdmittedClass kAdmitted[] = {
     {L"lifting rope", facts::kLiftingRopeVTable},
     {L"spider move", facts::kSpiderMoveVTable},
     {L"zip line", facts::kZipLineVTable, 0, 0, true},
-    {L"pole slide", facts::kPoleSlideVTable, 0x758, 0x143642998},
-    {L"one-shot move", facts::kOneShotMoveVTable, 0x840, 0x141812E50, false, true},
+    {L"pole slide", facts::kPoleSlideVTable, 0x758, 0x1433773E8},
+    {L"one-shot move", facts::kOneShotMoveVTable, 0x840, 0x1433D85BC, false, true},
     {L"wall run", facts::kWallRunVTable},
-    {L"chocobo climb", facts::kChocoboClimbVTable, 0x738, 0x143661AA8, false, false, {0x738, 0x740}, true},
+    {L"chocobo climb", facts::kChocoboClimbVTable, 0x738, 0x143397238, false, false, {0x738, 0x740}, true},
     {L"chocobo launch pad", facts::kChocoboJumpPadVTable, 0x734, facts::kChocoboJumpPadUnregister, false, false, {0x738, 0x740}, true},
     {L"chocobo jump box", facts::kChocoboJumpBoxVTable, 0x7A0, facts::kChocoboJumpBoxUnregister, false, false, {0x738, 0x740}, true},
     {L"chocobo slider", facts::kChocoboSliderVTable, 0x760, facts::kChocoboSliderUnregister, false, false, {0x738, 0x740}, true},
@@ -151,7 +151,7 @@ constexpr std::size_t   kClassCount     = std::size(kAdmitted);
 constexpr std::uint32_t kZiplineEnterEffect = 0x770;  // u8 bUseEnterEffect: set = starts on approach, else a button prompt
 constexpr std::uint32_t kOneShotUseA     = 0x848;  // OneShotMove fields its register resets [UNKNOWN meaning]: logged
 constexpr std::uint32_t kOneShotUseB     = 0x86C;
-inline constexpr platform::PerBuild<std::uint32_t> kEnterSlot{0x710, 0x718};
+inline constexpr platform::PerBuild<std::uint32_t> kEnterSlot{0x718, 0x710};
 constexpr std::size_t   kVtableSpan = 0x750;  // the slots read below, the climb's unregister (1.005 +0x740) included
 constexpr std::uint64_t kNoWeak = 0x00000000FFFFFFFFull;  // FWeakObjectPtr reset: index -1, serial 0
 
@@ -159,10 +159,10 @@ constexpr std::uint64_t kNoWeak = 0x00000000FFFFFFFFull;  // FWeakObjectPtr rese
 // first actor on the LeaderActionComp's wall-run list (+0x14F0) whose REAL entered flag is set. Its only call
 // (inside one 16-byte block in both builds) is taken over: for a seat's
 // LeaderActionComp (*(its controller+0x598)) that seat's flags are swapped in around it.
-constexpr std::uintptr_t kWallRunPickCall = 0x1434372CA;
+constexpr std::uintptr_t kWallRunPickCall = 0x14315631A;
 constexpr std::uint8_t   kWallRunPickBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x74,
                                                 0x24, 0x10, 0x57, 0xB8, 0x20, 0x00, 0x00, 0x00};
-constexpr platform::FunctionFact kWallRunPick{L"LeaderActionComp_FindWallRunActorEntered_Flag2A1", 0x143CFFE9C,
+constexpr platform::FunctionFact kWallRunPick{L"LeaderActionComp_FindWallRunActorEntered_Flag2A1", 0x143A61384,
                                               kWallRunPickBytes};
 using WallRunPickFn = void* (*)(void* leaderActionComp);
 constexpr std::uint32_t kControllerLeaderAction = 0x598;   // PC -> its LeaderActionComp
@@ -184,14 +184,14 @@ using FreeFn   = void (*)(void* block);
 // builds).
 constexpr std::uint8_t kSetClearBytes[] = {0x48, 0x8B, 0xC4, 0x48, 0x89, 0x58, 0x08, 0x48, 0x89, 0x70, 0x10, 0x48,
                                            0x89, 0x78, 0x18, 0x4C, 0x89, 0x70, 0x20, 0x55, 0x48, 0x8B, 0xEC, 0xB8};
-constexpr platform::FunctionFact kSetClear{L"FieldTick's scratch set clear", 0x1409B7DCC, kSetClearBytes};
+constexpr platform::FunctionFact kSetClear{L"FieldTick's scratch set clear", 0x140A582B0, kSetClearBytes};
 using SetClearFn = void (*)(void* set);
 
 // Data.
 using facts::kTagRegistryWeak;
-constexpr std::uintptr_t kOverlapLock  = 0x1491DE5D8;  // CRITICAL_SECTION held while FieldTick reads an overlap datum
-constexpr std::uintptr_t kSweepFlagA   = 0x1493BE6DA;  // either set: FieldTick reads sweep results instead
-constexpr std::uintptr_t kSweepFlagB   = 0x1493BE6D9;
+constexpr std::uintptr_t kOverlapLock  = 0x149016688;  // CRITICAL_SECTION held while FieldTick reads an overlap datum
+constexpr std::uintptr_t kSweepFlagA   = 0x1491FAA71;  // either set: FieldTick reads sweep results instead
+constexpr std::uintptr_t kSweepFlagB   = 0x1491FAA70;
 
 // The registry's world getter: facts::kObjectGetWorldSlot.
 using GetWorldFn = void* (*)(void* object);
@@ -591,7 +591,7 @@ void LogEvent(int seat, bool enter, const void* actor, const void* passed, std::
     {
         const int cls = ClassOf(actor);
         kind          = cls >= 0 ? std::wstring(kAdmitted[cls].name)
-                                 : std::format(L"vt 0x{:X}", g_image ? g_image->ResearchAddress(VTableOf(actor)) : 0);
+                                 : std::format(L"vt 0x{:X}", g_image ? g_image->SourceAddress(VTableOf(actor)) : 0);
     }
     platform::LogDebug(L"triggers: {}'s trigger {} {} ({}; {}): {}", players::SeatName(seat),
                        enter ? L"enters" : L"leaves",

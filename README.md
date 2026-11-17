@@ -4,7 +4,8 @@ Local split-screen co-op for up to three players in FINAL FANTASY VII REBIRTH, a
 
 ## Requirements
 
-- FINAL FANTASY VII REBIRTH on Steam, version 1.005 or 1.004.
+- FINAL FANTASY VII REBIRTH on Steam, version 1.005. Version 1.004 still works but is deprecated: its support will
+  be removed.
 - UE4SS from Nexus Mods: "UE4SS-Rebirth_FFVII_ReMenu (1.005 Compatible)". The mod is built against that loader's
   source and needs no other.
 - To build: Visual Studio 2022 with the C++ desktop workload, CMake 3.18 or later, a Rust toolchain (UE4SS builds part
@@ -52,10 +53,11 @@ python package.py
 
 ## Game versions
 
-One DLL serves 1.004 and 1.005. The source holds 1.004's addresses; for 1.005 they are translated through
-`src/platform/builds/`, and offsets that moved between versions are per-build values. Every address is checked against
-the game's code at start-up. If a check fails, that feature stays off and the log says why. On an unknown version
-everything that does not match stays off. `tools/version_match/README.md` covers adding a version.
+The source is written for 1.005: every address in it is a 1.005 address, as IDA shows it. One DLL still serves 1.004:
+its addresses are translated through the tables in `src/platform/builds/`, and offsets that moved between versions are
+per-build values. Every address is checked against the game's code at start-up. If a check fails, that feature stays
+off and the log says why. On an unknown version everything that does not match stays off. `tools/version_match/README.md`
+covers adding a version.
 
 ## Project map
 

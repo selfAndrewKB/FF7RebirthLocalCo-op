@@ -30,25 +30,25 @@ namespace {
 // Facts read from the database (research/RE-p2-command-menu-levers.md; this build).
 // The two lock setters: void(u8), each storing one byte on EndUISystem[23]; one call site each in
 // BattleSystem_Tick, each call's five bytes inside one aligned 16-byte block.
-constexpr std::uint8_t kEnabledBytes[] = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0xB0,
-                                          0xD4, 0x6D, 0xFE, 0x48, 0x2B, 0xE0, 0x8A, 0xD9};
-constexpr platform::FunctionFact kEnabled{L"EndUI23_SetCommandsEnabled5E2", 0x1439D1A74, kEnabledBytes};
-constexpr std::uint8_t kLockedBytes[] = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0x84,
-                                         0xD4, 0x6D, 0xFE, 0x48, 0x2B, 0xE0, 0x8A, 0xD9};
-constexpr platform::FunctionFact kLocked{L"EndUI23_SetCommandsLocked5E3", 0x1439D1AA0, kLockedBytes};
-constexpr std::uintptr_t kEnabledCall = 0x140C91C57;
-constexpr std::uintptr_t kLockedCall  = 0x140C91C61;
+constexpr std::uint8_t kEnabledBytes[] = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0x20,
+                                          0x9A, 0xA5, 0xFE, 0x48, 0x2B, 0xE0, 0x8A, 0xD9};
+constexpr platform::FunctionFact kEnabled{L"EndUI23_SetCommandsEnabled5E2", 0x143712154, kEnabledBytes};
+constexpr std::uint8_t kLockedBytes[] = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0xF4,
+                                         0x99, 0xA5, 0xFE, 0x48, 0x2B, 0xE0, 0x8A, 0xD9};
+constexpr platform::FunctionFact kLocked{L"EndUI23_SetCommandsLocked5E3", 0x143712180, kLockedBytes};
+constexpr std::uintptr_t kEnabledCall = 0x140B38303;
+constexpr std::uintptr_t kLockedCall  = 0x140B3830D;
 // The category setter: void(u8 category, u8 enabled). Its first instruction, `mov [rsp+8], rbx`
 // (5 bytes, no RIP-relative operand, no branch lands inside it), is the one the entry redirect replaces.
 constexpr std::uint8_t kCategoryBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x57, 0xB8, 0x20, 0x00, 0x00, 0x00,
-                                           0xE8, 0x18, 0xE1, 0x6D, 0xFE, 0x48, 0x2B, 0xE0, 0x40, 0x8A, 0xFA};
-constexpr platform::FunctionFact kCategory{L"EndUI23_SetCommandCategoryEnabled", 0x1439D0E08, kCategoryBytes};
+                                           0xE8, 0x40, 0xA8, 0xA5, 0xFE, 0x48, 0x2B, 0xE0, 0x40, 0x8A, 0xFA};
+constexpr platform::FunctionFact kCategory{L"EndUI23_SetCommandCategoryEnabled", 0x143711330, kCategoryBytes};
 // The event on/off table's dispatcher: its first instruction, `mov [rsp+10h], rbx` (5 bytes, the same
 // conditions), is replaced.
 constexpr std::uint8_t kDispatcherBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x48, 0x89, 0x74, 0x24, 0x18,
                                              0x57, 0x41, 0x54, 0x41, 0x55, 0x41, 0x56, 0x41, 0x57, 0xB8,
-                                             0xF0, 0x03, 0x00, 0x00, 0xE8, 0x8B, 0xBB, 0x07, 0x01};
-constexpr platform::FunctionFact kDispatcher{L"EventCmd_Dispatch_BattleModeCase87", 0x141033388, kDispatcherBytes};
+                                             0xF0, 0x03, 0x00, 0x00, 0xE8, 0xF3, 0xA4, 0x09, 0x01};
+constexpr platform::FunctionFact kDispatcher{L"EventCmd_Dispatch_BattleModeCase87", 0x1410D1670, kDispatcherBytes};
 constexpr std::size_t kFirstInstruction = 5;
 
 using facts::kUICommandController;  // the UI system's slot (facts/hud.h)
@@ -234,7 +234,7 @@ void Dispatch(void* fieldSystem, std::int32_t mode) noexcept
 
 namespace {
 
-/// The redirects, in order, from what Install found (its checks passed). At install on the research build; on 1.005
+/// The redirects, in order, from what Install found (its checks passed). At install on 1.004; otherwise
 /// from the game thread, where the locked call's five bytes cross a 16-byte block (platform/deferred_sites.h).
 bool PlaceSites(const platform::GameImage&) noexcept
 {

@@ -6,10 +6,10 @@
 // InstallFromOwnThread): such a call may be changed only from the one thread that runs it, while that
 // thread is not inside the function holding it. A module whose sites are such keeps what its Install
 // found, queues its placement for the session's tick (platform/game_thread_sites.h) and makes its install
-// line when the placement runs; on the research build the same placement runs at install. This is that
-// protocol, once: the image kept for the placement (set before it is queued and never reset, so a Remove
-// on another thread cannot pull it from under a running placement), the pending flag Remove clears so a
-// placement still queued does nothing, and the choice of Install or InstallFromOwnThread per site.
+// line when the placement runs; on 1.004, whose sites fit one block, the same placement runs at install.
+// This is that protocol, once: the image kept for the placement (set before it is queued and never reset, so
+// a Remove on another thread cannot pull it from under a running placement), the pending flag Remove clears
+// so a placement still queued does nothing, and the choice of Install or InstallFromOwnThread per site.
 
 #include "platform/call_redirect.h"
 #include "platform/image.h"
@@ -28,7 +28,8 @@ public:
     using PlaceFn = bool (*)(const GameImage& image) noexcept;
 
     /// Runs `place` now and gives its result, or, when `deferred`, queues it for the game thread's next session
-    /// tick: true when queued, false (nothing placed) when the queue had no room. Deferred on 1.005 by default.
+    /// tick: true when queued, false (nothing placed) when the queue had no room. Deferred by default on every
+    /// build but 1.004.
     bool Install(const GameImage& image, PlaceFn place, bool deferred = Deferred()) noexcept;
 
     /// One call site: InstallFromOwnThread when the placement runs on the game thread, Install at install.
@@ -57,7 +58,7 @@ public:
         return pending_;
     }
 
-    /// The running build's call sites cross 16-byte blocks: 1.005.
+    /// The running build's call sites cross 16-byte blocks: every build but 1.004.
     static bool Deferred() noexcept;
 
 private:

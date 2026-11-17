@@ -29,13 +29,13 @@ namespace {
 // UEndChocoboJetGaugeComponent (research/RE-chocobo-exits-pads.md; the reflection dump): its BeginPlay makes the
 // widget; its placement projects the owner's socket through the world's first local player and moves the widget,
 // then runs the show and hide animations and the fill, every tick. 1.005 through replaced-chocobo-spots.json.
-constexpr std::uint8_t kBeginPlayBytes[] = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0x64, 0x70, 0x2F, 0xFE,
+constexpr std::uint8_t kBeginPlayBytes[] = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0xCC, 0x46, 0x64, 0xFE,
                                             0x48, 0x2B, 0xE0, 0x48, 0x8B, 0xD9};
-constexpr platform::SlotFact kBeginPlaySlot{L"the chocobo jet gauge component's BeginPlay slot", 0x1467ED6D0,
-                                            {L"ChocoboJetGaugeComp_BeginPlay_CreatesWidget", 0x143DB7EC0, kBeginPlayBytes}};
-constexpr std::uint8_t kPlaceBytes[] = {0x40, 0x53, 0xB8, 0x50, 0x00, 0x00, 0x00, 0xE8, 0xB4, 0x09, 0x2E, 0xFE,
+constexpr platform::SlotFact kBeginPlaySlot{L"the chocobo jet gauge component's BeginPlay slot", 0x146679650,
+                                            {L"ChocoboJetGaugeComp_BeginPlay_CreatesWidget", 0x143B274A8, kBeginPlayBytes}};
+constexpr std::uint8_t kPlaceBytes[] = {0x40, 0x53, 0xB8, 0x50, 0x00, 0x00, 0x00, 0xE8, 0xBC, 0xE2, 0x62, 0xFE,
                                         0x48, 0x2B, 0xE0, 0x48, 0x83, 0xB9, 0xC0, 0x00, 0x00, 0x00, 0x00};
-constexpr platform::FunctionFact kPlace{L"ChocoboJetGaugeComp_PlaceWidget_FirstLocalPlayerView", 0x143DCE570, kPlaceBytes};
+constexpr platform::FunctionFact kPlace{L"ChocoboJetGaugeComp_PlaceWidget_FirstLocalPlayerView", 0x143B3D8B8, kPlaceBytes};
 using BeginPlayFn = std::uintptr_t (*)(void* component);
 using PlaceFn     = void (*)(void* component);
 constexpr std::uint32_t kGaugeWidget = 0xC0;  // JetGaugeWidget: the widget on the root overlay (null before BeginPlay)

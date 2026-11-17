@@ -38,26 +38,26 @@ using Clock = std::chrono::steady_clock;
 
 // research/RE-p2-attack-cameras.md (both builds; every site re-read from both exes).
 // D1: the slot-20 compute's call of CamEntry_IsActive_LeaderKeyed(rcx unused, rdx entry) -> bool (1.005: crosses a block).
-constexpr std::uintptr_t kActiveCall     = 0x140E58FD0;
+constexpr std::uintptr_t kActiveCall     = 0x140D4F31C;
 constexpr std::uint8_t   kUsesTargetBytes[] = {0x8A, 0x91, 0x80, 0x08, 0x00, 0x00, 0x32, 0xC0};
 // EndBattleCameraActor_UsesTargetMeshOrActor(cam) -> bool
-constexpr platform::FunctionFact kUsesTarget{L"EndBattleCameraActor_UsesTargetMeshOrActor", 0x140AEED2C,
+constexpr platform::FunctionFact kUsesTarget{L"EndBattleCameraActor_UsesTargetMeshOrActor", 0x140ED4A20,
                                              kUsesTargetBytes};
 constexpr std::uint8_t   kFrameBytes[]      = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x6C, 0x24, 0x10};
 // EndBattleCameraActor_ShotInvolvesLeader(cam) -> bool
-constexpr platform::FunctionFact kInvolvesLeader{L"EndBattleCameraActor_ShotInvolvesLeader", 0x140AEED90, kFrameBytes};
+constexpr platform::FunctionFact kInvolvesLeader{L"EndBattleCameraActor_ShotInvolvesLeader", 0x140ED4A84, kFrameBytes};
 // EndBattleCameraActor_GetTarget(cam) -> UObject*
-constexpr platform::FunctionFact kGetTarget{L"EndBattleCameraActor_GetTarget", 0x140AEEEEC, kFrameBytes};
-constexpr platform::FunctionFact kIsActive{L"CamEntry_IsActive_LeaderKeyed", 0x140AEEB7C, kFrameBytes};
+constexpr platform::FunctionFact kGetTarget{L"EndBattleCameraActor_GetTarget", 0x140ED4BE0, kFrameBytes};
+constexpr platform::FunctionFact kIsActive{L"CamEntry_IsActive_LeaderKeyed", 0x140ED4598, kFrameBytes};
 // D2: the calls of EndBattleCameraActor_UpdateFromOperatorPose(cam rcx, float dt xmm1, pose r8) -> byte: per camera in
 // BattleCamSeqEntry_EvaluatePose (1.004: crosses a block) and the seed at play; and the three calls of
 // PartyManager_GetCharacterByPlayerType(u8 lane, u8 type) -> UObject* that read the leader inside it (R1 selector 3,
 // R2 selector 6, R3 the eye's relative rotation).
-constexpr std::uintptr_t                kUpdateCalls[]  = {0x140C427CE, 0x140B6A798};
+constexpr std::uintptr_t                kUpdateCalls[]  = {0x14156AB2A, 0x141417B50};
 constexpr std::uint8_t                  kUpdatePoseBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x20, 0x55, 0x56, 0x57};
-constexpr platform::FunctionFact kUpdatePose{L"EndBattleCameraActor_UpdateFromOperatorPose", 0x140AEF118,
+constexpr platform::FunctionFact kUpdatePose{L"EndBattleCameraActor_UpdateFromOperatorPose", 0x140ED5B40,
                                              kUpdatePoseBytes};
-constexpr std::uintptr_t                kLeaderCalls[]  = {0x140AF0EC5, 0x14292F6D9, 0x142AA2995};
+constexpr std::uintptr_t                kLeaderCalls[]  = {0x140ED8273, 0x1425F03B4, 0x142705343};
 using facts::kCharacterByPlayerType;
 
 // The sequence list's entry, the sequence actor's camera and the camera's owner (facts/cameras.h).

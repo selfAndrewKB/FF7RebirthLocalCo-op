@@ -3,9 +3,9 @@
 Walks the mod's sources and fails on an IDA address literal (0x14XXXXXXX) that appears in two files, on a PerBuild
 pair whose two values are the same (a pair exists only where a build moved the value), and on a BytesMatch call outside
 platform/ (an address with bytes is a FunctionFact, found through FindFunction, so a changed function is logged by
-name). Comments and string literals are skipped; the 1.004 -> 1.005 translation table (platform/build_translation.cpp)
-lists addresses by design and is skipped, as is the image base. A shared fact belongs in src/facts/, declared once; a
-fact one module reads stays in that module.
+name). Comments and string literals are skipped; the build translation (platform/build_translation.cpp) lists addresses
+by design and is skipped, as is the image base. A shared fact belongs in src/facts/, declared once; a fact one module
+reads stays in that module.
 
 Usage: facts_once.py <src dir>. Exit 1 with a listing when anything is found; silent and 0 otherwise. Run by ctest.
 """

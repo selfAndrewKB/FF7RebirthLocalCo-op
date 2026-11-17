@@ -51,12 +51,12 @@ namespace {
 using RC::Unreal::UObject;
 
 // Facts read from the database (research/RE-p2-hud.md).
-constexpr std::uintptr_t kGameMode            = 0x1490FF2B8;  // g_AEndGameMode (pointer)
+constexpr std::uintptr_t kGameMode            = 0x148F32AA0;  // g_AEndGameMode (pointer)
 constexpr std::uint32_t  kGameModeHudTimeStep = 0x5D8;        // float, written once per engine tick
 
 // GEngine__GetFirstGamePlayerForGameViewport's first instruction (hud/passes/first_player_code.h).
-constexpr std::uintptr_t kFirstGamePlayer       = 0x140CCF8E4;
-constexpr std::uintptr_t kFirstGamePlayerResume = 0x140CCF8E9;
+constexpr std::uintptr_t kFirstGamePlayer       = 0x140925D68;
+constexpr std::uintptr_t kFirstGamePlayerResume = 0x140925D6D;
 
 // The enemy ability-name labels (research/RE-p2-battle-popups.md): a TSparseArray at *(EndUISystem+0x180),
 // 72-byte elements, the label's weak widget at +8. A new label is made for each name shown.

@@ -40,14 +40,14 @@ namespace {
 // Create returns at once when the holder already has a selector, so a new selector is "holder+8 null before, set after".
 constexpr std::uint8_t kCreateBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x48, 0x89, 0x74,
                                          0x24, 0x18, 0x57, 0xB8, 0x30, 0x00, 0x00, 0x00};
-constexpr platform::FunctionFact kCreate{L"EnemyTargetSel_Create_ByCharaSpecType", 0x1414F4908, kCreateBytes};
-constexpr std::uintptr_t         kCreateCall = 0x1413D8397;
+constexpr platform::FunctionFact kCreate{L"EnemyTargetSel_Create_ByCharaSpecType", 0x14104F374, kCreateBytes};
+constexpr std::uintptr_t         kCreateCall = 0x140E560F7;
 
 // Each decision: Decide(selector, u8 reason, u8 lock-check argument); not virtual, 6 callers (two cross a block in 1.005,
 // one is a tail jump), so an entry redirect. First instruction mov [rsp+10h],rbx.
 constexpr std::uint8_t kDecideBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x48, 0x89, 0x6C,
                                          0x24, 0x18, 0x48, 0x89, 0x74, 0x24, 0x20, 0x57};
-constexpr platform::FunctionFact kDecide{L"TargetSelector Decide", 0x1407FEB68, kDecideBytes};
+constexpr platform::FunctionFact kDecide{L"TargetSelector Decide", 0x14080A374, kDecideBytes};
 constexpr std::size_t    kDecideFirst = 5;
 
 // Each kind's select, bool(selector, u8 reason, UObject** out), in its vtable's slot +0x88 (the out is written on
@@ -56,7 +56,7 @@ constexpr std::size_t    kDecideFirst = 5;
 constexpr std::uint8_t kHateSelectBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x55, 0x56, 0x57,
                                              0x41, 0x54, 0x41, 0x55, 0x41, 0x56, 0x41, 0x57};
 constexpr std::uint8_t kNoneSelectBytes[] = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8,
-                                             0x5C, 0x4E, 0x3F, 0x01, 0x48, 0x2B, 0xE0, 0x48};
+                                             0x34, 0x54, 0x34, 0x01, 0x48, 0x2B, 0xE0, 0x48};
 constexpr std::uint32_t kSelectSlot = 0x88;
 
 enum class Kind : std::uint8_t
@@ -70,28 +70,28 @@ constexpr const wchar_t* kKindNames[] = {L"Hate", L"Condition", L"None", L"unkno
 constexpr std::size_t    kKinds       = 3;  // the kinds told apart
 
 constexpr platform::SlotFact kSelectSlots[kKinds] = {
-    {L"the Hate target selector's select slot (vt+0x88)", 0x145CB40B0,
-     {L"HateTargetSel_Select_Vt88", 0x140FA729C, kHateSelectBytes}},
+    {L"the Hate target selector's select slot (vt+0x88)", 0x145B1EDB8,
+     {L"HateTargetSel_Select_Vt88", 0x1411160B0, kHateSelectBytes}},
     facts::kCondTargetSelect,  // its vtable only: the slot is equal_targeting's
-    {L"the None target selector's select slot (vt+0x88)", 0x14580C318,
-     {L"NoneTargetSel_Select_Vt88", 0x140CBA0C8, kNoneSelectBytes}},
+    {L"the None target selector's select slot (vt+0x88)", 0x14566CA60,
+     {L"NoneTargetSel_Select_Vt88", 0x140E26740, kNoneSelectBytes}},
 };
 
 // The Condition select's one call of ApplyExclusion(unused, candidates, &entry->exclusions): once per priority group that
 // draws; the drawn element is *(Element**)(r8 - 0x10). The function's own entry (3 bytes) is not hookable.
 constexpr std::uint8_t kExclusionBytes[] = {0x45, 0x33, 0xD2, 0x45, 0x33, 0xC9, 0x49, 0x83,
                                             0x78, 0x10, 0x00, 0x49, 0x8B, 0xC0, 0x49, 0x0F};
-constexpr platform::FunctionFact kExclusion{L"CondTargetSel_ApplyExclusion", 0x140FA5FE0, kExclusionBytes};
-constexpr std::uintptr_t         kExclusionCall = 0x140FA5570;
+constexpr platform::FunctionFact kExclusion{L"CondTargetSel_ApplyExclusion", 0x141114708, kExclusionBytes};
+constexpr std::uintptr_t         kExclusionCall = 0x141113E38;
 
 // Called, not hooked: the player type hate is credited to (u8; 14 guest, 16 none), and the target the enemy's control
 // component holds, which is what ApplyTarget wrote (after the Cait Sith decoy).
 constexpr std::uint8_t kHateTypeBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x57, 0xB8, 0x20,
-                                           0x00, 0x00, 0x00, 0xE8, 0x40, 0x34, 0x22, 0x01};
-constexpr platform::FunctionFact kHateType{L"Character_GetHatePlayerType", 0x140E8BAE0, kHateTypeBytes};
+                                           0x00, 0x00, 0x00, 0xE8, 0x84, 0xDD, 0x5F, 0x01};
+constexpr platform::FunctionFact kHateType{L"Character_GetHatePlayerType", 0x140B6DDEC, kHateTypeBytes};
 constexpr std::uint8_t kAppliedBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x48, 0x89, 0x6C,
                                           0x24, 0x18, 0x48, 0x89, 0x74, 0x24, 0x20, 0x57};
-constexpr platform::FunctionFact kApplied{L"EnemyCtrl_GetCtrlCompTarget", 0x140A5F41C, kAppliedBytes};
+constexpr platform::FunctionFact kApplied{L"EnemyCtrl_GetCtrlCompTarget", 0x140C25C58, kAppliedBytes};
 
 // Holder (ctrl+0xBF8 points to it; the creation call hands it over): +0 the enemy AI controller, +8 the selector.
 constexpr std::uint32_t kHolderSelector = 0x8;

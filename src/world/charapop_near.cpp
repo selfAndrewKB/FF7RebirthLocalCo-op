@@ -38,9 +38,9 @@ using Clock = std::chrono::steady_clock;
 // manager to CharaPopObj_SetEntryMinLODLevel_Impl, which writes entry+0x1A1 and, with evaluateNow, queues the
 // key for the next LOD tick; off the game thread it posts itself as a game-thread task
 // (research/RE-p2-charapop-per-view.md). Entry: mov eax,28h; call __alloca_probe; sub rsp,rax; mov rax,rcx.
-constexpr std::uint8_t kSetMinLevelBytes[] = {0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8, 0x32, 0x07,
-                                              0x14, 0x01, 0x48, 0x2B, 0xE0, 0x48, 0x8B, 0xC1};
-constexpr platform::FunctionFact kSetMinLevel{L"CharaPop_SetEntryMinLODLevel_ByKey", 0x140F6E7F4, kSetMinLevelBytes};
+constexpr std::uint8_t kSetMinLevelBytes[] = {0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8, 0xD2, 0x38,
+                                              0x3A, 0x01, 0x48, 0x2B, 0xE0, 0x48, 0x8B, 0xC1};
+constexpr platform::FunctionFact kSetMinLevel{L"CharaPop_SetEntryMinLODLevel_ByKey", 0x140DC82A4, kSetMinLevelBytes};
 using SetMinLevelFn = std::uint8_t (*)(const std::uint64_t* key, std::uint8_t level, bool evaluateNow);
 
 // The evaluator runs for these states only.

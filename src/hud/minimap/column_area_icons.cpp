@@ -31,31 +31,31 @@ namespace {
 
 // Facts read from the database (research/RE-p2-hud-icon-manager.md; this build). Each
 // function's prologue up to its stack probe call is checked before it is called or redirected.
-constexpr std::uintptr_t kInstanceOne = 0x149349880;  // the game's instance (EndUISystem+0x1A0), a pointer
+constexpr std::uintptr_t kInstanceOne = 0x1491862F0;  // the game's instance (EndUISystem+0x1A0), a pointer
 constexpr std::size_t    kInstanceSize = 0x160;
 
 constexpr std::uint8_t   kCtorPrologue[]   = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00};
 // AreaMapIconMgr__Ctor(memory), returns it
-constexpr platform::FunctionFact kCtor{L"AreaMapIconMgr__Ctor", 0x143A0D944, kCtorPrologue};
+constexpr platform::FunctionFact kCtor{L"AreaMapIconMgr__Ctor", 0x14374F5F4, kCtorPrologue};
 constexpr std::uint8_t   kFrameUpdatePrologue[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x48, 0x89, 0x74, 0x24, 0x18, 0x57, 0x41,
-                                                   0x54, 0x41, 0x55, 0x41, 0x56, 0x41, 0x57, 0xB8, 0x50, 0x07, 0x00, 0x00};
+                                                   0x54, 0x41, 0x55, 0x41, 0x56, 0x41, 0x57, 0xB8, 0x80, 0x07, 0x00, 0x00};
 // AreaMapIcon_FrameUpdate(instance, xmm1 = DeltaTime)
-constexpr platform::FunctionFact kFrameUpdate{L"AreaMapIcon_FrameUpdate", 0x1409F72B8, kFrameUpdatePrologue};
-constexpr std::uint8_t   kClearAllPrologue[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x48, 0x89, 0x74, 0x24, 0x18, 0x55, 0x57,
-                                                0x41, 0x54, 0x41, 0x56, 0x41, 0x57, 0x48, 0x8D, 0x6C, 0x24, 0xC9, 0xB8};
+constexpr platform::FunctionFact kFrameUpdate{L"AreaMapIcon_FrameUpdate", 0x1409B5D90, kFrameUpdatePrologue};
+constexpr std::uint8_t   kClearAllPrologue[] = {0x48, 0x8B, 0xC4, 0x48, 0x89, 0x58, 0x10, 0x48, 0x89, 0x70, 0x18, 0x48,
+                                                0x89, 0x78, 0x20, 0x55, 0x41, 0x56, 0x41, 0x57, 0x48, 0x8D, 0x68, 0xA1};
 // AreaMapIconMgr__ClearAllAndDisable(instance)
-constexpr platform::FunctionFact kClearAll{L"AreaMapIconMgr__ClearAllAndDisable", 0x140F5D854, kClearAllPrologue};
+constexpr platform::FunctionFact kClearAll{L"AreaMapIconMgr__ClearAllAndDisable", 0x140F62A48, kClearAllPrologue};
 
 // The frame function's only call for the first player controller: E8 rel32 to
 // UWorld__GetFirstPlayerController, rcx = the world, inside one 16-byte block.
-constexpr std::uintptr_t kFirstControllerCall = 0x1409F7439;
+constexpr std::uintptr_t kFirstControllerCall = 0x1409B5F10;
 
 // The frame function's call for the range origin, the leader character by the leader's player type
 // (research/RE-p2-hud-targets.md): E8 rel32 to Party_GetLeaderCharacterByLeaderType,
 // no arguments, inside one 16-byte block.
-constexpr std::uintptr_t kLeaderCall = 0x1409F73E4;
-constexpr std::uint8_t   kLeaderPrologue[] = {0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8, 0x46, 0xD1, 0x42, 0x01};
-constexpr platform::FunctionFact kLeader{L"Party_GetLeaderCharacterByLeaderType", 0x140C81DE0, kLeaderPrologue};
+constexpr std::uintptr_t kLeaderCall = 0x1409B5EB8;
+constexpr std::uint8_t   kLeaderPrologue[] = {0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8, 0x7A, 0xD5, 0xA9, 0x00};
+constexpr platform::FunctionFact kLeader{L"Party_GetLeaderCharacterByLeaderType", 0x1416CE5FC, kLeaderPrologue};
 
 // The three game events that write player 1's instance, and their seven call sites
 // (research/RE-p2-hud-view-levers.md). None takes the instance: each reads EndUISystem+0x1A0.
@@ -64,13 +64,13 @@ constexpr platform::FunctionFact kLeader{L"Party_GetLeaderCharacterByLeaderType"
 // the in/out animation of one shared widget (EndUISystem+0x60), which a second run would restart.
 constexpr std::uint8_t   kEnablePrologue[]    = {0xB8, 0x28, 0x00, 0x00, 0x00};
 // void(): +0xD0 = 1, and the shared widget's "in"
-constexpr platform::FunctionFact kEnable{L"AreaMapIconMgr Enable", 0x141816F1C, kEnablePrologue};
+constexpr platform::FunctionFact kEnable{L"AreaMapIconMgr Enable", 0x140F62978, kEnablePrologue};
 constexpr std::uint8_t   kHideAndClearPrologue[] = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00};
 // void(): ClearAllAndDisable, and the widget's "out"
-constexpr platform::FunctionFact kHideAndClear{L"AreaMapIconMgr HideAndClear", 0x141816EE0, kHideAndClearPrologue};
+constexpr platform::FunctionFact kHideAndClear{L"AreaMapIconMgr HideAndClear", 0x140F6293C, kHideAndClearPrologue};
 constexpr std::uint8_t   kSetFlagD1Prologue[] = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00};
 // void(char): +0xD1 = cl
-constexpr platform::FunctionFact kSetFlagD1{L"AreaMapIconMgr SetFlagD1", 0x1439D1CEC, kSetFlagD1Prologue};
+constexpr platform::FunctionFact kSetFlagD1{L"AreaMapIconMgr SetFlagD1", 0x1437123CC, kSetFlagD1Prologue};
 
 enum class Event : std::uint8_t
 {
@@ -86,13 +86,13 @@ struct EventSite
     bool           tailJump;  // E9: EndUI__AreaMapIcon_EnableOrHideByCount's tail calls
 };
 constexpr EventSite kEventSites[] = {
-    {0x1410340A7, Event::HideAndClear, false},  // EventCmd_Dispatch_BattleModeCase87
-    {0x1410340B1, Event::Enable, false},        // the same event command
-    {0x143544CB0, Event::Enable, true},         // EndUI__AreaMapIcon_EnableOrHideByCount, count > 0
-    {0x143544CB9, Event::HideAndClear, true},   // the same, count <= 0
-    {0x14356050B, Event::SetFlagD1, false},     // a state's enter (cl = 0)
-    {0x143561FD5, Event::SetFlagD1, false},     // that state's exit (cl = 1)
-    {0x1435680F4, Event::SetFlagD1, false},     // a stop/cleanup (cl = 1)
+    {0x1410D2407, Event::HideAndClear, false},  // EventCmd_Dispatch_BattleModeCase87
+    {0x1410D2411, Event::Enable, false},        // the same event command
+    {0x143273DD8, Event::Enable, true},         // EndUI__AreaMapIcon_EnableOrHideByCount, count > 0
+    {0x143273DE1, Event::HideAndClear, true},   // the same, count <= 0
+    {0x143290977, Event::SetFlagD1, false},     // a state's enter (cl = 0)
+    {0x143293005, Event::SetFlagD1, false},     // that state's exit (cl = 1)
+    {0x143299B60, Event::SetFlagD1, false},     // a stop/cleanup (cl = 1)
 };
 
 // The instance: the canvases as TWeakPtr {object, reference controller} (#1 icons, #2 quest

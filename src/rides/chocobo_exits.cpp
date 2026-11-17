@@ -38,14 +38,14 @@ constexpr std::uint8_t kJetEnterBytes[]   = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x48,
                                              0x24, 0x18, 0x55, 0x57, 0x41, 0x57, 0x48, 0x8D};
 constexpr std::uint8_t kJetExitBytes[]    = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x48, 0x89, 0x74,
                                              0x24, 0x18, 0x57, 0x41, 0x56, 0x41, 0x57, 0xB8};
-constexpr platform::SlotFact kGlideEnterSlot{L"the chocobo glide state's enter slot", 0x145795408,
-                                             {L"CharCtrlStateChocoboGlide_OnEnter_Vt18", 0x143427234, kGlideEnterBytes}};
-constexpr platform::SlotFact kGlideExitSlot{L"the chocobo glide state's exit slot", 0x145795410,
-                                            {L"CharCtrlStateChocoboGlide_OnExit_Vt20", 0x14342810C, kGlideExitBytes}};
-constexpr platform::SlotFact kJetEnterSlot{L"the chocobo jet state's enter slot", 0x1457C5958,
-                                           {L"CharCtrlStateChocoboJet_OnEnter_Vt18", 0x143432B04, kJetEnterBytes}};
-constexpr platform::SlotFact kJetExitSlot{L"the chocobo jet state's exit slot", 0x1457C5960,
-                                          {L"CharCtrlStateChocoboJet_OnExit_Vt20", 0x143433BE4, kJetExitBytes}};
+constexpr platform::SlotFact kGlideEnterSlot{L"the chocobo glide state's enter slot", 0x145647ED8,
+                                             {L"CharCtrlStateChocoboGlide_OnEnter_Vt18", 0x143144484, kGlideEnterBytes}};
+constexpr platform::SlotFact kGlideExitSlot{L"the chocobo glide state's exit slot", 0x145647EE0,
+                                            {L"CharCtrlStateChocoboGlide_OnExit_Vt20", 0x143145364, kGlideExitBytes}};
+constexpr platform::SlotFact kJetEnterSlot{L"the chocobo jet state's enter slot", 0x145687618,
+                                           {L"CharCtrlStateChocoboJet_OnEnter_Vt18", 0x143151B60, kJetEnterBytes}};
+constexpr platform::SlotFact kJetExitSlot{L"the chocobo jet state's exit slot", 0x145687620,
+                                          {L"CharCtrlStateChocoboJet_OnExit_Vt20", 0x143152C34, kJetExitBytes}};
 using StateEnterFn = std::uintptr_t (*)(void* state, void* param);
 using StateExitFn  = std::uintptr_t (*)(void* state);
 // A control state's holder, and the holder's character (a weak).
@@ -103,7 +103,7 @@ void LogStep(const wchar_t* state, const wchar_t* step, const void* chocobo, boo
     {
         platform::LogDebug(L"chocobo exits: the {} state {} for {} from 0x{:X}: {}", state, step,
                            gameThread ? Whose(chocobo) : std::wstring{L"a chocobo (off the game thread)"},
-                           g_image ? g_image->ResearchAddress(from) : from, how);
+                           g_image ? g_image->SourceAddress(from) : from, how);
     }
     catch (...)
     {

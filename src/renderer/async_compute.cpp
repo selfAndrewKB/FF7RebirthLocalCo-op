@@ -16,18 +16,18 @@ namespace lss::renderer {
 
 namespace {
 
-// r.D3D12.AllowAsyncCompute's int (0 in the file). Research build; 1.005 through the build table.
-constexpr std::uintptr_t kAllowAsyncCompute = 0x1492EC9E4;
+// r.D3D12.AllowAsyncCompute's int (0 in the file).
+constexpr std::uintptr_t kAllowAsyncCompute = 0x149125F64;
 
-// GSupportsEfficientAsyncCompute (bool). Research build; 1.005 through the build table.
-constexpr std::uintptr_t kSupportsEfficientAsyncCompute = 0x1491163C2;
+// GSupportsEfficientAsyncCompute (bool).
+constexpr std::uintptr_t kSupportsEfficientAsyncCompute = 0x148F49BB9;
 
 // In the D3D12 device initialisation: `cmp dword [AllowAsyncCompute],ebx` (ebx 0), and after the vendor rule
-// `mov byte [GSupportsEfficientAsyncCompute],bl`. Research build; 1.005 through the build table. Each is checked
+// `mov byte [GSupportsEfficientAsyncCompute],bl`. Each is checked
 // up to its displacement, and the displacement must reach the address above.
-constexpr std::uintptr_t kSettingReadSite    = 0x144940C81;
+constexpr std::uintptr_t kSettingReadSite    = 0x1446D6C63;
 constexpr std::uint8_t   kSettingReadBytes[] = {0x39, 0x1D};
-constexpr std::uintptr_t kFlagStoreSite      = 0x144940CB1;
+constexpr std::uintptr_t kFlagStoreSite      = 0x1446D6C93;
 constexpr std::uint8_t   kFlagStoreBytes[]   = {0x88, 0x1D};
 
 /// True if the RIP-relative instruction at `site` (opcode bytes `opcode`, then a 32-bit displacement that ends the

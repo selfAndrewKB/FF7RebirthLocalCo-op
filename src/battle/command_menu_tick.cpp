@@ -52,27 +52,27 @@ namespace {
 
 // Facts read from the database (research/RE-p2-command-menu-tick.md; this build). Each call site's five
 // bytes lie inside one aligned 16-byte block (checked again by CallRedirect).
-constexpr std::uint8_t kTickBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x48, 0x89, 0x6C, 0x24, 0x18, 0x48, 0x89, 0x74,
-                                       0x24, 0x20, 0x57, 0xB8, 0xD0, 0x00, 0x00, 0x00, 0xE8, 0x82, 0x1C, 0x67, 0x01};
-constexpr platform::FunctionFact kTick{L"FieldCommandCtrl__Tick", 0x140A3D294, kTickBytes};
-constexpr std::uintptr_t         kTickCall = 0x140C92978;  // the game mode's phase-0 global tick; the only caller
-constexpr std::uint8_t kSlotBytes[] = {0x40, 0x53, 0xB8, 0x30, 0x00, 0x00, 0x00, 0xE8, 0x1C, 0xB5, 0x38, 0x01};
-constexpr platform::FunctionFact kSlot{L"FieldSys_SetFloatSlot3C0", 0x140D23A08, kSlotBytes};
-constexpr std::uintptr_t         kSlotCall = 0x140D239EA;  // in FieldCommandCtrl_Tick_MenuSlowGameSpeed0
+constexpr std::uint8_t kTickBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x48, 0x89, 0x6C, 0x24, 0x18, 0x56, 0x57, 0x41,
+                                       0x54, 0x41, 0x56, 0x41, 0x57, 0xB8, 0xD0, 0x00, 0x00, 0x00, 0xE8, 0x80, 0x82};
+constexpr platform::FunctionFact kTick{L"FieldCommandCtrl__Tick", 0x1408938E4, kTickBytes};
+constexpr std::uintptr_t         kTickCall = 0x140B3564D;  // the game mode's phase-0 global tick; the only caller
+constexpr std::uint8_t kSlotBytes[] = {0x40, 0x53, 0xB8, 0x30, 0x00, 0x00, 0x00, 0xE8, 0xBC, 0x68, 0x8D, 0x01};
+constexpr platform::FunctionFact kSlot{L"FieldSys_SetFloatSlot3C0", 0x1408952B8, kSlotBytes};
+constexpr std::uintptr_t         kSlotCall = 0x14089529A;  // in FieldCommandCtrl_Tick_MenuSlowGameSpeed0
 constexpr std::uint8_t kSnapshotBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x6C,
                                            0x24, 0x10, 0x48, 0x89, 0x74, 0x24, 0x18, 0x57};
-constexpr platform::FunctionFact kSnapshot{L"EndUIRequestQueue_SetTypeCommandSnapshot", 0x141406348, kSnapshotBytes};
-constexpr std::uintptr_t         kSnapshotCall = 0x140A3D613;
+constexpr platform::FunctionFact kSnapshot{L"EndUIRequestQueue_SetTypeCommandSnapshot", 0x14088B6B0, kSnapshotBytes};
+constexpr std::uintptr_t         kSnapshotCall = 0x140893CB3;
 constexpr std::uint8_t kGuideShowBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x48, 0x89, 0x6C,
                                             0x24, 0x20, 0x56, 0x57, 0x41, 0x56, 0xB8, 0x20};
-constexpr platform::FunctionFact kGuideShow{L"KeyGuide53_ShowMode", 0x1410E5AD8, kGuideShowBytes};
-constexpr std::uintptr_t         kGuideShowCall = 0x140A64E05;
-constexpr std::uint8_t kGuideMode8Bytes[] = {0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8, 0xDE, 0x10, 0x86, 0x00};
-constexpr platform::FunctionFact kGuideMode8{L"KeyGuide53_SetMode8", 0x14184DE48, kGuideMode8Bytes};
-constexpr std::uintptr_t         kGuideMode8Call = 0x140A64E1B;
+constexpr platform::FunctionFact kGuideShow{L"KeyGuide53_ShowMode", 0x14113115C, kGuideShowBytes};
+constexpr std::uintptr_t         kGuideShowCall = 0x140DCF999;
+constexpr std::uint8_t kGuideMode8Bytes[] = {0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8, 0xD2, 0xD8, 0x89, 0x00};
+constexpr platform::FunctionFact kGuideMode8{L"KeyGuide53_SetMode8", 0x1418CE2A4, kGuideMode8Bytes};
+constexpr std::uintptr_t         kGuideMode8Call = 0x140DCF9AF;
 constexpr std::uint8_t kHudModeBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x74, 0x24, 0x10, 0x57,
-                                          0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0x3B, 0x6E, 0x00, 0x01};
-constexpr platform::FunctionFact kSetHudMode{L"FieldCommandCtrl_SetBattleHudMode540", 0x1410A80E0, kHudModeBytes};
+                                          0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0x97, 0x21, 0x93, 0x01};
+constexpr platform::FunctionFact kSetHudMode{L"FieldCommandCtrl_SetBattleHudMode540", 0x1408399D4, kHudModeBytes};
 // Its entry (`mov [rsp+8], rbx`, inside one block in both builds) is redirected: the game's one caller,
 // EndUI_SetBattleHudMode, sets it on the game's controller at a battle's start and end, a field exit and the menu API's
 // in-battle switch (research/RE-p2-command-menu-lifecycle.md).
@@ -82,26 +82,26 @@ constexpr std::size_t kSetHudModeFirst = 5;
 // its own controller only (research/RE-p2-command-menu-lifecycle.md).
 constexpr std::uint8_t kResumeHudInputBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x6C, 0x24, 0x10, 0x48,
                                                  0x89, 0x74, 0x24, 0x18, 0x57, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8,
-                                                 0xE6, 0x82, 0x42, 0x01, 0x48, 0x2B, 0xE0, 0x48, 0x8B, 0xF9};
-constexpr platform::FunctionFact kResumeHudInput{L"FieldCommandCtrl_ResumeHudInput", 0x140C86C30, kResumeHudInputBytes};
+                                                 0x66, 0x19, 0x93, 0x01, 0x48, 0x2B, 0xE0, 0x48, 0x8B, 0xF9};
+constexpr platform::FunctionFact kResumeHudInput{L"FieldCommandCtrl_ResumeHudInput", 0x14083A200, kResumeHudInputBytes};
 // EndUI23_SuspendHudInput(u8 kind, u8 reset): acts on the UI system's controller slot.
 constexpr std::uint8_t kSuspendHudInputBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x74, 0x24, 0x10,
-                                                  0x57, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0x57, 0x81, 0x42,
+                                                  0x57, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0x6B, 0x15, 0x93,
                                                   0x01, 0x48, 0x2B, 0xE0, 0x40, 0x8A, 0xF2, 0x0F, 0xB6, 0xD9};
-constexpr platform::FunctionFact kSuspendHudInput{L"EndUI23_SuspendHudInput", 0x140C86DC4, kSuspendHudInputBytes};
+constexpr platform::FunctionFact kSuspendHudInput{L"EndUI23_SuspendHudInput", 0x14083A600, kSuspendHudInputBytes};
 constexpr std::uint8_t kPartyListInputBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x48, 0x89, 0x6C, 0x24, 0x18, 0x48,
                                                  0x89, 0x74, 0x24, 0x20, 0x57, 0x41, 0x54, 0x41, 0x55, 0x41, 0x56,
-                                                 0x41, 0x57, 0xB8, 0x30, 0x00, 0x00, 0x00, 0xE8, 0x6E, 0x7F};
-constexpr platform::FunctionFact kSetPartyListInput{L"PartyList360_SetInputEnabled140", 0x140C86FA0, kPartyListInputBytes};
+                                                 0x41, 0x57, 0xB8, 0x30, 0x00, 0x00, 0x00, 0xE8, 0x4E, 0x18};
+constexpr platform::FunctionFact kSetPartyListInput{L"PartyList360_SetInputEnabled140", 0x14083A310, kPartyListInputBytes};
 constexpr std::uint32_t kPartyList      = 0x360;  // the controller's party list object
 constexpr std::uint32_t kPartyListInput = 0x4A0;  // u8
 using facts::kCmdSetupPending;
 // FieldCommandCtrl_SetMenuFocusLayer783(ctrl, on): the menu's bottom focus layer (priority -1000),
 // pushed and focused, or popped (research/RE-p2-command-menu-input.md).
 constexpr std::uint8_t kSetMenuLayerBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x74, 0x24, 0x18,
-                                               0x57, 0xB8, 0x40, 0x00, 0x00, 0x00, 0xE8, 0x73, 0x80, 0x42,
+                                               0x57, 0xB8, 0x40, 0x00, 0x00, 0x00, 0xE8, 0x87, 0x14, 0x93,
                                                0x01, 0x48, 0x2B, 0xE0, 0x8A, 0x81, 0x83, 0x07, 0x00, 0x00};
-constexpr platform::FunctionFact kSetMenuLayer{L"FieldCommandCtrl_SetMenuFocusLayer783", 0x140C86EA8, kSetMenuLayerBytes};
+constexpr platform::FunctionFact kSetMenuLayer{L"FieldCommandCtrl_SetMenuFocusLayer783", 0x14083A6E4, kSetMenuLayerBytes};
 // UWidget::Visibility (ESlateVisibility, u8; logged). The command menu is shown and hidden by the game's
 // own calls, mirrored on each seat's controller: ResumeHudInput(ctrl, 0) makes it Visible (once "setup
 // done"), SuspendHudInput(0, _) Collapsed (research/RE-p2-command-menu-levers.md).
@@ -820,7 +820,7 @@ bool Install(const platform::GameImage& image) noexcept
 
 namespace {
 
-/// The call sites, from what Install found (its checks passed). At install on the research build; on 1.005 from
+/// The call sites, from what Install found (its checks passed). At install on 1.004; otherwise from
 /// the game thread.
 bool PlaceSites(const platform::GameImage& image) noexcept
 {

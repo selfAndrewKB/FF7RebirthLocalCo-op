@@ -51,27 +51,27 @@ namespace UObjectGlobals = RC::Unreal::UObjectGlobals;
 //   - OnActionInterruptInvoke / OnActionTopPriorityInvoke: the +0xAE0 / +0xB18 slots of both controllers. EnemyBase's
 //     hold the events' stubs, which fire only with a non-null second argument; BossBase's hold gates that call the
 //     same stubs only when the controller's mode byte is 1. Each takes (ctrl, ptr), passed on.
-constexpr std::uintptr_t kActionCall = 0x140CBA04E;  // call EnemyAICtrl_Event_OnActionInvoke(ctrl, u8 type, ptr)
-constexpr std::uintptr_t kAction     = 0x140CBA078;
+constexpr std::uintptr_t kActionCall = 0x140E266C6;  // call EnemyAICtrl_Event_OnActionInvoke(ctrl, u8 type, ptr)
+constexpr std::uintptr_t kAction     = 0x140E266F0;
 
 constexpr std::uint8_t kEventBytes[]         = {0x48, 0x85, 0xD2, 0x74, 0x48, 0x48, 0x89, 0x5C,
                                                 0x24, 0x08, 0x57, 0xB8, 0x20, 0x00, 0x00, 0x00};
-constexpr std::uint8_t kBossInterruptBytes[] = {0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8, 0xD2, 0x98,
-                                                0x7F, 0x00, 0x48, 0x2B, 0xE0, 0x80, 0xB9, 0x1C};
-constexpr std::uint8_t kBossTopBytes[]       = {0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8, 0x7E, 0x6D,
-                                                0x8B, 0x00, 0x48, 0x2B, 0xE0, 0x80, 0xB9, 0x1C};
+constexpr std::uint8_t kBossInterruptBytes[] = {0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8, 0x4A, 0xC2,
+                                                0x83, 0x00, 0x48, 0x2B, 0xE0, 0x80, 0xB9, 0x1C};
+constexpr std::uint8_t kBossTopBytes[]       = {0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8, 0x0E, 0xCB,
+                                                0x8D, 0x00, 0x48, 0x2B, 0xE0, 0x80, 0xB9, 0x1C};
 
 constexpr std::size_t        kDecisions = 4;
 constexpr std::size_t        kFirstBoss = 2;  // slots 2..3 are BossBase's
 constexpr platform::SlotFact kDecisionSlots[kDecisions] = {
-    {L"the EnemyBase controller's OnActionInterruptInvoke slot (+0xAE0)", 0x1457DC770,
-     {L"EnemyAICtrl_Event_OnActionInterruptInvoke", 0x1418B5674, kEventBytes}},
-    {L"the EnemyBase controller's OnActionTopPriorityInvoke slot (+0xB18)", 0x1457DC7A8,
-     {L"EnemyAICtrl_Event_OnActionTopPriorityInvoke", 0x1417F81C8, kEventBytes}},
-    {L"the BossBase controller's OnActionInterruptInvoke slot (+0xAE0)", 0x1457DBAE0,
-     {L"BossCtrl_VtAE0_Interrupt_IfMode1", 0x1418B5654, kBossInterruptBytes}},
-    {L"the BossBase controller's OnActionTopPriorityInvoke slot (+0xB18)", 0x1457DBB18,
-     {L"BossCtrl_VtB18_TopPriority_IfMode1", 0x1417F81A8, kBossTopBytes}},
+    {L"the EnemyBase controller's OnActionInterruptInvoke slot (+0xAE0)", 0x145621210,
+     {L"EnemyAICtrl_Event_OnActionInterruptInvoke", 0x14192F94C, kEventBytes}},
+    {L"the EnemyBase controller's OnActionTopPriorityInvoke slot (+0xB18)", 0x145621248,
+     {L"EnemyAICtrl_Event_OnActionTopPriorityInvoke", 0x14188F088, kEventBytes}},
+    {L"the BossBase controller's OnActionInterruptInvoke slot (+0xAE0)", 0x145677498,
+     {L"BossCtrl_VtAE0_Interrupt_IfMode1", 0x14192F92C, kBossInterruptBytes}},
+    {L"the BossBase controller's OnActionTopPriorityInvoke slot (+0xB18)", 0x1456774D0,
+     {L"BossCtrl_VtB18_TopPriority_IfMode1", 0x14188F068, kBossTopBytes}},
 };
 
 // Enemy AI controller (both builds): the mode byte BossBase's gates test, and the target selector's holder (a pointer
@@ -103,12 +103,12 @@ struct Native
 };
 constexpr std::size_t kNatives = 6;
 constexpr Native      kNativeFacts[kNatives] = {
-    {STR("/Script/EndGame.EndBattleAPI:GetPartyLeader"), 0x1414F307C, Kind::Leader},
-    {STR("/Script/EndGame.EndAIControllerBluePrintBase:GetLeader"), 0x1414F307C, Kind::Leader},
-    {STR("/Script/EndGame.EndAIControllerBluePrintBase:GetPlayerLeader"), 0x1414F307C, Kind::Leader},
-    {STR("/Script/EndGame.EndBattleAPI:IsUCPC"), 0x1417BFCCC, Kind::Ucpc},
-    {STR("/Script/EndGame.EndBattleAPI:IsAIPC"), 0x143E3D180, Kind::Ucpc},
-    {STR("/Script/EndGame.EndPartyAPI:GetPartyLeaderType"), 0x14188EBE4, Kind::LeaderType},
+    {STR("/Script/EndGame.EndBattleAPI:GetPartyLeader"), 0x14144A6D8, Kind::Leader},
+    {STR("/Script/EndGame.EndAIControllerBluePrintBase:GetLeader"), 0x14144A6D8, Kind::Leader},
+    {STR("/Script/EndGame.EndAIControllerBluePrintBase:GetPlayerLeader"), 0x14144A6D8, Kind::Leader},
+    {STR("/Script/EndGame.EndBattleAPI:IsUCPC"), 0x1418A7918, Kind::Ucpc},
+    {STR("/Script/EndGame.EndBattleAPI:IsAIPC"), 0x143BAC654, Kind::Ucpc},
+    {STR("/Script/EndGame.EndPartyAPI:GetPartyLeaderType"), 0x141913A9C, Kind::LeaderType},
 };
 
 using DecisionFn = std::uint64_t (*)(std::uint64_t controller, std::uint64_t b, std::uint64_t c, std::uint64_t d);
@@ -480,7 +480,7 @@ void Remove() noexcept
             platform::Log(L"target coin: a decision slot was changed after us; left in place (it passes through)");
         }
     }
-    // The action call crosses a block on the research build: put back only from the one thread that can run it,
+    // The action call crosses a block on 1.004: put back only from the one thread that can run it,
     // which unloading is not; it passes through once g_on is off.
 }
 

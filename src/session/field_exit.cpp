@@ -23,8 +23,8 @@ namespace {
 // load), the jump actor's repeat, and the Blueprint ExitLoation native's tail jump. The entry redirect
 // replaces its first instruction, `mov eax, 28h` (5 bytes, no RIP-relative operand, no branch lands
 // inside it), so all three reach RequestExit.
-constexpr std::uint8_t kRequestExitBytes[] = {0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8, 0xBE, 0x5D, 0x00, 0x01};
-constexpr platform::FunctionFact kRequestExit{L"AEndGameMode_RequestFieldExit_Clear71", 0x1410A9168, kRequestExitBytes};
+constexpr std::uint8_t kRequestExitBytes[] = {0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8, 0x6E, 0x9E, 0xDF, 0x00};
+constexpr platform::FunctionFact kRequestExit{L"AEndGameMode_RequestFieldExit_Clear71", 0x141371D08, kRequestExitBytes};
 constexpr std::size_t kFirstInstruction = 5;
 
 constexpr std::uint32_t  kFieldStep  = 0x70;         // EEndFieldStep; 13 once the entry steps are done

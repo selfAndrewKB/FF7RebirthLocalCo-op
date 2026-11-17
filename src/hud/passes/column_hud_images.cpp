@@ -42,25 +42,25 @@ namespace {
 
 // SEndRootOverlay__RenderToCompositeLayer(overlay): returns at once while the overlay has no
 // window (+0x2F0), before writing anything.
-constexpr std::uint8_t   kRenderToCompositeLayerPrologue[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x48, 0x89, 0x74, 0x24, 0x18, 0x48,
-                                                              0x89, 0x7C, 0x24, 0x20, 0x41, 0x56, 0xB8, 0x80, 0x03, 0x00, 0x00};
-constexpr platform::FunctionFact kRenderToCompositeLayer{L"SEndRootOverlay__RenderToCompositeLayer", 0x140C95CC0,
+constexpr std::uint8_t   kRenderToCompositeLayerPrologue[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x48, 0x89, 0x74, 0x24, 0x18, 0x57,
+                                                              0x41, 0x56, 0x41, 0x57, 0xB8, 0x80, 0x03, 0x00, 0x00, 0xE8, 0x4F};
+constexpr platform::FunctionFact kRenderToCompositeLayer{L"SEndRootOverlay__RenderToCompositeLayer", 0x140B0ED18,
                                                          kRenderToCompositeLayerPrologue};
 constexpr std::uint32_t  kOverlayWindow = 0x2F0;
 
 // Its call to FEndMenuRenderer__AcquireLayerSlot(renderer, pool 2): rcx = renderer, dl = 2, the
 // slot in rax.
-constexpr std::uintptr_t kAcquireCall = 0x140C960A2;
+constexpr std::uintptr_t kAcquireCall = 0x140B0F119;
 
 // FApp::DeltaTime, a double, which the overlay's paint args and fade read.
-constexpr std::uintptr_t kDeltaTime = 0x146FAA330;
+constexpr std::uintptr_t kDeltaTime = 0x146DDD200;
 
 // SceneRenderer_Render_Main's call to AddRenderCompositeLayerDelegatePasses(module, builder,
 // &Views, texture, context), once per view family, before that family's composite consume.
-constexpr std::uintptr_t kAddCompositePassesCall = 0x140FDE3C1;
+constexpr std::uintptr_t kAddCompositePassesCall = 0x140C1481D;
 constexpr std::uint8_t   kAddCompositePassesPrologue[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x6C,
                                                           0x24, 0x10, 0x48, 0x89, 0x74, 0x24, 0x18, 0x57};
-constexpr platform::FunctionFact kAddCompositePasses{L"SceneRenderer_AddCompositePasses", 0x140D1791C,
+constexpr platform::FunctionFact kAddCompositePasses{L"SceneRenderer_AddCompositePasses", 0x14131BB74,
                                                      kAddCompositePassesPrologue};
 constexpr std::uint32_t  kViewUnscaledViewRect = 0x238;  // FIntRect in FSceneView (FViewInfo is a copy)
 // FSceneView::PlayerIndex, an int32: the local player's controller id (a seat's, or a mirror's after the seats'); the
@@ -73,10 +73,10 @@ constexpr std::uint32_t  kViewPlayerIndex      = 0x228;
 constexpr std::size_t    kAddCompositePassesFirst = 5;
 
 // The consume loop's sites (hud/passes/entry_filter_code.h), with the instruction after each.
-constexpr std::uintptr_t kLoadVertexBufferSite   = 0x140FC8501;
-constexpr std::uintptr_t kLoadVertexBufferResume = 0x140FC8508;
-constexpr std::uintptr_t kDrawGateSite           = 0x140FC8E05;
-constexpr std::uintptr_t kDrawGateResume         = 0x140FC8E0A;
+constexpr std::uintptr_t kLoadVertexBufferSite   = 0x140A477D9;
+constexpr std::uintptr_t kLoadVertexBufferResume = 0x140A477E0;
+constexpr std::uintptr_t kDrawGateSite           = 0x140A48861;
+constexpr std::uintptr_t kDrawGateResume         = 0x140A48866;
 
 // FEndMenuRenderer__Ctor's per-pool buffers (pool 2's are passed to the consume): the vertex buffer object at
 // renderer+0x90, the index buffer at +0xA8 (hud/passes/menu_buffers.h), initialised through
@@ -292,9 +292,9 @@ bool InstallColumnHudImages(const platform::GameImage& image) noexcept
 
     const auto buffersCode = EntryBuffersCode(g_slot.Fields());
     const auto gateCode    = EntryDrawGateCode(g_slot.Fields());
-    // The family decision: the call on the research build, the function's entry on 1.005 (kAddCompositePassesFirst).
+    // The family decision: the function's entry (kAddCompositePassesFirst; its call crosses a block), on 1.004 the call.
     const auto familyRedirect = [&image, passes = *passes]() noexcept {
-        if (platform::RunningBuild() != platform::BuildIndex::V1005)
+        if (platform::RunningBuild() == platform::BuildIndex::V1004)
         {
             return g_familyCall.Install(image, kAddCompositePassesCall, passes,
                                         reinterpret_cast<std::uintptr_t>(&AddCompositePasses));
@@ -308,7 +308,7 @@ bool InstallColumnHudImages(const platform::GameImage& image) noexcept
         Patch(image, g_gateCode, kDrawGateSite, kDrawGateBytes, gateCode, kDrawGateResume) &&
         Patch(image, g_buffersCode, kLoadVertexBufferSite, kLoadVertexBufferBytes, buffersCode, kLoadVertexBufferResume) &&
         familyRedirect() &&
-        g_acquireCall.InstallResearch(image, kAcquireCall, facts::kAcquireLayerSlot.address,
+        g_acquireCall.InstallSource(image, kAcquireCall, facts::kAcquireLayerSlot.address,
                                       reinterpret_cast<std::uintptr_t>(&AcquireLayerSlot));
     if (!installed)
     {

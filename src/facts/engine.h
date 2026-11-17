@@ -35,76 +35,76 @@ using platform::SlotFact;
 // ---------------------------------------------------------------------------------------------
 
 /// FRendererModule::BeginRenderingViewFamily: renders one view family.
-inline constexpr std::uintptr_t kBeginRenderingViewFamily = 0x140BEE184;
+inline constexpr std::uintptr_t kBeginRenderingViewFamily = 0x1409E9CBC;
 
 /// The IRendererModule vtable entry through which every caller reaches it (vtable 0x14698B490,
 /// entry 8). The mod replaces this entry.
-inline constexpr std::uintptr_t kBeginRenderingViewFamilyEntry = 0x14698B4D0;
+inline constexpr std::uintptr_t kBeginRenderingViewFamilyEntry = 0x1468101B0;
 
 /// GFrameNumber (data, uint32): stepped once per frame by PostRenderAllViewports. Read by the HUD trace's frame line
 /// and held one back for the seats' HUD passes (hud/passes/column_hud_images, RE-damage-numbers-per-view.md). Its
-/// 1.005 twin is 0x146DDD224, carried by the hand-found table: the generated data range around FApp::DeltaTime
-/// would put it 0x1C bytes off.
-inline constexpr std::uintptr_t kFrameNumber = 0x146FAA370;
+/// 1.004 twin is carried by the hand-found table: the generated data range around FApp::DeltaTime would put it 0x1C
+/// bytes off.
+inline constexpr std::uintptr_t kFrameNumber = 0x146DDD224;
 
-/// The single call in UGameViewportClient::Draw (0x140CC2194) that submits the game's view
+/// The single call in UGameViewportClient::Draw (0x1409EDD88) that submits the game's view
 /// family: `call r9`. Its return address identifies the game viewport among all callers
 /// (UMG widgets submit their own families through the same entry).
 inline constexpr std::uint8_t   kDrawSubmitCallBytes[] = {0x41, 0xFF, 0xD1};  // call r9
-inline constexpr FunctionFact   kDrawSubmitCall{L"Draw's view-family submission call", 0x140CC2F86,
+inline constexpr FunctionFact   kDrawSubmitCall{L"Draw's view-family submission call", 0x1409EEB6A,
                                               kDrawSubmitCallBytes};
-inline constexpr std::uintptr_t kDrawSubmitReturn = 0x140CC2F89;
+inline constexpr std::uintptr_t kDrawSubmitReturn = 0x1409EEB6D;
 
 /// BeginRenderingViewFamily skips Scene->IncrementFrameNumber() when family+0x70 is nonzero:
 /// `cmp [rbx+70h], r12d` (rbx = the family). This is the instruction that makes +0x70 mean what
 /// renderer/scene_view_family.h says it means.
-inline constexpr std::uint8_t kFrameNumberGateBytes[] = {0x44, 0x39, 0x63, 0x70};
-inline constexpr FunctionFact kFrameNumberGate{L"the frame-number gate on family+0x70", 0x140BEE266,
+inline constexpr std::uint8_t kFrameNumberGateBytes[] = {0x44, 0x39, 0x67, 0x70};
+inline constexpr FunctionFact kFrameNumberGate{L"the frame-number gate on family+0x70", 0x1409E9D7A,
                                                kFrameNumberGateBytes};
 
-/// The FSceneViewFamily constructor (0x140CC42D0) storing bAdditionalViewFamily to family+0x74:
+/// The FSceneViewFamily constructor (0x1410BE634) storing bAdditionalViewFamily to family+0x74:
 /// `mov al,[rbx+68h]; and al,cl; mov [rdi+74h],al` (cl = 1). The shipped game never reads the
 /// field; the mod restores its stock reader below.
 inline constexpr std::uint8_t kAdditionalFamilyStoreBytes[] = {0x8A, 0x43, 0x68, 0x22, 0xC1, 0x88, 0x47, 0x74};
-inline constexpr FunctionFact kAdditionalFamilyStore{L"the bAdditionalViewFamily store to family+0x74", 0x140CC4353,
+inline constexpr FunctionFact kAdditionalFamilyStore{L"the bAdditionalViewFamily store to family+0x74", 0x1410BE6B7,
                                                      kAdditionalFamilyStoreBytes};
 
 // ---------------------------------------------------------------------------------------------
 // The final output's load action (RE-additional-view-family-reader.md)
 // ---------------------------------------------------------------------------------------------
 
-/// Inside AddPostProcessingPasses (0x14111A238), the inlined CreateViewFamilyOutput, from
-/// `mov rcx,[r12]` (rcx = View->Family, the scene renderer's copy) through the store of the load
-/// action to [rsp+610h]. Checked whole, so nothing between the family load and the decision can
-/// have changed rcx: 0x14111A301 mov rcx,[r12] ... 0x14111A363 mov rax,[rcx];
-/// cmp [rax],r12 (Views[0] == View); vmovdqu; setz al; add al,1; mov [rsp+610h],al.
+/// Inside AddPostProcessingPasses (0x14118C5CC), the inlined CreateViewFamilyOutput, from the first field copy out
+/// of the view (r14) through the store of the load action to [rbp+0E0h]. Checked whole, so nothing between the
+/// family load and the decision can have changed: 0x14118C65D mov eax,[r14+238h] ... 0x14118C699 mov rax,[r14]
+/// (the family, the scene renderer's copy); vmovdqu; mov rcx,[rax]; cmp [rcx],r14 (Views[0] == View);
+/// mov rcx,[r13+10h]; sete al; add al,dil (edi = 1); mov [rbp+0E0h],al.
 inline constexpr std::uint8_t kOutputLoadActionSequenceBytes[] = {
-    0x49, 0x8B, 0x0C, 0x24, 0x74, 0x08, 0x49, 0x8D, 0x9C, 0x24, 0x38, 0x02,
-    0x00, 0x00, 0xC5, 0xF8, 0x10, 0x03, 0x48, 0x89, 0x84, 0x24, 0xF8, 0x05,
-    0x00, 0x00, 0x49, 0x8B, 0xD5, 0x41, 0x8B, 0x84, 0x24, 0x38, 0x02, 0x00,
-    0x00, 0xC5, 0xFA, 0x7F, 0x84, 0x24, 0x00, 0x06, 0x00, 0x00, 0x89, 0x84,
-    0x24, 0x00, 0x06, 0x00, 0x00, 0x41, 0x8B, 0x84, 0x24, 0x3C, 0x02, 0x00,
-    0x00, 0x89, 0x84, 0x24, 0x04, 0x06, 0x00, 0x00, 0x41, 0x8B, 0x84, 0x24,
-    0x40, 0x02, 0x00, 0x00, 0x89, 0x84, 0x24, 0x08, 0x06, 0x00, 0x00, 0x41,
-    0x8B, 0x84, 0x24, 0x44, 0x02, 0x00, 0x00, 0x89, 0x84, 0x24, 0x0C, 0x06,
-    0x00, 0x00, 0x48, 0x8B, 0x01, 0x4C, 0x39, 0x20, 0xC5, 0xFA, 0x7F, 0xBC,
-    0x24, 0xC8, 0x01, 0x00, 0x00, 0x0F, 0x94, 0xC0, 0x04, 0x01, 0x88, 0x84,
-    0x24, 0x10, 0x06, 0x00, 0x00};
-inline constexpr FunctionFact kOutputLoadActionSequence{L"the final output's load-action decision", 0x14111A301,
+    0x41, 0x8B, 0x86, 0x38, 0x02, 0x00, 0x00, 0xBF, 0x01, 0x00, 0x00, 0x00,
+    0x89, 0x85, 0xD0, 0x00, 0x00, 0x00, 0x49, 0x8B, 0xD4, 0x41, 0x8B, 0x86,
+    0x3C, 0x02, 0x00, 0x00, 0x89, 0x85, 0xD4, 0x00, 0x00, 0x00, 0x41, 0x8B,
+    0x86, 0x40, 0x02, 0x00, 0x00, 0x89, 0x85, 0xD8, 0x00, 0x00, 0x00, 0x41,
+    0x8B, 0x86, 0x44, 0x02, 0x00, 0x00, 0x89, 0x85, 0xDC, 0x00, 0x00, 0x00,
+    0x49, 0x8B, 0x06, 0xC5, 0xFA, 0x7F, 0x75, 0xB8, 0x48, 0x8B, 0x08, 0x4C,
+    0x39, 0x31, 0x49, 0x8B, 0x4D, 0x10, 0x0F, 0x94, 0xC0, 0x40, 0x02, 0xC7,
+    0x88, 0x85, 0xE0, 0x00, 0x00, 0x00, 0x48, 0x8B, 0x85, 0xB0, 0x02, 0x00,
+    0x00, 0x48, 0x89, 0x45, 0xF0, 0x48, 0x89, 0x45, 0xB0, 0xE8, 0x59, 0xF8,
+    0x4D, 0x00, 0x48, 0x89, 0x85, 0x20, 0x02, 0x00, 0x00, 0x4C, 0x8D, 0x05,
+    0x37, 0x2B, 0xC4, 0x04, 0x49};
+inline constexpr FunctionFact kOutputLoadActionSequence{L"the final output's load-action decision", 0x14118C65D,
                                                         kOutputLoadActionSequenceBytes};
 
 /// The store of the computed load action (al = 2 clear if first in the family, 1 load otherwise),
-/// `mov [rsp+610h], al`, which the mod replaces; and the instruction after it, where execution
+/// `mov [rbp+0E0h], al`, which the mod replaces; and the instruction after it, where execution
 /// resumes. A single instruction is replaced so that no thread can be stopped inside the replaced
-/// bytes. The flags and al are dead after the store (0x14111A37E reloads rax; a call follows).
-inline constexpr std::uintptr_t kOutputLoadActionStore        = 0x14111A377;
-inline constexpr std::uint8_t   kOutputLoadActionStoreBytes[] = {0x88, 0x84, 0x24, 0x10, 0x06, 0x00, 0x00};
-inline constexpr std::uintptr_t kOutputLoadActionResume       = 0x14111A37E;
+/// bytes. The flags and al are dead after the store (0x14118C6B7 reloads rax; a call follows).
+inline constexpr std::uintptr_t kOutputLoadActionStore        = 0x14118C6B1;
+inline constexpr std::uint8_t   kOutputLoadActionStoreBytes[] = {0x88, 0x85, 0xE0, 0x00, 0x00, 0x00};
+inline constexpr std::uintptr_t kOutputLoadActionResume       = 0x14118C6B7;
 
-/// Game version 1.005 (RE-1005-core-facts.md): the store is `mov [rbp+0E0h], al`, 6 bytes, so resume is store + 6.
-/// Both addresses translate through the 1.005 table; these bytes and renderer/output_load_action_code.h's 1.005 code
-/// replace the research build's there.
-inline constexpr std::uint8_t kOutputLoadActionStoreBytes1005[] = {0x88, 0x85, 0xE0, 0x00, 0x00, 0x00};
+/// Game version 1.004 (RE-additional-view-family-reader.md): the store is `mov [rsp+610h], al`, 7 bytes, so resume
+/// is store + 7. Both addresses translate through the 1.004 table; these bytes and renderer/output_load_action_code.h's
+/// 1.004 code replace the source build's there.
+inline constexpr std::uint8_t kOutputLoadActionStoreBytes1004[] = {0x88, 0x84, 0x24, 0x10, 0x06, 0x00, 0x00};
 
 // ---------------------------------------------------------------------------------------------
 // A local player's view point (RE-local-player-viewpoint.md)
@@ -113,14 +113,14 @@ inline constexpr std::uint8_t kOutputLoadActionStoreBytes1005[] = {0x88, 0x85, 0
 /// ULocalPlayer::GetViewPoint(FMinimalViewInfo& Out, EStereoscopicPass): where each player's view
 /// is. Stock: the controller's camera-manager cache, so a player with a borrowed controller gets
 /// the lender's view. Called only virtually, twice per player per frame (for the view matrix and
-/// for CalcSceneView's location/rotation), through the ULocalPlayer vtable (0x146BB33D8) entry
+/// for CalcSceneView's location/rotation), through the ULocalPlayer vtable (0x146A18768) entry
 /// at +0x278. No native subclass overrides it. Its prologue, up to the stack-probe call whose target is relative.
-inline constexpr std::uintptr_t kLocalPlayerVTable = 0x146BB33D8;
-inline constexpr std::uintptr_t kGetViewPointEntry = 0x146BB3650;
+inline constexpr std::uintptr_t kLocalPlayerVTable = 0x146A18768;
+inline constexpr std::uintptr_t kGetViewPointEntry = 0x146A189E8;
 inline constexpr std::uint8_t   kGetViewPointPrologue[] = {
     0x48, 0x89, 0x5C, 0x24, 0x18, 0x55, 0x56, 0x57, 0x41, 0x54, 0x41, 0x55, 0x41, 0x56, 0x41,
     0x57, 0x48, 0x8D, 0xAC, 0x24, 0xC0, 0xF9, 0xFF, 0xFF, 0xB8, 0x40, 0x07, 0x00, 0x00, 0xE8};
-inline constexpr FunctionFact kGetViewPoint{L"ULocalPlayer::GetViewPoint", 0x140BF1270, kGetViewPointPrologue};
+inline constexpr FunctionFact kGetViewPoint{L"ULocalPlayer::GetViewPoint", 0x1409D4708, kGetViewPointPrologue};
 
 // ---------------------------------------------------------------------------------------------
 // Removing a local player (RE-remove-local-player.md)
@@ -130,22 +130,22 @@ inline constexpr FunctionFact kGetViewPoint{L"ULocalPlayer::GetViewPoint", 0x140
 /// the game instance's vtable at +0x2E8; no FF7R game-instance class overrides it. 1.005 inserted a UObject virtual
 /// at slot 19, so the entry is +0x2F0 there (RE-1005-core-facts.md). Its prologue, up to the stack-probe call.
 inline constexpr std::uint8_t kRemoveLocalPlayerPrologue[] = {
-    0x48, 0x89, 0x5C, 0x24, 0x18, 0x55, 0x56, 0x57, 0xB8, 0x30, 0x00, 0x00, 0x00, 0xE8};
-inline constexpr FunctionFact kRemoveLocalPlayer{L"UGameInstance::RemoveLocalPlayer", 0x144F561F0,
+    0x48, 0x8B, 0xC4, 0x48, 0x89, 0x58, 0x08, 0x48, 0x89, 0x68, 0x18, 0x48, 0x89, 0x70};
+inline constexpr FunctionFact kRemoveLocalPlayer{L"UGameInstance::RemoveLocalPlayer", 0x144D695A8,
                                                  kRemoveLocalPlayerPrologue};
-inline constexpr platform::PerBuild<std::uint32_t> kRemoveLocalPlayerVTableOffset = {0x2E8, 0x2F0};
+inline constexpr platform::PerBuild<std::uint32_t> kRemoveLocalPlayerVTableOffset = {0x2F0, 0x2E8};
 /// UObject's GetWorld virtual (1.005's UObject vtables are one slot longer; RE-p2-trigger-overlap.md,
 /// RE-coop-rows-facts.md).
-inline constexpr platform::PerBuild<std::uint32_t> kObjectGetWorldSlot = {0x160, 0x168};
+inline constexpr platform::PerBuild<std::uint32_t> kObjectGetWorldSlot = {0x168, 0x160};
 
 /// Right after the probe call: `sub rsp,rax; mov rsi,rcx; mov [rsp+20h],rdx;
 /// mov rcx,[rdx+30h]; mov rbx,rdx; test rcx,rcx; jz` (the jz is at 0x144F56217). It reads the
 /// player's PlayerController at +0x30 and skips all controller cleanup when it is null.
 /// That skip is what makes removing a seat's player safe once its borrowed controller is cleared.
 inline constexpr std::uint8_t kRemoveLocalPlayerControllerTestBytes[] = {
-    0x48, 0x2B, 0xE0, 0x48, 0x8B, 0xF1, 0x48, 0x89, 0x54, 0x24, 0x20,
-    0x48, 0x8B, 0x4A, 0x30, 0x48, 0x8B, 0xDA, 0x48, 0x85, 0xC9, 0x74};
-inline constexpr FunctionFact kRemoveLocalPlayerControllerTest{L"RemoveLocalPlayer's null-controller skip", 0x144F56202,
+    0x48, 0x2B, 0xE0, 0x48, 0x8B, 0xF1, 0x48, 0x8B, 0xDA, 0x48, 0x8B,
+    0x4A, 0x30, 0x48, 0x85, 0xC9, 0x74, 0x5B, 0x80, 0xB9, 0xF8, 0x00};
+inline constexpr FunctionFact kRemoveLocalPlayerControllerTest{L"RemoveLocalPlayer's null-controller skip", 0x144D695C6,
                                                                kRemoveLocalPlayerControllerTestBytes};
 
 /// ULocalPlayer::PlayerController, as RemoveLocalPlayer reads it. The shared camera writes this
@@ -214,12 +214,12 @@ inline constexpr std::uint32_t kSplitTypeThreePlayerVertical = 5;
 // -> the FWindowsWindow vtable, 37 entries in the stock order (GenericWindow.h).
 
 /// The GEngine global (data).
-inline constexpr std::uintptr_t kGEngine = 0x149117CC0;
+inline constexpr std::uintptr_t kGEngine = 0x148F4B580;
 
 /// UKismetSystemLibrary::SetWindowTitle: the reader whose code proves the two offsets below. Its prologue.
 inline constexpr std::uint8_t kSetWindowTitlePrologue[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x74,
                                                            0x24, 0x18, 0x57, 0xB8, 0x20, 0x00, 0x00, 0x00};
-inline constexpr FunctionFact kSetWindowTitle{L"UKismetSystemLibrary::SetWindowTitle", 0x144FD5330,
+inline constexpr FunctionFact kSetWindowTitle{L"UKismetSystemLibrary::SetWindowTitle", 0x144DEB75C,
                                               kSetWindowTitlePrologue};
 
 /// UGameEngine::GameViewportWindow: the SWindow pointer (the weak referencer follows at +0xE60).
@@ -240,19 +240,19 @@ inline constexpr std::uint32_t kOptionalIsSet           = 0x04;  // the IsSet by
 /// The FWindowsWindow vtable (data) and the slots the mod calls, with the functions they must hold:
 /// ReshapeWindow (WindowsWindow.cpp:411), GetWindowMode (`mov eax,[rcx+38h]; ret`) and GetOSWindowHandle
 /// (`mov rax,[rcx+28h]; ret`).
-inline constexpr std::uintptr_t kWindowsWindowVTable                = 0x1469594D8;
+inline constexpr std::uintptr_t kWindowsWindowVTable                = 0x1467E3290;
 inline constexpr std::size_t    kWindowsWindowSlotReshapeWindow     = 1;
 inline constexpr std::size_t    kWindowsWindowSlotGetWindowMode     = 13;
 inline constexpr std::size_t    kWindowsWindowSlotGetOSWindowHandle = 24;
 inline constexpr std::uint8_t   kWindowsWindowReshapeWindowPrologue[] = {0x40, 0x55, 0x53, 0x56, 0x57, 0x41, 0x54, 0x41,
                                                                        0x56, 0x41, 0x57, 0x48, 0x8D, 0x6C, 0x24, 0xE1};
-inline constexpr FunctionFact   kWindowsWindowReshapeWindow{L"FWindowsWindow::ReshapeWindow", 0x1447CA234,
+inline constexpr FunctionFact   kWindowsWindowReshapeWindow{L"FWindowsWindow::ReshapeWindow", 0x14455722C,
                                                           kWindowsWindowReshapeWindowPrologue};
 inline constexpr std::uint8_t   kWindowsWindowGetWindowModePrologue[] = {0x8B, 0x41, 0x38, 0xC3};
-inline constexpr FunctionFact   kWindowsWindowGetWindowMode{L"FWindowsWindow::GetWindowMode", 0x1418D5940,
+inline constexpr FunctionFact   kWindowsWindowGetWindowMode{L"FWindowsWindow::GetWindowMode", 0x141959170,
                                                           kWindowsWindowGetWindowModePrologue};
 inline constexpr std::uint8_t   kWindowsWindowGetOSWindowHandlePrologue[] = {0x48, 0x8B, 0x41, 0x28, 0xC3};
-inline constexpr FunctionFact   kWindowsWindowGetOSWindowHandle{L"FWindowsWindow::GetOSWindowHandle", 0x1418D5220,
+inline constexpr FunctionFact   kWindowsWindowGetOSWindowHandle{L"FWindowsWindow::GetOSWindowHandle", 0x141958710,
                                                               kWindowsWindowGetOSWindowHandlePrologue};
 
 // ---------------------------------------------------------------------------------------------
@@ -293,12 +293,12 @@ inline constexpr std::uint32_t kViewportInputModeBytes = 0x361;
 /// FWeakObjectPtr::Get and assignment from an object.
 inline constexpr std::uint8_t kWeakObjectGetBytes[] = {
     0x44, 0x8B, 0x49, 0x04, 0x45, 0x33, 0xC0, 0x45, 0x85, 0xC9, 0x74, 0x4F,
-    0x8B, 0x01, 0x85, 0xC0, 0x78, 0x49, 0x3B, 0x05, 0x1C, 0x5B, 0xFE, 0x06};
-inline constexpr FunctionFact kWeakObjectGet{L"FWeakObjectPtr::Get", 0x141905998, kWeakObjectGetBytes};
+    0x8B, 0x01, 0x85, 0xC0, 0x78, 0x49, 0x3B, 0x05, 0x38, 0xA1, 0xEE, 0x07};
+inline constexpr FunctionFact kWeakObjectGet{L"FWeakObjectPtr::Get", 0x1408349FC, kWeakObjectGetBytes};
 inline constexpr std::uint8_t kWeakObjectAssignBytes[] = {
-    0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x74, 0x24, 0x10, 0x57, 0xB8,
-    0x20, 0x00, 0x00, 0x00, 0xE8, 0x67, 0x96, 0x7A, 0x00, 0x48, 0x2B, 0xE0};
-inline constexpr FunctionFact kWeakObjectAssign{L"FWeakObjectPtr assignment", 0x1419058B4, kWeakObjectAssignBytes};
+    0x48, 0x89, 0x74, 0x24, 0x10, 0x57, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8,
+    0x20, 0x73, 0x93, 0x01, 0x48, 0x2B, 0xE0, 0x48, 0x8B, 0xF1, 0x48, 0x85};
+inline constexpr FunctionFact kWeakObjectAssign{L"FWeakObjectPtr assignment", 0x140834850, kWeakObjectAssignBytes};
 
 // ---------------------------------------------------------------------------------------------
 // Memory and smart pointers (stock UE4)
@@ -307,33 +307,33 @@ inline constexpr FunctionFact kWeakObjectAssign{L"FWeakObjectPtr assignment", 0x
 /// FMemory::Malloc(size, alignment) and FMemory::Free(block): the game's allocator (GMalloc behind them), for memory
 /// the game itself frees or that must be the game's (an array handed to a game function).
 inline constexpr std::uint8_t kMallocBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x57, 0xB8, 0x20,
-                                                0x00, 0x00, 0x00, 0xE8, 0x48, 0xFB, 0x86, 0x01};
-inline constexpr FunctionFact kMalloc{L"FMemory::Malloc", 0x14083F3D8, kMallocBytes};
+                                                0x00, 0x00, 0x00, 0xE8, 0xF0, 0xC1, 0x9C, 0x01};
+inline constexpr FunctionFact kMalloc{L"FMemory::Malloc", 0x14079F980, kMallocBytes};
 inline constexpr std::uint8_t kFreeBytes[] = {0x48, 0x85, 0xC9, 0x0F, 0x84, 0xA0, 0x03, 0x00, 0x00, 0x57, 0xB8, 0x50,
-                                              0x00, 0x00, 0x00, 0xE8, 0x4C, 0xF6, 0x90, 0x01, 0x48, 0x2B, 0xE0, 0x4C};
-inline constexpr FunctionFact kFree{L"FMemory::Free", 0x14079F8D0, kFreeBytes};
+                                              0x00, 0x00, 0x00, 0xE8, 0x2C, 0x76, 0x7D, 0x00, 0x48, 0x2B, 0xE0, 0x4C};
+inline constexpr FunctionFact kFree{L"FMemory::Free", 0x141994540, kFreeBytes};
 
 /// The engine's array-data free (IDA: ME_FreeResourceBindingArray): `mov rcx,[rcx]; if (rcx) FMemory::Free(rcx)`
 /// for the TArray at rcx. hud/minimap_labels calls it; world/anim_views redirects a call to it.
-inline constexpr std::uint8_t kFreeArrayDataBytes[] = {0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8, 0x36, 0xF7,
-                                                       0x90, 0x01, 0x48, 0x2B, 0xE0, 0x48, 0x8B, 0x09};
-inline constexpr FunctionFact kFreeArrayData{L"the array-data free (ME_FreeResourceBindingArray)", 0x14079F7F0,
+inline constexpr std::uint8_t kFreeArrayDataBytes[] = {0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8, 0xCE, 0x6C,
+                                                       0xA0, 0x01, 0x48, 0x2B, 0xE0, 0x48, 0x8B, 0x09};
+inline constexpr FunctionFact kFreeArrayData{L"the array-data free (ME_FreeResourceBindingArray)", 0x140764EA8,
                                              kFreeArrayDataBytes};
 
 /// UWorld::GetFirstPlayerController (entry `mov eax, 28h`).
 inline constexpr std::uint8_t kGetFirstPlayerControllerBytes[] = {0xB8, 0x28, 0x00, 0x00, 0x00};
-inline constexpr FunctionFact kGetFirstPlayerController{L"UWorld::GetFirstPlayerController", 0x140EF3078,
+inline constexpr FunctionFact kGetFirstPlayerController{L"UWorld::GetFirstPlayerController", 0x140F99D50,
                                                         kGetFirstPlayerControllerBytes};
 
 /// Thread-safe shared pointers: TWeakPtr's release of its reference (rcx = the weak pointer; `mov rcx,[rcx+8]` the
 /// controller) and the reference controller's ReleaseWeakReference (`lock xadd [rcx+0Ch], -1`).
-inline constexpr std::uint8_t kWeakPtrReleaseBytes[] = {0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8, 0x46, 0x74, 0x82, 0x01,
+inline constexpr std::uint8_t kWeakPtrReleaseBytes[] = {0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8, 0x7E, 0x48, 0x7F, 0x01,
                                                         0x48, 0x2B, 0xE0, 0x48, 0x8B, 0x49, 0x08};
-inline constexpr FunctionFact kWeakPtrRelease{L"TWeakPtrTS::Release", 0x140887AE0, kWeakPtrReleaseBytes};
-inline constexpr std::uint8_t kReleaseWeakReferenceBytes[] = {0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8, 0x26, 0x74,
-                                                              0x82, 0x01, 0x48, 0x2B, 0xE0, 0x83, 0xC8, 0xFF,
+inline constexpr FunctionFact kWeakPtrRelease{L"TWeakPtrTS::Release", 0x1409772F8, kWeakPtrReleaseBytes};
+inline constexpr std::uint8_t kReleaseWeakReferenceBytes[] = {0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8, 0x8A, 0x36,
+                                                              0x81, 0x00, 0x48, 0x2B, 0xE0, 0x83, 0xC8, 0xFF,
                                                               0xF0, 0x0F, 0xC1, 0x41, 0x0C};
-inline constexpr FunctionFact kReleaseWeakReference{L"TReferenceControllerTS::ReleaseWeakReference", 0x140887B00,
+inline constexpr FunctionFact kReleaseWeakReference{L"TReferenceControllerTS::ReleaseWeakReference", 0x1419584EC,
                                                     kReleaseWeakReferenceBytes};
 
 // ---------------------------------------------------------------------------------------------
@@ -342,13 +342,13 @@ inline constexpr FunctionFact kReleaseWeakReference{L"TReferenceControllerTS::Re
 
 /// The platform application (a pointer global): +0x1E0 is the i32 device code of the last active input device (an
 /// XInput pad k reads -2-3k), which force feedback goes to; its send interface is at +0x80.
-inline constexpr std::uintptr_t kPlatformApplication   = 0x149247570;
+inline constexpr std::uintptr_t kPlatformApplication   = 0x14907F8F0;
 inline constexpr std::uint32_t  kPlatformAppDeviceCode = 0x1E0;
 
-/// FRHICommandSubmitCommandsHint: its vtable (data) and the Execute in slot 0 (1.005: 0x145AD4AB0, 0x140AE3E90;
-/// renderer/submit_hints, renderer/submission_census).
-inline constexpr std::uintptr_t kSubmitCommandsHintVTable  = 0x146602920;
-inline constexpr std::uintptr_t kSubmitCommandsHintExecute = 0x140D00988;
+/// FRHICommandSubmitCommandsHint: its vtable (data) and the Execute in slot 0 (renderer/submit_hints,
+/// renderer/submission_census).
+inline constexpr std::uintptr_t kSubmitCommandsHintVTable  = 0x145AD4AB0;
+inline constexpr std::uintptr_t kSubmitCommandsHintExecute = 0x140AE3E90;
 
 // ---------------------------------------------------------------------------------------------
 // The pads: XInput's import slots and the engine's XInput device (stock UE4; RE-pad-slots.md, both builds)
@@ -356,13 +356,13 @@ inline constexpr std::uintptr_t kSubmitCommandsHintExecute = 0x140D00988;
 
 /// The exe's import slots for xinput1_3's XInputGetState and XInputSetState (.idata, read-only): every pad read of
 /// the game (the stock poll, Square's pad-type rescan and its last-active-pad check) and its one rumble send go
-/// through them (1.005: 0x145569800, 0x1455697F8).
-inline constexpr std::uintptr_t kXInputGetStateImport = 0x145714810;
-inline constexpr std::uintptr_t kXInputSetStateImport = 0x145714808;
+/// through them.
+inline constexpr std::uintptr_t kXInputGetStateImport = 0x145569800;
+inline constexpr std::uintptr_t kXInputSetStateImport = 0x1455697F8;
 
-/// GWindowsApplication, the FWindowsApplication pointer (1.005: 0x1491D8608); its XInputDevice at +0xD8, the external
+/// GWindowsApplication, the FWindowsApplication pointer; its XInputDevice at +0xD8, the external
 /// input devices' array at +0xE8 (data, then Num at +0xF0).
-inline constexpr std::uintptr_t kWindowsApplicationGlobal = 0x14939BDD0;
+inline constexpr std::uintptr_t kWindowsApplicationGlobal = 0x1491D8608;
 inline constexpr std::uint32_t  kAppXInputInterface       = 0xD8;
 inline constexpr std::uint32_t  kAppInputDevices          = 0xE8;
 
@@ -381,13 +381,13 @@ inline constexpr std::uint32_t kXInputStateLastSmall       = 0x100;  // float
 // ---------------------------------------------------------------------------------------------
 
 /// AHUD::PostRender: UGameViewportClient::Draw calls it through the AHUD vtable for each player's view, with the HUD's
-/// canvas already set to that view's rect (1.005: 0x1415C97FC). Every controller's HUD is the plain AHUD (one table).
+/// canvas already set to that view's rect. Every controller's HUD is the plain AHUD (one table).
 inline constexpr std::uint8_t   kHudPostRenderBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x18, 0x55, 0x56, 0x57, 0x41, 0x54, 0x41, 0x55,
                                                          0x41, 0x56, 0x41, 0x57, 0x48, 0x8B, 0xEC, 0xB8, 0x80, 0x00, 0x00, 0x00};
-inline constexpr FunctionFact   kHudPostRender{L"AHUD::PostRender", 0x14151C2A0, kHudPostRenderBytes};
-/// Its vtable slot, vtbl_AHUD (0x146BACFD8) + 0x6C8 (1.005: 0x146A051F8 + 0x6D0: every 1.005 UObject vtable is one
-/// slot longer).
-inline constexpr platform::SlotFact kHudPostRenderSlot{L"AHUD vtable: PostRender", 0x146BAD6A0, kHudPostRender};
+inline constexpr FunctionFact   kHudPostRender{L"AHUD::PostRender", 0x1415C97FC, kHudPostRenderBytes};
+/// Its vtable slot, vtbl_AHUD (0x146A051F8) + 0x6D0 (1.004: 0x146BACFD8 + 0x6C8: every UObject vtable grew one slot
+/// after it).
+inline constexpr platform::SlotFact kHudPostRenderSlot{L"AHUD vtable: PostRender", 0x146A058C8, kHudPostRender};
 /// AHUD: PlayerOwner (the controller), Canvas (set only during PostRender); UCanvas: ClipX, ClipY (the view's size).
 inline constexpr std::uint32_t kHudOwner         = 0x228;
 inline constexpr std::uint32_t kHudCanvas        = 0x278;
@@ -396,9 +396,9 @@ inline constexpr std::uint32_t kCanvasClipY      = 0x34;
 /// UEngine::MediumFont (Roboto), read through GEngine.
 inline constexpr std::uint32_t kEngineMediumFont = 0x70;
 
-/// The PlayStation pad reader's device vtable (the SonyController plugin, scePad; 1.005: 0x146432E10): not XInput, so
+/// The PlayStation pad reader's device vtable (the SonyController plugin, scePad): not XInput, so
 /// the pad table does not move its pads.
-inline constexpr std::uintptr_t kSonyControllerDeviceVTable = 0x1465A8AE0;
+inline constexpr std::uintptr_t kSonyControllerDeviceVTable = 0x146432E10;
 
 // ---------------------------------------------------------------------------------------------
 // Slate (stock UE4)

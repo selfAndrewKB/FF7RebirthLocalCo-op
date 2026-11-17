@@ -45,12 +45,12 @@ constexpr std::uint32_t kMarkerListMember = 0x150;
 
 // In MasterHUD_Tick's order (research/RE-p2-hud.md).
 constexpr std::array<SubTick, 6> kSubTicks{{
-    {0x98, {L"the HUD's +0x98 object's tick", 0x140A677F0, kTick98}},
-    {0xB0, {L"the HUD's +0xB0 object's tick", 0x140B8B374, kTickB0}},
-    {0x150, {L"EndUI__MarkerList_Tick", 0x140C8D360, kTick150}},
-    {0x188, {L"the HUD's +0x188 object's tick", 0x140F37874, kTick188}},
-    {0x170, {L"the HUD's +0x170 object's tick", 0x140F37ACC, kTick170}},
-    {0x180, {L"the HUD's +0x180 object's tick", 0x140A68620, kTick180}},
+    {0x98, {L"the HUD's +0x98 object's tick", 0x140F76A20, kTick98}},
+    {0xB0, {L"the HUD's +0xB0 object's tick", 0x140F754C0, kTickB0}},
+    {0x150, {L"EndUI__MarkerList_Tick", 0x140F75088, kTick150}},
+    {0x188, {L"the HUD's +0x188 object's tick", 0x140F763F4, kTick188}},
+    {0x170, {L"the HUD's +0x170 object's tick", 0x140F761D0, kTick170}},
+    {0x180, {L"the HUD's +0x180 object's tick", 0x140F6ECE4, kTick180}},
 }};
 
 // The leader-target icon: m = *(g+0x140); if *(int32*)(m+0x20) != 0 and
@@ -60,7 +60,7 @@ constexpr std::uint32_t  kLeaderTargetCount  = 0x20;
 constexpr std::uint32_t  kLeaderTargetWeak   = 0x6C;
 constexpr std::uint8_t   kLeaderTargetPrologue[] = {0x48, 0x8B, 0xC4, 0x48, 0x89, 0x58, 0x10, 0x48, 0x89, 0x70, 0x18, 0x48,
                                                     0x89, 0x78, 0x20, 0x55, 0x48, 0x8D, 0x68, 0xA1, 0xB8, 0xA0, 0x00, 0x00, 0x00};
-constexpr platform::FunctionFact kLeaderTargetTick{L"the leader-target icon's tick", 0x1417267F0,
+constexpr platform::FunctionFact kLeaderTargetTick{L"the leader-target icon's tick", 0x1437495F0,
                                                    kLeaderTargetPrologue};
 
 // The compass (pass 12 item 5): CompassHolder__FrameUpdate(holder, DeltaTime), holder =
@@ -71,7 +71,7 @@ constexpr std::uint8_t   kCompassFrameUpdatePrologue[] = {0x48, 0x8B, 0xC4, 0x48
                                                           0x48, 0x89, 0x78, 0x20, 0x55, 0x41, 0x54, 0x41, 0x55, 0x41, 0x56,
                                                           0x41, 0x57, 0x48, 0x8D, 0xA8, 0xC8, 0xFD, 0xFF, 0xFF, 0xB8, 0x10,
                                                           0x03, 0x00, 0x00};
-constexpr platform::FunctionFact kCompassFrameUpdate{L"the compass holder's FrameUpdate", 0x14122FBA0,
+constexpr platform::FunctionFact kCompassFrameUpdate{L"the compass holder's FrameUpdate", 0x14197DC1C,
                                                      kCompassFrameUpdatePrologue};
 
 using ObjectFn  = void (*)(void* object);

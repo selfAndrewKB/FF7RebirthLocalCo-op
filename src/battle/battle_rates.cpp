@@ -29,47 +29,47 @@ namespace settings = platform::settings;
 
 using platform::FunctionFact;
 
-// Facts read from the database (research/RE-battle-rate-sites.md; the research build's addresses).
+// Facts read from the database (research/RE-battle-rate-sites.md).
 // The enemy component's battle start (vtable slot 0xD8 of the two enemy component classes).
 constexpr std::uint8_t kStartBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x55, 0x56, 0x57, 0x41, 0x56, 0x41, 0x57};
-constexpr FunctionFact kStart{L"BattleEnemyComp_VtD8_BattleStart_StatsAndExp", 0x14110472C, kStartBytes};
-constexpr std::array<platform::SlotFact, 2> kStartSlots{{{L"the enemy component's battle start slot", 0x1457F0D98, kStart},
-                                                          {L"the second enemy component's battle start slot", 0x1466B73D0, kStart}}};
+constexpr FunctionFact kStart{L"BattleEnemyComp_VtD8_BattleStart_StatsAndExp", 0x140B83F5C, kStartBytes};
+constexpr std::array<platform::SlotFact, 2> kStartSlots{{{L"the enemy component's battle start slot", 0x1455FE900, kStart},
+                                                          {L"the second enemy component's battle start slot", 0x145B4DB28, kStart}}};
 // The stat computation and its two enemy calls; the phase change's stagger-share read just before its own.
 constexpr std::uint8_t kComputeBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x48, 0x89, 0x74, 0x24, 0x18, 0x55, 0x57};
-constexpr FunctionFact kCompute{L"EnemyParam_ComputeStats_FromSpecAndLevel", 0x14143C34C, kComputeBytes};
+constexpr FunctionFact kCompute{L"EnemyParam_ComputeStats_FromSpecAndLevel", 0x141536F88, kComputeBytes};
 constexpr std::uint8_t kShareBytes[] = {0x48, 0x8B, 0x81, 0x90, 0x04, 0x00, 0x00};
-constexpr FunctionFact kShare{L"BattleEnemyComp_GetStaggerGaugeShare", 0x14143C85C, kShareBytes};
-constexpr std::uintptr_t kStartComputeCall = 0x14143BCC2;
-constexpr std::uintptr_t kShareCall        = 0x14143BFE6;
-constexpr std::uintptr_t kPhaseComputeCall = 0x14143C155;
+constexpr FunctionFact kShare{L"BattleEnemyComp_GetStaggerGaugeShare", 0x141537498, kShareBytes};
+constexpr std::uintptr_t kStartComputeCall = 0x1415368F2;
+constexpr std::uintptr_t kShareCall        = 0x141536C22;
+constexpr std::uintptr_t kPhaseComputeCall = 0x141536D91;
 // The party-side test, and the boss byte of the component's base row.
 constexpr std::uint8_t kPartySideBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x57, 0xB8, 0x20, 0x00, 0x00, 0x00};
-constexpr FunctionFact  kPartySide{L"BattleCtrlComp_HasPlayerTypeOrFlags90A098", 0x140A5C154, kPartySideBytes};
+constexpr FunctionFact  kPartySide{L"BattleCtrlComp_HasPlayerTypeOrFlags90A098", 0x140BC75F4, kPartySideBytes};
 constexpr std::uint32_t kComponentBaseRow = 0x3E0;
 constexpr std::uint32_t kRowBossByte      = 0x19A;
 // The hit's difficulty step: its difficulty read and its rate-row read.
 constexpr std::uint8_t kDifficultyBytes[] = {0x48, 0x8B, 0x05};
-constexpr FunctionFact kDifficulty{L"Difficulty_GetEffective_DynamicAsNormal", 0x14087F0A8, kDifficultyBytes};
+constexpr FunctionFact kDifficulty{L"Difficulty_GetEffective_DynamicAsNormal", 0x140C21548, kDifficultyBytes};
 constexpr std::uint8_t kGetFloatBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x6C, 0x24, 0x10, 0x48, 0x89, 0x74};
-constexpr FunctionFact kGetFloat{L"EndParam__GetFloatByKey", 0x140A59490, kGetFloatBytes};
-constexpr std::uintptr_t kDifficultyCall  = 0x140FB42A3;
-constexpr std::uintptr_t kDamageRateCall  = 0x140FB42D1;
+constexpr FunctionFact kGetFloat{L"EndParam__GetFloatByKey", 0x140C28600, kGetFloatBytes};
+constexpr std::uintptr_t kDifficultyCall  = 0x140E20D7B;
+constexpr std::uintptr_t kDamageRateCall  = 0x140E20DA9;
 constexpr std::uint8_t   kDifficultyEasy   = 0;
 constexpr std::uint8_t   kDifficultyNormal = 1;
 // An enemy's base EXP at its battle start.
 constexpr std::uint8_t kExpValueBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x57, 0xB8, 0x40, 0x00, 0x00, 0x00};
-constexpr FunctionFact kExpValue{L"EnemyEXP_GetValueAtLevel_WithExpUpBonus", 0x1417F5780, kExpValueBytes};
-constexpr std::uintptr_t kExpCall = 0x14143B9C8;
-// The award's AP bonus: its gate and its row read; 1.005's second gate (that build only).
+constexpr FunctionFact kExpValue{L"EnemyEXP_GetValueAtLevel_WithExpUpBonus", 0x141534A34, kExpValueBytes};
+constexpr std::uintptr_t kExpCall = 0x1415365F1;
+// The award's AP bonus: its gate and its row read, and the second bonus gate (none in 1.004).
 constexpr std::uint8_t kStoryFlagBytes[] = {0x48, 0x8B, 0xC4, 0x48, 0x89, 0x58, 0x08, 0x48, 0x89, 0x68, 0x10};
-constexpr FunctionFact kStoryFlag{L"StoryFlag_GetByName", 0x1408BED98, kStoryFlagBytes};
-constexpr std::uint8_t kGetIntBytes[] = {0x48, 0x8B, 0xC4, 0x48, 0x89, 0x58, 0x08, 0x48, 0x89, 0x68, 0x10};
-constexpr FunctionFact kGetInt{L"EndParam__GetIntByKey", 0x140A59354, kGetIntBytes};
-constexpr std::uintptr_t kApGateCall = 0x14143C9FB;
-constexpr std::uintptr_t kApRowCall  = 0x14143CA10;
-constexpr std::uintptr_t kBonusGate2V1005 = 0x1418F72B8;  // 1.005 only: the award's second bonus gate, u8()
+constexpr FunctionFact kStoryFlag{L"StoryFlag_GetByName", 0x14092B5C8, kStoryFlagBytes};
+constexpr std::uint8_t kGetIntBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x6C, 0x24, 0x10, 0x48};
+constexpr FunctionFact kGetInt{L"EndParam__GetIntByKey", 0x140C2854C, kGetIntBytes};
+constexpr std::uintptr_t kApGateCall = 0x14127780B;
+constexpr std::uintptr_t kApRowCall  = 0x141277824;
 constexpr std::uint8_t   kBonusGate2Bytes[] = {0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8};
+constexpr FunctionFact   kBonusGate2{L"Rewards_BonusGate2", 0x1418F72B8, kBonusGate2Bytes};  // the award's second bonus gate, u8()
 
 using StartFn      = std::uint64_t (*)(void* component, std::uint8_t a, std::uint8_t b);
 using ComputeFn    = std::uint64_t (*)(void* estimate, void* param, std::int32_t* hp, std::int32_t* bp, void* pa, void* ma,
@@ -86,7 +86,7 @@ using GateFn       = std::uint8_t (*)();
 std::array<platform::VTableEntry, 2> g_startSlots;
 platform::CallRedirect g_startCompute, g_share, g_phaseCompute, g_difficulty, g_damageRate, g_exp, g_apGate, g_apRow;
 PartySideFn            g_partySide = nullptr;
-GateFn                 g_gate2     = nullptr;  // 1.005 only
+GateFn                 g_gate2     = nullptr;  // none in 1.004
 
 /// The rates in tenths (10: the game's own). Set on the game thread, read on any.
 struct Rates
@@ -301,22 +301,20 @@ bool PlaceCall(const platform::GameImage& image, platform::CallRedirect& call, s
     return target && call.Install(image, idaSite, *target, reinterpret_cast<std::uintptr_t>(replacement));
 }
 
-/// The 1.005 bonus gate the AP lever reads (none on the research build); false if its bytes are not the expected.
+/// The second bonus gate the AP lever reads (none in 1.004); false if its bytes are not the expected.
 bool FindSecondGate(const platform::GameImage& image) noexcept
 {
-    if (platform::RunningBuild() != platform::BuildIndex::V1005)
+    if (platform::RunningBuild() == platform::BuildIndex::V1004)
     {
         return true;
     }
-    const std::uintptr_t gate = image.Base() + (kBonusGate2V1005 - 0x140000000);
-    std::uint8_t         bytes[sizeof(kBonusGate2Bytes)]{};
-    if (!platform::CopyGuarded(bytes, reinterpret_cast<const void*>(gate), sizeof(bytes)) ||
-        std::memcmp(bytes, kBonusGate2Bytes, sizeof(bytes)) != 0)
+    const auto gate = platform::FindFunction(image, kBonusGate2);
+    if (!gate)
     {
         platform::Log(L"battle rates: the award's second bonus gate is not where expected");
         return false;
     }
-    g_gate2 = reinterpret_cast<GateFn>(gate);
+    g_gate2 = reinterpret_cast<GateFn>(*gate);
     return true;
 }
 

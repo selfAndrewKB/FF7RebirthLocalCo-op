@@ -66,43 +66,44 @@ constexpr std::uint32_t  kSlatePaintInterface = 0x2B0;
 constexpr std::uint32_t  kSlateContent        = 0x3B0;
 constexpr std::uint32_t  kSlateTarget         = 0x490;
 constexpr std::uint32_t  kContentCentre       = 0x478;  // float x, y, z
-constexpr std::uintptr_t kCirclePaintVTable   = 0x14676E5D8;
+constexpr std::uintptr_t kCirclePaintVTable   = 0x1465F8248;
 
 // MasterIconPaint_NaviMapHolder_FrameUpdate(holder, dt): the content's only writer (centre, rotations, icons).
 constexpr std::uint8_t   kHolderUpdateBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x48, 0x89, 0x74, 0x24, 0x18, 0x57, 0x41, 0x54,
                                                  0x41, 0x55, 0x41, 0x56, 0x41, 0x57, 0xB8, 0x90, 0x03, 0x00, 0x00, 0xE8};
-constexpr platform::FunctionFact kHolderUpdate{L"MasterIconPaint_NaviMapHolder_FrameUpdate", 0x140843F10,
+constexpr platform::FunctionFact kHolderUpdate{L"MasterIconPaint_NaviMapHolder_FrameUpdate", 0x140B7BB44,
                                                kHolderUpdateBytes};
 // Its one leader read: call UEndPartyAPI_GetPartyLeaderType (u8 in al); location, range, arrow yaw
 // and the party-icon skip all follow that answer (no sub-function reads the leader itself).
-constexpr std::uintptr_t kLeaderTypeCall    = 0x140844016;
+constexpr std::uintptr_t kLeaderTypeCall    = 0x140B7BC48;
 using facts::kGetPartyLeaderType;
 
 // The holder update's map pieces (research/RE-p2-minimap-tiles.md): a piece in state 2 (shown) is dropped when the run's
 // centre is out of its rectangle + margin + 5 m, asked where `lea rdx,[rsp+90h]` loads the centre (`mov rcx,rbx`
 // = the piece; only al is read after). The pieces' states are shared, so with one centre per run each player's run
 // dropped the other's pieces (CONFIRMED live: ~17 load/drop cycles a second, the flicker).
-constexpr std::uintptr_t kPieceUnloadCall      = 0x140844905;
-constexpr std::uintptr_t kPieceShouldUnload    = 0x141513F24;  // NaviMapPiece__ShouldUnload_CentreOutOfRectPlus500
+constexpr std::uintptr_t kPieceUnloadCall      = 0x140B7C4D8;
+constexpr std::uintptr_t kPieceShouldUnload    = 0x140E7A7B8;  // NaviMapPiece__ShouldUnload_CentreOutOfRectPlus500
 constexpr std::uint8_t   kPieceUnloadArgsBytes[] = {0x48, 0x8D, 0x94, 0x24, 0x90, 0x00, 0x00, 0x00, 0x48, 0x8B, 0xCB};
-constexpr platform::FunctionFact kPieceUnloadArgs{L"the piece-unload call's arguments", 0x1408448FA,
+constexpr platform::FunctionFact kPieceUnloadArgs{L"the piece-unload call's arguments", 0x140B7C4CD,
                                                   kPieceUnloadArgsBytes};
 constexpr std::uint8_t   kPieceUnloadAfterBytes[] = {0x84, 0xC0};
-constexpr platform::FunctionFact kPieceUnloadAfter{L"after the piece-unload call", 0x14084490A, kPieceUnloadAfterBytes};
+constexpr platform::FunctionFact kPieceUnloadAfter{L"after the piece-unload call", 0x140B7C4DD, kPieceUnloadAfterBytes};
 
 // SEndNaviMapCircle__OnPaint_Pool0's pool-0 block: the acquire (rcx renderer, dl 0; its call crosses a
 // 16-byte block, so it is installed from the game thread while that thread is outside the paint), FindOrAdd (rcx
 // slot, rdx the FName value from the static below, r8 rect), and the submit (rcx renderer, dl 0, r8 slot).
-constexpr std::uintptr_t kFindOrAddCall    = 0x140FC6CE9;
-constexpr std::uintptr_t kStockNameStatic  = 0x14939C2F8;  // FName "SEndNaviMapCircle", built once by the game
+constexpr std::uintptr_t kFindOrAddCall    = 0x14130A553;
+constexpr std::uintptr_t kStockNameStatic  = 0x1491873A8;  // FName "SEndNaviMapCircle", built once by the game
 
-// Pool 0's consume: the vertex-buffer load before DrawLayerEntry (r13 = renderer, r9 = entry).
-constexpr std::uintptr_t kConsumeLoadSite   = 0x140FC7C91;
-constexpr std::uintptr_t kConsumeLoadResume = 0x140FC7C98;
-// Game version 1.005 (RE-1005-hud-2.md): the load crosses a 16-byte block there, so the next instruction, the store
-// of the vertex-buffer argument, is redirected instead (hud/passes/entry_filter_code.h); the call follows it.
-constexpr std::uintptr_t kConsumeStoreSite   = 0x140FC7C98;
-constexpr std::uintptr_t kConsumeStoreResume = 0x140FC7C9D;
+// Pool 0's consume: the vertex-buffer load before DrawLayerEntry (r13 = renderer, r9 = entry) crosses a 16-byte block
+// (RE-1005-hud-2.md), so the next instruction, the store of the vertex-buffer argument, is redirected instead
+// (hud/passes/entry_filter_code.h); the call follows it.
+constexpr std::uintptr_t kConsumeStoreSite   = 0x140A460F4;
+constexpr std::uintptr_t kConsumeStoreResume = 0x140A460F9;
+// Game version 1.004: the load fits one block and is redirected itself.
+constexpr std::uintptr_t kConsumeLoadSite   = 0x140A460ED;
+constexpr std::uintptr_t kConsumeLoadResume = 0x140A460F4;
 
 // Pool 0's buffers (renderer +0x80 vertex, +0x98 index): the same kind and capacities as every pool's (uploads
 // grow past them on the render thread).
@@ -111,17 +112,17 @@ constexpr std::uint32_t  kPoolZeroIndexBuffer  = 0x98;
 
 // The widget's own target recipe (SEndNaviMapCircle__Construct_CreatesRT): NewObject in GObjTransientPkg, SRGB
 // (+0x91 bit 0), TargetGamma 1, ClearColor 0, InitCustomFormat(X, Y, PF_B8G8R8A8, linear), UpdateResourceImmediate.
-constexpr std::uintptr_t kTransientPackage = 0x149115C28;
+constexpr std::uintptr_t kTransientPackage = 0x148F49448;
 constexpr std::uint8_t   kNewRenderTargetBytes[] = {0x40, 0x53, 0xB8, 0x60, 0x00, 0x00, 0x00, 0xE8,
-                                                    0x38, 0xDA, 0x23, 0xFF, 0x48, 0x2B, 0xE0, 0x48};
-constexpr platform::FunctionFact kNewRenderTarget{L"the render target's NewObject", 0x142E714EC, kNewRenderTargetBytes};
-constexpr std::uint8_t   kInitCustomFormatBytes[] = {0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8, 0x86, 0xC0,
-                                                     0xEF, 0xFC, 0x48, 0x2B, 0xE0, 0x8A, 0x44, 0x24};
-constexpr platform::FunctionFact kInitCustomFormat{L"UTextureRenderTarget2D::InitCustomFormat", 0x1451B2EA0,
+                                                    0xE0, 0x12, 0x64, 0xFF, 0x48, 0x2B, 0xE0, 0x48};
+constexpr platform::FunctionFact kNewRenderTarget{L"the render target's NewObject", 0x142B2A894, kNewRenderTargetBytes};
+constexpr std::uint8_t   kInitCustomFormatBytes[] = {0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8, 0x16, 0x38,
+                                                     0x18, 0xFD, 0x48, 0x2B, 0xE0, 0x8A, 0x44, 0x24};
+constexpr platform::FunctionFact kInitCustomFormat{L"UTextureRenderTarget2D::InitCustomFormat", 0x144FE8360,
                                                    kInitCustomFormatBytes};
-constexpr std::uint8_t   kUpdateResourceImmediateBytes[] = {0xB8, 0x58, 0x00, 0x00, 0x00, 0xE8, 0x5A, 0x58,
-                                                            0xEF, 0xFC, 0x48, 0x2B, 0xE0, 0x48, 0x8B, 0x81};
-constexpr platform::FunctionFact kUpdateResourceImmediate{L"UTexture::UpdateResourceImmediate", 0x1451B96CC,
+constexpr std::uint8_t   kUpdateResourceImmediateBytes[] = {0xB8, 0x58, 0x00, 0x00, 0x00, 0xE8, 0x7A, 0xCC,
+                                                            0x17, 0xFD, 0x48, 0x2B, 0xE0, 0x4C, 0x8B, 0x89};
+constexpr platform::FunctionFact kUpdateResourceImmediate{L"UTexture::UpdateResourceImmediate", 0x144FEEEFC,
                                                           kUpdateResourceImmediateBytes};
 constexpr std::uint32_t  kTargetFlags91    = 0x91;  // bit 0: SRGB
 constexpr std::uint32_t  kTargetGamma      = 0xE0;
@@ -594,10 +595,10 @@ bool Install(const platform::GameImage& image) noexcept
     const auto submitAt  = platform::FindFunction(image, facts::kNaviMapCircleSubmitCall);
     const auto submit    = platform::FindFunction(image, facts::kSubmitLayerSlot);
     const auto name      = image.Rebase(kStockNameStatic, sizeof(std::uint64_t));
-    const bool v1005     = platform::RunningBuild() == platform::BuildIndex::V1005;  // its consume site (above)
-    const auto consume   = v1005 ? image.Rebase(kConsumeStoreSite, sizeof(kStoreVertexBufferArgBytes1005))
-                                 : image.Rebase(kConsumeLoadSite, sizeof(kLoadPoolZeroVertexBufferBytes));
-    const auto resume    = image.Rebase(v1005 ? kConsumeStoreResume : kConsumeLoadResume);
+    const bool v1004     = platform::RunningBuild() == platform::BuildIndex::V1004;  // its consume site (above)
+    const auto consume   = v1004 ? image.Rebase(kConsumeLoadSite, sizeof(kLoadPoolZeroVertexBufferBytes))
+                                 : image.Rebase(kConsumeStoreSite, sizeof(kStoreVertexBufferArgBytes));
+    const auto resume    = image.Rebase(v1004 ? kConsumeLoadResume : kConsumeStoreResume);
     const auto package   = image.Rebase(kTransientPackage, sizeof(void*));
     const auto circle    = image.Rebase(kCirclePaintVTable, sizeof(void*));
     const auto vbVtable  = players::game_globals::Address(players::game_globals::Global::VertexBufferVTable);
@@ -627,10 +628,10 @@ bool Install(const platform::GameImage& image) noexcept
                    reinterpret_cast<SubmitLayerSlotFn>(*submit));
 
     // The consume code first: it does nothing until a seat's entry name is published with its buffers.
-    const auto code     = EntryBuffersCode(g_slot.Fields(), kLoadPoolZeroVertexBufferBytes);
-    const auto code1005 = EntryBuffersStoreCode1005(g_slot.Fields());
-    const bool consumed = v1005 ? g_consumeCode.Install(*consume, kStoreVertexBufferArgBytes1005, code1005, *resume)
-                                : g_consumeCode.Install(*consume, kLoadPoolZeroVertexBufferBytes, code, *resume);
+    const auto storeCode = EntryBuffersStoreCode(g_slot.Fields());
+    const auto loadCode  = EntryBuffersCode(g_slot.Fields(), kLoadPoolZeroVertexBufferBytes);
+    const bool consumed  = v1004 ? g_consumeCode.Install(*consume, kLoadPoolZeroVertexBufferBytes, loadCode, *resume)
+                                 : g_consumeCode.Install(*consume, kStoreVertexBufferArgBytes, storeCode, *resume);
     const bool installed =
         consumed &&
         g_leaderCall.Install(*leaderAt, *leader, reinterpret_cast<std::uintptr_t>(&LeaderType)) &&

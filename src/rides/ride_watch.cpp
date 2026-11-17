@@ -72,10 +72,10 @@ using facts::kRideManagerPlayerTypes;
 // AEndChocoboCharacter's native tail and the input component the player-core test reads.
 // 1.005 moved this tail by +0x20 (research/RE-1005-offsets-C.md): CreateRideObject writes +0x1938 and +0x1930, and the
 // ride-state tests read `byte [rbx+1940h]`, `byte [rcx+1942h]` and `[rdi+1944h]`.
-constexpr platform::PerBuild<std::uint32_t> kChocoboRideMode   = {0x1910, 0x1930};  // u8
+constexpr platform::PerBuild<std::uint32_t> kChocoboRideMode   = {0x1930, 0x1910};  // u8
 using facts::kChocoboRideObject;
-constexpr platform::PerBuild<std::uint32_t> kChocoboFlag1920   = {0x1920, 0x1940};  // u8
-constexpr platform::PerBuild<std::uint32_t> kChocoboFlag1922   = {0x1922, 0x1942};  // u8
+constexpr platform::PerBuild<std::uint32_t> kChocoboFlag1920   = {0x1940, 0x1920};  // u8
+constexpr platform::PerBuild<std::uint32_t> kChocoboFlag1922   = {0x1942, 0x1922};  // u8
 using facts::kChocoboRidden;
 using facts::kCharacterControlHolder;
 using facts::kChocoboMoveStateVTable;

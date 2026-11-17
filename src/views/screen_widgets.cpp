@@ -26,7 +26,7 @@ namespace {
 // returning a byte; it stores z at +0x2A8. First instruction mov [rsp+18h], rbx (5 bytes, position-independent, inside
 // one 16-byte block in both builds; 1.004's block also holds SetZOrder's tail jump to this entry).
 constexpr std::uint8_t   kAddFirst[]    = {0x48, 0x89, 0x5C, 0x24, 0x18};
-constexpr platform::FunctionFact kAdd{L"UEndUserWidget__AddToRootOverlay_ZOrderPlus10", 0x140E68B98, kAddFirst};
+constexpr platform::FunctionFact kAdd{L"UEndUserWidget__AddToRootOverlay_ZOrderPlus10", 0x141106AA0, kAddFirst};
 constexpr std::uint32_t  kZOrder        = 0x2A8;  // i32; -1 once RemoveFromParent took it off the overlay
 constexpr std::uint32_t  kVisibility    = 0xC3;   // UWidget::Visibility (ESlateVisibility; the UE4SS header dump, UMG.hpp)
 constexpr std::uint8_t   kCollapsed     = 1;

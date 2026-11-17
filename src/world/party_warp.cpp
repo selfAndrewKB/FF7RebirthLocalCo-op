@@ -46,18 +46,18 @@ struct VariantFact
 };
 
 constexpr VariantFact kVariants[] = {
-    {L"PLAYER", Subject::Member, facts::kFollowStatePlayerVTable, 0x140CB9618, 0x14183BD94, 0x1431CF7D4, 0x140B1975C,
+    {L"PLAYER", Subject::Member, facts::kFollowStatePlayerVTable, 0x14119AD20, 0x14183CD64, 0x142ED7394, 0x140E22A50,
      true},
-    {L"CHOCOBO_MEMBER", Subject::Chocobo, 0x145CB2C00, 0x140CB9618, 0x14183BD94, 0x1431CF7D4, 0x1431D851C, false},
-    {L"CHOCOBO_SUB", Subject::Chocobo, 0x145CB1650, 0x140CB9618, 0x14183BD94, 0x1431CF7D4, 0x1431D851C, false},
-    {L"CHOCOBO", Subject::Chocobo, 0x145CB2918, 0x1431C9638, 0x14183BD94, 0x1431CF7D4, 0x1431D84F4, false},
+    {L"CHOCOBO_MEMBER", Subject::Chocobo, 0x145B1E1A0, 0x14119AD20, 0x14183CD64, 0x142ED7394, 0x142EDFAE8, false},
+    {L"CHOCOBO_SUB", Subject::Chocobo, 0x145B1D230, 0x14119AD20, 0x14183CD64, 0x142ED7394, 0x142EDFAE8, false},
+    {L"CHOCOBO", Subject::Chocobo, 0x145B1E488, 0x142ED1118, 0x14183CD64, 0x142ED7394, 0x142EDFAC0, false},
 };
 constexpr std::size_t kVariantCount = sizeof(kVariants) / sizeof(kVariants[0]);
 
 // PartyManager_IsIdle (bool()), the guard PartyFollow_ForceTeleportAll uses before it forces anyone.
-constexpr std::uint8_t kPartyIdleBytes[] = {0x48, 0x8B, 0x05, 0x99, 0x11, 0x88, 0x08, 0x48, 0x85, 0xC0, 0x74, 0x07,
+constexpr std::uint8_t kPartyIdleBytes[] = {0x48, 0x8B, 0x05, 0x81, 0xBD, 0x12, 0x08, 0x48, 0x85, 0xC0, 0x74, 0x07,
                                             0x80, 0x38, 0x00, 0x0F, 0x94, 0xC0, 0xC3, 0xB0, 0x01, 0xC3, 0xCC, 0xCC};
-constexpr platform::FunctionFact kPartyIdle{L"PartyManager_IsIdle", 0x140B1AB40, kPartyIdleBytes};
+constexpr platform::FunctionFact kPartyIdle{L"PartyManager_IsIdle", 0x1410AC788, kPartyIdleBytes};
 
 // The follow update's own gates a forced request skips (research/RE-warp-gates.md):
 //   G1: the character's field controller state, its virtual check (ladder, squeeze, crawl, climbing wall, grappling
@@ -67,11 +67,11 @@ constexpr platform::FunctionFact kPartyIdle{L"PartyManager_IsIdle", 0x140B1AB40,
 //       one it calls (the two the research found in every party member's vtable).
 //   G2: the field-exclusion mask (a scene, a dialog, a minigame holds the field), read by views/whole_screen.
 //   G4: the field step (13 once the field is up); a forced request waits on it, the mod's finish-now would not.
-constexpr platform::PerBuild<std::uint32_t> kFieldStateSlot = {0x930, 0x938};
-constexpr std::uintptr_t kEndPlayerCharacterVTable = 0x145840A90;
-constexpr std::uintptr_t kFieldStateCheck          = 0x140A5F5AC;  // the slot's function
+constexpr platform::PerBuild<std::uint32_t> kFieldStateSlot = {0x938, 0x930};
+constexpr std::uintptr_t kEndPlayerCharacterVTable = 0x1456B3198;
+constexpr std::uintptr_t kFieldStateCheck          = 0x1409A5A84;  // the slot's function
 constexpr std::uint8_t   kFieldStateBytes[]        = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00};
-constexpr platform::FunctionFact kFieldState{L"EndCharacter_IsInFieldControllerState", 0x140A5FA84, kFieldStateBytes};
+constexpr platform::FunctionFact kFieldState{L"EndCharacter_IsInFieldControllerState", 0x141985068, kFieldStateBytes};
 constexpr std::uint32_t kFieldStep        = 0x70;  // EEndFieldStep
 constexpr std::uint8_t  kFieldStepUp      = 13;
 constexpr std::uint32_t kAiSkipsUpdate    = 0xAD8;  // the PLAYER update returns at once while set
@@ -204,7 +204,7 @@ void* FollowOf(const void* pawn, Subject subject, const Variant** variantOut = n
 std::uintptr_t IdaVtableOf(const void* object) noexcept
 {
     std::uintptr_t vtable = 0;
-    return Read(object, 0, vtable) && g_image ? g_image->ResearchAddress(vtable) : 0;
+    return Read(object, 0, vtable) && g_image ? g_image->SourceAddress(vtable) : 0;
 }
 
 bool Test(TestFn fn, bool& out) noexcept

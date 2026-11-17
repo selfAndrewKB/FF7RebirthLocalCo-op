@@ -33,24 +33,24 @@ using world::field_rules::AnyOn;
 
 // The class's notify and follower slots (research/RE-cart-climb-seats.md).
 constexpr std::uint8_t kNotifyBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x57, 0xB8, 0x50,
-                                         0x00, 0x00, 0x00, 0xE8, 0xD8, 0x13, 0xA8, 0xFE};
-constexpr platform::SlotFact kNotifySlot{L"the cart climb's notify slot", 0x1466E9DD8,
-                                         {L"CartJump_Vt748_Notify", 0x14362DB48, kNotifyBytes}};
+                                         0x00, 0x00, 0x00, 0xE8, 0x14, 0x98, 0xE0, 0xFE};
+constexpr platform::SlotFact kNotifySlot{L"the cart climb's notify slot", 0x1465774F8,
+                                         {L"CartJump_Vt748_Notify", 0x14336235C, kNotifyBytes}};
 constexpr std::uint8_t kFollowerBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x48, 0x89, 0x74,
                                            0x24, 0x18, 0x57, 0xB8, 0x20, 0x00, 0x00, 0x00};
-constexpr platform::SlotFact kFollowerSlot{L"the cart climb's follower-enter slot", 0x1466E9D40,
-                                           {L"CartJump_Vt6B0_AIEnter_RequestJump", 0x14362E0A4, kFollowerBytes}};
+constexpr platform::SlotFact kFollowerSlot{L"the cart climb's follower-enter slot", 0x146577460,
+                                           {L"CartJump_Vt6B0_AIEnter_RequestJump", 0x14336268C, kFollowerBytes}};
 // The shared climb list's add and remove. The add's first instruction crosses a 16-byte block in one build: its redirect
 // goes at the second instruction (a store into the caller's home area that no branch lands on).
-constexpr std::uint8_t kListBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x6C,
-                                       0x24, 0x20, 0x56, 0x57, 0x41, 0x56, 0xB8, 0x20};
-constexpr platform::FunctionFact kListAdd{L"ParkourList_AddUnique_Global3C0", 0x143CFD8FC, kListBytes};
-constexpr platform::FunctionFact kListRemove{L"ParkourList_RemoveAll_Global3C0", 0x143D01F20, kListBytes};
+constexpr std::uint8_t kListBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x74,
+                                       0x24, 0x20, 0x57, 0xB8, 0x20, 0x00, 0x00, 0x00};
+constexpr platform::FunctionFact kListAdd{L"ParkourList_AddUnique_Global3C0", 0x143A5EED4, kListBytes};
+constexpr platform::FunctionFact kListRemove{L"ParkourList_RemoveAll_Global3C0", 0x1418506A4, kListBytes};
 // The cart's own calls of them, known by their return addresses (each checked at install as an E8 to its function):
 // the notify's add and remove, and the unregister's remove. Every other caller (the forced-parkour spots) passes through.
-constexpr std::uintptr_t kNotifyAddCall        = 0x14362DBFE;
-constexpr std::uintptr_t kNotifyRemoveCall     = 0x14362DC13;
-constexpr std::uintptr_t kUnregisterRemoveCall = 0x14362DA33;
+constexpr std::uintptr_t kNotifyAddCall        = 0x143362412;
+constexpr std::uintptr_t kNotifyRemoveCall     = 0x143362427;
+constexpr std::uintptr_t kUnregisterRemoveCall = 0x143362247;
 
 constexpr std::size_t kMaxCarts = 8;  // carts with recorded wishes at once
 

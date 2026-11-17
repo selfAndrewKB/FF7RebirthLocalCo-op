@@ -54,9 +54,9 @@ constexpr std::size_t   kMaxHidden     = 64;
 // The per-entry placement the list's tick runs: stateless.
 constexpr std::uint8_t kPlacePinBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x74, 0x24, 0x18, 0x55,
                                            0x57, 0x41, 0x56, 0x48, 0x8B, 0xEC, 0xB8, 0x40, 0x00, 0x00, 0x00};
-constexpr platform::FunctionFact kPlacePin{L"EndUI__M1B8_PlacePin_OwnerPC_EdgeFade", 0x143A0CFDC, kPlacePinBytes};
+constexpr platform::FunctionFact kPlacePin{L"EndUI__M1B8_PlacePin_OwnerPC_EdgeFade", 0x14374ED08, kPlacePinBytes};
 constexpr std::uint8_t kPlaceHookBytes[] = {0x48, 0x85, 0xD2, 0x0F, 0x84, 0x32, 0x01, 0x00, 0x00, 0xB8, 0x28, 0x00, 0x00, 0x00};
-constexpr platform::FunctionFact kPlaceHook{L"EndUI__M1B8_PlaceHookIcon_ByAngle", 0x143A0CEA0, kPlaceHookBytes};
+constexpr platform::FunctionFact kPlaceHook{L"EndUI__M1B8_PlaceHookIcon_ByAngle", 0x14374EBCC, kPlaceHookBytes};
 
 using PlacePinFn  = std::uint8_t (*)(void* manager, void* pin, const void* location, float* angle);
 using PlaceHookFn = void (*)(void* unused, void* hook, const float* angle);

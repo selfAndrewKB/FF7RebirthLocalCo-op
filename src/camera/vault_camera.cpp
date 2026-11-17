@@ -32,7 +32,7 @@ namespace {
 
 // FEndBehaviorVaultExtraAction::Begin (vtable +0x98): `call IsUCPC_Core` at +0x102, E8 at +0x2 of its block (1.005:
 // +0x6). research/RE-p2-chocobo-jump-camera.md.
-constexpr std::uintptr_t kCoreCall = 0x1416E8F52;
+constexpr std::uintptr_t kCoreCall = 0x1415B9F86;
 using CoreFn = std::uint8_t (*)(const void* character);
 
 // FEndBehaviorVaultExtraAction::Begin itself, through its vtable slot: called by PushAction from the vault state's
@@ -40,30 +40,30 @@ using CoreFn = std::uint8_t (*)(const void* character);
 constexpr std::uint8_t kBeginBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x48, 0x89, 0x74,
                                         0x24, 0x18, 0x55, 0x57, 0x41, 0x56, 0x48, 0x8D};
 constexpr platform::SlotFact kBeginSlot{
-    L"the vault action's Begin slot", 0x145CCED90,
-    {L"FEndBehaviorVaultExtraAction::Begin", 0x1416E8E50, kBeginBytes}};
+    L"the vault action's Begin slot", 0x145B38EA8,
+    {L"FEndBehaviorVaultExtraAction::Begin", 0x1415B9E84, kBeginBytes}};
 using BeginFn = std::uint8_t (*)(void* action);
 
 // FEndBehaviorVaultExtraAction::End (vtable +0x120), on the animation worker:
 // `mov cl, 0Fh; call PrimaryPCM_FieldOp_DeactivateModule`, the action in rbx (mov rbx, rcx at entry). One block in
 // both builds. research/RE-p2-chocobo-jump-camera.md.
-constexpr std::uintptr_t kEndDeactivateCall = 0x1416EA304;
+constexpr std::uintptr_t kEndDeactivateCall = 0x1415BBF4A;
 constexpr std::uint32_t  kActionCharacter   = 0x450;   // the action's character, an FWeakObjectPtr {index, serial}
 constexpr std::uint32_t  kFieldOperator     = 0x2CB0;  // a camera manager's Field operator (a pointer to it)
 using facts::kOperatorModules;
 constexpr std::uint32_t  kModuleSlot15      = 15;
 
 inline constexpr std::uint8_t kPrimaryDeactivateBytes[] = {
-    0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0xBC, 0x66, 0x9C, 0x00,
-    0x48, 0x2B, 0xE0, 0x8A, 0xD9, 0xE8, 0xD2, 0x83, 0x37, 0xFF, 0x48, 0x85};
+    0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0x68, 0x9C, 0xBD, 0x00,
+    0x48, 0x2B, 0xE0, 0x8A, 0xD9, 0xE8, 0xC6, 0x24, 0x1D, 0xFF, 0x48, 0x85};
 inline constexpr std::uint8_t kOperatorDeactivateBytes[] = {
     0x48, 0x89, 0x5C, 0x24, 0x08, 0x57, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8,
-    0x00, 0xB3, 0xEA, 0x00, 0x48, 0x2B, 0xE0, 0x48, 0x8B, 0x81, 0xE0, 0x06};
+    0x20, 0x70, 0xD3, 0x00, 0x48, 0x2B, 0xE0, 0x48, 0x8B, 0x81, 0xE0, 0x06};
 /// void(u8 slot): the primary camera manager's Field operator, DeactivateModule(slot).
-inline constexpr platform::FunctionFact kPrimaryDeactivate{L"PrimaryPCM_FieldOp_DeactivateModule", 0x1416E8868,
+inline constexpr platform::FunctionFact kPrimaryDeactivate{L"PrimaryPCM_FieldOp_DeactivateModule", 0x141591F0C,
                                                            kPrimaryDeactivateBytes};
 /// (operator, u8 slot): module = (*(op+0x6E0))[slot]; module->Deactivate(). The call the primary one makes, on any operator.
-inline constexpr platform::FunctionFact kOperatorDeactivate{L"FEndModularCameraOperator::DeactivateModule", 0x141203C20,
+inline constexpr platform::FunctionFact kOperatorDeactivate{L"FEndModularCameraOperator::DeactivateModule", 0x141434B50,
                                                             kOperatorDeactivateBytes};
 using PrimaryDeactivateFn  = void (*)(std::uint8_t slot);
 using OperatorDeactivateFn = void (*)(void* op, std::uint8_t slot);
@@ -210,15 +210,15 @@ std::uint8_t Begin(void* action) noexcept
     return call.result;
 }
 
-std::uintptr_t Research(std::uintptr_t live) noexcept
+std::uintptr_t AsSource(std::uintptr_t live) noexcept
 {
-    return g_image ? g_image->ResearchAddress(live) : live;
+    return g_image ? g_image->SourceAddress(live) : live;
 }
 
 std::uintptr_t Slot15Vtable(const void* op) noexcept
 {
     const void* module = camera_access::ModuleAt(op, kModuleSlot15);
-    return module != nullptr ? Research(VTableOf(module)) : 0;
+    return module != nullptr ? AsSource(VTableOf(module)) : 0;
 }
 
 /// The vault End's deactivate (lever L2): the stub hands over the action from rbx. Any thread; the game's own End runs

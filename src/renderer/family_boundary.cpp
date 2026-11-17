@@ -18,23 +18,23 @@ namespace {
 
 // Facts read from the database (research/RE-p2-main-menu-crash.md; this build).
 // The entry bytes hold rel32 calls only, which read the same at any load address.
-constexpr std::uint8_t kQueueTaskBytes[] = {0x44, 0x88, 0x4C, 0x24, 0x20, 0x44, 0x89, 0x44,
-                                            0x24, 0x18, 0x48, 0x89, 0x4C, 0x24, 0x08, 0x55};
-constexpr platform::FunctionFact kQueueTask{L"TGraphTask SetupPrereqs/QueueTask to the render thread", 0x1420B8090,
+constexpr std::uint8_t kQueueTaskBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x6C,
+                                            0x24, 0x10, 0x48, 0x89, 0x74, 0x24, 0x18, 0x57};
+constexpr platform::FunctionFact kQueueTask{L"TGraphTask SetupPrereqs/QueueTask to the render thread", 0x1428CCCE4,
                                             kQueueTaskBytes};
 constexpr std::uint8_t kGrowBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x57, 0xB8, 0x20,
-                                       0x00, 0x00, 0x00, 0xE8, 0x24, 0x07, 0x1F, 0x01};
-constexpr platform::FunctionFact kGrow{L"ME_CmdBuf_GrowAlloc", 0x140EBE7FC, kGrowBytes};
+                                       0x00, 0x00, 0x00, 0xE8, 0x64, 0x3F, 0x20, 0x01};
+constexpr platform::FunctionFact kGrow{L"ME_CmdBuf_GrowAlloc", 0x140F67C0C, kGrowBytes};
 constexpr std::uint8_t kClearStateBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x6C,
                                              0x24, 0x10, 0x48, 0x89, 0x74, 0x24, 0x18, 0x57};
-constexpr platform::FunctionFact kClearState{L"FD3D12CommandContext::ClearState", 0x14081FD74, kClearStateBytes};
+constexpr platform::FunctionFact kClearState{L"FD3D12CommandContext::ClearState", 0x1409183E0, kClearStateBytes};
 constexpr std::uint8_t kSubmitBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x48, 0x89, 0x6C,
                                          0x24, 0x18, 0x48, 0x89, 0x74, 0x24, 0x20, 0x57};
-constexpr platform::FunctionFact kSubmit{L"FD3D12CommandContext::RHISubmitCommandsHint", 0x140D009A8, kSubmitBytes};
+constexpr platform::FunctionFact kSubmit{L"FD3D12CommandContext::RHISubmitCommandsHint", 0x140AE3410, kSubmitBytes};
 
-constexpr std::uintptr_t kContextVtable     = 0x14697BFA8;  // FD3D12CommandContext
+constexpr std::uintptr_t kContextVtable     = 0x1468012C0;  // FD3D12CommandContext
 constexpr std::uint32_t  kSubmitSlot        = 0xF0;         // its RHISubmitCommandsHint entry
-constexpr std::uintptr_t kImmediateList     = 0x1488EB8F0;  // g_RHICmdList_Immediate_Global (the object)
+constexpr std::uintptr_t kImmediateList     = 0x14871EF70;  // g_RHICmdList_Immediate_Global (the object)
 constexpr std::size_t    kImmediateListSize = 0x48;
 constexpr std::size_t    kComputeContext    = 0x28;  // list: ComputeContext, logged against Context
 

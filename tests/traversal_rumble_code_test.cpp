@@ -105,7 +105,7 @@ void TestTheBytes()
 {
     std::puts("jump list load: the code starts with the game's own load, embeds the slots' address, every jump lands");
     const auto code = JumpListLoadCode(&g_slots);
-    EXPECT(std::memcmp(code.data(), kJumpListLoadBytes, sizeof(kJumpListLoadBytes)) == 0);
+    EXPECT(std::memcmp(code.data(), kJumpListLoadBytes1004, sizeof(kJumpListLoadBytes1004)) == 0);
     std::uint64_t embedded = 0;
     std::memcpy(&embedded, code.data() + 17, sizeof(embedded));
     EXPECT(embedded == reinterpret_cast<std::uint64_t>(&g_slots));

@@ -28,8 +28,8 @@ namespace {
 
 // End_AddViewSlaveLocation (RE-p2-distant-lod-swap.md, "Slave-location call facts"; this build).
 constexpr std::uint8_t   kAddViewSlaveLocationBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x57, 0xB8, 0x70,
-                                                         0x00, 0x00, 0x00, 0xE8, 0x40, 0x71, 0x61, 0x01};
-constexpr platform::FunctionFact kAddViewSlaveLocation{L"End_AddViewSlaveLocation", 0x140A97DE0,
+                                                         0x00, 0x00, 0x00, 0xE8, 0x18, 0xE1, 0x29, 0x01};
+constexpr platform::FunctionFact kAddViewSlaveLocation{L"End_AddViewSlaveLocation", 0x140ECDA58,
                                                        kAddViewSlaveLocationBytes};
 
 using AddViewSlaveLocationFn = char (*)(const float* location, const float* direction, float fovRadians,

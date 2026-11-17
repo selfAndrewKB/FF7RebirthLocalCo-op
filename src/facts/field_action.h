@@ -18,14 +18,14 @@ namespace lss::facts {
 // party leader is near" byte, which the game refreshes once per frame from the party leader's position whenever the
 // object's wanted byte asks for it. A box is a candidate for anyone's throw selection only while that byte is set.
 // Both builds (the pointer's address is translated); null until the game makes the object.
-inline constexpr std::uintptr_t kFieldActionGlobal       = 0x14939BC90;
+inline constexpr std::uintptr_t kFieldActionGlobal       = 0x1491D84B0;
 inline constexpr std::uint32_t  kFieldActionGlobalWanted = 0x389;  // u8: a refresh wanted this frame (the refresh clears it)
 inline constexpr std::uint8_t   kRefreshShootingTargetsBytes[] = {0x48, 0x8B, 0xC4, 0x48, 0x89, 0x58, 0x10, 0x48,
                                                                   0x89, 0x78, 0x18, 0x4C, 0x89, 0x78, 0x20, 0x55};
 /// FieldActionGlobal_RefreshShootingTargets_LeaderNear261(global): when the byte above is set, clears it and writes
 /// every registered box's leader-near byte from the party leader's position.
 inline constexpr platform::FunctionFact kRefreshShootingTargets{L"FieldActionGlobal_RefreshShootingTargets_LeaderNear261",
-                                                                0x141628190, kRefreshShootingTargetsBytes};
+                                                                0x1416AD83C, kRefreshShootingTargetsBytes};
 
 // The registry: 1024 pool nodes of 288 bytes; the live list's head node (node+0x08 next, the point at node+0x18) under
 // an SRWLOCK the game holds while it walks.
@@ -64,8 +64,8 @@ inline constexpr std::uint32_t kFieldActionEntryKeyBack = 0x10;
 // The switches (AEndFieldActionSwitchAccessActor: levers, wall switches, lift panels; RE-further-player-levers.md): the
 // native vtable placed Blueprint switches keep, and the class's unregister override (the leave: the leader's list, the
 // point off, the in-range byte cleared). 1.005 through replaced-levers.json.
-inline constexpr std::uintptr_t kSwitchAccessVTable     = 0x1458716D8;
-inline constexpr std::uintptr_t kSwitchAccessUnregister = 0x1413E51BC;
+inline constexpr std::uintptr_t kSwitchAccessVTable     = 0x14567E3F0;
+inline constexpr std::uintptr_t kSwitchAccessUnregister = 0x140D7F428;
 // The actor's own bytes, one per actor: in range (the register sets it, the unregister clears it), the press latch
 // (the point's press listener sets it when the hold completes; the point setter clears it on its on and off edges), the
 // point shown (the setter's own record of its last show), the "cannot act" answer of the last notify.
@@ -85,8 +85,8 @@ inline constexpr std::uint32_t kSwitchExecActor     = 0x58;
 // The communication towers' terminals (AEndFieldActionOneShotAccessActor with bTower set; RE-tower-activation.md): the
 // native vtable placed Blueprint terminals keep, and the class's unregister override (the leave: the leader's list, the
 // point off, the registered character cleared). 1.005 through replaced-towers.json.
-inline constexpr std::uintptr_t kOneShotAccessVTable     = 0x1458721A8;
-inline constexpr std::uintptr_t kOneShotAccessUnregister = 0x1436A0BA0;
+inline constexpr std::uintptr_t kOneShotAccessVTable     = 0x14567D908;
+inline constexpr std::uintptr_t kOneShotAccessUnregister = 0x1433D8550;
 // The actor's own fields, one per actor: the hub row it activates (FName), the tower flag (bool; the class's other
 // actors, life springs and story terminals, leave it clear), the character that registered (a weak reference the
 // register sets to the party leader and the unregister clears; the point shows only while it is valid), the press latch

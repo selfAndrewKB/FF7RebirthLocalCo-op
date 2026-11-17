@@ -34,69 +34,68 @@ namespace {
 
 // Facts read from the database (research/RE-p2-distant-lod-swap.md; this build). Each function's first
 // bytes are checked before anything is redirected; the entry redirects replace one register save.
-constexpr std::uintptr_t kRenderEntry = 0x1457A6720;  // slot 5 of the scene renderer's vtable
+constexpr std::uintptr_t kRenderEntry = 0x1455F61A0;  // slot 5 of the scene renderer's vtable
 constexpr std::uint8_t   kRenderMainBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x18, 0x55, 0x56, 0x57,
                                                0x41, 0x54, 0x41, 0x55, 0x41, 0x56, 0x41, 0x57};
 // SceneRenderer_Render_Main(renderer, RHI command list)
-constexpr platform::FunctionFact kRenderMain{L"SceneRenderer_Render_Main", 0x140FDD1F0, kRenderMainBytes};
+constexpr platform::FunctionFact kRenderMain{L"SceneRenderer_Render_Main", 0x140C13340, kRenderMainBytes};
 
 // The gate's call of ME_Group_ProcessStreamingFeedbackReadbacks(group), its only caller.
-constexpr std::uintptr_t kProcessCall = 0x140915E38;
-constexpr std::uint8_t   kProcessBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x6C,
-                                            0x24, 0x10, 0x48, 0x89, 0x74, 0x24, 0x18, 0x57};
-constexpr platform::FunctionFact kProcess{L"ME_Group_ProcessStreamingFeedbackReadbacks", 0x1409156B4, kProcessBytes};
+constexpr std::uintptr_t kProcessCall = 0x140BC0ECC;
+constexpr std::uint8_t   kProcessBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x20, 0x48, 0x89, 0x4C,
+                                            0x24, 0x08, 0x55, 0x56, 0x57, 0x41, 0x54, 0x41};
+constexpr platform::FunctionFact kProcess{L"ME_Group_ProcessStreamingFeedbackReadbacks", 0x140BC193C, kProcessBytes};
 
-// ME_MainPass_CopyStreamingFeedbackToReadback(builder, scene): its one call crosses a
-// 16-byte block, so its entry is redirected; first instruction `mov [rsp+10h],rdx`.
+// ME_MainPass_CopyStreamingFeedbackToReadback(builder, scene); first instruction `mov [rsp+10h],rdx`. Its one call
+// is redirected from the render thread (below); in 1.004 that call crosses a 16-byte block, so the entry is redirected
+// there instead.
 constexpr std::uint8_t   kCopyBytes[] = {0x48, 0x89, 0x54, 0x24, 0x10, 0x48, 0x89, 0x4C,
                                          0x24, 0x08, 0x55, 0x53, 0x56, 0x57, 0x41, 0x54};
-constexpr platform::FunctionFact kCopy{L"ME_MainPass_CopyStreamingFeedbackToReadback", 0x140915958, kCopyBytes};
+constexpr platform::FunctionFact kCopy{L"ME_MainPass_CopyStreamingFeedbackToReadback", 0x14199FE6C, kCopyBytes};
 constexpr std::size_t    kCopyFirst   = 5;
 
 // ME_Scene_ComputeRequestedMips_HiddenComponents(renderer, command list, &Views[0]): the same; first
-// instruction `mov [rsp+18h],r8`.
-constexpr std::uint8_t   kHiddenBytes[] = {0x4C, 0x89, 0x44, 0x24, 0x18, 0x48, 0x89, 0x54,
-                                           0x24, 0x10, 0x55, 0x53, 0x56, 0x57, 0x41, 0x54};
-constexpr platform::FunctionFact kHidden{L"ME_Scene_ComputeRequestedMips_HiddenComponents", 0x140CF05F8, kHiddenBytes};
+// instruction `mov [rsp+10h],rbx`.
+constexpr std::uint8_t   kHiddenBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x55, 0x56, 0x57,
+                                           0x41, 0x54, 0x41, 0x55, 0x41, 0x56, 0x41, 0x57};
+constexpr platform::FunctionFact kHidden{L"ME_Scene_ComputeRequestedMips_HiddenComponents", 0x14078389C, kHiddenBytes};
 constexpr std::size_t    kHiddenFirst   = 5;
 
-// Game version 1.005 (research/RE-1005-hud-2.md): the process call and both entries (now `mov [rsp+10h],rdx` and
-// `mov [rsp+10h],rbx`) cross a 16-byte block. Each of the three functions has
-// one caller, all on the render thread inside Render_Main, so their calls are redirected instead: the hidden pass's
+// The process call and both entries cross a 16-byte block (research/RE-1005-hud-2.md). Each of the three functions
+// has one caller, all on the render thread inside Render_Main, so their calls are redirected instead: the hidden pass's
 // (inside one block) at install, the process and copy calls (crossing) from the render thread itself, at the first
 // Render (InstallOnRenderThread), and those two are never restored from another thread.
-constexpr std::uintptr_t kCopyCall   = 0x14157B30C;  // ME_RenderChunkDispatch_ViewLoop's call of the copy
-constexpr std::uintptr_t kHiddenCall = 0x140FDD6EE;  // Render_Main's call of the hidden pass
+constexpr std::uintptr_t kCopyCall   = 0x141324D2C;  // ME_RenderChunkDispatch_ViewLoop's call of the copy
+constexpr std::uintptr_t kHiddenCall = 0x140C13AAB;  // Render_Main's call of the hidden pass
 
 // Phase 8 of MassiveEnvironment_RenderPass (research/RE-perf-family-duplication.md): its sync call of
 // ME_DispatchComputeRequestedMeshAndTextureMips(command list, ?, group, chunk, byte stack arguments), once per loaded
 // chunk: the slave frustums' mip requests, whose marks (entry+0x48, set from the returned bool) only the main pass's
 // copy reads. The call lies inside one 16-byte block in both builds. The async
 // variant's call (only with async compute and r.MassiveEnvironment.UsingAsyncComputeForMainPass) is not covered.
-constexpr std::uintptr_t kMipRequestsCall    = 0x140F10D4A;
+constexpr std::uintptr_t kMipRequestsCall    = 0x140C8B5D4;
 constexpr std::uint8_t   kMipRequestsBytes[] = {0x40, 0x55, 0x53, 0x56, 0x57, 0x41, 0x54, 0x41,
                                                 0x55, 0x41, 0x56, 0x41, 0x57, 0x48, 0x8D, 0xAC};
-constexpr platform::FunctionFact kMipRequests{L"ME_DispatchComputeRequestedMeshAndTextureMips", 0x140C9D2F0,
+constexpr platform::FunctionFact kMipRequests{L"ME_DispatchComputeRequestedMeshAndTextureMips", 0x140CD1594,
                                               kMipRequestsBytes};
 
 // Option D of RE-perf-me-shadows.md (Phase 3): the shadow pass's streaming-feedback writes, skipped in an additional
 // family by machine code at one instruction of ME_ChunkDraw_FullPipeline_cand (renderer/me_shadow_feedback_code.h).
-// Research build; the 1.005 twins through the build table.
-constexpr std::uintptr_t kShadowSite   = 0x140F0DC3A;  // jbe over the pre-transition loop (count 0)
-constexpr std::uintptr_t kShadowResume = 0x140F0DC40;  // the instruction after it
-constexpr std::uintptr_t kShadowEmpty  = 0x140F0DD5C;  // the jbe's target
-constexpr std::uintptr_t kShadowSkip   = 0x140F0E345;  // the transition array's free, past the region
+constexpr std::uintptr_t kShadowSite   =0x140C882B7;  // jbe over the pre-transition loop (count 0)
+constexpr std::uintptr_t kShadowResume = 0x140C882BD;  // the instruction after it
+constexpr std::uintptr_t kShadowEmpty  = 0x140C883D9;  // the jbe's target
+constexpr std::uintptr_t kShadowSkip   = 0x140C88A01;  // the transition array's free, past the region
 constexpr std::uint32_t  kShadowMaskBit = 16;           // feedback-mask
 
 constexpr std::uint32_t kRendererAdditionalFamily = 0x84;  // the family copy's bAdditionalViewFamily (+0x74)
 
 // The budget state, for the log: IStreamingManager's static (FStreamingManagerCollection*), its ME
 // streaming manager at +0x50, the render thread's copy of the state at +0xA1 (2 or more: no slave requests).
-constexpr std::uintptr_t kStreamingManagers = 0x149117AF8;
+constexpr std::uintptr_t kStreamingManagers = 0x148F4B3B0;
 constexpr std::uint32_t  kMeManager         = 0x50;
 // 1.005: the ME streaming manager's state pair moved 8 down: `cmp byte [rax+99h],2` after [collection+50h] (1.004
 // [rcx+0A1h]); its constructor clears +0x98/+0x99.
-constexpr platform::PerBuild<std::uint32_t> kBudgetStateRender = {0xA1, 0x99};
+constexpr platform::PerBuild<std::uint32_t> kBudgetStateRender = {0x99, 0xA1};
 
 constexpr ULONGLONG kLogPeriodMs = 10'000;
 
@@ -104,7 +103,7 @@ using RenderFn  = void (*)(void* renderer, void* commandList, void* a3, void* a4
 using ProcessFn = void (*)(void* group);
 using CopyFn    = void (*)(void* builder, void* scene);
 using HiddenFn  = void (*)(void* renderer, void* commandList, const void* views);
-// The stack arguments are bytes (one on the research build, two on 1.005); whole slots are passed on.
+// The stack arguments are bytes (two; one on 1.004); whole slots are passed on.
 using MipRequestsFn = bool (*)(void* commandList, void* a2, void* group, std::uint64_t chunk, std::uint64_t s1,
                                std::uint64_t s2, std::uint64_t s3);
 
@@ -112,13 +111,13 @@ platform::VTableEntry   g_render;
 platform::CallRedirect  g_processCall;
 platform::EntryRedirect g_copyEntry;
 platform::EntryRedirect g_hiddenEntry;
-platform::CallRedirect  g_copyCall;    // 1.005, in place of g_copyEntry
-platform::CallRedirect  g_hiddenCall;  // 1.005, in place of g_hiddenEntry
+platform::CallRedirect  g_copyCall;    // in place of g_copyEntry (1.004's entry fits one block)
+platform::CallRedirect  g_hiddenCall;  // in place of g_hiddenEntry (as above)
 platform::CallRedirect  g_mipRequestsCall;
 platform::CodeRedirect  g_shadowCode;
 ShadowFeedbackFields    g_shadowFields;
 std::uint64_t           g_shadowLogged[3] = {};  // skipped, passedOne, passedAdditional at the last log
-std::atomic<bool>       g_renderThreadPending{false};  // 1.005: the process and copy calls wait for the render thread
+std::atomic<bool>       g_renderThreadPending{false};  // the process and copy calls wait for the render thread
 std::uintptr_t          g_processSite = 0, g_processTarget = 0, g_copySite = 0, g_copyTarget = 0;  // set before it
 std::atomic<bool>       g_installed{false};
 std::atomic<bool>       g_on{false};
@@ -175,9 +174,9 @@ void InstallShadowSkip(const platform::GameImage& image) noexcept
     const auto resume = image.Rebase(kShadowResume);
     const auto empty  = image.Rebase(kShadowEmpty);
     const auto skipTo = image.Rebase(kShadowSkip);
-    const bool v1005  = platform::RunningBuild() == platform::BuildIndex::V1005;
+    const bool v1004  = platform::RunningBuild() == platform::BuildIndex::V1004;
     const std::span<const std::uint8_t> compare =
-        v1005 ? std::span<const std::uint8_t>(kShadowFeedbackCompareBytes1005) : std::span<const std::uint8_t>(kShadowFeedbackCompareBytes);
+        v1004 ? std::span<const std::uint8_t>(kShadowFeedbackCompareBytes1004) : std::span<const std::uint8_t>(kShadowFeedbackCompareBytes);
     std::uint8_t before[4] = {};
     if (!site || !resume || !empty || !skipTo || *resume != *site + sizeof(kShadowFeedbackSiteBytes) ||
         !platform::CopyGuarded(before, reinterpret_cast<const void*>(*site - sizeof(before)), sizeof(before)) ||
@@ -189,7 +188,7 @@ void InstallShadowSkip(const platform::GameImage& image) noexcept
     }
     UpdateShadowSwitch();
     const bool installed =
-        v1005 ? g_shadowCode.Install(*site, kShadowFeedbackSiteBytes, ShadowFeedbackCode1005(g_shadowFields, *skipTo, *empty), *resume)
+        v1004 ? g_shadowCode.Install(*site, kShadowFeedbackSiteBytes, ShadowFeedbackCode1004(g_shadowFields, *skipTo, *empty), *resume)
               : g_shadowCode.Install(*site, kShadowFeedbackSiteBytes, ShadowFeedbackCode(g_shadowFields, *skipTo, *empty), *resume);
     platform::Log(L"stream feedback: players 2 and 3's families {} the shadow pass's streaming-feedback writes",
                   installed ? L"skip" : L"still record (the site could not be redirected)");
@@ -212,7 +211,7 @@ void Copy(void* builder, void* scene) noexcept;
 /// 1.005: the process and copy calls, from the render thread (the only one that runs them), outside Render_Main.
 void InstallOnRenderThread() noexcept
 {
-    // A plain load first: on the research build (and after the first Render) this is all a Render pays.
+    // A plain load first: on 1.004 (and after the first Render) this is all a Render pays.
     if (!g_renderThreadPending.load(std::memory_order_relaxed) ||
         !g_renderThreadPending.exchange(false, std::memory_order_acq_rel))
     {
@@ -329,19 +328,20 @@ void RemoveAll() noexcept
     {
         g_copyEntry.Restore();
     }
-    // 1.005's process and copy calls cross a block and were installed from the render thread: they stay, passing every
-    // call through once Render no longer marks a family (this DLL is pinned).
-    if (platform::RunningBuild() != platform::BuildIndex::V1005 && g_processCall.IsInstalled())
+    // The process and copy calls cross a block and were installed from the render thread: they stay, passing every
+    // call through once Render no longer marks a family (this DLL is pinned). 1.004's fit one block and come out.
+    if (platform::RunningBuild() == platform::BuildIndex::V1004 && g_processCall.IsInstalled())
     {
         g_processCall.Restore();
     }
     g_render.Restore();
 }
 
-/// Game version 1.005 (kCopyCall above): the hidden pass's call now, Render, and the process and copy calls left to
-/// the render thread's first Render. The functions were found (bytes checked) by the caller.
-bool Install1005(const platform::GameImage& image, std::uintptr_t entry, std::uintptr_t render, std::uintptr_t call,
-                 std::uintptr_t process, std::uintptr_t copy, std::uintptr_t mipCall, std::uintptr_t mip) noexcept
+/// The hidden pass's call now, Render, and the process and copy calls (kCopyCall above) left to the render thread's
+/// first Render, where they cross a block. The functions were found (bytes checked) by the caller.
+bool InstallViaRenderThread(const platform::GameImage& image, std::uintptr_t entry, std::uintptr_t render,
+                            std::uintptr_t call, std::uintptr_t process, std::uintptr_t copy, std::uintptr_t mipCall,
+                            std::uintptr_t mip) noexcept
 {
     const auto copyCall   = image.Rebase(kCopyCall, 5);
     const auto hiddenCall = image.Rebase(kHiddenCall, 5);
@@ -397,11 +397,11 @@ bool InstallMeFeedbackOnce(const platform::GameImage& image) noexcept
         return false;
     }
     g_managers = *managers;
-    if (platform::RunningBuild() == platform::BuildIndex::V1005)
+    if (platform::RunningBuild() != platform::BuildIndex::V1004)
     {
-        return Install1005(image, *entry, *render, *call, *process, *copy, *mipCall, *mip);
+        return InstallViaRenderThread(image, *entry, *render, *call, *process, *copy, *mipCall, *mip);
     }
-    // The skip points first: they pass everything through until Render marks a family.
+    // 1.004, whose sites fit one block: the skip points first; they pass everything through until Render marks a family.
     const bool installed =
         g_processCall.Install(*call, *process, reinterpret_cast<std::uintptr_t>(&Process)) &&
         g_copyEntry.Install(*copy, image.EntryInstruction(kCopy.address, kCopy.entryBytes.first(kCopyFirst)),

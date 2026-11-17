@@ -15,8 +15,9 @@
 namespace lss::feedback::traversal_rumble_code {
 
 // 1.004 only: the jump box's add is inlined there; this is its list load, under the game's lock (1.005 calls PlayNamed).
-inline constexpr std::uintptr_t kJumpListLoad        = 0x1422AD981;
-inline constexpr std::uint8_t   kJumpListLoadBytes[] = {0x48, 0x8B, 0xB6, 0xB0, 0x03, 0x00, 0x00};  // mov rsi,[rsi+3B0h]
+// That build's own address and bytes, with no counterpart in the source build.
+inline constexpr std::uintptr_t kJumpListLoad1004        = 0x1422AD981;
+inline constexpr std::uint8_t   kJumpListLoadBytes1004[] = {0x48, 0x8B, 0xB6, 0xB0, 0x03, 0x00, 0x00};  // mov rsi,[rsi+3B0h]
 inline constexpr std::size_t    kJumpListLoadCodeSize = 51;
 
 /// One landing's route: the thread whose inline add takes `list` (0: the slot is free; no thread's id is 0), and the

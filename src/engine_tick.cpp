@@ -20,11 +20,11 @@ namespace {
 // position-independent bytes inside one 16-byte block, which the entry redirect replaces. The function re-reads
 // bIdleMode from its home slot later, so the trampoline replays the store.
 constexpr std::uint8_t kTickBytes[] = {0x44, 0x88, 0x44, 0x24, 0x18, 0x48, 0x89, 0x4C, 0x24, 0x08, 0x55, 0x53};
-constexpr platform::FunctionFact kTick{L"UGameEngine::Tick", 0x14109F840, kTickBytes};
+constexpr platform::FunctionFact kTick{L"UGameEngine::Tick", 0x1409F1748, kTickBytes};
 
 /// The Tick entry of UGameEngine's vtable: UE4SS's UEngine slot 10 after the UObject virtuals (77 in 1.004, 78 in
-/// 1.005, which inserted one). The research build's address; 1.005's is in replaced-engine-tick.json.
-constexpr std::uintptr_t kTickSlotEntry = 0x146B9A728;
+/// 1.005, which inserted one); 1.004's slot is in the build table.
+constexpr std::uintptr_t kTickSlotEntry = 0x1469FED38;
 
 using TickFn = void (*)(void* engine, float deltaSeconds, bool idleMode);
 

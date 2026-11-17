@@ -29,34 +29,34 @@ namespace {
 
 // Facts read from the database (research/RE-p2-party-switch.md; this build).
 // The two component getters the switch asks per member, and their calls in the cycle and CanSwitch.
-constexpr std::uint8_t kPlayerComponentBytes[] = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0x08, 0xF7, 0x6B, 0x01};
-constexpr platform::FunctionFact kPlayerComponent{L"EndCharacter_GetBattlePlayerControllerComponent", 0x1409EF81C,
+constexpr std::uint8_t kPlayerComponentBytes[] = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0xA0, 0x95, 0x7B, 0x01};
+constexpr platform::FunctionFact kPlayerComponent{L"EndCharacter_GetBattlePlayerControllerComponent", 0x1409B25D4,
                                                   kPlayerComponentBytes};
 using facts::kAiControllerComponent;
-constexpr std::uintptr_t kCycleCall     = 0x14158BAB0;  // in BattleLeader_CycleSwitch: rcx = the candidate
-constexpr std::uintptr_t kCanSwitchCall = 0x14158BD82;  // in CanSwitch: rcx = the member counted
+constexpr std::uintptr_t kCycleCall     = 0x140F8A52C;  // in BattleLeader_CycleSwitch: rcx = the candidate
+constexpr std::uintptr_t kCanSwitchCall = 0x140F8A83A;  // in CanSwitch: rcx = the member counted
 
 // The switch widget's "cannot switch" test, bool(u8 player type), and its two calls; the game's
 // lookup of a character by player type (a leaf), PartyManager_GetCharacterByPlayerType(0, type).
 constexpr std::uint8_t kDisabledBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x57, 0xB8, 0x80,
-                                           0x00, 0x00, 0x00, 0xE8, 0x38, 0xD3, 0x17, 0x01};
-constexpr platform::FunctionFact kDisabled{L"CommandSwitchHud_IsMemberSwitchDisabled", 0x140F31BE8, kDisabledBytes};
+                                           0x00, 0x00, 0x00, 0xE8, 0x34, 0xA6, 0xD6, 0x00};
+constexpr platform::FunctionFact kDisabled{L"CommandSwitchHud_IsMemberSwitchDisabled", 0x14140153C, kDisabledBytes};
 using facts::kCharacterByPlayerType;
-constexpr std::uintptr_t kDisabledCalls[] = {0x140F318C3, 0x140F31BB5};
+constexpr std::uintptr_t kDisabledCalls[] = {0x141400CAB, 0x141401509};
 
 // The forced switches (research/RE-ko-stay.md): the KO tick's call to the cycle every frame while player 1's character
 // is down, and the petrify tick's once when its wait runs out. The cycle itself, and those two calls.
 constexpr std::uint8_t kCycleSwitchBytes[] = {0x48, 0x8B, 0xC4, 0x48, 0x89, 0x58, 0x08, 0x44, 0x88, 0x48,
                                               0x20, 0x44, 0x88, 0x40, 0x18, 0x88, 0x50, 0x10, 0x55, 0x56};
-constexpr platform::FunctionFact kCycleSwitch{L"BattleLeader_CycleSwitch", 0x14158B9B8, kCycleSwitchBytes};
-constexpr std::uintptr_t         kKnockedOutCall = 0x142A2170F;  // in the dead state's tick
-constexpr std::uintptr_t         kPetrifiedCall  = 0x142A7EE7D;  // in the battle component's tick, at the petrify wait's end
+constexpr platform::FunctionFact kCycleSwitch{L"BattleLeader_CycleSwitch", 0x140F8A434, kCycleSwitchBytes};
+constexpr std::uintptr_t         kKnockedOutCall = 0x142623011;  // in the dead state's tick
+constexpr std::uintptr_t         kPetrifiedCall  = 0x1426FF86D;  // in the battle component's tick, at the petrify wait's end
 constexpr auto                   kForcedQuietMs  = std::chrono::milliseconds(1000);  // a refusal after this starts a new spell
 
 // The player's request (research/RE-p2-own-battle-switch.md): FieldCommandCtrl_RequestLeaderCycleSwitch, the d-pad's
 // path, refuses while the game's two event counters hold, then jumps into the cycle with "require CanSwitch" set.
 // That tail jump (its five bytes inside one block in both builds) is redirected.
-constexpr std::uintptr_t kRequestJump = 0x14158B95B;
+constexpr std::uintptr_t kRequestJump = 0x1408398E3;
 
 using ComponentFn  = void* (*)(void* character);
 using DisabledFn   = std::uint8_t (*)(std::uint8_t type);

@@ -539,19 +539,22 @@ catch (...)
 
 bool Place(const platform::GameImage& image) noexcept
 {
-    const auto getFirst = image.EntryInstruction(facts::kOptionsGetValue.address,
-                                                 facts::kOptionsGetValue.entryBytes.first(facts::kOptionsGetValueFirst));
+    const auto getBytes = facts::kOptionsGetValue.entryBytes;
     const auto setFirst = image.EntryInstruction(facts::kOptionsSetValue.address,
                                                  facts::kOptionsSetValue.entryBytes.first(facts::kOptionsSetValueFirst));
-    const bool get = platform::RunningBuild() == platform::BuildIndex::V1005
-                         ? g_getValue.InstallAtSecondInstruction(g.getValueAt, facts::kOptionsGetValueFirst1005,
-                                                                 facts::kOptionsGetValueSecond1005,
-                                                                 reinterpret_cast<std::uintptr_t>(&GetValue))
-                         : g_getValue.Install(g.getValueAt, getFirst, reinterpret_cast<std::uintptr_t>(&GetValue));
+    const bool get = platform::RunningBuild() == platform::BuildIndex::V1004
+                         ? g_getValue.Install(g.getValueAt,
+                                              image.EntryInstruction(facts::kOptionsGetValue.address,
+                                                                     getBytes.first(facts::kOptionsGetValueFirst1004)),
+                                              reinterpret_cast<std::uintptr_t>(&GetValue))
+                         : g_getValue.InstallAtSecondInstruction(
+                               g.getValueAt, getBytes.first(facts::kOptionsGetValueFirst),
+                               getBytes.subspan(facts::kOptionsGetValueFirst, facts::kOptionsGetValueSecond),
+                               reinterpret_cast<std::uintptr_t>(&GetValue));
     const bool placed = get && g_setValue.Install(g.setValueAt, setFirst, reinterpret_cast<std::uintptr_t>(&SetValue));
-    // Reset All: 1.005 only (1.004's entry crosses a block and its second instruction is too short to take the jump; there
+    // Reset All: not on 1.004 (its entry crosses a block and its second instruction is too short to take the jump; there
     // Reset All keeps every value of the page).
-    if (placed && platform::RunningBuild() == platform::BuildIndex::V1005)
+    if (placed && platform::RunningBuild() != platform::BuildIndex::V1004)
     {
         const auto reset    = platform::FindFunction(image, facts::kOptionsResetConfirm);
         bool       followed = false;

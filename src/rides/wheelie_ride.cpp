@@ -52,51 +52,51 @@ using Clock = std::chrono::steady_clock;
 // The game's functions (research/RE-p2-wheelie-ride.md). All Square Enix End code.
 constexpr std::uint8_t kShouldRideBytes[] = {0x48, 0x8B, 0xC4, 0x48, 0x89, 0x58, 0x08, 0x48, 0x89, 0x70, 0x18, 0x48,
                                              0x89, 0x78, 0x20, 0x55, 0x48, 0x8D, 0x68, 0xA1, 0xB8, 0xD0, 0x00, 0x00};
-constexpr platform::FunctionFact kShouldRide{L"SBScooterCoordinator_ShouldRideAuto_Vt2F8", 0x141258734, kShouldRideBytes};
+constexpr platform::FunctionFact kShouldRide{L"SBScooterCoordinator_ShouldRideAuto_Vt2F8", 0x140E88050, kShouldRideBytes};
 
-constexpr std::uint8_t kIsRidingBytes[] = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0x14, 0xE5, 0x64, 0x01,
-                                           0x48, 0x2B, 0xE0, 0xE8, 0x14, 0x00, 0x00, 0x00, 0x48, 0x8B, 0xD8, 0x48};
-constexpr platform::FunctionFact kIsRiding{L"PrimaryPC_IsActiveVehicleRiding", 0x140A60A10, kIsRidingBytes};
+constexpr std::uint8_t kIsRidingBytes[] = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0xCC, 0x79, 0xA0, 0x01,
+                                           0x48, 0x2B, 0xE0, 0xE8, 0xA8, 0x01, 0x00, 0x00, 0x48, 0x8B, 0xD8, 0x48};
+constexpr platform::FunctionFact kIsRiding{L"PrimaryPC_IsActiveVehicleRiding", 0x1407641A8, kIsRidingBytes};
 
-constexpr std::uint8_t kInputBasisBytes[] = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0x5C, 0xC6, 0x1B, 0x01,
-                                             0x48, 0x2B, 0xE0, 0x48, 0x8B, 0xD9, 0xE8, 0x71, 0xE3, 0xB6, 0xFF, 0x48};
-constexpr platform::FunctionFact kInputBasis{L"PrimaryPCM_GetInputBasisRotation_2FA8OrVt718", 0x140EF28C8, kInputBasisBytes};
+constexpr std::uint8_t kInputBasisBytes[] = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0x2C, 0x19, 0x1D, 0x01,
+                                             0x48, 0x2B, 0xE0, 0x48, 0x8B, 0xD9, 0xE8, 0x89, 0xA1, 0x7C, 0xFF, 0x48};
+constexpr platform::FunctionFact kInputBasis{L"PrimaryPCM_GetInputBasisRotation_2FA8OrVt718", 0x140F9A248, kInputBasisBytes};
 
 constexpr std::uint8_t kLookupBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x6C, 0x24, 0x10, 0x48, 0x89,
-                                         0x74, 0x24, 0x18, 0x57, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0x0E, 0xDE};
-constexpr platform::FunctionFact kLookup{L"EndPC_LookupMap5C0", 0x140A61108, kLookupBytes};
+                                         0x74, 0x24, 0x18, 0x57, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0xC6, 0x72};
+constexpr platform::FunctionFact kLookup{L"EndPC_LookupMap5C0", 0x1407648A0, kLookupBytes};
 
 using facts::kGetOrCreateVehicleCoordinator;
 
 constexpr std::uint8_t kDispatchBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x57, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8,
-                                           0x88, 0xC8, 0x3A, 0xFE, 0x48, 0x2B, 0xE0, 0x8A, 0x01, 0x48, 0x8B, 0xD9};
-constexpr platform::FunctionFact kDispatch{L"Vehicle_BeginByType_Dispatch", 0x143D02698, kDispatchBytes};
+                                           0xF0, 0x80, 0x70, 0xFE, 0x48, 0x2B, 0xE0, 0x8A, 0x01, 0x48, 0x8B, 0xD9};
+constexpr platform::FunctionFact kDispatch{L"Vehicle_BeginByType_Dispatch", 0x143A63A80, kDispatchBytes};
 
 constexpr std::uint8_t kBeginBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x48, 0x89, 0x6C, 0x24, 0x18, 0x56, 0x57,
                                         0x41, 0x54, 0x41, 0x56, 0x41, 0x57, 0xB8, 0x30, 0x00, 0x00, 0x00, 0xE8};
-constexpr platform::FunctionFact kBegin{L"SBScooterCoordinator_Begin_SetActive", 0x143DAEE14, kBeginBytes};
+constexpr platform::FunctionFact kBegin{L"SBScooterCoordinator_Begin_SetActive", 0x143B1C234, kBeginBytes};
 
-constexpr std::uint8_t kFlushBytes[] = {0xB8, 0x38, 0x00, 0x00, 0x00, 0xE8, 0xC6, 0xDA, 0x30, 0xFE, 0x48, 0x2B,
+constexpr std::uint8_t kFlushBytes[] = {0xB8, 0x38, 0x00, 0x00, 0x00, 0xE8, 0xAE, 0xAF, 0x9A, 0xFF, 0x48, 0x2B,
                                         0xE0, 0x48, 0x8D, 0x41, 0x48, 0x48, 0x83, 0xC1, 0x08, 0x48, 0x89, 0x44};
-constexpr platform::FunctionFact kFlush{L"SBScooterCoordinator_SM_FlushPending", 0x143DA1460, kFlushBytes};
+constexpr platform::FunctionFact kFlush{L"SBScooterCoordinator_SM_FlushPending", 0x1427C0BC8, kFlushBytes};
 
-constexpr std::uint8_t kRequestGetOffBytes[] = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0x6C, 0x44, 0x30, 0xFE,
+constexpr std::uint8_t kRequestGetOffBytes[] = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0x68, 0x41, 0x65, 0xFE,
                                                 0x48, 0x2B, 0xE0, 0x4C, 0x8D, 0x99, 0x18, 0x02, 0x00, 0x00, 0x48, 0x8B};
-constexpr platform::FunctionFact kRequestGetOff{L"SBScooterCoordinator_RequestGetOff", 0x143DAAAB8, kRequestGetOffBytes};
+constexpr platform::FunctionFact kRequestGetOff{L"SBScooterCoordinator_RequestGetOff", 0x143B17A0C, kRequestGetOffBytes};
 
 constexpr std::uint8_t kGetOffPrimaryBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x57, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8,
-                                                0x84, 0xDC, 0xA4, 0x00, 0x48, 0x2B, 0xE0, 0x48, 0x8B, 0xD9, 0xE8, 0x29};
-constexpr platform::FunctionFact kGetOffPrimary{L"Vehicle_RequestGetOff_PrimaryActive", 0x14166129C, kGetOffPrimaryBytes};
+                                                0xCC, 0x45, 0xA8, 0x00, 0x48, 0x2B, 0xE0, 0x48, 0x8B, 0xD9, 0xE8, 0x31};
+constexpr platform::FunctionFact kGetOffPrimary{L"Vehicle_RequestGetOff_PrimaryActive", 0x1416E75A4, kGetOffPrimaryBytes};
 
 constexpr std::uint8_t kCoordTickBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x57, 0xB8, 0x30, 0x00, 0x00, 0x00, 0xE8,
-                                            0x30, 0x48, 0xE5, 0x00, 0x48, 0x2B, 0xE0, 0x48, 0x8B, 0xD9, 0x48, 0x81};
-constexpr platform::FunctionFact kCoordTick{L"SBScooterCoordinator_Tick_Vt280", 0x14125A6F0, kCoordTickBytes};
+                                            0x60, 0x2A, 0x2E, 0x01, 0x48, 0x2B, 0xE0, 0x48, 0x8B, 0xD9, 0x48, 0x81};
+constexpr platform::FunctionFact kCoordTick{L"SBScooterCoordinator_Tick_Vt280", 0x140E89110, kCoordTickBytes};
 
 constexpr std::uint8_t kSwapBackBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x57, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8,
-                                           0x30, 0x6B, 0x30, 0xFE, 0x48, 0x2B, 0xE0, 0x65, 0x48, 0x8B, 0x04, 0x25};
+                                           0x50, 0x6A, 0x65, 0xFE, 0x48, 0x2B, 0xE0, 0x65, 0x48, 0x8B, 0x04, 0x25};
 constexpr platform::SlotFact kSwapBackSlot{
-    L"the scooter coordinator's getoff swap-back slot (vt+0x2F0)", 0x145D770E0,
-    {L"SBScooterCoordinator_Vt2F0_FinishGetOff_SwapBack", 0x143DA83F0, kSwapBackBytes}};
+    L"the scooter coordinator's getoff swap-back slot (vt+0x2F0)", 0x145BD6E48,
+    {L"SBScooterCoordinator_Vt2F0_FinishGetOff_SwapBack", 0x143B15120, kSwapBackBytes}};
 
 // The single-player animated getoff's swap back: the getoff motion's "End DetachFromSBScooter" notify
 // on the rider's mesh. It detaches the rider, then calls `[PM+0x140]+0x5B8`'s vt+0x2F0 only when the rider is the party
@@ -105,10 +105,10 @@ constexpr platform::SlotFact kSwapBackSlot{
 constexpr std::uint8_t kDetachNotifyBytes[] = {0x48, 0x85, 0xD2, 0x0F, 0x84, 0x9E, 0x03, 0x00, 0x00, 0x48, 0x89, 0x5C,
                                                0x24, 0x08, 0x48, 0x89, 0x74, 0x24, 0x18, 0x55, 0x57, 0x41, 0x54, 0x41};
 constexpr platform::SlotFact kDetachNotifySlot{
-    L"the End DetachFromSBScooter notify's Notify slot", 0x1458DE3E8,
-    {L"AnimNotify_DetachFromRideObject_Notify_FieldLeaderSwapBack", 0x14331A4A8, kDetachNotifyBytes}};
-constexpr std::uintptr_t kDetachLeaderSite = 0x14331A814;  // its field-leader test: call ResolveFieldLeaderCharOrLeader
-constexpr std::uintptr_t kResolveLeader    = 0x140A6085C;  // PartyManager_ResolveFieldLeaderCharOrLeader(selector)
+    L"the End DetachFromSBScooter notify's Notify slot", 0x14574D9B8,
+    {L"AnimNotify_DetachFromRideObject_Notify_FieldLeaderSwapBack", 0x14302A2A4, kDetachNotifyBytes}};
+constexpr std::uintptr_t kDetachLeaderSite = 0x14302A610;  // its field-leader test: call ResolveFieldLeaderCharOrLeader
+constexpr std::uintptr_t kResolveLeader    = 0x140764048;  // PartyManager_ResolveFieldLeaderCharOrLeader(selector)
 
 using facts::kSwitchAiControlAsync;
 using facts::kScooterUpdateTarget;
@@ -162,7 +162,7 @@ using TopUIFn         = void (*)(void* coordinator);
 constexpr std::uint8_t   kScooterKey        = 4;
 using facts::kScooterCoordinatorVTable;
 using facts::kScooterCharacterVTable;
-constexpr std::uintptr_t kScooterMoveVt     = 0x1466B9D88;  // SBScooterMoveState
+constexpr std::uintptr_t kScooterMoveVt     = 0x146547858;  // SBScooterMoveState
 using facts::kControllerActiveVehicle;
 using facts::kCoordinatorBody;
 using facts::kScooterCoordShared;
@@ -186,7 +186,7 @@ constexpr std::int32_t   kStateIdle = 0, kStateBoarding = 2, kStateRiding = 3, k
 // (1.004 +0x1870).
 using facts::kScooterRidden;
 using facts::kScooterExcluded;
-constexpr platform::PerBuild<std::uint32_t> kScooterSetting  = {0x1870, 0x1890};  // MovementSetting*: +0x394 distance, +0x398 max yaw, +0x39C min power
+constexpr platform::PerBuild<std::uint32_t> kScooterSetting  = {0x1890, 0x1870};  // MovementSetting*: +0x394 distance, +0x398 max yaw, +0x39C min power
 constexpr std::uint32_t  kSettingDistance   = 0x394;
 constexpr std::uint32_t  kSettingMaxYaw     = 0x398;
 constexpr std::uint32_t  kSettingMinPower   = 0x39C;
@@ -213,22 +213,22 @@ struct Site
     const wchar_t*  what;
 };
 constexpr std::array<Site, 14> kForcedSites = {{
-    {0x140D9DB40, L"the field step"},
-    {0x1413A0E50, L"a fast travel"},
-    {0x141884358, L"an interaction (A)"},
-    {0x141884577, L"an interaction (D)"},
-    {0x14360FBD4, L"an interaction (B)"},
-    {0x14360FDD0, L"an interaction (C)"},
-    {0x142AED1BB, L"an event"},
-    {0x1434E1CDE, L"an event node (1)"},
-    {0x1434E1D6A, L"an event node (2)"},
-    {0x1434E1E2E, L"an event node (3)"},
-    {0x1434E1F4F, L"an event node (4)"},
-    {0x1434E2013, L"an event node (5)"},
-    {0x1435548D4, L"the Wheelie level command"},
-    {0x143554989, L"a level command"},
+    {0x1410DA1BB, L"the field step"},
+    {0x140956BFF, L"a fast travel"},
+    {0x1415DC2EC, L"an interaction (A)"},
+    {0x1415DC50B, L"an interaction (D)"},
+    {0x1433443CC, L"an interaction (B)"},
+    {0x1433445C8, L"an interaction (C)"},
+    {0x14274A8AB, L"an event"},
+    {0x14320CFB6, L"an event node (1)"},
+    {0x14320D042, L"an event node (2)"},
+    {0x14320D106, L"an event node (3)"},
+    {0x14320D227, L"an event node (4)"},
+    {0x14320D2EB, L"an event node (5)"},
+    {0x143283B58, L"the Wheelie level command"},
+    {0x143283C0D, L"a level command"},
 }};
-constexpr std::uintptr_t kOwnGetOffSite = 0x1434507BF;  // the driver's getoff button, scooter slot 16
+constexpr std::uintptr_t kOwnGetOffSite = 0x143170A3F;  // the driver's getoff button, scooter slot 16
 
 struct Functions
 {

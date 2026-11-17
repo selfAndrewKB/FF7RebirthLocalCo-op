@@ -26,7 +26,7 @@ using platform::FunctionFact;
 
 /// g_EndUISystem (data): the UI system object itself, the HUD's root, at this address. Its slots are 8-byte pointers
 /// to the managers and holders below (EndUISystem[n] = slot n, at the address plus 8n).
-inline constexpr std::uintptr_t kEndUISystem = 0x1493496E0;
+inline constexpr std::uintptr_t kEndUISystem = 0x149186150;
 
 inline constexpr std::uint32_t kUIInput              = 0x10;   // EndUISystem[2]: Square's input object
 inline constexpr std::uint32_t kUIFieldMarkers       = 0x98;   // -> a TSparseArray of the field-target markers
@@ -47,52 +47,52 @@ inline constexpr std::uint32_t kUISaveIcon    = 0x118;
 inline constexpr std::uint32_t kSaveIconShown = 16;
 inline constexpr std::uint32_t kSaveIconText  = 0x430;
 inline constexpr std::uint8_t  kShowSaveIconBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x57, 0xB8, 0x20,
-                                                       0x00, 0x00, 0x00, 0xE8, 0x50, 0x22, 0x8C, 0x00};
-inline constexpr FunctionFact  kShowSaveIcon{L"EndUI_ShowSaveIcon_Static", 0x1417ECCD0, kShowSaveIconBytes};
+                                                       0x00, 0x00, 0x00, 0xE8, 0x30, 0x09, 0x90, 0x00};
+inline constexpr FunctionFact  kShowSaveIcon{L"EndUI_ShowSaveIcon_Static", 0x14186B240, kShowSaveIconBytes};
 inline constexpr std::uint8_t  kHideSaveIconBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x74,
                                                        0x24, 0x10, 0x57, 0xB8, 0x20, 0x00, 0x00, 0x00};
-inline constexpr FunctionFact  kHideSaveIcon{L"EndUI_HideSaveIcon_Static", 0x141858214, kHideSaveIconBytes};
-inline constexpr std::uint8_t  kTextBlockSetTextBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x57, 0xB8, 0x50,
-                                                           0x00, 0x00, 0x00, 0xE8, 0x2C, 0x04, 0x72, 0x01};
-inline constexpr FunctionFact  kTextBlockSetText{L"UEndTextBlock_SetText_FStringPtr", 0x14098EAF4, kTextBlockSetTextBytes};
+inline constexpr FunctionFact  kHideSaveIcon{L"EndUI_HideSaveIcon_Static", 0x140FE4168, kHideSaveIconBytes};
+inline constexpr std::uint8_t  kTextBlockSetTextBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x74,
+                                                           0x24, 0x10, 0x57, 0xB8, 0x50, 0x00, 0x00, 0x00};
+inline constexpr FunctionFact  kTextBlockSetText{L"UEndTextBlock_SetText_FStringPtr", 0x140E8B948, kTextBlockSetTextBytes};
 /// Its byte marking a command-controller Setup deferred behind a fade. 1.005: MasterHUD_Tick 0x140F75A05 cmp byte
 /// [rbx+2D9h],0 (1.004 0x140F37E5D [rbx+2D1h]); EndUISystem__ClearFieldCommandSetupPending 0x1413FBB7A and
 /// SetupFieldCommandOrDefer 0x1413FBBE2 mov byte [..+2D9h],0 (a member was inserted after +0x2A8).
-inline constexpr platform::PerBuild<std::uint32_t> kUISetupDeferred = {0x2D1, 0x2D9};
+inline constexpr platform::PerBuild<std::uint32_t> kUISetupDeferred = {0x2D9, 0x2D1};
 
 /// UWidget's render transform applied from its fields (+0x90/+0x94 the translation, +0x98/+0x9C the scale, +0xA8 the
 /// angle): the game's own call after it writes them (the enemy gauges' scale, RE-p2-enemy-markers.md; the chocobo
-/// wrangle's targets, RE-chocobo-wrangle-targets.md). Its 1.005 prologue differs (the translation table carries
+/// wrangle's targets, RE-chocobo-wrangle-targets.md). Its 1.004 prologue differs (the translation table carries
 /// that build's bytes).
-inline constexpr std::uint8_t kApplyRenderTransformBytes[] = {0x48, 0x8B, 0xC4, 0x48, 0x89, 0x58, 0x10, 0x48,
-                                                              0x89, 0x70, 0x18, 0x48, 0x89, 0x78, 0x20, 0x55,
-                                                              0x41, 0x56, 0x41, 0x57, 0x48, 0x8D, 0x68, 0x98};
-inline constexpr FunctionFact  kApplyRenderTransform{L"UWidget's render transform applied", 0x14096ECAC,
+inline constexpr std::uint8_t kApplyRenderTransformBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x48, 0x89, 0x74,
+                                                              0x24, 0x18, 0x48, 0x89, 0x7C, 0x24, 0x20, 0x55,
+                                                              0x41, 0x54, 0x41, 0x55, 0x41, 0x56, 0x41, 0x57};
+inline constexpr FunctionFact  kApplyRenderTransform{L"UWidget's render transform applied", 0x140B12FA8,
                                                     kApplyRenderTransformBytes};
 
 // ---------------------------------------------------------------------------------------------
-// The root overlay's render (SEndRootOverlay__RenderToCompositeLayer 0x140C95CC0)
+// The root overlay's render (SEndRootOverlay__RenderToCompositeLayer 0x140B0ED18)
 // ---------------------------------------------------------------------------------------------
 
-// It asks for the rect to lay the HUD out in: `call EndUI__GetCompositeLayerRect` at 0x140C95F57 (7 bytes into its
+// It asks for the rect to lay the HUD out in: `call EndUI__GetCompositeLayerRect` at 0x140B0EFAD (7 bytes into its
 // 16-byte block).
-inline constexpr std::uintptr_t kOverlayRectCall = 0x140C95F57;
+inline constexpr std::uintptr_t kOverlayRectCall = 0x140B0EFAD;
 inline constexpr std::uint8_t   kGetCompositeLayerRectPrologue[] = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00};
-inline constexpr FunctionFact   kGetCompositeLayerRect{L"EndUI::GetCompositeLayerRect", 0x140C958B8,  // FIntRect* (out)
+inline constexpr FunctionFact   kGetCompositeLayerRect{L"EndUI::GetCompositeLayerRect", 0x140B0E8CC,  // FIntRect* (out)
                                                      kGetCompositeLayerRectPrologue};
 
 // The same function then takes the frame's layer entry, after storing the host scale at +0x330
-// (0x140C95FA0) and before the widget tree ticks (0x140C961C7):
+// (0x140B0EFF6) and before the widget tree ticks (0x140C961C7):
 //   mov rdx, [FName "SEndRootOverlay"] ; lea r8, [rsp+40h] (&rect) ; mov rcx, rsi (slot) ;
-//   call FEndMenuRenderer__FindOrAddNamedLayerEntry at 0x140C960D9 (9 bytes into its block).
+//   call FEndMenuRenderer__FindOrAddNamedLayerEntry at 0x140B0F140 (9 bytes into its block).
 // Three register arguments, none on the stack; the entry comes back in rax.
-inline constexpr std::uintptr_t kEntryCall = 0x140C960D9;
+inline constexpr std::uintptr_t kEntryCall = 0x140B0F140;
 inline constexpr std::uint8_t   kFindOrAddNamedLayerEntryPrologue[] = {
     0x48, 0x89, 0x5C, 0x24, 0x10,   // mov [rsp+10h], rbx
-    0x48, 0x89, 0x74, 0x24, 0x18,   // mov [rsp+18h], rsi
-    0x48, 0x89, 0x7C, 0x24, 0x20};  // mov [rsp+20h], rdi
+    0x4C, 0x89, 0x44, 0x24, 0x18,   // mov [rsp+18h], rsi
+    0x55, 0x56, 0x57, 0x41, 0x54};  // mov [rsp+20h], rdi
 /// Entry* (Slot*, FName, FIntRect*).
-inline constexpr FunctionFact kFindOrAddNamedLayerEntry{L"FEndMenuRenderer::FindOrAddNamedLayerEntry", 0x140FC8A98,
+inline constexpr FunctionFact kFindOrAddNamedLayerEntry{L"FEndMenuRenderer::FindOrAddNamedLayerEntry", 0x140A47B68,
                                                         kFindOrAddNamedLayerEntryPrologue};
 
 // FEndMenuLayerEntry: the FMatrix at +0x50..+0x8F that DrawEntryBatchToTarget projects the entry
@@ -113,39 +113,39 @@ inline constexpr std::uint32_t kEntryMatrixCount    = 232;
 inline constexpr std::int32_t  kEntryMatrixMaxCount = 4096;  // a sanity bound; the HUD pushes a handful
 
 // The render ends by submitting the slot: `mov r8, rsi (slot) ; mov dl, 2 (pool) ; mov rcx, rdi ;
-// call FEndMenuRenderer__SubmitLayerSlot` at 0x140C96258 (8 bytes into its block).
-inline constexpr std::uintptr_t kSubmitCall = 0x140C96258;
+// call FEndMenuRenderer__SubmitLayerSlot` at 0x140B0F2F6 (8 bytes into its block).
+inline constexpr std::uintptr_t kSubmitCall = 0x140B0F2F6;
 inline constexpr std::uint8_t   kSubmitLayerSlotPrologue[] = {
-    0x48, 0x8B, 0xC4,               // mov rax, rsp
-    0x48, 0x89, 0x58, 0x10,         // mov [rax+10h], rbx
-    0x48, 0x89, 0x70, 0x18,         // mov [rax+18h], rsi
-    0x48, 0x89, 0x78, 0x20, 0x55};  // mov [rax+20h], rdi ; push rbp
-inline constexpr FunctionFact kSubmitLayerSlot{L"FEndMenuRenderer::SubmitLayerSlot", 0x140FC873C,
+    0x48, 0x89, 0x5C,               // mov rax, rsp
+    0x24, 0x10, 0x48, 0x89,         // mov [rax+10h], rbx
+    0x74, 0x24, 0x18, 0x55,         // mov [rax+18h], rsi
+    0x57, 0x41, 0x54, 0x41, 0x56};  // mov [rax+20h], rdi ; push rbp
+inline constexpr FunctionFact kSubmitLayerSlot{L"FEndMenuRenderer::SubmitLayerSlot", 0x140A47A14,
                                                kSubmitLayerSlotPrologue};
 
 // FEndMenuRenderer__AcquireLayerSlot(renderer, pool): rcx = the renderer, dl = the pool, the slot in rax. The root
-// overlay's render takes pool 2 (its call at 0x140C960A2, hud/passes/column_hud_images), the navimap circle's paint pool
+// overlay's render takes pool 2 (its call at 0x140B0F119, hud/passes/column_hud_images), the navimap circle's paint pool
 // 0.
 inline constexpr std::uint8_t kAcquireLayerSlotPrologue[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x57, 0xB8, 0x20, 0x00, 0x00,
                                                              0x00};
-inline constexpr FunctionFact kAcquireLayerSlot{L"FEndMenuRenderer::AcquireLayerSlot", 0x140FC8694,
+inline constexpr FunctionFact kAcquireLayerSlot{L"FEndMenuRenderer::AcquireLayerSlot", 0x140A4796C,
                                                 kAcquireLayerSlotPrologue};
 
 // SEndNaviMapCircle__OnPaint_Pool0's pool-0 block: the acquire (rcx renderer, dl 0; its call
 // crosses a 16-byte block, so it is installed from the game thread while that thread is outside the paint) and the
 // submit (rcx renderer, dl 0, r8 slot). hud/minimap redirects them; hud/minimap_once skips the block
 // (RE-p2-own-minimap.md).
-inline constexpr std::uint8_t kNaviMapCircleAcquireCallBytes[] = {0xE8, 0xE1, 0x19, 0x00, 0x00};  // call Acquire
-inline constexpr platform::FunctionFact kNaviMapCircleAcquireCall{L"the navi-map circle's acquire call", 0x140FC6CAE,
+inline constexpr std::uint8_t kNaviMapCircleAcquireCallBytes[] = {0xE8, 0x4F, 0xD4, 0x73, 0xFF};  // call Acquire
+inline constexpr platform::FunctionFact kNaviMapCircleAcquireCall{L"the navi-map circle's acquire call", 0x14130A518,
                                                                   kNaviMapCircleAcquireCallBytes};
-inline constexpr std::uint8_t kNaviMapCircleSubmitCallBytes[] = {0xE8, 0x24, 0x18, 0x00, 0x00};  // call Submit
-inline constexpr platform::FunctionFact kNaviMapCircleSubmitCall{L"the navi-map circle's submit call", 0x140FC6F13,
+inline constexpr std::uint8_t kNaviMapCircleSubmitCallBytes[] = {0xE8, 0x96, 0xD2, 0x73, 0xFF};  // call Submit
+inline constexpr platform::FunctionFact kNaviMapCircleSubmitCall{L"the navi-map circle's submit call", 0x14130A779,
                                                                  kNaviMapCircleSubmitCallBytes};
 
 // A layer slot's pool buffers are FVertexBuffer and FIndexBuffer resources (their vtables, data), initialised through
 // BeginInitResource_OrDirectIfRenderThread (render thread: vt+0x28 directly).
-inline constexpr std::uintptr_t kVertexBufferVtable = 0x146621CF8;
-inline constexpr std::uintptr_t kIndexBufferVtable  = 0x146621D50;
+inline constexpr std::uintptr_t kVertexBufferVtable = 0x1464AF7B8;
+inline constexpr std::uintptr_t kIndexBufferVtable  = 0x1464AF810;
 // Such a buffer as the menu renderer's ctor lays it out (research/RE-p2-hud-second-image.md): 0x20 bytes, the vtable,
 // the render resource's list index (-1 until InitResource lists it), a u16 the ctor sets to 2, the RHI buffer
 // InitResource makes, and the capacity.
@@ -155,31 +155,31 @@ inline constexpr std::uint32_t  kMenuBufferListIndex = 0x08;  // i32
 inline constexpr std::uint32_t  kMenuBufferCtorWord  = 0x0C;  // u16
 inline constexpr std::uint32_t  kMenuBufferRhi       = 0x10;
 inline constexpr std::uint32_t  kMenuBufferCapacity  = 0x18;  // u32
-inline constexpr std::uint8_t   kBeginInitResourcePrologue[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x74, 0x24,
-                                                              0x10, 0x48, 0x89, 0x7C, 0x24, 0x18, 0x41, 0x56, 0xB8,
-                                                              0x90, 0x00, 0x00, 0x00};
-inline constexpr FunctionFact   kBeginInitResource{L"BeginInitResource", 0x1409E7EF8,  // void (FRenderResource*)
+inline constexpr std::uint8_t   kBeginInitResourcePrologue[] = {0x48, 0x8B, 0xC4, 0x48, 0x89, 0x58, 0x08, 0x48, 0x89,
+                                                              0x70, 0x10, 0x48, 0x89, 0x78, 0x18, 0x55, 0x41, 0x54,
+                                                              0x41, 0x55, 0x41, 0x56};
+inline constexpr FunctionFact   kBeginInitResource{L"BeginInitResource", 0x1408F26F0,  // void (FRenderResource*)
                                                  kBeginInitResourcePrologue};
 
 // EndUI__ContainScaleFor1920x1080: the UI scale of a rect relative to 1920x1080 (RE-p2-hud-view-levers.md).
 // float(FVector2D) with the size packed in rcx (X low, Y high), the result in xmm0; a leaf that
 // reads only its argument and .rdata constants, so any thread may call it.
 inline constexpr std::uint8_t kContainScaleBytes[] = {
-    0xC5, 0xFA, 0x6F, 0x1D, 0x48, 0xD4, 0x6A, 0x05,  // vmovdqu xmm3, [abs mask]
-    0xC5, 0xFA, 0x10, 0x25, 0xC4, 0xD3, 0x6A, 0x05,  // vmovss xmm4, [1e-8]
+    0xC5, 0xFA, 0x6F, 0x1D, 0x70, 0x1D, 0x34, 0x05,  // vmovdqu xmm3, [abs mask]
+    0xC5, 0xFA, 0x10, 0x25, 0x58, 0x1D, 0x34, 0x05,  // vmovss xmm4, [1e-8]
     0x48, 0x89, 0x4C, 0x24, 0x10,                    // mov [rsp+10h], rcx
     0xC5, 0xFA, 0x10, 0x54, 0x24, 0x10};             // vmovss xmm2, [rsp+10h]
-inline constexpr FunctionFact kContainScale{L"EndUI::ContainScaleFor1920x1080", 0x1409F52B0, kContainScaleBytes};
+inline constexpr FunctionFact kContainScale{L"EndUI::ContainScaleFor1920x1080", 0x140BC7998, kContainScaleBytes};
 
 // The overlay singleton (SEndRootOverlay__GetOrCreate 0x1410EAB8C) and its marker host set: the block each overlay render
 // writes for the view it renders, and the marker projection reads (EndUI__ProjectWorldToRootOverlay and its twin are its
 // only readers found; RE-p2-hud.md, the projection's formula). Same offsets in 1.005 (RE-1005-offsets-A.md).
-inline constexpr std::uintptr_t kRootOverlaySingleton = 0x1491D1948;
+inline constexpr std::uintptr_t kRootOverlaySingleton = 0x1490099F8;
 inline constexpr std::uint32_t  kOverlayLayoutMin     = 0x310;  // float x, y: the UI rect's Min (stored, not read)
-inline constexpr std::uint32_t  kOverlayViewOrigin    = 0x318;  // float x, y: player 0's view rect's Min (0x140C95F2C)
+inline constexpr std::uint32_t  kOverlayViewOrigin    = 0x318;  // float x, y: player 0's view rect's Min (0x140B0EF82)
 inline constexpr std::uint32_t  kOverlayUiSize        = 0x320;  // float w, h: the UI rect's size (the band in a split)
 inline constexpr std::uint32_t  kOverlayViewWidth     = 0x328;  // float: player 0's view size, cached before the rect
-inline constexpr std::uint32_t  kOverlayViewHeight    = 0x32C;  // call (written at 0x140C95F3C)
+inline constexpr std::uint32_t  kOverlayViewHeight    = 0x32C;  // call (written at 0x140B0EF92)
 inline constexpr std::uint32_t  kOverlayHostScale     = 0x330;  // float: the host scale (the mod's in a band)
 
 // ---------------------------------------------------------------------------------------------
@@ -197,7 +197,7 @@ inline constexpr std::uint32_t kUserWidgetViewportLayoutEnd = 0x238;
 /// UUserWidget::SetPositionInViewport(widget, FVector2D, bRemoveDPIScale): the stock setter the game's Blueprints
 /// place widgets with (hud/position_probe) and the enemy gauges' placement calls.
 inline constexpr std::uint8_t kSetPositionInViewportPrologue[] = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00};
-inline constexpr FunctionFact kSetPositionInViewport{L"UUserWidget::SetPositionInViewport", 0x140CC39E8,
+inline constexpr FunctionFact kSetPositionInViewport{L"UUserWidget::SetPositionInViewport", 0x140E8F54C,
                                                      kSetPositionInViewportPrologue};
 
 /// FieldActionIconList__SortAndLayout(TArray<FWeakObjectPtr>* list, UObject* placeNow): sorts the given array by
@@ -206,7 +206,7 @@ inline constexpr FunctionFact kSetPositionInViewport{L"UUserWidget::SetPositionI
 inline constexpr std::uint8_t kSortAndLayoutBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x20, 0x48, 0x89, 0x54, 0x24, 0x10, 0x55,
                                                        0x56, 0x57, 0x41, 0x54, 0x41, 0x55, 0x41, 0x56, 0x41, 0x57, 0xB8,
                                                        0x20, 0x00};
-inline constexpr FunctionFact kSortAndLayout{L"FieldActionIconList::SortAndLayout", 0x1414A9B14, kSortAndLayoutBytes};
+inline constexpr FunctionFact kSortAndLayout{L"FieldActionIconList::SortAndLayout", 0x1409FB938, kSortAndLayoutBytes};
 
 // ---------------------------------------------------------------------------------------------
 // The game's message window (UEndMessageWindow; RE-message-window.md, both builds)
@@ -222,7 +222,7 @@ inline constexpr std::uint32_t kMessageWindowRemoveAfterOut = 0x3D1;
 
 /// SWidget::SetVisibility(widget, TAttribute<EVisibility>*): a widget's vtable slot 59; the game also calls it directly.
 inline constexpr std::uint8_t kSetVisibilityBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x57, 0xB8, 0x40, 0x00, 0x00, 0x00};
-inline constexpr FunctionFact kSetVisibility{L"SWidget::SetVisibility", 0x140C27B38, kSetVisibilityBytes};
+inline constexpr FunctionFact kSetVisibility{L"SWidget::SetVisibility", 0x140DD3400, kSetVisibilityBytes};
 inline constexpr std::size_t   kSetVisibilitySlot  = 59;
 inline constexpr std::uint32_t kWidgetVisibility   = 0x1B0;  // the Visibility attribute: +0 value, +1 set
 inline constexpr std::uint32_t kWidgetVisibilityDelegate = 0x1B8;  // its getter delegate (0: unbound)
@@ -238,10 +238,10 @@ inline constexpr std::uint8_t  kVisibilitySelfHitTestInvisible = 0x11;
 /// tick. EndUI_RemoveMapIcon(FName key). Game thread.
 inline constexpr std::uint8_t kAddMapIconBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x6C, 0x24, 0x10,
                                                     0x48, 0x89, 0x74, 0x24, 0x18, 0x57, 0xB8, 0x40, 0x00, 0x00};
-inline constexpr FunctionFact kAddMapIcon{L"EndUI_AddMapIcon", 0x14080571C, kAddMapIconBytes};
-inline constexpr std::uint8_t kRemoveMapIconBytes[] = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0x2C, 0xE5,
-                                                       0x49, 0x01, 0x48, 0x2B, 0xE0, 0x48, 0x8B, 0xD9};
-inline constexpr FunctionFact kRemoveMapIcon{L"EndUI_RemoveMapIcon", 0x140C109F8, kRemoveMapIconBytes};
+inline constexpr FunctionFact kAddMapIcon{L"EndUI_AddMapIcon", 0x14197D8E8, kAddMapIconBytes};
+inline constexpr std::uint8_t kRemoveMapIconBytes[] = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0x68, 0xE9,
+                                                       0xC3, 0x00, 0x48, 0x2B, 0xE0, 0x48, 0x8B, 0xD9};
+inline constexpr FunctionFact kRemoveMapIcon{L"EndUI_RemoveMapIcon", 0x14152D20C, kRemoveMapIconBytes};
 inline constexpr std::uint8_t kMapIconKindMainStory = 2;  // the main objective's diamond (with its line) and pin
 /// An area-map icon manager instance's icon map (a TMap's sparse array: 24-byte elements, the key at +0, the element
 /// pointer at +8); an element's widget TSharedPtr at +0 (its reference controller at +8).
@@ -262,7 +262,7 @@ inline constexpr std::uint32_t kSharedCount        = 0x8;  // a reference contro
 /// attribute*, the invalidate reason the game's callers pass). It compares first: an unchanged value costs nothing.
 inline constexpr std::uint8_t kSetRenderTransformBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x6C, 0x24, 0x18, 0x56, 0x57,
                                                             0x41, 0x54, 0x41, 0x56, 0x41, 0x57, 0xB8, 0x30, 0x00, 0x00, 0x00, 0xE8};
-inline constexpr FunctionFact kSetRenderTransform{L"SWidget_SetAttribute_RenderTransform", 0x140970390, kSetRenderTransformBytes};
+inline constexpr FunctionFact kSetRenderTransform{L"SWidget_SetAttribute_RenderTransform", 0x140B127E0, kSetRenderTransformBytes};
 inline constexpr std::uint8_t  kRenderTransformReason = 17;
 /// A Slate widget's render-transform attribute (TAttribute<TOptional<FSlateRenderTransform>>, 48 bytes): the 2x2 matrix
 /// at +0, the translation at +0x10, the optional's set byte at +0x18, the attribute's set byte at +0x1C, an unbound
@@ -273,13 +273,13 @@ inline constexpr std::uint32_t kRenderTransformOptSet  = 0x18;
 inline constexpr std::uint32_t kRenderTransformAttrSet = 0x1C;
 /// SEndMapIcon_SetIconScale(icon, FVector2D scale by value): the minimap pin's image scaled about its centre. The holder's
 /// render loop writes a main-objective pin's scale on every run (1, or 0.5 while a kind-11 icon is up).
-inline constexpr std::uint8_t kSetMapIconScaleBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x18, 0x55, 0x48, 0x8B,
-                                                         0xEC, 0xB8, 0x60, 0x00, 0x00, 0x00, 0xE8};
-inline constexpr FunctionFact kSetMapIconScale{L"SEndMapIcon_SetIconScale", 0x140E70F60, kSetMapIconScaleBytes};
+inline constexpr std::uint8_t kSetMapIconScaleBytes[] = {0x40, 0x55, 0x48, 0x8B, 0xEC, 0xB8, 0x60, 0x00,
+                                                         0x00, 0x00, 0xE8, 0x69, 0x9B, 0x65, 0x01};
+inline constexpr FunctionFact kSetMapIconScale{L"SEndMapIcon_SetIconScale", 0x140B12008, kSetMapIconScaleBytes};
 /// SEndFieldQuestIcon, the field diamond with its line under it (one per key in each view's icon manager): its vtable,
 /// for the type check. Its diamond SImage and SEndMapIcon's pin image are both held at kIconImage; the diamond is laid
 /// out kQuestIconSize wide and tall, its bottom on the line.
-inline constexpr std::uintptr_t kFieldQuestIconVTable = 0x1457C00C0;
+inline constexpr std::uintptr_t kFieldQuestIconVTable = 0x14569EA60;
 inline constexpr std::uint32_t  kIconImage            = 0x3B0;
 inline constexpr float          kQuestIconSize        = 24.0f;
 
@@ -290,16 +290,16 @@ inline constexpr float          kQuestIconSize        = 24.0f;
 /// The UI filter manager's latch over a reference count, per filter type: EnableType(world, type) sets the type's one
 /// latch and counts it once; DisableType(type) clears it (type 1's also clears type 6's). RefInc/RefDec(manager, type)
 /// count a holder of the filter's own, as the game's other menus share one.
-inline constexpr std::uint8_t kFilterOnBytes[]  = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0xE8, 0xD3, 0xEB, 0x00};
-inline constexpr std::uint8_t kFilterOffBytes[] = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0xF0, 0xDA, 0xEB, 0x00};
+inline constexpr std::uint8_t kFilterOnBytes[]  = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0x60, 0xE7, 0xAD, 0x00};
+inline constexpr std::uint8_t kFilterOffBytes[] = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0x88, 0xD9, 0xAD, 0x00};
 inline constexpr std::uint8_t kRefIncBytes[]    = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x57, 0xB8, 0x20,
-                                                   0x00, 0x00, 0x00, 0xE8, 0xAC, 0xD3, 0xEB, 0x00};
+                                                   0x00, 0x00, 0x00, 0xE8, 0x24, 0xE7, 0xAD, 0x00};
 inline constexpr std::uint8_t kRefDecBytes[]    = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x57, 0xB8, 0x20,
-                                                   0x00, 0x00, 0x00, 0xE8, 0x74, 0xDA, 0xEB, 0x00};
-inline constexpr FunctionFact kFilterOn{L"EndUIFilter_EnableType", 0x1411F1B3C, kFilterOnBytes};
-inline constexpr FunctionFact kFilterOff{L"EndUIFilter_DisableType", 0x1411F1434, kFilterOffBytes};
-inline constexpr FunctionFact kRefInc{L"EndUIFilter_RefInc", 0x1411F1B74, kRefIncBytes};
-inline constexpr FunctionFact kRefDec{L"EndUIFilter_RefDec", 0x1411F14AC, kRefDecBytes};
+                                                   0x00, 0x00, 0x00, 0xE8, 0x0C, 0xD9, 0xAD, 0x00};
+inline constexpr FunctionFact kFilterOn{L"EndUIFilter_EnableType", 0x14168D414, kFilterOnBytes};
+inline constexpr FunctionFact kFilterOff{L"EndUIFilter_DisableType", 0x14168E1EC, kFilterOffBytes};
+inline constexpr FunctionFact kRefInc{L"EndUIFilter_RefInc", 0x14168D44C, kRefIncBytes};
+inline constexpr FunctionFact kRefDec{L"EndUIFilter_RefDec", 0x14168E264, kRefDecBytes};
 inline constexpr std::uint32_t kFilterLatch = 0x1C;  // the manager's u8 latch per type
 inline constexpr std::uint32_t kFilterCount = 0x2C;  // its i32 count per type
 
@@ -310,12 +310,12 @@ inline constexpr std::uint32_t kFilterCount = 0x2C;  // its i32 count per type
 /// one call (facts/party.h kPartyHp).
 inline constexpr std::uint8_t kDangerDecisionBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x6C,
                                                         0x24, 0x10, 0x48, 0x89, 0x74, 0x24, 0x18, 0x57};
-inline constexpr FunctionFact kDangerDecision{L"FieldCommandCtrl_Tick_PinchFilter650", 0x141526EE0, kDangerDecisionBytes};
-inline constexpr std::uintptr_t kDangerHpCall          = 0x141526F79;  // the decision's HP read
-inline constexpr std::uintptr_t kDangerDyingOnCall     = 0x142A67126;  // its EnableType(1)
-inline constexpr std::uintptr_t kDangerStoneOnCall     = 0x142A6712F;  // its EnableType(6)
-inline constexpr std::uintptr_t kDangerDyingOffCall    = 0x142A670E4;  // its DisableType(1)
-inline constexpr std::uintptr_t kDangerStoneOffCall    = 0x142A670ED;  // its DisableType(6)
+inline constexpr FunctionFact kDangerDecision{L"FieldCommandCtrl_Tick_PinchFilter650", 0x140C2A164, kDangerDecisionBytes};
+inline constexpr std::uintptr_t kDangerHpCall          = 0x140C2A1FD;  // the decision's HP read
+inline constexpr std::uintptr_t kDangerDyingOnCall     = 0x14259FEC2;  // its EnableType(1)
+inline constexpr std::uintptr_t kDangerStoneOnCall     = 0x14259FECB;  // its EnableType(6)
+inline constexpr std::uintptr_t kDangerDyingOffCall    = 0x14259FE80;  // its DisableType(1)
+inline constexpr std::uintptr_t kDangerStoneOffCall    = 0x14259FE89;  // its DisableType(6)
 inline constexpr std::uint32_t  kCmdDanger             = 0x650;  // i32: 0 none, 1 Dying, 4 Stone
 inline constexpr std::uint32_t  kCmdDangerAllowed      = 0x77C;  // u8: an event hides the edge here, on player 1's only
 inline constexpr std::int32_t   kDangerDying           = 1;
@@ -331,8 +331,8 @@ inline constexpr std::int32_t   kNeverLowHp            = 0x7FFFFFFF;  // an HP n
 inline constexpr std::uint32_t kUIScreenFilter = 0xC0;
 inline constexpr std::uint8_t kFilterTickBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x7C,
                                                     0x24, 0x18, 0x55, 0x48, 0x8B, 0xEC, 0xB8, 0x70};
-inline constexpr FunctionFact kFilterTick{L"EndUI__MC0_Lerps_GameModeDt", 0x140F37340, kFilterTickBytes};
-inline constexpr std::uintptr_t kFilterTickCall    = 0x140F37F18;  // MasterHUD_Tick's one call
+inline constexpr FunctionFact kFilterTick{L"EndUI__MC0_Lerps_GameModeDt", 0x14114E8CC, kFilterTickBytes};
+inline constexpr std::uintptr_t kFilterTickCall    = 0x140F75AC0;  // MasterHUD_Tick's one call
 inline constexpr std::uint32_t  kFilterSlotSize    = 0xC8;
 inline constexpr std::uint32_t  kFilterIntensity   = 0x9C;
 inline constexpr std::uint32_t  kFilterFadeStart   = 0xB4;
@@ -345,9 +345,9 @@ inline constexpr float          kDyingFadeSeconds  = 0.5f;  // its fade's length
 /// The registry's screen-filter functor: its apply (vtable slot, the one function for this functor class) writes the
 /// view's filter fields from its own, each blended by the weight: (functor, the view's settings at kViewSettings,
 /// weight). Its "on" float and its intensity; the object's size, copied whole for a view's own value.
-inline constexpr std::uintptr_t kFilterApplySlot  = 0x146BE7B08;
+inline constexpr std::uintptr_t kFilterApplySlot  = 0x145E66720;
 inline constexpr std::uint8_t   kFilterApplyBytes[] = {0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8};
-inline constexpr FunctionFact   kFilterApply{L"ScreenFilterFunctor_ApplyToView", 0x1450F73D4, kFilterApplyBytes};
+inline constexpr FunctionFact   kFilterApply{L"ScreenFilterFunctor_ApplyToView", 0x144F1F7E4, kFilterApplyBytes};
 inline constexpr std::uint32_t  kFunctorOn        = 0x0C;
 inline constexpr std::uint32_t  kFunctorIntensity = 0x14;
 inline constexpr std::uint32_t  kFunctorSize      = 0x38;

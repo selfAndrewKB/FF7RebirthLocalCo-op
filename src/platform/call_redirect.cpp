@@ -48,8 +48,8 @@ bool CallRedirect::Install(const GameImage& image, std::uintptr_t idaSite, std::
     return site && Install(*site, target, replacement);
 }
 
-bool CallRedirect::InstallResearch(const GameImage& image, std::uintptr_t idaSite, std::uintptr_t idaTarget,
-                                   std::uintptr_t replacement) noexcept
+bool CallRedirect::InstallSource(const GameImage& image, std::uintptr_t idaSite, std::uintptr_t idaTarget,
+                                 std::uintptr_t replacement) noexcept
 {
     const auto site   = image.Rebase(idaSite, kCallLength);
     const auto target = image.Rebase(idaTarget);

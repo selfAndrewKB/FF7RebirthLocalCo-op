@@ -38,17 +38,17 @@ namespace {
 // research/RE-p2-framing.md (this build; slots and entries checked by disassembly).
 // vtbl_OpLocationListener slot 2: OpLocationListener_OnCameraSetting_ForwardToOp(listener, location, row, enter):
 // op = *(listener+8); enter -> op vt+0xE0 (set layer 5), else op vt+0xE8 (clear layer 5).
-constexpr std::uint8_t kListenerForwardBytes[] = {0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8, 0x5E, 0x94, 0x07,
-                                                  0x01, 0x48, 0x2B, 0xE0, 0x48, 0x8B, 0x49, 0x08};
-constexpr platform::SlotFact kListenerSlot{L"OpLocationListener's OnCameraSetting slot (2)", 0x1466B6F90,
-                                           {L"OpLocationListener_OnCameraSetting_ForwardToOp", 0x141035AC8,
+constexpr std::uint8_t kListenerForwardBytes[] = {0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8, 0x6E, 0x9B, 0xD3,
+                                                  0x00, 0x48, 0x2B, 0xE0, 0x48, 0x8B, 0x49, 0x08};
+constexpr platform::SlotFact kListenerSlot{L"OpLocationListener's OnCameraSetting slot (2)", 0x146544740,
+                                           {L"OpLocationListener_OnCameraSetting_ForwardToOp", 0x141432008,
                                             kListenerForwardBytes}};
 constexpr std::uint32_t  kListenerOperator = 0x08;
 // vtbl_UEndPlayerExistNavAreaComponent TickComponent slot: UpdateNavModifiers from its controller's leader.
-constexpr std::uint8_t kNavAreaTickBytes[] = {0x40, 0x53, 0xB8, 0x30, 0x00, 0x00, 0x00, 0xE8, 0xD0, 0xCE,
-                                              0xA4, 0x00, 0x48, 0x2B, 0xE0, 0x48, 0x8B, 0x41, 0x10};
-constexpr platform::SlotFact kNavAreaTickSlot{L"UEndPlayerExistNavAreaComponent's TickComponent slot", 0x1467C8448,
-                                              {L"EndPlayerExistNavAreaComponent_TickComponent", 0x141662054,
+constexpr std::uint8_t kNavAreaTickBytes[] = {0x40, 0x53, 0xB8, 0x30, 0x00, 0x00, 0x00, 0xE8, 0x4C, 0x14,
+                                              0xAA, 0x00, 0x48, 0x2B, 0xE0, 0x48, 0x8B, 0x41, 0x10};
+constexpr platform::SlotFact kNavAreaTickSlot{L"UEndPlayerExistNavAreaComponent's TickComponent slot", 0x146653D08,
+                                              {L"EndPlayerExistNavAreaComponent_TickComponent", 0x1416CA728,
                                                kNavAreaTickBytes}};
 using location_volumes::kNavAreaController;
 using facts::kCameraManagerBattleOperator;

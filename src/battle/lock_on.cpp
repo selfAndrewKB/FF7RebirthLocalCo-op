@@ -56,59 +56,61 @@ namespace {
 
 // Facts read from the database (research/RE-p2-targeting-scoped-tick.md, RE-p2-lock-on.md; this
 // build). Each function's first bytes, through its stack probe, are checked before it is used.
-constexpr std::uint8_t kTickTargetingBytes[] = {0x40, 0x53, 0xB8, 0x30, 0x00, 0x00, 0x00, 0xE8, 0xF4, 0xAC, 0x74, 0x01};
-constexpr std::uint8_t kSetLockBytes[]       = {0xB8, 0x98, 0x00, 0x00, 0x00, 0xE8, 0xCE, 0x3B, 0x81, 0x00,
+constexpr std::uint8_t kTickTargetingBytes[] = {0x40, 0x53, 0xB8, 0x30, 0x00, 0x00, 0x00, 0xE8, 0xE4, 0x40, 0x7F, 0x01};
+constexpr std::uint8_t kSetLockBytes[]       = {0xB8, 0x98, 0x00, 0x00, 0x00, 0xE8, 0x62, 0x28, 0x1E, 0x01,
                                                 0x48, 0x2B, 0xE0, 0x8A, 0x81, 0x8C, 0x00, 0x00, 0x00};
-constexpr std::uint8_t kMenuSelectBytes[]    = {0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8, 0xC6, 0xF9, 0x41, 0x01};
-constexpr std::uint8_t kMenuBusyBytes[]      = {0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8, 0xFE, 0xF9, 0x41, 0x01,
-                                                0x48, 0x2B, 0xE0, 0xE8, 0x06, 0x74, 0xB7, 0xFF};
-constexpr std::uint8_t kPanelClearedBytes[]  = {0x40, 0x53, 0xB8, 0x30, 0x00, 0x00, 0x00, 0xE8, 0xA0,
-                                                0x84, 0x6D, 0xFE, 0x48, 0x2B, 0xE0, 0x48, 0x8B, 0xD9};
-constexpr std::uint8_t kPanelSetBytes[]      = {0x40, 0x53, 0xB8, 0x50, 0x00, 0x00, 0x00, 0xE8, 0xF4, 0xA3, 0x6E,
+constexpr std::uint8_t kMenuSelectBytes[]    = {0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8, 0xFE, 0x43, 0x7F, 0x01};
+constexpr std::uint8_t kMenuBusyBytes[]      = {0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8, 0x36, 0x44, 0x7F, 0x01,
+                                                0x48, 0x2B, 0xE0, 0xE8, 0x3A, 0xE4, 0xF2, 0xFF};
+constexpr std::uint8_t kPanelClearedBytes[]  = {0x40, 0x53, 0xB8, 0x30, 0x00, 0x00, 0x00, 0xE8, 0x88,
+                                                0x46, 0xA5, 0xFE, 0x48, 0x2B, 0xE0, 0x48, 0x8B, 0xD9};
+constexpr std::uint8_t kPanelSetBytes[]      = {0x40, 0x53, 0xB8, 0x50, 0x00, 0x00, 0x00, 0xE8, 0x34, 0x77, 0xA6,
                                                 0xFE, 0x48, 0x2B, 0xE0, 0xC5, 0xF8, 0x29, 0x74, 0x24, 0x40};
-constexpr std::uint8_t kMarkerNameBytes[]    = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0xFC,
-                                                0x06, 0x42, 0x01, 0x48, 0x2B, 0xE0, 0x48, 0x8B, 0xD9};
-constexpr std::uint8_t kCursorReleaseBytes[] = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0xDC, 0x42, 0x07, 0x01};
-constexpr std::uint8_t kDeactivateBytes[]    = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0x38, 0xB3, 0xEA, 0x00};
-constexpr std::uint8_t kTargetListBytes[]    = {0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8, 0xCE, 0xFE, 0x41, 0x01,
+constexpr std::uint8_t kMarkerNameBytes[]    = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0x7C,
+                                                0x77, 0xA9, 0x00, 0x48, 0x2B, 0xE0, 0x48, 0x8B, 0xD9};
+constexpr std::uint8_t kCursorReleaseBytes[] = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0x40, 0x13, 0xFA, 0x00};
+constexpr std::uint8_t kDeactivateBytes[]    = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0x58, 0x70, 0xD3, 0x00};
+constexpr std::uint8_t kTargetListBytes1004[]    = {0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8, 0xCE, 0xFE, 0x41, 0x01,
                                                 0x48, 0x2B, 0xE0, 0xE8, 0xD6, 0x78, 0xB7, 0xFF};
 constexpr std::uint8_t kModuleOnBytes[]      = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x57, 0xB8, 0x30,
-                                                0x00, 0x00, 0x00, 0xE8, 0xA0, 0xB6, 0xEA, 0x00};
+                                                0x00, 0x00, 0x00, 0xE8, 0x78, 0x12, 0x1E, 0x01};
 
-constexpr platform::FunctionFact kTickTargeting{L"BattleTarget_TickTargeting", 0x140964230, kTickTargetingBytes};
-constexpr platform::FunctionFact kSetLock{L"BattleTarget_SetLockMode8C", 0x14189B358, kSetLockBytes};
-constexpr platform::FunctionFact kMenuSelect{L"BattleTarget_IsMenuTargetSelectOpen", 0x140C8F560, kMenuSelectBytes};
-constexpr platform::FunctionFact kMenuBusy{L"BattleTarget_IsMenuTargetSelectBusy", 0x140C8F528, kMenuBusyBytes};
-constexpr platform::FunctionFact kPanelCleared{L"EndUI4_QueueTargetCleared", 0x1439D6A84, kPanelClearedBytes};
-constexpr platform::FunctionFact kPanelSet{L"EndUI4_QueueTargetSet", 0x1439C4B30, kPanelSetBytes};
-constexpr platform::FunctionFact kMarkerName{L"EndUI__MarkerList_SetTargetOwnerName", 0x140C8E828, kMarkerNameBytes};
-constexpr platform::FunctionFact kCursorRelease{L"EndUI22_ReleaseTargetCursor", 0x14103AC48, kCursorReleaseBytes};
-constexpr platform::FunctionFact kDeactivate{L"PrimaryPCM_Op2CA8_SlotCall18", 0x141203BEC, kDeactivateBytes};
-// Whether the command controller in EndUISystem[23] has its target list open (entries 10/11/13).
-constexpr platform::FunctionFact kTargetList{L"EndUI23_IsCommandTargetEntryActive", 0x140C8F058, kTargetListBytes};
-// Its body, bool(command controller), which the wrapper above tail-jumps to with EndUISystem[23]. 1.005 inlined the
-// wrapper into its only caller (RE-1005-player-two.md); the body is byte for byte the research build's
-// (RE-1005-battle-2.md), so on 1.005 the mod calls it with the same slot the wrapper read.
+constexpr platform::FunctionFact kTickTargeting{L"BattleTarget_TickTargeting", 0x140977A90, kTickTargetingBytes};
+constexpr platform::FunctionFact kSetLock{L"BattleTarget_SetLockMode8C", 0x140F89314, kSetLockBytes};
+constexpr platform::FunctionFact kMenuSelect{L"BattleTarget_IsMenuTargetSelectOpen", 0x140977778, kMenuSelectBytes};
+constexpr platform::FunctionFact kMenuBusy{L"BattleTarget_IsMenuTargetSelectBusy", 0x140977740, kMenuBusyBytes};
+constexpr platform::FunctionFact kPanelCleared{L"EndUI4_QueueTargetCleared", 0x1437174EC, kPanelClearedBytes};
+constexpr platform::FunctionFact kPanelSet{L"EndUI4_QueueTargetSet", 0x143704440, kPanelSetBytes};
+constexpr platform::FunctionFact kMarkerName{L"EndUI__MarkerList_SetTargetOwnerName", 0x1416D43F8, kMarkerNameBytes};
+constexpr platform::FunctionFact kCursorRelease{L"EndUI22_ReleaseTargetCursor", 0x1411CA834, kCursorReleaseBytes};
+constexpr platform::FunctionFact kDeactivate{L"PrimaryPCM_Op2CA8_SlotCall18", 0x141434B1C, kDeactivateBytes};
+// Whether the command controller in EndUISystem[23] has its target list open (entries 10/11/13): the body,
+// bool(command controller), of a wrapper the build inlined into its only caller (RE-1005-player-two.md,
+// RE-1005-battle-2.md); the mod calls it with the slot the wrapper read.
 constexpr std::uint8_t kTargetListImplBytes[] = {0x8B, 0x41, 0x34, 0x33, 0xD2, 0x39, 0x51, 0x38,
                                                  0x4C, 0x8B, 0xC9, 0x0F, 0x4D, 0x41, 0x38};
-constexpr platform::FunctionFact kTargetListImpl{L"EndUI23_IsCommandTargetEntryActive_Impl", 0x140C8F07C,
+constexpr platform::FunctionFact kTargetListImpl{L"EndUI23_IsCommandTargetEntryActive_Impl", 0x1409777B4,
                                                  kTargetListImplBytes};
-constexpr platform::FunctionFact kModuleOn{L"PrimaryPCM_Op2CA8_SlotFlag44", 0x141203880, kModuleOnBytes};
+// 1.004 keeps the wrapper (it tail-jumps to the body with EndUISystem[23]): that build's own address and bytes.
+constexpr platform::FunctionFact kTargetList1004{L"EndUI23_IsCommandTargetEntryActive", 0x140C8F058, kTargetListBytes1004};
+constexpr platform::FunctionFact kModuleOn{L"PrimaryPCM_Op2CA8_SlotFlag44", 0x140F8A8F8, kModuleOnBytes};
 
 // The targeting tick's two calls in BattleSystem_Tick (time stopped with the menu's target select;
 // in battle), and the tick's three writes with one copy shared by every player: the two requests for
 // player 1's target panel (each call takes a weak reference made for it and releases it at its end)
 // and the marker list's target owner name.
-constexpr std::uintptr_t kTickTargetingCalls[] = {0x140C91AA2, 0x140C91CC0};
-constexpr std::uintptr_t kPanelClearedSite     = 0x14295F0A5;  // in the cold chunk of the "cleared" request (the call straddles a block)
-constexpr std::uintptr_t kPanelClearedResume   = 0x14295F0AD;
-constexpr std::uint8_t   kPanelClearedCallBytes[] = {0xE8, 0xC1, 0x79, 0x07, 0x01};
+constexpr std::uintptr_t kTickTargetingCalls[] = {0x140B3814E, 0x140B3836C};
+constexpr std::uint8_t   kPanelClearedCallBytes[] = {0xE8, 0x21, 0x3B, 0x1D, 0x01};
 // the request's call, checked: E8 to EndUI4_QueueTargetCleared
-constexpr platform::FunctionFact kPanelClearedCall{L"the cleared request's call of QueueTargetCleared", 0x14295F0BE,
+constexpr platform::FunctionFact kPanelClearedCall{L"the cleared request's call of QueueTargetCleared", 0x1425439C6,
                                                    kPanelClearedCallBytes};
-constexpr std::uintptr_t kPanelClearedSkipTo   = 0x14295F0C3;  // after the request's call
-constexpr std::uintptr_t kPanelSetCall         = 0x14295F139;  // crosses a block on 1.005 (placed from the game thread)
-constexpr std::uintptr_t kMarkerNameCall       = 0x140C8F9C9;
+// 1.004, where that call straddles a block: the cold chunk of the "cleared" request is gated instead (that build's own
+// addresses; battle/panel_gate_code.h).
+constexpr std::uintptr_t kPanelClearedSite1004   = 0x14295F0A5;
+constexpr std::uintptr_t kPanelClearedResume1004 = 0x14295F0AD;
+constexpr std::uintptr_t kPanelClearedSkipTo1004 = 0x14295F0C3;  // after the request's call
+constexpr std::uintptr_t kPanelSetCall         = 0x142543A3F;  // crosses a block (placed from the game thread)
+constexpr std::uintptr_t kMarkerNameCall       = 0x140976229;
 
 // The battle system (a pointer global) and its target fields.
 using facts::kBattleStateGlobal;
@@ -154,19 +156,19 @@ using LayerTestFn    = std::uint8_t (*)(std::uint8_t layer);
 // Set once at install.
 platform::CallRedirect g_tickTargetingCalls[2];
 platform::CodeRedirect g_panelClearedGate;
-platform::CallRedirect g_panelClearedCall;  // 1.005: the "cleared" request's call, which fits one block there
+platform::CallRedirect g_panelClearedCall;  // the "cleared" request's call (1.004: the chunk's gate instead)
 platform::CallRedirect g_panelSetCall;
 platform::CallRedirect g_markerNameCall;
-// 1.005: the call sites are placed from the game thread (both targeting calls and the "set" call cross a block),
-// with the image kept for it (platform/deferred_sites.h).
+// The call sites are placed from the game thread (both targeting calls and the "set" call cross a block), with the
+// image kept for it (platform/deferred_sites.h).
 platform::DeferredSites g_placement;
 bool           g_installed   = false;  // the scope's facts: the TargetScope works
 bool           g_runReady    = false;  // the seats' run and its skipped writes are installed
 SetLockFn      g_setLock     = nullptr;
 TestFn         g_menuSelect  = nullptr;
 TestFn         g_menuBusy    = nullptr;
-TestFn         g_targetList  = nullptr;  // optional: the log of a seat's target list
-ListImplFn     g_targetListImpl = nullptr;  // the same on 1.005 (the wrapper's body; see kTargetListImpl)
+ListImplFn     g_targetListImpl = nullptr;  // optional: the log of a seat's target list (the wrapper's body)
+TestFn         g_targetList  = nullptr;  // the same on 1.004 (the wrapper; kTargetList1004)
 ReleaseFn      g_release     = nullptr;
 WeakReleaseFn  g_weakRelease = nullptr;
 CursorFn       g_cursorRelease = nullptr;
@@ -281,8 +283,8 @@ void ReleaseCursor(std::uintptr_t& cursor) noexcept
     cursor = 0;
 }
 
-/// Whether the command controller in the UI system's slot has its target list open: the game's wrapper, or on
-/// 1.005 its body with the slot the wrapper reads. False if neither is known or the call faulted.
+/// Whether the command controller in the UI system's slot has its target list open: the wrapper's body with the slot
+/// the wrapper reads, or on 1.004 the game's wrapper. False if neither is known or the call faulted.
 bool TargetListActive(std::uint8_t& open) noexcept
 {
     if (g_targetList != nullptr)
@@ -668,27 +670,29 @@ bool Redirect(const platform::GameImage& image, platform::CallRedirect& call, st
     return target && live && g_placement.Place(call, *live, *target, replacement);
 }
 
-/// The "old target cleared" request kept from player 1's panel in a seat's run. On 1.005 its call fits one
-/// block and is redirected (PanelCleared); on the research build its chunk is gated (battle/panel_gate_code.h),
-/// once the chunk is the one the research read: its call still names the request, and the gated instruction matches.
+/// The "old target cleared" request kept from player 1's panel in a seat's run: its call fits one block and is
+/// redirected (PanelCleared). On 1.004 the call straddles a block, so its chunk is gated instead
+/// (battle/panel_gate_code.h), once the chunk is the one the research read: its call still names the request, and the
+/// gated instruction matches.
 bool InstallPanelGate(const platform::GameImage& image) noexcept
 {
-    if (platform::RunningBuild() == platform::BuildIndex::V1005)
+    if (platform::RunningBuild() != platform::BuildIndex::V1004)
     {
         return platform::FindFunction(image, kPanelClearedCall) &&
                Redirect(image, g_panelClearedCall, kPanelClearedCall.address, kPanelCleared,
                         reinterpret_cast<std::uintptr_t>(&PanelCleared));
     }
-    const auto request = platform::FindFunction(image, kPanelCleared);
-    const auto site    = image.Rebase(kPanelClearedSite, sizeof(kPanelGateSiteBytes));
-    const auto resume  = image.Rebase(kPanelClearedResume);
-    const auto skipTo  = image.Rebase(kPanelClearedSkipTo);
+    constexpr auto kBuild  = platform::BuildIndex::V1004;
+    const auto     request = platform::FindFunction(image, kPanelCleared);
+    const auto     site    = image.OwnAddress(kBuild, kPanelClearedSite1004, kPanelGateSiteBytes1004);
+    const auto     resume  = image.OwnAddress(kBuild, kPanelClearedResume1004, {});
+    const auto     skipTo  = image.OwnAddress(kBuild, kPanelClearedSkipTo1004, {});
     if (!request || !site || !resume || !skipTo || !platform::FindFunction(image, kPanelClearedCall))
     {
         return false;
     }
     const auto code = PanelGateCode(g_panelGate, *skipTo);
-    return g_panelClearedGate.Install(*site, kPanelGateSiteBytes, code, *resume);
+    return g_panelClearedGate.Install(*site, kPanelGateSiteBytes1004, code, *resume);
 }
 
 void RestoreCall(platform::CallRedirect& call) noexcept
@@ -791,13 +795,14 @@ bool Install(const platform::GameImage& image) noexcept
     g_setLock       = reinterpret_cast<SetLockFn>(find(kSetLock));
     g_menuSelect    = reinterpret_cast<TestFn>(find(kMenuSelect));
     g_menuBusy      = reinterpret_cast<TestFn>(find(kMenuBusy));
-    if (platform::RunningBuild() == platform::BuildIndex::V1005)
+    if (platform::RunningBuild() == platform::BuildIndex::V1004)
     {
-        g_targetListImpl = reinterpret_cast<ListImplFn>(find(kTargetListImpl));  // the wrapper was inlined
+        const auto wrapper = image.OwnAddress(platform::BuildIndex::V1004, kTargetList1004.address, kTargetList1004.entryBytes);
+        g_targetList       = reinterpret_cast<TestFn>(wrapper.value_or(0));
     }
     else
     {
-        g_targetList = reinterpret_cast<TestFn>(find(kTargetList));
+        g_targetListImpl = reinterpret_cast<ListImplFn>(find(kTargetListImpl));  // the wrapper was inlined
     }
     g_release       = reinterpret_cast<ReleaseFn>(find(facts::kReleaseWeakReference));
     g_weakRelease   = reinterpret_cast<WeakReleaseFn>(find(facts::kWeakPtrRelease));
@@ -815,14 +820,13 @@ bool Install(const platform::GameImage& image) noexcept
         platform::Log(L"lock-on: UNAVAILABLE (a check failed); players 2 and 3 have no targeting of their own");
         return false;
     }
-    // Both targeting calls and the "set" call cross a 16-byte block in 1.005: every site is placed from the game
-    // thread, between its ticks (platform/deferred_sites.h).
+    // Both targeting calls and the "set" call cross a 16-byte block: every site is placed from the game thread,
+    // between its ticks (platform/deferred_sites.h).
     const bool placed = g_placement.Install(image, &PlaceSites);
     if (g_placement.FromGameThread())
     {
         platform::Log(L"lock-on: {}",
-                      placed ? L"the targeting calls are placed from the game thread (1.005: they cross a 16-byte "
-                               L"block)"
+                      placed ? L"the targeting calls are placed from the game thread (they cross a 16-byte block)"
                              : L"players 2 and 3's targeting run UNAVAILABLE (no room to place its calls from the game "
                                L"thread)");
     }

@@ -45,21 +45,21 @@ namespace {
 // 1.004 addresses (1.005 through replaced-shop-talk.json). research/RE-p2-shopkeeper-talk.md.
 constexpr std::uint8_t kRequestBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x74,
                                           0x24, 0x10, 0x57, 0xB8, 0x50, 0x00, 0x00, 0x00};
-constexpr platform::FunctionFact kRequest{L"StateTrigger_Request", 0x140F7AA58, kRequestBytes};
+constexpr platform::FunctionFact kRequest{L"StateTrigger_Request", 0x141177604, kRequestBytes};
 constexpr std::uint8_t kAiEventBytes[] = {0x48, 0x89, 0x54, 0x24, 0x10, 0x48, 0x89, 0x4C, 0x24, 0x08, 0x55,
                                           0x53, 0x56, 0x57, 0x41, 0x56, 0x48, 0x8D, 0x6C, 0x24, 0xC9};
-constexpr platform::FunctionFact kAiEvent{L"ShopMenu_SendLeaderTargetAIEvent5", 0x14353E9C0, kAiEventBytes};
+constexpr platform::FunctionFact kAiEvent{L"ShopMenu_SendLeaderTargetAIEvent5", 0x14326DCD8, kAiEventBytes};
 // The LEADER_ resolver ('LEADER_' = the party manager's leader at +0x148), redirected to run with the talking
 // seat's member as the leader: the greeting's look-at, twice a frame from the press until the shop is up.
 constexpr std::uint8_t kLeaderNameBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x18, 0x48, 0x89, 0x74, 0x24, 0x20,
                                              0x57, 0x41, 0x54, 0x41, 0x55, 0x41, 0x56, 0x41, 0x57};
-constexpr platform::FunctionFact kLeaderName{L"ResolveNamedPoint_LEADER_BATTLELEADER", 0x1408A95B8, kLeaderNameBytes};
+constexpr platform::FunctionFact kLeaderName{L"ResolveNamedPoint_LEADER_BATTLELEADER", 0x1411989F0, kLeaderNameBytes};
 constexpr std::uint8_t kAccessorBytes[] = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00};  // push rbx; mov eax, 20h
-constexpr platform::FunctionFact kActionRow{L"DataAcc_Action_Ctor", 0x1407BEB9C, kAccessorBytes};
-constexpr platform::FunctionFact kGroupRow{L"DataAcc_ActionGroup_Ctor", 0x1411CB32C, kAccessorBytes};
+constexpr platform::FunctionFact kActionRow{L"DataAcc_Action_Ctor", 0x140C23C2C, kAccessorBytes};
+constexpr platform::FunctionFact kGroupRow{L"DataAcc_ActionGroup_Ctor", 0x141173210, kAccessorBytes};
 constexpr std::size_t kFirstInstruction = 5;  // each redirected entry starts with a 5-byte mov [rsp+n], reg
 // DispatchKey's return address after its StateTrigger_Request call (the object branch).
-constexpr std::uintptr_t kDispatchReturn = 0x1414A8FB3;
+constexpr std::uintptr_t kDispatchReturn = 0x14117CCE3;
 
 // bool-ish(FName trigger, FName sender, float delay, u8 flags), all by value.
 using RequestFn  = std::uint64_t (*)(std::uint64_t trigger, std::uint64_t sender, float delay, std::uint8_t flags);
@@ -254,7 +254,7 @@ std::uint64_t Request(std::uint64_t trigger, std::uint64_t sender, float delay, 
     const auto returnAddress = reinterpret_cast<std::uintptr_t>(_ReturnAddress());
     const int  seat          = players::generation::OnGameThread() ? field_pickup::PassSeat() : -1;
     if (players::SeatBuilt(seat) && players::generation::Active(seat) && g_image &&
-        g_image->ResearchAddress(returnAddress) == kDispatchReturn)
+        g_image->SourceAddress(returnAddress) == kDispatchReturn)
     {
         const auto known = g_known.find(sender);
         const bool shop  = known != g_known.end() && IsAdmitted(known->second.verdict);
@@ -351,7 +351,7 @@ std::uint64_t LeaderName(std::uint64_t a, std::uint64_t b, std::uint64_t c, std:
     {
         const wchar_t* const leader =
             scope.Held() ? L"'s member" : L"'s member NOT held (no member: player 1's character)";
-        const auto from = g_image ? g_image->ResearchAddress(returnAddress) : returnAddress;
+        const auto from = g_image ? g_image->SourceAddress(returnAddress) : returnAddress;
         if (count++ == 0)
         {
             const std::wstring what =

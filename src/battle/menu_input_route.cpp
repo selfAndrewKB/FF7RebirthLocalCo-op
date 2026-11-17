@@ -42,7 +42,7 @@ namespace {
 // it with the FKeys' first eight bytes). Target switching (Prev/NextTarget) goes to the seat's menu
 // like every other action: its handler switches the target fields a TargetScope holds as the seat's
 // (research/RE-p2-targeting-scoped-tick.md).
-constexpr std::uintptr_t kCommandMenuKey = 0x1491E44F0;
+constexpr std::uintptr_t kCommandMenuKey = 0x14901C5D0;
 constexpr std::uint32_t  kEventKey       = 0x18;
 // The input processor's key-up handler (IInputProcessor slot 3; FKeyEvent in r8, its UserIndex, the
 // pad's controller id, at +0x0C) and the up route's call in ActionUp_UpdateTables (bool(owner, event)):
@@ -50,17 +50,17 @@ constexpr std::uint32_t  kEventKey       = 0x18;
 // The handler's first instruction (mov [rsp+8], rbx) is often patched by another hook (UE4SS's input
 // handling puts a jump there, live), so the slot is checked to still name the handler and the bytes
 // are checked after that instruction.
-constexpr std::uintptr_t kKeyUpEntry     = 0x145D40598;  // the vtable entry
-constexpr std::uintptr_t kKeyUp          = 0x140E65D18;  // SquareInput__HandleKeyUpEvent
+constexpr std::uintptr_t kKeyUpEntry     = 0x145BA5CE0;  // the vtable entry
+constexpr std::uintptr_t kKeyUp          = 0x141546794;  // SquareInput__HandleKeyUpEvent
 constexpr std::uint8_t   kKeyUpRestBytes[] = {0x48, 0x89, 0x6C, 0x24, 0x10, 0x56, 0x57, 0x41,
                                               0x56, 0xB8, 0x60, 0x00, 0x00, 0x00, 0xE8};
-constexpr platform::FunctionFact kKeyUpAfterFirst{L"HandleKeyUpEvent after its first instruction", 0x140E65D1D,
+constexpr platform::FunctionFact kKeyUpAfterFirst{L"HandleKeyUpEvent after its first instruction", 0x141546799,
                                                   kKeyUpRestBytes};
 constexpr std::uint32_t kKeyEventUser = 0x0C;
 constexpr std::uint8_t  kUpRouteBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x18, 0x55, 0x56, 0x57, 0x41, 0x54, 0x41, 0x55,
-                                           0x41, 0x56, 0x41, 0x57, 0x48, 0x8D, 0xAC, 0x24, 0x60, 0xFE, 0xFF, 0xFF};
-constexpr platform::FunctionFact kUpRoute{L"SquareInput__RouteActionUpToUIHandlerStack", 0x140E66A14, kUpRouteBytes};
-constexpr std::uintptr_t kUpRouteCall = 0x140E66914;
+                                           0x41, 0x56, 0x41, 0x57, 0x48, 0x8D, 0xAC, 0x24, 0x50, 0xFE, 0xFF, 0xFF};
+constexpr platform::FunctionFact kUpRoute{L"SquareInput__RouteActionUpToUIHandlerStack", 0x1409F84C0, kUpRouteBytes};
+constexpr std::uintptr_t kUpRouteCall = 0x1409F81C8;
 
 // The action keys (FKeys) the route and its log compare an event's key name with.
 enum Action : std::size_t

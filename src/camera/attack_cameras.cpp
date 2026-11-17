@@ -58,10 +58,10 @@ constexpr std::uint32_t                     kCameraTarget = 0xA68;
 // The shot change: BattleCamSeqList_AnyActive_ApplyCam's call of FirstPC_PCM_SetCameraCutBit400 (cl = 1; 1.005
 // also dl = 1, passed on to its anim world manager), and the game's own PrimaryPCM_SetGameCameraCutThisFrame, which sets
 // bGameCameraCutThisFrame (PCM+0x2C10 bit 10) on GetEndPlayerCameraManager()'s and tells the anim world manager.
-constexpr std::uintptr_t kCutCall       = 0x140C42F23;
-constexpr std::uintptr_t kFirstPcCut    = 0x140F9A40C;
+constexpr std::uintptr_t kCutCall       = 0x140E24C56;
+constexpr std::uintptr_t kFirstPcCut    = 0x1421D25B0;
 constexpr std::uint8_t   kPrimaryCutBytes[] = {0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8};  // mov eax, 28h; call __alloca_probe
-constexpr platform::FunctionFact kPrimaryCut{L"the primary camera manager's cut", 0x1417ED43C, kPrimaryCutBytes};
+constexpr platform::FunctionFact kPrimaryCut{L"the primary camera manager's cut", 0x14143AD50, kPrimaryCutBytes};
 
 constexpr auto kStatusEvery = std::chrono::seconds(10);
 

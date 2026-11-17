@@ -55,7 +55,7 @@ constexpr std::array<std::int32_t, 10> kLoggedRequests{5, 6, 12, 13, 25, 26, 32,
 
 // A party character's battle parts: the holder whose +0 is the character. In 1.005 both the vt+0xA18 getter and
 // CreateMoveState read it at [rcx+1778h].
-constexpr platform::PerBuild<std::uint32_t> kCharacterHolder = {0x1758, 0x1778};
+constexpr platform::PerBuild<std::uint32_t> kCharacterHolder = {0x1778, 0x1758};
 using facts::kCharacterControlHolder;
 constexpr std::uint32_t  kOwnerSlot         = 0x48;
 using facts::kBattlePlayerComponentVTable;

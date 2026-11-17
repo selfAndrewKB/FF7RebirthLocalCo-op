@@ -22,7 +22,7 @@ using platform::FunctionFact;
 using platform::SlotFact;
 
 // The class (the vtable stored by the native constructor at offset 0)
-inline constexpr std::uintptr_t kEndPlayerControllerVTable = 0x1467C85A0;
+inline constexpr std::uintptr_t kEndPlayerControllerVTable = 0x146653E58;
 
 // Fields
 inline constexpr std::uint32_t kControllerPawn           = 0x258;
@@ -43,13 +43,13 @@ inline constexpr std::uint32_t kControllerActiveVehicle  = 0x5B8;
 /// Party member switch and its helpers. The two predicates return a byte in al.
 inline constexpr std::uint8_t kEnsureEndPlayerTriggerBytes[] = {
     0x48, 0x89, 0x5C, 0x24, 0x08, 0x57, 0xB8, 0x50, 0x00, 0x00, 0x00, 0xE8,
-    0x54, 0x4A, 0x3A, 0xFE, 0x48, 0x2B, 0xE0, 0x33, 0xC0, 0x48, 0x8B, 0xF9};
-inline constexpr FunctionFact kEnsureEndPlayerTrigger{L"AEndPlayerController::EnsureEndPlayerTrigger", 0x143D0A4CC,
+    0x6C, 0xC5, 0x6F, 0xFE, 0x48, 0x2B, 0xE0, 0x33, 0xC0, 0x48, 0x8B, 0xF9};
+inline constexpr FunctionFact kEnsureEndPlayerTrigger{L"AEndPlayerController::EnsureEndPlayerTrigger", 0x143A6F604,
                                                       kEnsureEndPlayerTriggerBytes};
 inline constexpr std::uint8_t kSwitchLeaderInternalBytes[] = {
     0x48, 0x89, 0x5C, 0x24, 0x18, 0x55, 0x56, 0x57, 0x41, 0x56, 0x41, 0x57,
-    0xB8, 0x40, 0x00, 0x00, 0x00, 0xE8, 0x66, 0x9D, 0xEA, 0x00, 0x48, 0x2B};
-inline constexpr FunctionFact kSwitchLeaderInternal{L"AEndPlayerController::SwitchLeaderInternal", 0x1412051B4,
+    0xB8, 0x40, 0x00, 0x00, 0x00, 0xE8, 0x76, 0x11, 0xE7, 0x00, 0x48, 0x2B};
+inline constexpr FunctionFact kSwitchLeaderInternal{L"AEndPlayerController::SwitchLeaderInternal", 0x1412FA9F4,
                                                     kSwitchLeaderInternalBytes};
 
 // Replaced slots
@@ -57,11 +57,11 @@ inline constexpr std::uint8_t kProcessPlayerInputBytes[] = {
     0x48, 0x89, 0x5C, 0x24, 0x10, 0x48, 0x89, 0x74, 0x24, 0x18, 0x55, 0x57,
     0x41, 0x56, 0x48, 0x8D, 0x6C, 0x24, 0xB9, 0xB8, 0xC0, 0x00, 0x00, 0x00};
 inline constexpr SlotFact kProcessPlayerInput{
-    L"the End player controller's ProcessPlayerInput slot (400)", 0x1467C9220,
-    {L"AEndPlayerController::ProcessPlayerInput", 0x1407BDE58, kProcessPlayerInputBytes}};
+    L"the End player controller's ProcessPlayerInput slot (400)", 0x146654AE0,
+    {L"AEndPlayerController::ProcessPlayerInput", 0x1410D62F0, kProcessPlayerInputBytes}};
 
 // The leader-action component (EndPlayerLeaderActionParamComponent)
-/// The leader-action component's owning controller (0x14125C16C reads comp+0xA0 as the PC).
+/// The leader-action component's owning controller (0x1410E519C reads comp+0xA0 as the PC).
 inline constexpr std::uint32_t kLeaderActionOwner = 0xA0;
 /// Its ranged selection (RE-p2-ranged-reticle.md, RE-yuffie-box-throw.md; the same in both builds [CONFIRMED]): five
 /// key records of 64 bytes (the key's name first; record 0 the throw's key, record 1 the hold's), the published state
@@ -89,35 +89,35 @@ inline constexpr std::uint8_t  kShootingStateShown        = 0x02;
 inline constexpr std::uint8_t  kShootingStateCanShoot     = 0x80;
 inline constexpr std::uint8_t kLeaderActionTickBytes[] = {
     0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x7C, 0x24, 0x10, 0x55, 0x48,
-    0x8D, 0x6C, 0x24, 0xA9, 0xB8, 0xB0, 0x00, 0x00, 0x00, 0xE8, 0xAA, 0x2D};
+    0x8D, 0x6C, 0x24, 0xA9, 0xB8, 0xB0, 0x00, 0x00, 0x00, 0xE8, 0xCA, 0x69};
 inline constexpr SlotFact kLeaderActionTick{
-    L"the leader-action component's tick slot (+0x428)", 0x145D6C490,
-    {L"EndPlayerLeaderActionParamComponent::Tick_Vt428", 0x14125C16C, kLeaderActionTickBytes}};
+    L"the leader-action component's tick slot (+0x428)", 0x145BCADA8,
+    {L"EndPlayerLeaderActionParamComponent::Tick_Vt428", 0x1410E519C, kLeaderActionTickBytes}};
 
 // Square's input object and its keys
 /// The action keys (FKey24 statics, 24 bytes: the FName first) the routes compare an event's key name with
 /// (RE-p2-battle-input.md).
 inline constexpr std::size_t    kKeySize          = 24;
-inline constexpr std::uintptr_t kKeyAttack        = 0x1491E44D8;
-inline constexpr std::uintptr_t kKeyUniqueAbility = 0x1491E4520;
-inline constexpr std::uintptr_t kKeyGuard         = 0x1491E4598;
-inline constexpr std::uintptr_t kKeyDodge         = 0x1491E45E0;
+inline constexpr std::uintptr_t kKeyAttack        = 0x14901C5B8;
+inline constexpr std::uintptr_t kKeyUniqueAbility = 0x14901C600;
+inline constexpr std::uintptr_t kKeyGuard         = 0x14901C678;
+inline constexpr std::uintptr_t kKeyDodge         = 0x14901C6C0;
 /// The menu-opening actions the game's one pause poll reads on the merged tables (RE-pause-menu-any-pad.md):
 /// PauseMenu (Start; the field-action poll also needs it not held), MapMenu (the touch pad) and EnemyIntel.
-inline constexpr std::uintptr_t kPauseMenuKey     = 0x1491E44C0;
-inline constexpr std::uintptr_t kMapMenuKey       = 0x1491E45B0;
-inline constexpr std::uintptr_t kEnemyIntelKey    = 0x1491E45C8;
+inline constexpr std::uintptr_t kPauseMenuKey     = 0x14901C5A0;
+inline constexpr std::uintptr_t kMapMenuKey       = 0x14901C690;
+inline constexpr std::uintptr_t kEnemyIntelKey    = 0x14901C6A8;
 /// The engine key L3 sends (EKeys::Gamepad_LeftThumbstick, an FKey: the FName first), keying its own raw-table element
 /// with each pad's source bit, whatever action the key assignment binds to it (RE-pad-slots.md).
-inline constexpr std::uintptr_t kLeftThumbstickKey = 0x149245C08;
+inline constexpr std::uintptr_t kLeftThumbstickKey = 0x14907DF88;
 /// InputKey24_CopyAddRef(out, key): copies a key, taking a reference on its name.
 inline constexpr std::uint8_t kInputKeyCopyBytes[] = {0x48, 0x8B, 0x02, 0x48, 0x89, 0x01, 0x48, 0x8B,
                                                       0x42, 0x08, 0x48, 0x89, 0x41, 0x08, 0x48, 0x8B};
-inline constexpr FunctionFact kInputKeyCopy{L"InputKey24_CopyAddRef", 0x14078C2F4, kInputKeyCopyBytes};
+inline constexpr FunctionFact kInputKeyCopy{L"InputKey24_CopyAddRef", 0x1408DAE0C, kInputKeyCopyBytes};
 /// Square's input object (its stick fields and per-pad banks), and the byte that makes the merge
 /// read DirectInput alone.
-inline constexpr std::uintptr_t kSquareInputGlobal     = 0x1493496F0;
-inline constexpr std::uintptr_t kDirectInputOnlyFlag   = 0x1490FF1C0;
+inline constexpr std::uintptr_t kSquareInputGlobal     = 0x149186160;
+inline constexpr std::uintptr_t kDirectInputOnlyFlag   = 0x148F32990;
 inline constexpr std::uint32_t  kInputMergedSticks     = 0x1210;  // float LX, LY, RX, RY
 inline constexpr std::uint32_t  kInputDeviceBanks      = 0x11D0;  // {Record* data; int32 num; int32 max}
 inline constexpr std::uint32_t  kInputBankHeaderSize   = 16;

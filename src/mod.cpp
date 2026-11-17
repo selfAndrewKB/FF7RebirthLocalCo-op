@@ -84,7 +84,7 @@ namespace {
 namespace Hook = RC::Unreal::Hook;
 using lss::platform::Log;
 
-constexpr const wchar_t* kVersion = L"0.162.0";  // built against the Nexus UE4SS (c0a8d4c)
+constexpr const wchar_t* kVersion = L"0.163.0";  // built against the Nexus UE4SS (c0a8d4c)
 
 /// How often the seats' status lines are written while a seat is in.
 constexpr ULONGLONG kStatusIntervalMs = 10'000;
@@ -288,7 +288,7 @@ public:
         if (image && image->Build() != nullptr)
         {
             Log(L"game version {}{}", image->Build()->name,
-                image->Build()->research ? L" (the research build)" : L" (addresses translated from the research build)");
+                image->Build()->source ? L" (the source build)" : L" (addresses translated from the source build)");
         }
         const auto removeLocalPlayer = image ? VerifyEngine(*image) : std::nullopt;
         // The heartbeat first (it passes the tick through until Start, below): without it nothing of the mod runs,

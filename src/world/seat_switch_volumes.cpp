@@ -32,12 +32,12 @@ namespace lss::world::seat_switch_volumes {
 namespace {
 
 // 1.004 addresses (1.005 through replaced-shop-volumes.json). research/RE-p2-shop-npcs-near-p2.md.
-constexpr std::uintptr_t kVolumeVtable  = 0x145888590;  // AEndCharaPopSwitchVolume
-constexpr std::uintptr_t kEnterOverride = 0x1417FD038;  // ..._OnTriggerEnter_SetInside
-constexpr std::uintptr_t kLeaveOverride = 0x1409DD160;  // ..._OnTriggerLeave_ClearInside
-inline constexpr platform::PerBuild<std::uint32_t> kEnterSlot{0x668, 0x670};
-inline constexpr platform::PerBuild<std::uint32_t> kLeaveSlot{0x670, 0x678};
-inline constexpr platform::PerBuild<std::uint32_t> kInside{0x3B0, 0x3D0};  // u8, CharaPop's only reader of it
+constexpr std::uintptr_t kVolumeVtable  = 0x1456F2240;  // AEndCharaPopSwitchVolume
+constexpr std::uintptr_t kEnterOverride = 0x14189CA14;  // ..._OnTriggerEnter_SetInside
+constexpr std::uintptr_t kLeaveOverride = 0x14189E758;  // ..._OnTriggerLeave_ClearInside
+inline constexpr platform::PerBuild<std::uint32_t> kEnterSlot{0x670, 0x668};
+inline constexpr platform::PerBuild<std::uint32_t> kLeaveSlot{0x678, 0x670};
+inline constexpr platform::PerBuild<std::uint32_t> kInside{0x3D0, 0x3B0};  // u8, CharaPop's only reader of it
 constexpr std::uint32_t kCounts = 0x270;  // u8: the parent counts entries per key (volumes with extra shapes)
 // bool(volume, FName entrant by value); the result in al.
 using OverrideFn = std::uint8_t (*)(void* volume, std::uint64_t entrant);

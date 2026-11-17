@@ -36,13 +36,13 @@ constexpr std::uint32_t  kOperatorActive       = 0xD1;    // u8: the update pick
 constexpr std::uint32_t  kOperatorBytes        = 0x2CD0;  // current / previous operator bytes (+0x2CD0..+0x2CD3)
 
 constexpr std::uint8_t kActivateBytes[]   = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x57, 0xB8, 0x40, 0x00, 0x00, 0x00, 0xE8,
-                                             0x7C, 0xAD, 0xEA, 0x00, 0x48, 0x2B, 0xE0, 0x48, 0x8B, 0x01, 0x41, 0x8A};
+                                             0x00, 0x89, 0xD3, 0x00, 0x48, 0x2B, 0xE0, 0x48, 0x8B, 0x01, 0x41, 0x8A};
 constexpr std::uint8_t kDeactivateBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x57, 0xB8, 0x30, 0x00, 0x00, 0x00, 0xE8,
-                                             0xA8, 0x5F, 0x00, 0x01, 0x48, 0x2B, 0xE0, 0x48, 0x8B, 0xF9, 0x41, 0x8A};
-constexpr platform::SlotFact kActivate{L"the Battle operator's Activate slot (+0x10)", 0x1466B4938,
-                                       {L"FEndBattleCameraOperator::Activate", 0x1412041A4, kActivateBytes}};
-constexpr platform::SlotFact kDeactivate{L"the Battle operator's Deactivate slot (+0x20)", 0x1466B4948,
-                                         {L"FEndBattleCameraOperator::Deactivate", 0x1410A8F78, kDeactivateBytes}};
+                                             0x04, 0x84, 0xD3, 0x00, 0x48, 0x2B, 0xE0, 0x48, 0x8B, 0xF9, 0x41, 0x8A};
+constexpr platform::SlotFact kActivate{L"the Battle operator's Activate slot (+0x10)", 0x146542348,
+                                       {L"FEndBattleCameraOperator::Activate", 0x141433270, kActivateBytes}};
+constexpr platform::SlotFact kDeactivate{L"the Battle operator's Deactivate slot (+0x20)", 0x146542358,
+                                         {L"FEndBattleCameraOperator::Deactivate", 0x14143376C, kDeactivateBytes}};
 
 // The operator's camera modules (EEndCameraModuleLayer): +0x6E0 points at 25 TSharedPtr entries (16
 // bytes each), each module's active bytes at +0x44/+0x45. Logged: battle offset, length, lock-on,

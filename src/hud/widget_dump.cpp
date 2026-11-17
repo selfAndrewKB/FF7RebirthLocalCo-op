@@ -443,7 +443,7 @@ using facts::kCmdSetupPending;
 // by the game viewport client at +0x120 (a weak pointer; its reference controller at +0x128).
 constexpr std::uint8_t   kPlayerHostGeometryPrologue[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x48, 0x89, 0x74,
                                                           0x24, 0x18, 0x57, 0xB8, 0x20, 0x00, 0x00, 0x00};
-constexpr platform::FunctionFact kPlayerHostGeometry{L"GameLayerManager player-host geometry", 0x1451803CC,
+constexpr platform::FunctionFact kPlayerHostGeometry{L"GameLayerManager player-host geometry", 0x144FB0A50,
                                                      kPlayerHostGeometryPrologue};
 constexpr std::uint32_t  kViewportLayerManager           = 0x120;
 constexpr std::uint32_t  kViewportLayerManagerController = 0x128;

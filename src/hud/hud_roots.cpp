@@ -34,9 +34,9 @@ using RC::Unreal::UObject;
 
 // UUserWidget::SetPlayerContext(widget, const FLocalPlayerContext&): writes the 16 bytes at +0x248
 // (weak local player, weak world) and walks the widget's child user widgets. No events.
-constexpr std::uint8_t   kSetPlayerContextPrologue[] = {0x48, 0x89, 0x5C, 0x24, 0x18, 0x55, 0x48, 0x8B, 0xEC,
-                                                        0xB8, 0x40, 0x00, 0x00, 0x00};
-constexpr platform::FunctionFact kSetPlayerContext{L"UUserWidget::SetPlayerContext", 0x140F59C50,
+constexpr std::uint8_t   kSetPlayerContextPrologue[] = {0xB8, 0x38, 0x00, 0x00, 0x00, 0xE8, 0x4A, 0x30, 0x06,
+                                                        0x01, 0x48, 0x2B, 0xE0, 0xC5};
+constexpr platform::FunctionFact kSetPlayerContext{L"UUserWidget::SetPlayerContext", 0x141108B2C,
                                                    kSetPlayerContextPrologue};
 constexpr std::uint32_t  kWidgetWorldWeak = 0x250;
 

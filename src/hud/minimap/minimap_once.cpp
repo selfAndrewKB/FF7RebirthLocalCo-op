@@ -14,6 +14,7 @@
 #endif
 
 #include <cstdint>
+#include <optional>
 #include <span>
 
 #ifndef WIN32_LEAN_AND_MEAN
@@ -39,21 +40,22 @@ struct WidgetSite
 };
 
 constexpr std::uint8_t kCircleAfterSubmit[]  = {0x49, 0x8B, 0x8F, 0xE0, 0x01, 0x00, 0x00};  // mov rcx,[r15+1E0h]
-constexpr std::uint8_t kOctagonAcquire[]     = {0xE8, 0x44, 0x84, 0x56, 0xFD};
-constexpr std::uint8_t kOctagonSubmit[]      = {0xE8, 0x57, 0x82, 0x56, 0xFD};
+constexpr std::uint8_t kOctagonAcquire[]     = {0xE8, 0xBC, 0x25, 0x2A, 0xFD};
+constexpr std::uint8_t kOctagonSubmit[]      = {0xE8, 0xDA, 0x23, 0x2A, 0xFD};
 constexpr std::uint8_t kOctagonAfterSubmit[] = {0x49, 0x8B, 0x8E, 0xE0, 0x01, 0x00, 0x00};  // mov rcx,[r14+1E0h]
-constexpr platform::FunctionFact kCircleAfter{L"after the circle's submit call", 0x140FC6F18, kCircleAfterSubmit};
-constexpr platform::FunctionFact kOctagonAcquireCall{L"the octagon's acquire call", 0x143A6024B, kOctagonAcquire};
-constexpr platform::FunctionFact kOctagonSubmitCall{L"the octagon's submit call", 0x143A604E0, kOctagonSubmit};
-constexpr platform::FunctionFact kOctagonAfter{L"after the octagon's submit call", 0x143A604E5, kOctagonAfterSubmit};
+constexpr platform::FunctionFact kCircleAfter{L"after the circle's submit call", 0x14130A77E, kCircleAfterSubmit};
+constexpr platform::FunctionFact kOctagonAcquireCall{L"the octagon's acquire call", 0x1437A53AB, kOctagonAcquire};
+constexpr platform::FunctionFact kOctagonSubmitCall{L"the octagon's submit call", 0x1437A5635, kOctagonSubmit};
+constexpr platform::FunctionFact kOctagonAfter{L"after the octagon's submit call", 0x1437A563A, kOctagonAfterSubmit};
 
-constexpr WidgetSite kCircle{L"circle", 0x140FC6C95, kCircleSiteBytes, facts::kNaviMapCircleAcquireCall,
+constexpr WidgetSite kCircle{L"circle", 0x14130A506, kCircleSiteBytes, facts::kNaviMapCircleAcquireCall,
                              facts::kNaviMapCircleSubmitCall, kCircleAfter};
-constexpr WidgetSite kOctagon{L"octagon", 0x143A60235, kOctagonSiteBytes, kOctagonAcquireCall, kOctagonSubmitCall,
+constexpr WidgetSite kOctagon{L"octagon", 0x1437A5395, kOctagonSiteBytes, kOctagonAcquireCall, kOctagonSubmitCall,
                               kOctagonAfter};
-// Game version 1.005 (research/RE-1005-hud-2.md): the circle's site is the next instruction (the same block
-// and landing point; its own skip code, hud/minimap/minimap_once_code.h).
-constexpr WidgetSite kCircle1005{L"circle", 0x140FC6C9C, kCircleSiteBytes1005, facts::kNaviMapCircleAcquireCall,
+// Game version 1.004: the circle's site is the instruction before (the same block and landing point; its own skip
+// code, hud/minimap/minimap_once_code.h). That build's own address: the instruction has no counterpart in the source
+// build's table.
+constexpr WidgetSite kCircle1004{L"circle", 0x140FC6C95, kCircleSiteBytes1004, facts::kNaviMapCircleAcquireCall,
                                  facts::kNaviMapCircleSubmitCall, kCircleAfter};
 
 constexpr ULONGLONG kLogPeriodMs = 60'000;  // the counts line, once a minute
@@ -74,10 +76,10 @@ std::uint64_t Counter(const std::uint64_t& field) noexcept
     return reinterpret_cast<const volatile std::uint64_t&>(field);
 }
 
+/// `site`: the widget's site as the running build has it (rebased, or the build's own address).
 bool Install(const platform::GameImage& image, platform::CodeRedirect& redirect, const WidgetSite& widget,
-             std::span<const std::uint8_t> code) noexcept
+             std::span<const std::uint8_t> code, std::optional<std::uintptr_t> site) noexcept
 {
-    const auto site = image.Rebase(widget.site, widget.siteBytes.size());
     if (!site || !platform::FindFunction(image, widget.acquireCall) ||
         !platform::FindFunction(image, widget.submitCall))
     {
@@ -106,10 +108,13 @@ bool InstallMinimapOnce(const platform::GameImage& image) noexcept
     const auto circleAfter  = platform::FindFunction(image, kCircle.afterSubmit);
     const auto octagonAfter = platform::FindFunction(image, kOctagon.afterSubmit);
     const bool circle =
-        circleAfter && (platform::RunningBuild() == platform::BuildIndex::V1005
-                            ? Install(image, g_circleCode, kCircle1005, CircleSkipCode1005(g_fields, *circleAfter))
-                            : Install(image, g_circleCode, kCircle, CircleSkipCode(g_fields, *circleAfter)));
-    const bool octagon = octagonAfter && Install(image, g_octagonCode, kOctagon, OctagonSkipCode(g_fields, *octagonAfter));
+        circleAfter && (platform::RunningBuild() == platform::BuildIndex::V1004
+                            ? Install(image, g_circleCode, kCircle1004, CircleSkipCode1004(g_fields, *circleAfter),
+                                      image.OwnAddress(platform::BuildIndex::V1004, kCircle1004.site, kCircle1004.siteBytes))
+                            : Install(image, g_circleCode, kCircle, CircleSkipCode(g_fields, *circleAfter),
+                                      image.Rebase(kCircle.site, kCircle.siteBytes.size())));
+    const bool octagon = octagonAfter && Install(image, g_octagonCode, kOctagon, OctagonSkipCode(g_fields, *octagonAfter),
+                                                 image.Rebase(kOctagon.site, kOctagon.siteBytes.size()));
     g_installed = circle || octagon;
     g_on        = g_installed;
     if (g_installed)

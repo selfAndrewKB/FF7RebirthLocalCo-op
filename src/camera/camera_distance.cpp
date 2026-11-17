@@ -44,14 +44,14 @@ namespace {
 
 // Facts read from the database (research/RE-p2-battle-camera.md; this build).
 constexpr std::uint8_t kPrimaryApplyBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x57, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8,
-                                               0x34, 0x5A, 0xCB, 0xFE, 0x48, 0x2B, 0xE0, 0x8A, 0xDA, 0x40, 0x8A, 0xF9};
-constexpr platform::FunctionFact kPrimaryApply{L"PrimaryPCM_ApplyCameraDistanceOptions", 0x1433F94EC, kPrimaryApplyBytes};
-constexpr std::uint8_t kManagerApplyBytes[] = {0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8, 0xE2, 0x5B, 0x37, 0xFE, 0x48, 0x2B,
+                                               0xCC, 0xA8, 0x05, 0xFF, 0x48, 0x2B, 0xE0, 0x8A, 0xDA, 0x40, 0x8A, 0xF9};
+constexpr platform::FunctionFact kPrimaryApply{L"PrimaryPCM_ApplyCameraDistanceOptions", 0x1431112A4, kPrimaryApplyBytes};
+constexpr std::uint8_t kManagerApplyBytes[] = {0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8, 0x3A, 0xC4, 0x6C, 0xFE, 0x48, 0x2B,
                                                0xE0, 0x4C, 0x8B, 0xD1, 0x45, 0x8A, 0xD8, 0x48, 0x8B, 0x89, 0xB0, 0x2C};
-constexpr platform::FunctionFact kManagerApply{L"AEndPlayerCameraManager__ApplyCameraDistanceOptions", 0x143D39344,
+constexpr platform::FunctionFact kManagerApply{L"AEndPlayerCameraManager__ApplyCameraDistanceOptions", 0x143A9F73C,
                                                kManagerApplyBytes};
-constexpr std::uintptr_t kSetterCall  = 0x142ADCBCA;  // in the option setter: the primary camera manager's apply
-constexpr std::uintptr_t kConfirmCall = 0x14180A4D6;  // in the confirm-key handler: the per-camera-manager apply
+constexpr std::uintptr_t kSetterCall  = 0x1410B9F6D;  // in the option setter: the primary camera manager's apply
+constexpr std::uintptr_t kConfirmCall = 0x140FE6BF9;  // in the confirm-key handler: the per-camera-manager apply
 // 1.005 (research/RE-1005-field-2.md): the setter was merged into OptionsMenu_SetOptionValue_CopyApplyCommit and its
 // call sits at %16 = 13, so it crosses a 16-byte block. There it is heard at the primary apply's entry instead
 // (first instruction `mov [rsp+8], rbx`, 5 bytes at %16 = 4; that call is its only caller), by its return address.
@@ -59,9 +59,9 @@ constexpr std::size_t kPrimaryApplyFirstInstruction = 5;
 
 // Split framing (research/RE-p2-framing.md, RE-p2-battle-camera.md).
 // GetSystemOptionData(): the global option struct (pure read: [[[g]+0x100]+0x28]+0x10).
-constexpr std::uint8_t kOptionDataBytes[] = {0x48, 0x8B, 0x05, 0xF5, 0xCB, 0xB1, 0x08, 0x48, 0x85, 0xC0, 0x74, 0x10,
+constexpr std::uint8_t kOptionDataBytes[] = {0x48, 0x8B, 0x05, 0x4D, 0x6F, 0x5B, 0x08, 0x48, 0x85, 0xC0, 0x74, 0x10,
                                              0x48, 0x8B, 0x80, 0x00, 0x01, 0x00, 0x00};
-constexpr platform::FunctionFact kOptionData{L"GetSystemOptionData", 0x14087F15C, kOptionDataBytes};
+constexpr platform::FunctionFact kOptionData{L"GetSystemOptionData", 0x140C2162C, kOptionDataBytes};
 constexpr std::uint32_t kOptionFieldLevel  = 0x36;  // Camera Distance: Out of Battle
 constexpr std::uint32_t kOptionBattleLevel = 0x37;  // Camera Distance: In Battle
 constexpr std::uint32_t kOpInitialized     = 0xD2;  // the operator's lazy init ran (it seeds the level from the option)
@@ -141,7 +141,7 @@ void PrimaryApplyEntry(std::uint8_t field, std::uint8_t battle) noexcept
     }
 }
 
-/// The option setter's call: redirected on the research build; on 1.005, heard at the primary apply's entry.
+/// The option setter's call: heard at the primary apply's entry (the call crosses a block); on 1.004, redirected.
 bool InstallSetter(const platform::GameImage& image, std::uintptr_t primary) noexcept
 {
     const auto site = image.Rebase(kSetterCall, 5);
@@ -149,7 +149,7 @@ bool InstallSetter(const platform::GameImage& image, std::uintptr_t primary) noe
     {
         return false;
     }
-    if (platform::RunningBuild() != platform::BuildIndex::V1005)
+    if (platform::RunningBuild() == platform::BuildIndex::V1004)
     {
         return g_setterCall.Install(*site, primary, reinterpret_cast<std::uintptr_t>(&PrimaryApply));
     }

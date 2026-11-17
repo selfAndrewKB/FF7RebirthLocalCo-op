@@ -43,34 +43,34 @@ namespace {
 constexpr std::uint8_t   kPlayNamedBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08,   // mov [rsp+8],rbx (crosses a block in 1.004)
                                               0x48, 0x89, 0x6C, 0x24, 0x10};  // mov [rsp+10h],rbp
 // VibrationList3B0_PlayNamed(key, params*, flag)
-constexpr platform::FunctionFact kPlayNamed{L"VibrationList3B0_PlayNamed", 0x141302F0C, kPlayNamedBytes};
-constexpr std::uintptr_t kAddOrUpdate   = 0x141302E2C;  // VibrationList3B0_AddOrUpdate(list, key, params*, flag)
-constexpr std::uintptr_t kListTick      = 0x14125D324;  // Vibration_TickGlobalList_ApplyToPrimaryPC(dt xmm0)
-constexpr std::uintptr_t kBuildSet      = 0x14125CFD0;  // Vibration_TickList_BuildChannelSet(list, dt xmm1, set*) -> changed
-constexpr std::uintptr_t kApply         = 0x1408A1688;  // PrimaryPC_ApplyVibrationChannels758(list, set*): on PM+0x140
+constexpr platform::FunctionFact kPlayNamed{L"VibrationList3B0_PlayNamed", 0x1410C9320, kPlayNamedBytes};
+constexpr std::uintptr_t kAddOrUpdate   = 0x1410C9240;  // VibrationList3B0_AddOrUpdate(list, key, params*, flag)
+constexpr std::uintptr_t kListTick      = 0x1411B64B0;  // Vibration_TickGlobalList_ApplyToPrimaryPC(dt xmm0)
+constexpr std::uintptr_t kBuildSet      = 0x1411B6024;  // Vibration_TickList_BuildChannelSet(list, dt xmm1, set*) -> changed
+constexpr std::uintptr_t kApply         = 0x14189679C;  // PrimaryPC_ApplyVibrationChannels758(list, set*): on PM+0x140
 constexpr std::uint8_t   kCtorBytes[]   = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x57, 0xB8, 0x20, 0x00, 0x00, 0x00};
 // VibrationList_Ctor (6 channel slots in 1.004, 7 in 1.005)
-constexpr platform::FunctionFact kListCtor{L"VibrationList_Ctor", 0x143727368, kCtorBytes};
-constexpr std::uintptr_t kListLock      = 0x14881C428;  // the game's CRITICAL_SECTION around adds and the set build
+constexpr platform::FunctionFact kListCtor{L"VibrationList_Ctor", 0x14345C1C4, kCtorBytes};
+constexpr std::uintptr_t kListLock      = 0x14864FC48;  // the game's CRITICAL_SECTION around adds and the set build
 constexpr std::uint8_t   kRowsBytes[]   = {0x48, 0x89, 0x5C, 0x24, 0x08};
 // LeaderActionComp_PerFrameB_RowsAndVibration(comp, xmm1, xmm2)
-constexpr platform::FunctionFact kRows{L"LeaderActionComp_PerFrameB_RowsAndVibration", 0x14125D474, kRowsBytes};
-constexpr std::uintptr_t kListTickCall  = 0x14125D558;  // ... its call of the list tick
-constexpr std::uintptr_t kZipGateCall   = 0x1433251E2;  // Zipline phase 3: the rumble block's player test (rcx = move)
-constexpr std::uintptr_t kZipGate       = 0x141635DE8;  // FieldActionMove_IsPlayerChar_Ex_UCPCOrVehicleOrLeaderTag
-constexpr std::uintptr_t kZipAddCall    = 0x1433252C6;  // ... the keep-alive add (call PlayNamed)
+constexpr platform::FunctionFact kRows{L"LeaderActionComp_PerFrameB_RowsAndVibration", 0x1411B6600, kRowsBytes};
+constexpr std::uintptr_t kListTickCall  = 0x1411B66E4;  // ... its call of the list tick
+constexpr std::uintptr_t kZipGateCall   = 0x143035446;  // Zipline phase 3: the rumble block's player test (rcx = move)
+constexpr std::uintptr_t kZipGate       = 0x1410D02D4;  // FieldActionMove_IsPlayerChar_Ex_UCPCOrVehicleOrLeaderTag
+constexpr std::uintptr_t kZipAddCall    = 0x14303552A;  // ... the keep-alive add (call PlayNamed)
 // RE-p2-rumble-owner-chocobo.md (read from both exes).
 constexpr std::uint8_t   kStopNamedBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08,  // mov [rsp+8],rbx
                                               0x57, 0xB8, 0x20, 0x00, 0x00, 0x00};
 // VibrationList3B0_StopNamed(key): flags the global list's entries
-constexpr platform::FunctionFact kStopNamed{L"VibrationList3B0_StopNamed", 0x1422C4818, kStopNamedBytes};
+constexpr platform::FunctionFact kStopNamed{L"VibrationList3B0_StopNamed", 0x1421D9EB4, kStopNamedBytes};
 constexpr std::size_t    kStopFirstInstruction = 5;
-constexpr std::uintptr_t kFootSlot      = 0x1457F3ED0;  // EndChocoboCharacter vt+0x978 (1.005 +0x980): footsteps
-constexpr std::uintptr_t kFootImpact    = 0x1418BA510;  // ... its function: GetMoveState, then FFB_Chocobo_1/2
+constexpr std::uintptr_t kFootSlot      = 0x14566D868;  // EndChocoboCharacter vt+0x978 (1.005 +0x980): footsteps
+constexpr std::uintptr_t kFootImpact    = 0x141926AD4;  // ... its function: GetMoveState, then FFB_Chocobo_1/2
 
 // The list object's size, as the global owner's creator allocates it (1.004 `mov ecx,178h`, 1.005 `mov ecx,1B0h`; read
 // from both exes).
-constexpr platform::PerBuild<std::size_t> kListSize{0x178, 0x1B0};
+constexpr platform::PerBuild<std::size_t> kListSize{0x1B0, 0x178};
 
 constexpr std::uint32_t kComponentOwner = 0xA0;   // the leader-action component's controller
 constexpr auto          kSummaryEvery   = std::chrono::seconds(10);
@@ -643,12 +643,12 @@ void Install(const platform::GameImage& image) noexcept
     const bool rows   = add && rowsAt &&
                       g_rows.Install(*rowsAt, image.EntryInstruction(kRows.address, kRows.entryBytes),
                                      reinterpret_cast<std::uintptr_t>(&Rows));
-    const bool tick = rows && g_listTickCall.InstallResearch(image, kListTickCall, kListTick,
+    const bool tick = rows && g_listTickCall.InstallSource(image, kListTickCall, kListTick,
                                                              reinterpret_cast<std::uintptr_t>(&ListTick));
     const bool zip  = tick &&
-                     g_zipAddCall.InstallResearch(image, kZipAddCall, kPlayNamed.address,
+                     g_zipAddCall.InstallSource(image, kZipAddCall, kPlayNamed.address,
                                                   reinterpret_cast<std::uintptr_t>(&ZipAdd)) &&
-                     g_zipGateCall.InstallResearch(image, kZipGateCall, kZipGate,
+                     g_zipGateCall.InstallSource(image, kZipGateCall, kZipGate,
                                                    reinterpret_cast<std::uintptr_t>(&ZipGate));
     // The stop by name: a seat's loops added to its list must stop there.
     const auto owner  = players::game_globals::Address(players::game_globals::Global::FieldAction);  // the list's owner (StopNamed and PlayNamed read it)

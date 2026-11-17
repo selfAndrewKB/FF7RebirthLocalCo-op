@@ -30,29 +30,29 @@ namespace {
 // Leak 1 (research/RE-p2-scope-leak-audit.md): the block in the component's tick slot that advances the game
 // clock. Its `inc qword [rip+...]` (kClockIncrement) names the frame count; the check of those bytes is the check
 // that the three globals are where the research read them.
-constexpr std::uint8_t   kClockIncrementBytes[] = {0x48, 0xFF, 0x05, 0x52, 0x2C, 0xEA, 0x07};
-constexpr platform::FunctionFact kClockIncrement{L"the clock's frame-count increment", 0x14125C1A7,
+constexpr std::uint8_t   kClockIncrementBytes[] = {0x48, 0xFF, 0x05, 0xFA, 0xD3, 0xE4, 0x07};
+constexpr platform::FunctionFact kClockIncrement{L"the clock's frame-count increment", 0x1410E51D7,
                                                  kClockIncrementBytes};
-constexpr std::uintptr_t kClockFrames         = 0x1490FEE00;  // int64
-constexpr std::uintptr_t kClockSeconds        = 0x1490FEE08;  // double: seconds += (double)dt
-constexpr std::uintptr_t kClockMs             = 0x146FA9A00;  // int64: trunc(seconds * 1000.0)
+constexpr std::uintptr_t kClockFrames         = 0x148F325D8;  // int64
+constexpr std::uintptr_t kClockSeconds        = 0x148F325D0;  // double: seconds += (double)dt
+constexpr std::uintptr_t kClockMs             = 0x146DDC920;  // int64: trunc(seconds * 1000.0)
 constexpr std::uint8_t   kClockMsScaleBytes[] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x40, 0x8F, 0x40};
 // the 1000.0 it multiplies by
-constexpr platform::FunctionFact kClockMsScale{L"the clock's 1000.0 multiplier", 0x1460A2D88, kClockMsScaleBytes};
+constexpr platform::FunctionFact kClockMsScale{L"the clock's 1000.0 multiplier", 0x145F09DD0, kClockMsScaleBytes};
 constexpr std::uint32_t  kComponentGuard      = 0x9A4;        // bit 0: this component advanced the clock this frame
 constexpr int            kNudges              = 4;
 
 // Leak 2: the block the same tick writes for the leader alone: a dword, the 48-byte transform at +0x10, two 12-byte
 // vectors and dt (kLeaderBlock, kLeaderBlockSize). The byte after it is an unrelated flag.
-constexpr std::uintptr_t kLeaderBlock     = 0x14911F230;
+constexpr std::uintptr_t kLeaderBlock     = 0x148F53900;
 constexpr std::size_t    kLeaderBlockSize = 0x5C;
 
 // Leak 5: slot 16's one call to MoveStateBase__FieldSummonBody (rcx = state, xmm1 = dt, unused).
-constexpr std::uintptr_t kSummonCall  = 0x1407BC991;
+constexpr std::uintptr_t kSummonCall  = 0x1410E42E5;
 constexpr std::uint8_t   kSummonBodyPrologue[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x48, 0x89, 0x74, 0x24, 0x18, 0x57,
                                                   0x41, 0x54, 0x41, 0x55, 0x41, 0x56, 0x41, 0x57, 0xB8, 0xC0, 0x01,
-                                                  0x00, 0x00, 0xE8, 0x8F, 0x39, 0x8F, 0x01, 0x48, 0x2B, 0xE0};
-constexpr platform::FunctionFact kSummonBody{L"MoveStateBase__FieldSummonBody", 0x1407BB584, kSummonBodyPrologue};
+                                                  0x00, 0x00, 0xE8, 0xAF, 0xA3, 0x08, 0x01, 0x48, 0x2B, 0xE0};
+constexpr platform::FunctionFact kSummonBody{L"MoveStateBase__FieldSummonBody", 0x1410E17B4, kSummonBodyPrologue};
 
 using SummonBodyFn = void (*)(void* state, float deltaTime);
 

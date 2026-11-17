@@ -44,14 +44,14 @@ Mode g_mode = Mode::PlayersStay;
 // only its loop-1 call in PartyBattleAIMgr_QueueBattleInTeleports is redirected (rdx = &the battle member).
 constexpr std::uint8_t kContainsBytes[] = {0x48, 0x8B, 0x81, 0x80, 0x00, 0x00, 0x00, 0x4C, 0x8B, 0xC1, 0x48, 0x85,
                                            0xC0, 0x4C, 0x0F, 0x45, 0xC0, 0x48, 0x63, 0x81, 0x88, 0x00, 0x00, 0x00};
-constexpr platform::FunctionFact kContains{L"InlineActorArray16_Contains", 0x140A6C818, kContainsBytes};
-constexpr std::uintptr_t         kBattleInCall = 0x141251364;
+constexpr platform::FunctionFact kContains{L"InlineActorArray16_Contains", 0x140F40678, kContainsBytes};
+constexpr std::uintptr_t         kBattleInCall = 0x14115801E;
 // The battle end's per-member placement, void(ctx{&mgr, mgr}*, character, FVector* location, bool extra); its call
 // in PartyBattleAIMgr_QueueBattleFinishTeleports (non-leader members, rdx = the member).
 constexpr std::uint8_t kPlaceBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x74, 0x24, 0x20, 0x4C, 0x89,
                                         0x44, 0x24, 0x18, 0x48, 0x89, 0x54, 0x24, 0x10, 0x57, 0x41, 0x54, 0x41};
-constexpr platform::FunctionFact kPlace{L"PartyBattleAIMgr_BattleEnd_PlaceMember", 0x1421DCD50, kPlaceBytes};
-constexpr std::uintptr_t         kBattleFinishCall = 0x141324E04;
+constexpr platform::FunctionFact kPlace{L"PartyBattleAIMgr_BattleEnd_PlaceMember", 0x1421ADB70, kPlaceBytes};
+constexpr std::uintptr_t         kBattleFinishCall = 0x141159D88;
 
 constexpr std::uint32_t kControllerPawn = 0x258;  // AController::Pawn
 

@@ -46,25 +46,25 @@ using TriggerFn = std::uintptr_t (*)(void* actor, void* key, void* other, void* 
 
 // EndCharacter__Tick_Vt308's call of EndCharacter_FieldActionActorNotifyPass_Vt748(character, dt) (E8 at +0x5 of its
 // block in both builds). The pass walks the character's own controller's list (+0x618).
-constexpr std::uintptr_t kNotifyCall    = 0x14125B205;
+constexpr std::uintptr_t kNotifyCall    = 0x140E8A445;
 constexpr std::uint8_t   kNotifyBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x48, 0x89, 0x74,
                                            0x24, 0x18, 0x48, 0x89, 0x7C, 0x24, 0x20, 0x55};
-constexpr platform::FunctionFact kNotifyPass{L"EndCharacter_FieldActionActorNotifyPass_Vt748", 0x14125B3B0, kNotifyBytes};
+constexpr platform::FunctionFact kNotifyPass{L"EndCharacter_FieldActionActorNotifyPass_Vt748", 0x140E8ABE0, kNotifyBytes};
 using NotifyFn = void (*)(void* character, float dt);
 
 // The field tick's trigger pass (FieldTick_StreamingThenLocationUpdate; research/RE-p2-trigger-overlap.md):
 // the pending key PlayerTrigger is resolved to the PRIMARY controller's trigger (`call FWeakObjectPtr::Get(PM+0x140)`,
 // E8 inside one block in both builds). The tracker's dispatch call that follows belongs to world/seat_triggers,
 // which reports each pass here (NoteDispatch).
-constexpr std::uintptr_t kTriggerResolveCall = 0x140A56428;
+constexpr std::uintptr_t kTriggerResolveCall = 0x140935BB7;
 using ResolveFn = void* (*)(const void* weak);
 
 // The ladder's per-frame offer: Ladder_Vt748_NotifyNear_AutoEngage(ladder, context), context +0x8 the character
 // (1.005 slot +0x750). It requests state 8 on that character when the approach and distance checks pass.
 constexpr std::uint8_t kLadderNotifyBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x18, 0x55, 0x56, 0x57,
                                                0x41, 0x56, 0x41, 0x57, 0x48, 0x8D, 0x6C, 0x24};
-constexpr platform::SlotFact kLadderNotifySlot{L"the ladder's notify slot (+0x748)", 0x145940E90,
-                                               {L"Ladder_Vt748_NotifyNear_AutoEngage", 0x141643238, kLadderNotifyBytes}};
+constexpr platform::SlotFact kLadderNotifySlot{L"the ladder's notify slot (+0x748)", 0x1457A2DA0,
+                                               {L"Ladder_Vt748_NotifyNear_AutoEngage", 0x1415DC9D8, kLadderNotifyBytes}};
 using LadderNotifyFn = std::uintptr_t (*)(void* ladder, void* context);
 
 // The ladder executer (state 8's per-class executer): Start +0x10, End +0x18, UpdateInput +0x30
@@ -72,16 +72,16 @@ using LadderNotifyFn = std::uintptr_t (*)(void* ladder, void* context);
 // (FWeakObjectPtr).
 constexpr std::uint8_t kExecStartBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x48, 0x89, 0x6C,
                                             0x24, 0x18, 0x56, 0x57, 0x41, 0x56, 0xB8, 0xC0};
-constexpr std::uint8_t kExecEndBytes[]   = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x48, 0x89, 0x74,
-                                            0x24, 0x18, 0x48, 0x89, 0x7C, 0x24, 0x20, 0x55};
+constexpr std::uint8_t kExecEndBytes[]   = {0x48, 0x89, 0x5C, 0x24, 0x18, 0x55, 0x56, 0x57,
+                                            0x41, 0x56, 0x41, 0x57, 0x48, 0x8B, 0xEC, 0xB8};
 constexpr std::uint8_t kExecInputBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x48, 0x89, 0x74,
                                             0x24, 0x18, 0x48, 0x89, 0x7C, 0x24, 0x20, 0x55};
-constexpr platform::SlotFact kExecStartSlot{L"the ladder executer's Start slot (+0x10)", 0x1458125D0,
-                                            {L"LadderExecuter_Start_Vt10", 0x14132DA38, kExecStartBytes}};
-constexpr platform::SlotFact kExecEndSlot{L"the ladder executer's End slot (+0x18)", 0x1458125D8,
-                                          {L"LadderExecuter_End_Vt18", 0x14132D860, kExecEndBytes}};
-constexpr platform::SlotFact kExecInputSlot{L"the ladder executer's UpdateInput slot (+0x30)", 0x1458125F0,
-                                            {L"LadderExecuter_UpdateInput_Vt30", 0x14132F4A4, kExecInputBytes}};
+constexpr platform::SlotFact kExecStartSlot{L"the ladder executer's Start slot (+0x10)", 0x145787600,
+                                            {L"LadderExecuter_Start_Vt10", 0x141597194, kExecStartBytes}};
+constexpr platform::SlotFact kExecEndSlot{L"the ladder executer's End slot (+0x18)", 0x145787608,
+                                          {L"LadderExecuter_End_Vt18", 0x141597444, kExecEndBytes}};
+constexpr platform::SlotFact kExecInputSlot{L"the ladder executer's UpdateInput slot (+0x30)", 0x145787620,
+                                            {L"LadderExecuter_UpdateInput_Vt30", 0x141594080, kExecInputBytes}};
 using ExecFn      = std::uintptr_t (*)(void* executer);
 using ExecInputFn = std::uintptr_t (*)(void* executer, float dt);
 constexpr std::uint32_t kExecCharacter = 0x10;
@@ -220,9 +220,9 @@ std::uintptr_t Live(const platform::GameImage& image, std::uintptr_t research) n
     return at ? *at : 0;
 }
 
-std::uintptr_t Research(std::uintptr_t live) noexcept
+std::uintptr_t AsSource(std::uintptr_t live) noexcept
 {
-    return g_image ? g_image->ResearchAddress(live) : live;
+    return g_image ? g_image->SourceAddress(live) : live;
 }
 
 /// The characters this watch follows: p for player p's pawn (0 player 1's; a seat's is its member, or the chocobo
@@ -279,7 +279,7 @@ std::wstring ActorText(const void* actor)
                           : vt == g_jumpPadVt  ? L"chocobo launch pad"
                                                : nullptr;
     return kind != nullptr ? std::format(L"{} ({})", players::NameOf(actor), kind)
-                           : std::format(L"{} (vt 0x{:X})", players::NameOf(actor), Research(vt));
+                           : std::format(L"{} (vt 0x{:X})", players::NameOf(actor), AsSource(vt));
 }
 
 /// A controller's field-action list (+0x618), each weak entry resolved by the game. Game thread.

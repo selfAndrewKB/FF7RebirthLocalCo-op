@@ -37,22 +37,22 @@ using Clock = std::chrono::steady_clock;
 
 // research/RE-p2-attack-cameras.md; this build's slots and the functions they hold.
 // Guard effect: vt_FEndCharacterControllerComponentBattlePlayer +0x678 (1.005 +0x680): char fn(component, const FVector*).
-constexpr std::uintptr_t kGuardSlot = 0x145796550;
-constexpr std::uintptr_t kGuard     = 0x14143C948;  // CharComp_Vt_PlayCameraEffectIfEnabled
+constexpr std::uintptr_t kGuardSlot = 0x145611DC0;
+constexpr std::uintptr_t kGuard     = 0x1407A5C9C;  // CharComp_Vt_PlayCameraEffectIfEnabled
 // The shake notifies (the AnimNotify slots as combat_rumble wraps them: Notify / End (notify, mesh, animation), Begin
 // with the duration).
-constexpr std::uintptr_t kShakeSlot      = 0x1457F7D70;
-constexpr std::uintptr_t kShake          = 0x140E52890;  // UEndBattleCameraShakeNotify::Notify
-constexpr std::uintptr_t kShakeBeginSlot = 0x1459075E8;
-constexpr std::uintptr_t kShakeBegin     = 0x1418AFB54;  // UEndBattleCameraShakeNotifyState::NotifyBegin
-constexpr std::uintptr_t kShakeEndSlot   = 0x1459075F8;
-constexpr std::uintptr_t kShakeEnd       = 0x1418AFCE8;  // UEndBattleCameraShakeNotifyState::NotifyEnd
+constexpr std::uintptr_t kShakeSlot      = 0x14563BB50;
+constexpr std::uintptr_t kShake          = 0x1411621F0;  // UEndBattleCameraShakeNotify::Notify
+constexpr std::uintptr_t kShakeBeginSlot = 0x14576EEC0;
+constexpr std::uintptr_t kShakeBegin     = 0x142F86800;  // UEndBattleCameraShakeNotifyState::NotifyBegin
+constexpr std::uintptr_t kShakeEndSlot   = 0x14576EED0;
+constexpr std::uintptr_t kShakeEnd       = 0x142F885CC;  // UEndBattleCameraShakeNotifyState::NotifyEnd
 // StealCamera NotifyBegin, and the game's own pair test it uses: Character_SharesActionKeyWith(a, b), both characters'
 // action key (char+0x638 -> attack state +0xE8/+0xF0) the same and not null.
-constexpr std::uintptr_t kStealBeginSlot = 0x145886240;
-constexpr std::uintptr_t kStealBegin     = 0x141812908;
+constexpr std::uintptr_t kStealBeginSlot = 0x14563E990;
+constexpr std::uintptr_t kStealBegin     = 0x140D7E844;
 constexpr std::uint8_t   kSharesKeyBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x57, 0xB8, 0x40, 0x00, 0x00, 0x00, 0xE8};
-constexpr platform::FunctionFact kSharesKey{L"the two characters' action keys shared", 0x141812A08, kSharesKeyBytes};
+constexpr platform::FunctionFact kSharesKey{L"the two characters' action keys shared", 0x140D7E938, kSharesKeyBytes};
 
 constexpr std::uint32_t kComponentOwner = 0xA0;  // UActorComponent::OwnerPrivate (the mesh's character)
 constexpr auto          kStatusEvery    = std::chrono::seconds(10);

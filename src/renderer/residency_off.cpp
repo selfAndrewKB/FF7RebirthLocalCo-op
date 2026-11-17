@@ -17,13 +17,13 @@ namespace lss::renderer {
 
 namespace {
 
-// GEnableResidencyManagement (1 in the file). Research build; 1.005 through the build table.
-constexpr std::uintptr_t kResidencyGate = 0x146FAA3B0;
+// GEnableResidencyManagement (1 in the file).
+constexpr std::uintptr_t kResidencyGate = 0x146DDD290;
 
 // FD3D12Adapter's device creation reads the setting and clears the gate: `cmp [rax+r9*4],r14d; jne +7;
-// mov byte [gate],r14b`. Research build; 1.005 through the build table. Checked up to the store's displacement.
+// mov byte [gate],r14b`. Checked up to the store's displacement.
 constexpr std::uint8_t   kGateStoreBytes[] = {0x46, 0x39, 0x34, 0x88, 0x75, 0x07, 0x44, 0x88, 0x35};
-constexpr platform::FunctionFact kGateStoreSite{L"the D3D12 adapter's residency-gate store", 0x144924B9B,
+constexpr platform::FunctionFact kGateStoreSite{L"the D3D12 adapter's residency-gate store", 0x1446B8BB3,
                                                 kGateStoreBytes};
 
 std::optional<std::uintptr_t> GateAddress(const platform::GameImage& image) noexcept

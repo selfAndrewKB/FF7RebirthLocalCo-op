@@ -19,21 +19,21 @@ namespace lss::camera::near_fade {
 namespace {
 
 // 1.004 addresses; 1.005 through replaced-near-fade.json (both call sites and callees read from both exes).
-constexpr std::uintptr_t kGatherCall = 0x140A54F89;  // the near-fade pass: call EndCharaRegistry_GatherCharsWithin500OfPoint
-constexpr std::uintptr_t kGather     = 0x14093D388;
-constexpr std::uintptr_t kKickCall   = 0x1418969B1;  // NearFade_KickActorNow_IfGameThread: call ..._FindUnit
-constexpr std::uintptr_t kKick       = 0x1418969BC;
+constexpr std::uintptr_t kGatherCall = 0x140933A52;  // the near-fade pass: call EndCharaRegistry_GatherCharsWithin500OfPoint
+constexpr std::uintptr_t kGather     = 0x141970B28;
+constexpr std::uintptr_t kKickCall   = 0x143A9DE05;  // NearFade_KickActorNow_IfGameThread: call ..._FindUnit
+constexpr std::uintptr_t kKick       = 0x143A950D8;
 // Phase A: player 1's camera's occluder traces toward its pivot admit every party member's mesh (its
 // bUpdateJointsFromAnimation bit), so a seat's character between player 1's camera and player 1 was faded. The hit
 // actor's weak pointer is resolved here; a null answer makes the game skip the hit.
-constexpr std::uintptr_t kHitResolveCall = 0x140A54DCB;  // NearFade_BuildCandidateSet: call FWeakObjectPtr::Get(hit actor)
+constexpr std::uintptr_t kHitResolveCall = 0x140933898;  // NearFade_BuildCandidateSet: call FWeakObjectPtr::Get(hit actor)
 constexpr std::uint8_t   kAttachParentBytes[] = {0x48, 0x8B, 0x81, 0x38, 0x01, 0x00, 0x00, 0x48, 0x85, 0xC0, 0x74, 0x0C};
-const platform::FunctionFact kAttachParent{L"Pawn_RootAttachParent_FieldA0", 0x1408F18AC, kAttachParentBytes};
+const platform::FunctionFact kAttachParent{L"Pawn_RootAttachParent_FieldA0", 0x1407E29B0, kAttachParentBytes};
 // The overlap fade: climbing walls, spider walls and one-shot moves turn on a per-character tick that fades the
 // character to 0.3 (hidden reason bit 9) while another party member is inside its capsule, unless the game's player test
 // says it is the player's character. A seat's character is one too.
-constexpr std::uintptr_t kOverlapPlayerCall = 0x1414D74C6;  // CharActionCtrl_TickOverlapFade_HiddenReason9: call IsUCPC_...
-constexpr std::uintptr_t kIsPlayerChar      = 0x140806FE0;  // IsUCPC_WithVehicleCheck(actor)
+constexpr std::uintptr_t kOverlapPlayerCall = 0x1412FA1E6;  // CharActionCtrl_TickOverlapFade_HiddenReason9: call IsUCPC_...
+constexpr std::uintptr_t kIsPlayerChar      = 0x140763270;  // IsUCPC_WithVehicleCheck(actor)
 
 // The gather's output, a TArray<AEndCharacterBase*>.
 constexpr std::uint32_t kArrayNum = 8;
@@ -234,14 +234,14 @@ const void* FadeOfMember(void* member) noexcept
 
 void Install(const platform::GameImage& image) noexcept
 {
-    const bool gather = g_gatherCall.InstallResearch(image, kGatherCall, kGather,
+    const bool gather = g_gatherCall.InstallSource(image, kGatherCall, kGather,
                                                      reinterpret_cast<std::uintptr_t>(&Gather));
-    const bool kick   = g_kickCall.InstallResearch(image, kKickCall, kKick, reinterpret_cast<std::uintptr_t>(&Kick));
+    const bool kick   = g_kickCall.InstallSource(image, kKickCall, kKick, reinterpret_cast<std::uintptr_t>(&Kick));
     const auto parent = platform::FindFunction(image, kAttachParent);
     g_attachParent    = parent ? reinterpret_cast<AttachParentFn>(*parent) : nullptr;
-    const bool hits   = g_hitCall.InstallResearch(image, kHitResolveCall, facts::kWeakObjectGet.address,
+    const bool hits   = g_hitCall.InstallSource(image, kHitResolveCall, facts::kWeakObjectGet.address,
                                                   reinterpret_cast<std::uintptr_t>(&HitActor));
-    const bool overlap = g_overlapCall.InstallResearch(image, kOverlapPlayerCall, kIsPlayerChar,
+    const bool overlap = g_overlapCall.InstallSource(image, kOverlapPlayerCall, kIsPlayerChar,
                                                        reinterpret_cast<std::uintptr_t>(&OverlapPlayerTest));
     platform::Log(L"near fade: player 2's or 3's character {} by player 1's camera's near fade; the cameras' immediate fade "
                   L"{}; the occluder traces {}; the climbing overlap fade {}",

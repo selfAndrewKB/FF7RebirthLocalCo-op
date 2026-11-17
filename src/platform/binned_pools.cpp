@@ -11,8 +11,8 @@ namespace lss::platform::binned_pools {
 namespace {
 
 // Facts read from the database (RE-oom-path.md, "Reading the pools live"; this build).
-constexpr std::uintptr_t kAllocatorStatic = 0x149104AE8;  // FMallocBinned3::MallocBinned3, set by its constructor
-constexpr std::uintptr_t kBinned3Vtable   = 0x145EB1AF8;
+constexpr std::uintptr_t kAllocatorStatic = 0x148F38538;  // FMallocBinned3::MallocBinned3, set by its constructor
+constexpr std::uintptr_t kBinned3Vtable   = 0x145D11A58;
 constexpr std::uint32_t  kPoolTables      = 0x28;  // FPoolTable[74]
 constexpr std::uint32_t  kPoolStride      = 0x60;
 // FPoolTable

@@ -1,14 +1,17 @@
 # version_match: carrying the mod's addresses to a new game build
 
-The mod's source keeps the research build's IDA addresses (1.004). For each later build, these tools produce the
+The mod's source keeps the source build's IDA addresses (1.005). For each other build, these tools produce the
 tables `src/platform/builds/build_<ver>.h` (generated) and `build_<ver>_replaced.h` (hand-found), which
-`platform/build_translation` uses at run time. Plan and findings: `Rebirth/Documentation/PLAN-GAME-VERSIONS.md`.
+`platform/build_translation` uses at run time. Plan and findings: `Rebirth/Documentation/plan/versions.md`.
+
+The 1.004 tables are frozen: they were made when 1.004 was the source build and 1.005 the matched one, then inverted
+when the source moved to 1.005 (`plan/versions.md`). 1.004 is deprecated; nothing regenerates them.
 
 Needs Python 3 with `pefile`, `capstone` 5 and `numpy`. The exes live in `Rebirth/builds/<ver>/ff7rebirth_.exe`.
 
 | Script | What it does |
 |---|---|
-| `match.py <old exe> <new exe> <src> <out> --version-name <ver>` | harvests every address in the mod's code, matches it, writes `report.md`, `matches.json` and `build_<ver>.h` (~2 min) |
+| `match.py <source exe> <new exe> <src> <out> --version-name <ver> --source-name 1.005` | harvests every address in the mod's code, matches it, writes `report.md`, `matches.json` and `build_<ver>.h` (~2 min) |
 | `replaced_header.py <out> <ver> <header>` | turns the IDA agents' `replaced-*.json` into `build_<ver>_replaced.h` |
 | `layout_diff.py <old dump> <new dump> <out.md>` | diffs reflected class layouts between two UE4SS object dumps (Ctrl+J in game) |
 | `offset_census.py <src> <old dump> <new dump> <out.json> <out.md>` | lists the mod's integer constants with reflected-layout leads, for the offset audit |

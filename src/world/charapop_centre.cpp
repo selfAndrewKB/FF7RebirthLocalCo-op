@@ -51,9 +51,9 @@ using Clock = std::chrono::steady_clock;
 // M+0x11A0..+0x11A8 (a leaf; game thread only). Entry: mov rax,[rip+...] (g_EndGameRoot); mov r8,[rax+180h];
 // mov [r8+119Ch],cl. The first instruction's displacement is within the image. Disabling writes the zero vector,
 // the resting state (research/RE-p2-charapop-two-centres.md).
-constexpr std::uint8_t kSetCentreBytes[] = {0x48, 0x8B, 0x05, 0xE1, 0xBE, 0x84, 0x07, 0x4C,
+constexpr std::uint8_t kSetCentreBytes[] = {0x48, 0x8B, 0x05, 0x8D, 0xAC, 0x62, 0x07, 0x4C,
                                             0x8B, 0x80, 0x80, 0x01, 0x00, 0x00, 0x41, 0x88};
-constexpr platform::FunctionFact kSetCentre{L"CharaPop_SetOverrideCenter", 0x1418B2F00, kSetCentreBytes};
+constexpr platform::FunctionFact kSetCentre{L"CharaPop_SetOverrideCenter", 0x141907924, kSetCentreBytes};
 using SetCentreFn = void (*)(bool enable, const float* centre);
 
 // CharaPopEntry_EvalSpawnScore_ByCenter(entry) -> int32 (the same first 21 bytes in 1.005): the distance part
@@ -63,7 +63,7 @@ using SetCentreFn = void (*)(bool enable, const float* centre);
 constexpr std::uint8_t kScoreBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10,  // mov [rsp+10h],rbx
                                         0x48, 0x89, 0x7C, 0x24, 0x18,  // mov [rsp+18h],rdi
                                         0x55, 0x48, 0x8D, 0x6C, 0x24, 0xA9, 0xB8, 0xE0, 0x00, 0x00, 0x00};
-constexpr platform::FunctionFact kScore{L"CharaPopEntry_EvalSpawnScore_ByCenter", 0x1408B5B8C, kScoreBytes};
+constexpr platform::FunctionFact kScore{L"CharaPopEntry_EvalSpawnScore_ByCenter", 0x1408AFC14, kScoreBytes};
 using ScoreFn = std::int32_t (*)(void* entry);
 
 // The manager M (the entry's +0: its manager) as the score reads it, and the pop object's selection.

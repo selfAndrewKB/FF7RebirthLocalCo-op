@@ -43,21 +43,21 @@ namespace {
 
 // 1.004 addresses; 1.005 through replaced-anim-two-views.json (every call site and function read from both exes).
 using facts::kAnimWorldManager;
-constexpr std::uintptr_t kClearCall   = 0x140A32B57;  // PropagateLinkedActorCamDist's last call: its arrays are refilled
-constexpr std::uintptr_t kEvalCall    = 0x141001E92;  // AnimBudgetAllocator_Tick_SE: the parallel evaluation
-constexpr std::uintptr_t kEvalTarget  = 0x1410025A0;  // ParallelFor_Wrapper
-constexpr std::uintptr_t kGrowCall    = 0x140A32B0A;  // the game's own append: `mov rcx, array; call TArray8_ResizeGrow`
-constexpr std::uint8_t   kGrowBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x48, 0x89, 0x4C, 0x24, 0x08, 0x55, 0x56,
-                                         0x57, 0x41, 0x54, 0x41, 0x55, 0x41, 0x56, 0x41, 0x57, 0xB8, 0x20, 0x00};
-const platform::FunctionFact kGrow{L"TArray8_ResizeGrow", 0x14082DFE8, kGrowBytes};  // what the call must reach
-constexpr std::uintptr_t kInterfaceClassGlobal = 0x1492B5E30;  // UClass* of EndActorInterface
+constexpr std::uintptr_t kClearCall   = 0x140861C43;  // PropagateLinkedActorCamDist's last call: its arrays are refilled
+constexpr std::uintptr_t kEvalCall    = 0x140FCFD7A;  // AnimBudgetAllocator_Tick_SE: the parallel evaluation
+constexpr std::uintptr_t kEvalTarget  = 0x140FCFE00;  // ParallelFor_Wrapper
+constexpr std::uintptr_t kGrowCall    = 0x140861BF6;  // the game's own append: `mov rcx, array; call TArray8_ResizeGrow`
+constexpr std::uint8_t   kGrowBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x74, 0x24, 0x10, 0x57, 0xB8,
+                                         0x20, 0x00, 0x00, 0x00, 0xE8, 0xEB, 0x1D, 0xA1, 0x01, 0x48, 0x2B, 0xE0};
+const platform::FunctionFact kGrow{L"TArray8_ResizeGrow", 0x140759D80, kGrowBytes};  // what the call must reach
+constexpr std::uintptr_t kInterfaceClassGlobal = 0x1490EF218;  // UClass* of EndActorInterface
 
 constexpr std::uint8_t kInterfaceOfBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x6C,
                                               0x24, 0x10, 0x48, 0x89, 0x74, 0x24, 0x18, 0x57};
-const platform::FunctionFact kInterfaceOf{L"UObject_GetInterfaceAddress", 0x140885660, kInterfaceOfBytes};
+const platform::FunctionFact kInterfaceOf{L"UObject_GetInterfaceAddress", 0x141997CC0, kInterfaceOfBytes};
 constexpr std::uint8_t kMeasureBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x48, 0x89, 0x74,
                                           0x24, 0x18, 0x48, 0x89, 0x7C, 0x24, 0x20, 0x41};
-const platform::FunctionFact kMeasure{L"EndSkelMeshComp_ComputeCamDistAngle", 0x140886E6C, kMeasureBytes};
+const platform::FunctionFact kMeasure{L"EndSkelMeshComp_ComputeCamDistAngle", 0x1407E3080, kMeasureBytes};
 
 // W's registrations: a stock TSparseArray (platform/sparse_array.h) at +0x7F8 of 56-byte elements. An element's
 // actor is a weak pointer at +0x18.
@@ -71,8 +71,8 @@ constexpr std::uint32_t kIfaceValid = 0x90;
 constexpr std::uint32_t kIfaceData  = 0xA0;
 constexpr std::uint32_t kDataMesh   = 0x10;
 constexpr std::uint32_t kDataPairs  = 0x40;  // TArray<{float dist, float angle}>: data, Num +8, Max +0xC
-constexpr platform::PerBuild<std::uint32_t> kMeshDist  = {0x1234, 0x1224};
-constexpr platform::PerBuild<std::uint32_t> kMeshAngle = {0x1238, 0x1228};
+constexpr platform::PerBuild<std::uint32_t> kMeshDist  = {0x1224, 0x1234};
+constexpr platform::PerBuild<std::uint32_t> kMeshAngle = {0x1228, 0x1238};
 
 // Past this distance from a seat's camera no End.Animation.* threshold can change a decision (the largest, the wild
 // animals' 300 m force-update distance, plus a margin).
@@ -81,8 +81,8 @@ constexpr auto  kSummaryEvery = std::chrono::seconds(10);
 
 // The tick-time measure (research/RE-p2-detail-drop-p1-facing.md). Its first instruction crosses a block in 1.004, so the
 // second is replaced there (both a store into the caller's home area, five bytes each).
-constexpr std::uintptr_t kCameraDiffDegrees  = 0x1470B99A0;  // End.Animation.SignificanceCameraDiffDegrees (60)
-constexpr platform::PerBuild<std::uint32_t> kMeshMode = {0x122A, 0x121B};  // ShouldUpdateTransform's mode (1 = angle)
+constexpr std::uintptr_t kCameraDiffDegrees  = 0x146EECAE0;  // End.Animation.SignificanceCameraDiffDegrees (60)
+constexpr platform::PerBuild<std::uint32_t> kMeshMode = {0x121B, 0x122A};  // ShouldUpdateTransform's mode (1 = angle)
 constexpr std::uint32_t  kComponentOwner     = 0xA0;
 using platform::kDegreesPerRadian;
 using platform::kRadiansPerDegree;
@@ -536,9 +536,9 @@ void Install(const platform::GameImage& image) noexcept
     g_interfaceOf = reinterpret_cast<InterfaceOfFn>(*iface);
     g_measure     = reinterpret_cast<MeasureFn>(*meas);
     g_grow        = reinterpret_cast<GrowFn>(grow);
-    const bool refill = g_clearCall.InstallResearch(image, kClearCall, facts::kFreeArrayData.address,
+    const bool refill = g_clearCall.InstallSource(image, kClearCall, facts::kFreeArrayData.address,
                                                     reinterpret_cast<std::uintptr_t>(&Refilled));
-    const bool eval   = refill && g_evalCall.InstallResearch(image, kEvalCall, kEvalTarget,
+    const bool eval   = refill && g_evalCall.InstallSource(image, kEvalCall, kEvalTarget,
                                                              reinterpret_cast<std::uintptr_t>(&Evaluate));
     if (refill && !eval)
     {

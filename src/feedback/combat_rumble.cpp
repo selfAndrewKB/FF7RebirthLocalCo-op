@@ -50,11 +50,11 @@ using Clock = std::chrono::steady_clock;
 // research/RE-p2-rumble.md (this build).
 // BattleHit_ApplyReaction_CamFxAndFFB: the leader gate (cl kind, rdx attacker, r8 target), the camera effect
 // on the primary camera manager, and the primary-controller fallback when the attacker has no player controller.
-constexpr std::uintptr_t kGateCall     = 0x14131FE21;
-constexpr std::uintptr_t kGate         = 0x14169AE88;  // BattleHitFx_ShouldPlay_LeaderInvolved
-constexpr std::uintptr_t kCameraCall   = 0x14131FE78;
-constexpr std::uintptr_t kCamera       = 0x1416FAE10;  // PrimaryPCM_CameraEffect2DF0_Play
-constexpr std::uintptr_t kFallbackCall = 0x14131FEA2;
+constexpr std::uintptr_t kGateCall     = 0x1413977FB;
+constexpr std::uintptr_t kGate         = 0x140ED3D10;  // BattleHitFx_ShouldPlay_LeaderInvolved
+constexpr std::uintptr_t kCameraCall   = 0x141397852;
+constexpr std::uintptr_t kCamera       = 0x141161EC0;  // PrimaryPCM_CameraEffect2DF0_Play
+constexpr std::uintptr_t kFallbackCall = 0x14139787C;
 using facts::kGetPrimaryEndPlayerController;
 // 1.005 (research/RE-1005-field-2.md): the fallback call sits at %16 = 12, so it crosses a 16-byte block. There the
 // three calls are changed together from the game thread's first tick (InstallFromOwnThread), outside every hit: the
@@ -80,15 +80,17 @@ struct NotifyFact
     std::uintptr_t firstControllerCall;
     Phase          phase;
 };
+// Each slot: the class's vtable plus the slot's offset (UObject vtables are one slot longer than 1.004's: there the
+// three sit 8 lower, which the build table carries slot by slot).
 constexpr std::array kNotifies = {
-    NotifyFact{L"EndForceFeedback", 0x14668D6C0 + 0x278, 0x14325F71C, 0x14325F752, Phase::Notify},
-    NotifyFact{L"EndForceFeedbackAdvanced", 0x1458898E8 + 0x278, 0x14184709C, 0x1418470D2, Phase::Notify},
-    NotifyFact{L"EndForceFeedbackRange", 0x1457FA8B0 + 0x278, 0x1411F6B30, 0x1411F6B6B, Phase::Begin},
-    NotifyFact{L"EndForceFeedbackRange", 0x1457FA8B0 + 0x280, 0x1411F7B64, 0x1411F7BB9, Phase::Tick},
-    NotifyFact{L"EndForceFeedbackRange", 0x1457FA8B0 + 0x288, 0x1411F6EF4, 0x1411F6F41, Phase::End},
-    NotifyFact{L"EndForceFeedbackRangeAdvanced", 0x14589EE58 + 0x278, 0x141846EEC, 0x141846F3C, Phase::Begin},
-    NotifyFact{L"EndForceFeedbackRangeAdvanced", 0x14589EE58 + 0x280, 0x14181AD44, 0x14181AD87, Phase::Tick},
-    NotifyFact{L"EndForceFeedbackRangeAdvanced", 0x14589EE58 + 0x288, 0x14181ACC0, 0x14181AD0C, Phase::End},
+    NotifyFact{L"EndForceFeedback", 0x14651B160 + 0x280, 0x142F6FB80, 0x142F6FBB6, Phase::Notify},
+    NotifyFact{L"EndForceFeedbackAdvanced", 0x1456E9710 + 0x280, 0x1418BF2E0, 0x1418BF316, Phase::Notify},
+    NotifyFact{L"EndForceFeedbackRange", 0x1456CF758 + 0x280, 0x1410314B8, 0x1410314F3, Phase::Begin},
+    NotifyFact{L"EndForceFeedbackRange", 0x1456CF758 + 0x288, 0x141030618, 0x141030661, Phase::Tick},
+    NotifyFact{L"EndForceFeedbackRange", 0x1456CF758 + 0x290, 0x14102F888, 0x14102F8D5, Phase::End},
+    NotifyFact{L"EndForceFeedbackRangeAdvanced", 0x1456FFC00 + 0x280, 0x1418BF0FC, 0x1418BF156, Phase::Begin},
+    NotifyFact{L"EndForceFeedbackRangeAdvanced", 0x1456FFC00 + 0x288, 0x1418BB42C, 0x1418BB46F, Phase::Tick},
+    NotifyFact{L"EndForceFeedbackRangeAdvanced", 0x1456FFC00 + 0x290, 0x1418BB3A8, 0x1418BB3F4, Phase::End},
 };
 constexpr std::uint32_t kComponentOwner = 0xA0;  // UActorComponent::OwnerPrivate
 
@@ -96,10 +98,10 @@ constexpr std::uint32_t kComponentOwner = 0xA0;  // UActorComponent::OwnerPrivat
 // The plays, for the log (dev tools): EndFFBComp_PlayChannel (the dispatcher) and its classic path (also called
 // directly).
 constexpr std::uint8_t   kPlayBytes[]        = {0x48, 0x89, 0x5C, 0x24, 0x08};
-constexpr platform::FunctionFact kPlay{L"EndFFBComp_PlayChannel", 0x1411F71E8, kPlayBytes};
+constexpr platform::FunctionFact kPlay{L"EndFFBComp_PlayChannel", 0x14102FC14, kPlayBytes};
 constexpr std::uint8_t   kPlayClassicBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x20};
-constexpr platform::FunctionFact kPlayClassic{L"EndFFBComp_PlayChannel's classic path", 0x1411F7244, kPlayClassicBytes};
-constexpr std::uintptr_t kFromDispatcher     = 0x1411F7234;  // the dispatcher's own call of the classic path, +5
+constexpr platform::FunctionFact kPlayClassic{L"EndFFBComp_PlayChannel's classic path", 0x14102FC70, kPlayClassicBytes};
+constexpr std::uintptr_t kFromDispatcher     = 0x14102FC60;  // the dispatcher's own call of the classic path, +5
 constexpr std::uint32_t  kComponentController = 0x10;        // the End force-feedback component's controller
 
 struct Source
@@ -108,21 +110,20 @@ struct Source
     const wchar_t* what;
 };
 constexpr Source kSources[] = {
-    {0x14131FF12, L"battle hit"},
-    {0x1416FADE5, L"guard"},
-    {0x140CB3815, L"ATB gain on hit"},
-    {0x1413243E9, L"Materia ATB effect"},
-    {0x142242DD1, L"Materia ATB effect (task)"},
-    {0x1412F376F, L"field hit"},
-    {0x140C07E34, L"item get"},
-    {0x1408A18D1, L"rumble list (traversal)"},
-    {0x14325F7A5, L"montage notify"},
-    {0x141847117, L"montage notify (advanced)"},
-    {0x1411F7122, L"montage range notify"},
-    {0x1408A264E, L"cutscene clip"},
-    {0x1434973C6, L"cutscene track"},
-    {0x1434AFE70, L"Niagara effect"},
-    {0x1411F6EE1, L"minigame"},
+    {0x1413978EC, L"battle hit"},
+    {0x1407A611D, L"guard"},
+    {0x1412E133A, L"ATB gain on hit"},
+    {0x140D44F2D, L"Materia ATB effect"},
+    {0x141805B33, L"field hit"},
+    {0x1415322C9, L"item get"},
+    {0x141896A0F, L"rumble list (traversal)"},
+    {0x142F6FC09, L"montage notify"},
+    {0x1418BF35B, L"montage notify (advanced)"},
+    {0x14102FB4E, L"montage range notify"},
+    {0x14103165A, L"cutscene clip"},
+    {0x1431BC6BE, L"cutscene track"},
+    {0x1431D8E08, L"Niagara effect"},
+    {0x141030C3D, L"minigame"},
 };
 // Six arguments, two on the stack: rcx component, dl channel, r8 FName*, r9b, [rsp+0x28] u8,
 // [rsp+0x30] u8*. Returns a byte.
@@ -522,7 +523,7 @@ void* FirstController(void* world) noexcept
 #if LSS_DEV
 const wchar_t* SourceOf(std::uintptr_t returnAddress) noexcept
 {
-    const auto ida = g_image ? g_image->ResearchAddress(returnAddress) : returnAddress;
+    const auto ida = g_image ? g_image->SourceAddress(returnAddress) : returnAddress;
     for (const Source& source : kSources)
     {
         if (source.returnAddress == ida)
@@ -554,7 +555,7 @@ void LogPlay(const void* component, std::uint64_t channel, const void* name, std
         const std::uint64_t key    = name != nullptr ? ReadField<std::uint64_t>(name, 0) : 0;
         platform::LogDebug(L"combat rumble: frame {}: play {} channel {} on {} from {}", platform::frame_watch::FrameIndex(),
                       players::unreal::NameText(key), channel & 0xFF, players::Who(controller),
-                      source != nullptr ? std::wstring(source) : std::format(L"0x{:X}", g_image ? g_image->ResearchAddress(returnAddress) : returnAddress));
+                      source != nullptr ? std::wstring(source) : std::format(L"0x{:X}", g_image ? g_image->SourceAddress(returnAddress) : returnAddress));
     }
     catch (...)
     {
@@ -572,7 +573,7 @@ std::uint64_t PlayClassic(void* component, std::uint64_t channel, const void* na
                           std::uint64_t fifth, void* sixth) noexcept
 {
     const auto from = reinterpret_cast<std::uintptr_t>(_ReturnAddress());
-    if (!g_image || g_image->ResearchAddress(from) != kFromDispatcher)  // the dispatcher's own call is logged by Play
+    if (!g_image || g_image->SourceAddress(from) != kFromDispatcher)  // the dispatcher's own call is logged by Play
     {
         LogPlay(component, channel, name, from);
     }
@@ -631,7 +632,7 @@ void Install(const platform::GameImage& image) noexcept
 {
     g_image = image;
     bool hits = false;
-    if (platform::RunningBuild() == platform::BuildIndex::V1005)
+    if (platform::RunningBuild() != platform::BuildIndex::V1004)
     {
         // Resolved now, installed by the first BeforeTick (the fallback call crosses a block).
         const auto hit = [&image](platform::CallRedirect& redirect, std::uintptr_t site, std::uintptr_t target,
@@ -649,10 +650,10 @@ void Install(const platform::GameImage& image) noexcept
     }
     else
     {
-        const bool gate = g_gateCall.InstallResearch(image, kGateCall, kGate, reinterpret_cast<std::uintptr_t>(&Gate));
-        const bool camera   = gate && g_cameraCall.InstallResearch(image, kCameraCall, kCamera,
+        const bool gate = g_gateCall.InstallSource(image, kGateCall, kGate, reinterpret_cast<std::uintptr_t>(&Gate));
+        const bool camera   = gate && g_cameraCall.InstallSource(image, kCameraCall, kCamera,
                                                                    reinterpret_cast<std::uintptr_t>(&Camera));
-        const bool fallback = gate && g_fallbackCall.InstallResearch(image, kFallbackCall,
+        const bool fallback = gate && g_fallbackCall.InstallSource(image, kFallbackCall,
                                                                     kGetPrimaryEndPlayerController,
                                                                      reinterpret_cast<std::uintptr_t>(&Fallback));
         if (gate && (!camera || !fallback))
@@ -765,7 +766,7 @@ void Remove() noexcept
         restored = slot.Restore() && restored;
     }
     // The hits placed from the game thread (1.005: the fallback crosses a block) go back all three or none, from
-    // that thread; the research build's, placed at install, from any.
+    // that thread; 1.004's, placed at install, from any.
     if (g_hitsOwnThread.load(std::memory_order_relaxed) && !gameThread)
     {
         left = true;

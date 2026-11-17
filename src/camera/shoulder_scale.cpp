@@ -32,10 +32,10 @@ namespace {
 // call FEndModularCameraOperator__FinalizePose` (bytes E8 37 B0 03 00, one 16-byte block), after
 // the modules' ApplyToPose. FinalizePose(op, stick, dt) applies the stick and computes the location from the pose
 // at op+0x40 (checked by disassembly).
-constexpr std::uintptr_t kFinalizeCall = 0x140A61C20;
+constexpr std::uintptr_t kFinalizeCall = 0x140D50180;
 constexpr std::uint8_t   kFinalizePoseBytes[] = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8,
-                                                 0xC8, 0x22, 0x61, 0x01, 0x48, 0x2B, 0xE0};
-constexpr platform::FunctionFact kFinalizePose{L"the camera operator's FinalizePose", 0x140A9CC5C, kFinalizePoseBytes};
+                                                 0x90, 0xD6, 0x41, 0x01, 0x48, 0x2B, 0xE0};
+constexpr platform::FunctionFact kFinalizePose{L"the camera operator's FinalizePose", 0x140D4E4E4, kFinalizePoseBytes};
 constexpr std::uint32_t  kPoseAimY        = 0x88;  // op+0x40 pose, +0x48 AimOffset Y (lateral)
 constexpr float          kMinRatio = 0.25f, kMaxRatio = 4.0f;  // a ratio outside this is not trusted
 constexpr float          kMaxScale = 1.0f;  // only ever softened: a wider half keeps the game's offset

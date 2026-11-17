@@ -43,7 +43,7 @@ namespace UObjectGlobals = RC::Unreal::UObjectGlobals;
 constexpr std::int32_t kCameraComponentOffset    = 0x230;
 // 1.005: UCameraComponent's bitfield byte moved to +0x204 (USceneComponent-derived fields -8): UCameraComponent::
 // GetCameraView reads `test byte [rcx+204h], 8` where 1.004 reads +0x20C (research/RE-1005-offsets-C.md).
-constexpr platform::PerBuild<std::int32_t> kConstrainAspectRatioByte = {0x20C, 0x204};
+constexpr platform::PerBuild<std::int32_t> kConstrainAspectRatioByte = {0x204, 0x20C};
 
 using Tracked = players::TrackedObject;
 

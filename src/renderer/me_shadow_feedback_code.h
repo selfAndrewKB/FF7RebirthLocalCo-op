@@ -14,10 +14,10 @@
 // `cmp dword [r14+18h],<zero register>` that enters the pre-transition loop (the site; one 16-byte block in both
 // builds). While the switch byte is set and the view's family is an additional one (FViewInfo+0 is the renderer's
 // family copy, +0x74 its bAdditionalViewFamily, the byte me_feedback_once reads at renderer+0x84), the code jumps to
-// the free of the transition array (site + 0x70B in the research build, site + 0x74A in 1.005), past the whole region.
-// The research build's code after it needs r12 = 0 and r13 = the view, both already true, and r15d = 0x30 (the command
-// list's allocator offset, set inside the region at site + 0x1DA and read by `mov [rsi+r15],rax` at site + 0xDC8; before
-// it r15 is rsi+0x30); 1.005's frees rbx (the array, [rbp-68h]) and needs edi = 0. Otherwise it redoes the compare
+// the free of the transition array (site + 0x74A; site + 0x70B in 1.004), past the whole region. The code after it
+// frees rbx (the array, [rbp-68h]) and needs edi = 0; 1.004's needs r12 = 0 and r13 = the view, both already true,
+// and r15d = 0x30 (the command list's allocator offset, set inside the region at site + 0x1DA and read by
+// `mov [rsi+r15],rax` at site + 0xDC8; before it r15 is rsi+0x30). Otherwise it redoes the compare
 // (the zero register reads 0) and takes the `jbe` or resumes. rax and the flags are dead at the site. Each path counts
 // itself in the fields (lock inc).
 
@@ -41,11 +41,11 @@ static_assert(offsetof(ShadowFeedbackFields, skipped) == 0x08 && offsetof(Shadow
 
 /// The instruction the site replaces (`jbe rel32`, +0x11C in both builds), and the compare just before it.
 inline constexpr std::uint8_t kShadowFeedbackSiteBytes[]        = {0x0F, 0x86, 0x1C, 0x01, 0x00, 0x00};
-inline constexpr std::uint8_t kShadowFeedbackCompareBytes[]     = {0x45, 0x39, 0x66, 0x18};  // cmp [r14+18h],r12d
-inline constexpr std::uint8_t kShadowFeedbackCompareBytes1005[] = {0x45, 0x39, 0x6E, 0x18};  // cmp [r14+18h],r13d
+inline constexpr std::uint8_t kShadowFeedbackCompareBytes[]     = {0x45, 0x39, 0x6E, 0x18};  // cmp [r14+18h],r13d
+inline constexpr std::uint8_t kShadowFeedbackCompareBytes1004[] = {0x45, 0x39, 0x66, 0x18};  // cmp [r14+18h],r12d
 
 inline constexpr std::size_t kShadowFeedbackCodeSize     = 83;
-inline constexpr std::size_t kShadowFeedbackCodeSize1005 = 83;
+inline constexpr std::size_t kShadowFeedbackCodeSize1004 = 83;
 
 namespace detail {
 inline void PutQword(std::uint8_t* at, std::uint64_t value) noexcept
@@ -54,12 +54,13 @@ inline void PutQword(std::uint8_t* at, std::uint64_t value) noexcept
 }
 }  // namespace detail
 
-/// Research build. `skipTo` and `emptyTo` are the live addresses of the array's free and of the `jbe` target.
-inline std::array<std::uint8_t, kShadowFeedbackCodeSize> ShadowFeedbackCode(const ShadowFeedbackFields& fields,
-                                                                            std::uintptr_t skipTo,
-                                                                            std::uintptr_t emptyTo) noexcept
+/// Game version 1.004: the view is in r13, and the code at the free needs r15d = 0x30. `skipTo` and `emptyTo` are the
+/// live addresses of the array's free and of the `jbe` target.
+inline std::array<std::uint8_t, kShadowFeedbackCodeSize1004> ShadowFeedbackCode1004(const ShadowFeedbackFields& fields,
+                                                                                    std::uintptr_t skipTo,
+                                                                                    std::uintptr_t emptyTo) noexcept
 {
-    std::array<std::uint8_t, kShadowFeedbackCodeSize> code = {
+    std::array<std::uint8_t, kShadowFeedbackCodeSize1004> code = {
         0x49, 0x8B, 0x45, 0x00,                    //  0: mov  rax, [r13]          the view's family copy
         0x80, 0x78, 0x74, 0x00,                    //  4: cmp  byte [rax+74h], 0   bAdditionalViewFamily
         0x48, 0xB8, 0, 0, 0, 0, 0, 0, 0, 0,        //  8: mov  rax, &fields        (flags kept)
@@ -84,12 +85,12 @@ inline std::array<std::uint8_t, kShadowFeedbackCodeSize> ShadowFeedbackCode(cons
     return code;
 }
 
-/// Game version 1.005: the view is in r12, and the code at the free needs rbx = the array and edi = 0.
-inline std::array<std::uint8_t, kShadowFeedbackCodeSize1005> ShadowFeedbackCode1005(const ShadowFeedbackFields& fields,
-                                                                                    std::uintptr_t skipTo,
-                                                                                    std::uintptr_t emptyTo) noexcept
+/// The view is in r12, and the code at the free needs rbx = the array and edi = 0. `skipTo` and `emptyTo` as above.
+inline std::array<std::uint8_t, kShadowFeedbackCodeSize> ShadowFeedbackCode(const ShadowFeedbackFields& fields,
+                                                                            std::uintptr_t skipTo,
+                                                                            std::uintptr_t emptyTo) noexcept
 {
-    std::array<std::uint8_t, kShadowFeedbackCodeSize1005> code = {
+    std::array<std::uint8_t, kShadowFeedbackCodeSize> code = {
         0x49, 0x8B, 0x04, 0x24,                    //  0: mov  rax, [r12]          the view's family copy
         0x80, 0x78, 0x74, 0x00,                    //  4: cmp  byte [rax+74h], 0   bAdditionalViewFamily
         0x48, 0xB8, 0, 0, 0, 0, 0, 0, 0, 0,        //  8: mov  rax, &fields        (flags kept)

@@ -1,7 +1,8 @@
 #pragma once
 
 // The machine code that keeps a seat's targeting run out of player 1's target panel, at the one
-// panel request whose call site straddles a code block (research/RE-p2-targeting-scoped-tick.md).
+// panel request whose call site straddles a code block in game version 1.004 (research/RE-p2-targeting-scoped-tick.md;
+// in 1.005 the call fits one block and is redirected instead).
 //
 // The site is the chunk's `mov [rsp+0x108], rax` (8 bytes, one instruction inside one 16-byte block; its address
 // in the installer). The displayed-target update posts "old target cleared" to the target panel from a cold chunk
@@ -37,9 +38,9 @@ static_assert(offsetof(PanelGate, skipped) == 4);
 inline constexpr std::size_t kPanelGateCodeSize = 40;
 
 /// The instruction replaced at the site, as the research read it.
-inline constexpr std::uint8_t kPanelGateSiteBytes[] = {0x48, 0x89, 0x84, 0x24, 0x08, 0x01, 0x00, 0x00};  // mov [rsp+0x108], rax
+inline constexpr std::uint8_t kPanelGateSiteBytes1004[] = {0x48, 0x89, 0x84, 0x24, 0x08, 0x01, 0x00, 0x00};  // mov [rsp+0x108], rax
 
-/// `skipTo` is the live address the gated path goes on at (the site + 0x1E in the research build).
+/// `skipTo` is the live address the gated path goes on at (the site + 0x1E).
 inline std::array<std::uint8_t, kPanelGateCodeSize> PanelGateCode(const PanelGate& gate, std::uintptr_t skipTo) noexcept
 {
     std::array<std::uint8_t, kPanelGateCodeSize> code = {

@@ -34,8 +34,8 @@ namespace {
 // controller, ensures its trigger, NewObjects and registers its UEndPlayerExistNavAreaComponent (pc+0x590) and sets
 // pc+0x7DC. It has no guard of its own (a second call makes a second component), so it runs only while +0x590 is null.
 constexpr std::uint8_t   kCreateNavAreaBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x55, 0x48, 0x8B,
-                                                  0xEC, 0xB8, 0x70, 0x00, 0x00, 0x00, 0xE8, 0x1D};
-constexpr platform::FunctionFact kCreateNavArea{L"PartyManager_SetPrimaryPC_CreateNavAreaComp", 0x143D00E00,
+                                                  0xEC, 0xB8, 0x70, 0x00, 0x00, 0x00, 0xE8, 0x85};
+constexpr platform::FunctionFact kCreateNavArea{L"PartyManager_SetPrimaryPC_CreateNavAreaComp", 0x143A622E8,
                                                 kCreateNavAreaBytes};
 constexpr std::uint32_t  kControllerNavArea  = 0x590;
 using camera::location_volumes::kNavAreaController;
@@ -45,9 +45,9 @@ using camera::location_volumes::kNavAreaController;
 // `this` is unused; the game's one instance is a singleton.
 constexpr std::uint8_t   kSetLayer7Bytes[] = {0x48, 0x85, 0xD2, 0x74, 0x54, 0x48, 0x89, 0x5C,
                                               0x24, 0x08, 0x57, 0xB8, 0x20, 0x00, 0x00, 0x00};
-constexpr platform::FunctionFact kSetLayer7{L"LocMoveTypeListener_Vt40_SetPrimaryPCLayer7", 0x14182BE00,
+constexpr platform::FunctionFact kSetLayer7{L"LocMoveTypeListener_Vt40_SetPrimaryPCLayer7", 0x141432B38,
                                             kSetLayer7Bytes};
-constexpr std::uintptr_t kMoveTypeListener = 0x14939BCE8;
+constexpr std::uintptr_t kMoveTypeListener = 0x1491D8518;
 constexpr std::uint32_t  kControllerLayer7Move = 0x890 + 7;
 constexpr std::uint32_t  kControllerLayer7Dash = 0x8A4 + 7;
 

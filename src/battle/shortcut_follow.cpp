@@ -42,19 +42,19 @@ namespace {
 // there.
 // Item use rebuilds the executing controller's only (FieldCommandCtrl_ExecuteCommandRecord); its call is followed
 // both ways (the inventory is shared). Each call inside one aligned 16-byte block.
-constexpr std::uint8_t kRebuildShortcutsBytes[] = {0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8, 0x86, 0xEC, 0x6D, 0xFE, 0x48, 0x2B, 0xE0,
-                                                   0xE8, 0x8E, 0x66, 0xE3, 0xFC, 0x48, 0x8B, 0x88, 0xB8, 0x00, 0x00, 0x00};
-constexpr platform::FunctionFact kRebuildShortcuts{L"EndUI23_RebuildShortcutTables", 0x1439D02A0, kRebuildShortcutsBytes};
+constexpr std::uint8_t kRebuildShortcutsBytes[] = {0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8, 0x0E, 0xD1, 0x9D, 0x00, 0x48, 0x2B, 0xE0,
+                                                   0xE8, 0x12, 0x71, 0x11, 0xFF, 0x48, 0x8B, 0x88, 0xB8, 0x00, 0x00, 0x00};
+constexpr platform::FunctionFact kRebuildShortcuts{L"EndUI23_RebuildShortcutTables", 0x14178EA68, kRebuildShortcutsBytes};
 constexpr std::size_t            kRebuildShortcutsFirst = 5;
-constexpr std::uint8_t kCtrlShortcutsBytes[] = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0x60, 0xB1, 0xB8, 0x00, 0x48,
+constexpr std::uint8_t kCtrlShortcutsBytes[] = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0xE8, 0xD0, 0x9D, 0x00, 0x48,
                                                 0x2B, 0xE0, 0x48, 0x8B, 0xD9, 0x48, 0x81, 0xC1, 0xF0, 0x00, 0x00, 0x00};
-constexpr platform::FunctionFact kCtrlShortcuts{L"FieldCommandCtrl_RebuildShortcutTables", 0x141523DC4, kCtrlShortcutsBytes};
+constexpr platform::FunctionFact kCtrlShortcuts{L"FieldCommandCtrl_RebuildShortcutTables", 0x14178EA8C, kCtrlShortcutsBytes};
 constexpr std::uint8_t kSelecterShortcutsBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x6C, 0x24, 0x10, 0x48, 0x89, 0x74,
                                                     0x24, 0x18, 0x57, 0x41, 0x56, 0x41, 0x57, 0xB8, 0x30, 0x00, 0x00, 0x00};
-constexpr platform::FunctionFact kSelecterShortcuts{L"MemberSelecter_RebuildShortcutTables", 0x140D202B4,
+constexpr platform::FunctionFact kSelecterShortcuts{L"MemberSelecter_RebuildShortcutTables", 0x1411D93B8,
                                                     kSelecterShortcutsBytes};
-constexpr std::uintptr_t kStatusShortcutsCall = 0x1422FA6D9;  // 1.004 only: call of the table builder (inlined wrapper)
-constexpr std::uintptr_t kItemShortcutsCall   = 0x141524C69;  // in ExecuteCommandRecord: call of the controller's rebuild
+constexpr std::uintptr_t kStatusShortcutsCall1004 = 0x1422FA6D9;  // 1.004 only: call of the table builder (inlined wrapper); that build's own address
+constexpr std::uintptr_t kItemShortcutsCall   = 0x1413FE791;  // in ExecuteCommandRecord: call of the controller's rebuild
 constexpr std::uint32_t  kSelecter            = 0xF0;         // the member selecter, embedded
 constexpr std::uint32_t  kShortcutSets        = 0x208;        // selecter +0x118: two TArray<TArray<88-byte record>>
 constexpr std::uint32_t  kShortcutTarget      = 0x3C;         // the ordinal whose shortcuts show
@@ -144,7 +144,7 @@ void FollowShortcuts(std::uintptr_t source, std::uintptr_t target, std::wstring_
         const auto source0 = ids(source, 0), source1 = ids(source, 1), after0 = ids(target, 0), after1 = ids(target, 1);
         platform::LogDebug(L"command menu: {}'s shortcut tables rebuilt too ({}, from 0x{:X}): row {}: the rebuilt "
                            L"one {} {} (was {}), the other {} {} (match: {}); +0x280={}",
-                           whose, why, g_image ? g_image->ResearchAddress(caller) : caller, row, after0, after1,
+                           whose, why, g_image ? g_image->SourceAddress(caller) : caller, row, after0, after1,
                            before, source0,
                            source1, players::YesNo(after0 == source0 && after1 == source1),
                            ReadAt<std::int32_t>(target + kShortcutShown));
@@ -237,7 +237,7 @@ void ItemShortcutsCall(void* controller) noexcept
     }
 }
 
-/// One call site redirected: at install on the research build, from the game thread on 1.005.
+/// One call site redirected: from the game thread, or at install on 1.004.
 template <class Fn>
 bool Redirect(platform::DeferredSites& placement, platform::CallRedirect& call, std::uintptr_t site,
               std::uintptr_t target, Fn* with) noexcept
@@ -252,17 +252,17 @@ void Find(const platform::GameImage& image) noexcept
     g_image.emplace(image);
     const auto site = [&image](std::uintptr_t address) { return image.Rebase(address, 5); };
     // The shortcut follows: the wrapper and the controller's rebuild on both builds; the status menu's inlined
-    // rebuild on the research build only.
+    // rebuild on 1.004 only.
     const auto wrapper = platform::FindFunction(image, kRebuildShortcuts);
     const auto rebuild = platform::FindFunction(image, kCtrlShortcuts);
     g_ctrlShortcuts    = rebuild ? reinterpret_cast<ShortcutsFn>(*rebuild) : nullptr;
     g_sites.rebuildShortcuts = wrapper ? *wrapper : 0;
     g_sites.itemAt           = site(kItemShortcutsCall).value_or(0);
-    if (platform::RunningBuild() != platform::BuildIndex::V1005)
+    if (platform::RunningBuild() == platform::BuildIndex::V1004)
     {
         const auto builder  = platform::FindFunction(image, kSelecterShortcuts);
         g_selecterShortcuts = builder ? reinterpret_cast<SelecterShortcutsFn>(*builder) : nullptr;
-        g_sites.statusAt    = site(kStatusShortcutsCall).value_or(0);
+        g_sites.statusAt    = image.OwnAddress(platform::BuildIndex::V1004, kStatusShortcutsCall1004, {}, 5).value_or(0);
     }
 }
 
@@ -289,7 +289,7 @@ void Place(const platform::GameImage& image, platform::DeferredSites& placement)
                                 reinterpret_cast<std::uintptr_t>(g_ctrlShortcuts), &ItemShortcutsCall);
     platform::Log(L"command menu: the shortcut tables follow the game's rebuilds: menus and character events {}, the "
                   L"status menu's inlined one {}, item use {} (logged at Debug)",
-                  menus ? L"yes" : L"NO", platform::RunningBuild() == platform::BuildIndex::V1005 ? L"(1.005 calls the wrapper)"
+                  menus ? L"yes" : L"NO", platform::RunningBuild() != platform::BuildIndex::V1004 ? L"(this build calls the wrapper)"
                                                                                                  : (status ? L"yes" : L"NO"),
                   items ? L"yes" : L"NO");
 }

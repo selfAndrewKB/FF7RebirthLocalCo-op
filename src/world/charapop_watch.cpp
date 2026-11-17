@@ -70,8 +70,8 @@ constexpr std::uint32_t  kThreshold        = 0xE8;
 // lookup, like the base-interface getter), then the interface's getter at slot +0x1D0 (may return null; its
 // creator at +0x1D8 is never called). Entry: as the base-interface getter's, then call __alloca_probe; sub rsp,rax.
 constexpr std::uint8_t kActorInterfaceOfBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x74, 0x24, 0x10, 0x57, 0xB8,
-                                                   0x80, 0x00, 0x00, 0x00, 0xE8, 0x4B, 0xA5, 0x7F, 0x01, 0x48, 0x2B, 0xE0};
-constexpr platform::FunctionFact kActorInterfaceOf{L"CharaPopEntry_GetEndActorInterface", 0x1408B49D0, kActorInterfaceOfBytes};
+                                                   0x80, 0x00, 0x00, 0x00, 0xE8, 0x67, 0xD1, 0x56, 0x01, 0x48, 0x2B, 0xE0};
+constexpr platform::FunctionFact kActorInterfaceOf{L"CharaPopEntry_GetEndActorInterface", 0x140BFEA04, kActorInterfaceOfBytes};
 using FadeOfFn = void* (*)(void* iface);
 constexpr std::uint32_t kFadeSlot    = 0x1D0;
 constexpr std::uint32_t kFadeHidden  = 0x88;  // u8
@@ -86,7 +86,7 @@ constexpr std::uint32_t kCompVisibleByte  = 0x14C;  // bVisible, bit 0x20
 constexpr std::uint8_t  kCompVisibleBit   = 0x20;
 constexpr std::uint32_t kCompHiddenByte   = 0x14D;  // bHiddenInGame, bit 0x04
 constexpr std::uint8_t  kCompHiddenBit    = 0x04;
-constexpr platform::PerBuild<std::uint32_t> kCompLastRender = {0x2A4, 0x294};  // float: LastRenderTime, written by any view that drew it; 1.005: EndSkelMeshComp_UpdateRecentlyRendered writes [rdi+294h] (1.004 [rdi+2A4h])
+constexpr platform::PerBuild<std::uint32_t> kCompLastRender = {0x294, 0x2A4};  // float: LastRenderTime, written by any view that drew it; 1.005: EndSkelMeshComp_UpdateRecentlyRendered writes [rdi+294h] (1.004 [rdi+2A4h])
 
 // The actor's paused state as the evaluators read it: CharaPopEntry_GetEndActorBaseInterface(entry)
 // resolves the entry's actor and returns its EndActorBaseInterface (null if none), a pure lookup; the
@@ -94,7 +94,7 @@ constexpr platform::PerBuild<std::uint32_t> kCompLastRender = {0x2A4, 0x294};  /
 // push rdi; mov eax,80h.
 constexpr std::uint8_t kInterfaceOfBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x74,
                                               0x24, 0x10, 0x57, 0xB8, 0x80, 0x00, 0x00, 0x00};
-constexpr platform::FunctionFact kInterfaceOf{L"CharaPopEntry_GetEndActorBaseInterface", 0x1408B4ABC, kInterfaceOfBytes};
+constexpr platform::FunctionFact kInterfaceOf{L"CharaPopEntry_GetEndActorBaseInterface", 0x140BFE918, kInterfaceOfBytes};
 using InterfaceOfFn = void* (*)(const void* entry);
 using PausedFn      = std::uint8_t (*)(void* iface, std::uint8_t reason);
 constexpr std::uint32_t kPausedSlot  = 0x30;
@@ -110,13 +110,13 @@ constexpr std::uint32_t  kSnapshotFaster    = 0x910;  // two u8
 constexpr std::uint32_t  kSnapshotValid     = 0x913;  // u8
 
 // UEndSkeletalMeshComponent's optimisation fields.
-constexpr platform::PerBuild<std::uint32_t> kCompLevelOn    = {0x121C, 0x120C};  // u8: reads the owner's CharaPop level; 1.005: AnimOptimizationEval `cmp byte [rdi+120Ch]`
-constexpr platform::PerBuild<std::uint32_t> kCompForced     = {0x1220, 0x1210};  // u8; 1.005: AnimOptimizationEval `mov [rdi+1210h],al`
-constexpr platform::PerBuild<std::uint32_t> kCompShadow     = {0x1224, 0x1214};  // u8: cast shadow; 1.005: AnimOptimizationEval `mov byte [rcx+1214h],1`
-constexpr platform::PerBuild<std::uint32_t> kCompPauseLevel = {0x1226, 0x1217};  // u8; 1.005: AnimOptimizationEval `movzx eax,byte [rcx+1217h]` (not -0x10: a byte was inserted)
-constexpr platform::PerBuild<std::uint32_t> kCompLevel      = {0x1228, 0x1219};  // u8: the owner's CharaPop level, copied; 1.005: AnimOptimizationEval `mov [rdi+1219h],al`
-constexpr platform::PerBuild<std::uint32_t> kCompDistance   = {0x1234, 0x1224};  // float, to the snapshot camera; 1.005: AnimOptimizationEval and CalcAnimSignificance read [rcx+1224h]
-constexpr platform::PerBuild<std::uint32_t> kCompAngle      = {0x1238, 0x1228};  // float, radians; 1.005: CalcAnimSignificance reads [rcx+1228h]
+constexpr platform::PerBuild<std::uint32_t> kCompLevelOn    = {0x120C, 0x121C};  // u8: reads the owner's CharaPop level; 1.005: AnimOptimizationEval `cmp byte [rdi+120Ch]`
+constexpr platform::PerBuild<std::uint32_t> kCompForced     = {0x1210, 0x1220};  // u8; 1.005: AnimOptimizationEval `mov [rdi+1210h],al`
+constexpr platform::PerBuild<std::uint32_t> kCompShadow     = {0x1214, 0x1224};  // u8: cast shadow; 1.005: AnimOptimizationEval `mov byte [rcx+1214h],1`
+constexpr platform::PerBuild<std::uint32_t> kCompPauseLevel = {0x1217, 0x1226};  // u8; 1.005: AnimOptimizationEval `movzx eax,byte [rcx+1217h]` (not -0x10: a byte was inserted)
+constexpr platform::PerBuild<std::uint32_t> kCompLevel      = {0x1219, 0x1228};  // u8: the owner's CharaPop level, copied; 1.005: AnimOptimizationEval `mov [rdi+1219h],al`
+constexpr platform::PerBuild<std::uint32_t> kCompDistance   = {0x1224, 0x1234};  // float, to the snapshot camera; 1.005: AnimOptimizationEval and CalcAnimSignificance read [rcx+1224h]
+constexpr platform::PerBuild<std::uint32_t> kCompAngle      = {0x1228, 0x1238};  // float, radians; 1.005: CalcAnimSignificance reads [rcx+1228h]
 
 constexpr std::uint32_t kSampleEvery   = 10;      // ticks
 constexpr float         kFarFromOneCm  = 5000.0f;  // entries more than 50 m from player 1's camera, or

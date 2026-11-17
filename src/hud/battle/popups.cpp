@@ -47,11 +47,11 @@ constexpr List kLists[] = {
 
 // The wrappers: prologues up to the stack probe, checked before their first instruction is replaced.
 constexpr std::uint8_t   kPlaceSlatePrologue[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x57, 0xB8, 0x60,
-                                                  0x00, 0x00, 0x00, 0xE8, 0x18, 0xF8, 0x14, 0x01};
-constexpr platform::FunctionFact kPlaceSlate{L"the Slate popup's place wrapper", 0x140F5F708, kPlaceSlatePrologue};
+                                                  0x00, 0x00, 0x00, 0xE8, 0x58, 0xCC, 0xE5, 0x00};
+constexpr platform::FunctionFact kPlaceSlate{L"the Slate popup's place wrapper", 0x14130EF18, kPlaceSlatePrologue};
 constexpr std::uint8_t   kPlaceUmgPrologue[]   = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x48, 0x89, 0x6C, 0x24, 0x18, 0x56, 0x57,
-                                                  0x41, 0x56, 0xB8, 0x70, 0x00, 0x00, 0x00, 0xE8, 0x14, 0xD8, 0x66, 0xFE};
-constexpr platform::FunctionFact kPlaceUmg{L"the UMG popup's place wrapper", 0x143A41704, kPlaceUmgPrologue};
+                                                  0x41, 0x56, 0xB8, 0x70, 0x00, 0x00, 0x00, 0xE8, 0x58, 0x5B, 0x9E, 0xFE};
+constexpr platform::FunctionFact kPlaceUmg{L"the UMG popup's place wrapper", 0x143786010, kPlaceUmgPrologue};
 constexpr std::uintptr_t kEntryLength          = sizeof(kPopupEntryBytes);
 
 // FWeakObjectPtr::Get (hud/hud_updates.cpp).

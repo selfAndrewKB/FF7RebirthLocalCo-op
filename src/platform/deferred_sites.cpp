@@ -34,7 +34,7 @@ void DeferredSites::RunQueued(void* self) noexcept
 
 bool DeferredSites::Deferred() noexcept
 {
-    return RunningBuild() == BuildIndex::V1005;
+    return RunningBuild() != BuildIndex::V1004;
 }
 
 }  // namespace lss::platform

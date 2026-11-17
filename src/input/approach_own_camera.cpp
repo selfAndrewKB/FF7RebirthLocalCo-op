@@ -28,8 +28,8 @@ namespace seat_ladder = scopes::seat_ladder;
 namespace {
 
 // 1.004 addresses; 1.005 through replaced-approach-two.json (every site and callee read from both exes).
-constexpr std::uintptr_t kDirCheck  = 0x141642A00;  // FieldAction_ApproachDirCheck_MergedStick
-constexpr std::uintptr_t kBeamCheck = 0x143714DB4;  // SplineMove_ApproachCheck_MergedStickPrimaryBasis
+constexpr std::uintptr_t kDirCheck  = 0x1415DD02C;  // FieldAction_ApproachDirCheck_MergedStick
+constexpr std::uintptr_t kBeamCheck = 0x14344983C;  // SplineMove_ApproachCheck_MergedStickPrimaryBasis
 
 struct Site
 {
@@ -42,14 +42,14 @@ struct Site
 // so those
 // are swapped from the game thread outside any character's tick, the way the HUD's crossing calls are.
 constexpr Site kDirSites[] = {
-    {L"ladder", 0x1416434D7},         {L"crawl", 0x141642652},         {L"squeeze", 0x141645CCB},
-    {L"squeeze", 0x142A93E56},        {L"squeeze", 0x142A93E97},       {L"climbing wall", 0x141646D35},
-    {L"pole slide", 0x143643121},     {L"hook rope", 0x14367C406},     {L"lifting rope", 0x14367C923},
-    {L"one-shot move", 0x142A9418F, true}, {L"monkey bars", 0x143642F6C, true}, {L"zip line", 0x1436436FD, true},
-    {L"spider wall", 0x1436D4E7F, true},
+    {L"ladder", 0x1415DCC77},         {L"crawl", 0x1415DC89A},         {L"squeeze", 0x1415DDAC7},
+    {L"squeeze", 0x1426F0862},        {L"squeeze", 0x1426F08A3},       {L"climbing wall", 0x1415DF469},
+    {L"pole slide", 0x143377B71},     {L"hook rope", 0x1433B295A},     {L"lifting rope", 0x1433B2E77},
+    {L"one-shot move", 0x1426F09D5, true}, {L"monkey bars", 0x1433779BC, true}, {L"zip line", 0x14337814D, true},
+    {L"spider wall", 0x14340A0FB, true},
 };
 constexpr std::size_t kDirCount = std::size(kDirSites);
-constexpr Site        kBeamSite{L"balance beam", 0x142A94023};
+constexpr Site        kBeamSite{L"balance beam", 0x1426F0BF7};
 
 // bool Check(character, endTransform, outClosestPoint, forward, back, radius, slack, lift, angleDegrees): pure but for the
 // write to the closest point.
@@ -235,7 +235,7 @@ void Install(const platform::GameImage& image) noexcept
                 continue;
             }
         }
-        else if (g_dirCalls[i].InstallResearch(image, kDirSites[i].call, kDirCheck,
+        else if (g_dirCalls[i].InstallSource(image, kDirSites[i].call, kDirCheck,
                                                reinterpret_cast<std::uintptr_t>(kDirChecks[i])))
         {
             ++placed;
@@ -250,7 +250,7 @@ void Install(const platform::GameImage& image) noexcept
         }
     }
     g_lateTried = false;
-    const bool beam = g_beamCall.InstallResearch(image, kBeamSite.call, kBeamCheck,
+    const bool beam = g_beamCall.InstallSource(image, kBeamSite.call, kBeamCheck,
                                                  reinterpret_cast<std::uintptr_t>(&BeamCheck));
     platform::Log(L"approach: {} walk-up checks (ladder, crawl, squeeze, climbing wall, pole slide, hook rope, lifting "
                   L"rope) read player 2's or 3's stick in that player's camera basis, {} more (one-shot move, monkey bars, zip "

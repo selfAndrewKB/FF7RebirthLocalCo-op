@@ -21,12 +21,12 @@ using ReaderFn = std::uint8_t (*)(void* controller);
 // The two readers of the controller's own summon gauge widget: bool(controller), the widget's "gauge shown" and
 // "summon on the field" bytes. Their first instruction is a 2-byte push, so their calls are redirected, not their entry.
 constexpr std::uint8_t kGaugeShownBytes[] = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8,
-                                             0x70, 0x99, 0x41, 0x01, 0x48, 0x2B, 0xE0, 0x48};
-constexpr platform::FunctionFact kGaugeShown{L"FieldCommandCtrl_IsSummonGaugeShown_W744_3EC", 0x140C955B4,
+                                             0xA8, 0x2A, 0x66, 0x01, 0x48, 0x2B, 0xE0, 0x48};
+constexpr platform::FunctionFact kGaugeShown{L"FieldCommandCtrl_IsSummonGaugeShown_W744_3EC", 0x140B090CC,
                                              kGaugeShownBytes};
 constexpr std::uint8_t kOnFieldBytes[] = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8,
-                                          0xA8, 0x99, 0x41, 0x01, 0x48, 0x2B, 0xE0, 0x48};
-constexpr platform::FunctionFact kOnField{L"FieldCommandCtrl_IsSummonOnField_W744_3ED", 0x140C9557C, kOnFieldBytes};
+                                          0xE0, 0x2A, 0x66, 0x01, 0x48, 0x2B, 0xE0, 0x48};
+constexpr platform::FunctionFact kOnField{L"FieldCommandCtrl_IsSummonOnField_W744_3ED", 0x140B09094, kOnFieldBytes};
 
 enum class Reader : std::uint8_t
 {
@@ -42,12 +42,12 @@ struct Site
     Reader         reader;
 };
 constexpr std::array kSites{
-    Site{0x140988321, Reader::GaugeShown},  // the summon-ready test
-    Site{0x140D2342A, Reader::GaugeShown},  // the Summon row's check
-    Site{0x140D23212, Reader::OnField},     // the row count
-    Site{0x141089CB1, Reader::OnField},     // the top rows' cell setup
-    Site{0x14165CA93, Reader::OnField},     // the row builder: the summon's commands, else Summon
-    Site{0x1418EFD06, Reader::OnField},     // the summon icon's state
+    Site{0x1417A27A1, Reader::GaugeShown},  // the summon-ready test
+    Site{0x1411D64E5, Reader::GaugeShown},  // the Summon row's check
+    Site{0x1411D65BE, Reader::OnField},     // the row count
+    Site{0x1411B1FB1, Reader::OnField},     // the top rows' cell setup
+    Site{0x141760C73, Reader::OnField},     // the row builder: the summon's commands, else Summon
+    Site{0x14088DBCF, Reader::OnField},     // the summon icon's state
 };
 
 ReaderFn                                          g_shown = nullptr, g_onField = nullptr;

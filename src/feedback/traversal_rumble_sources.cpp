@@ -48,23 +48,23 @@ namespace {
 
 // The rumble sources that run outside the seats' scopes (research/RE-p2-rumble-owner-chocobo.md; slots and code read from
 // both exes). Each names a seat as the owner of its adds while it runs for the seat's scooter or chocobo.
-constexpr std::uintptr_t kScooterTickSlot = 0x1466B9D90;  // SBScooterMoveState slot 1: hit and loop rumble (actor tick)
-constexpr std::uintptr_t kScooterTick     = 0x14344F38C;
-constexpr std::uintptr_t kScooterOffSlot  = 0x1466B9DC8;  // ... slot 8, Deactivate: stops the loop
-constexpr std::uintptr_t kScooterOff      = 0x14344A350;
-constexpr std::uintptr_t kGlideSafeSlot   = 0x145CE5C48;  // the sky-glide rumble delegate's ExecuteIfSafe (+0x50, Broadcast)
-constexpr std::uintptr_t kGlideSafe       = 0x142247D60;
-constexpr std::uintptr_t kGlideRunSlot    = 0x145CE5C40;  // ... its Execute (+0x48)
-constexpr std::uintptr_t kGlideRun        = 0x142247D30;
+constexpr std::uintptr_t kScooterTickSlot = 0x146547860;  // SBScooterMoveState slot 1: hit and loop rumble (actor tick)
+constexpr std::uintptr_t kScooterTick     = 0x14316F660;
+constexpr std::uintptr_t kScooterOffSlot  = 0x146547898;  // ... slot 8, Deactivate: stops the loop
+constexpr std::uintptr_t kScooterOff      = 0x14316A150;
+constexpr std::uintptr_t kGlideSafeSlot   = 0x146545DD0;  // the sky-glide rumble delegate's ExecuteIfSafe (+0x50, Broadcast)
+constexpr std::uintptr_t kGlideSafe       = 0x14314299C;
+constexpr std::uintptr_t kGlideRunSlot    = 0x146545DC8;  // ... its Execute (+0x48)
+constexpr std::uintptr_t kGlideRun        = 0x143142980;
 constexpr std::uint8_t   kJumpEndedBytes[] = {0xB8, 0x28, 0x00, 0x00, 0x00};  // mov eax,28h
 // the jump box's OnEnded TFunction invoker (often the worker)
-constexpr platform::FunctionFact kJumpEnded{L"the jump box's OnEnded invoker", 0x1422ADF00, kJumpEndedBytes};
-constexpr std::uintptr_t kDriftSlot       = 0x146692AF0;  // the drift action's state 1 tick (state table; anim worker)
-constexpr std::uintptr_t kDrift           = 0x14328EFA4;
-constexpr std::uintptr_t kBrakeOneSlot    = 0x1470FCDE0;  // the brake move's phase 1 and 2 (phase table; anim worker)
-constexpr std::uintptr_t kBrakeOne        = 0x14328B9FC;
-constexpr std::uintptr_t kBrakeTwoSlot    = 0x1470FCDE8;
-constexpr std::uintptr_t kBrakeTwo        = 0x14328A1A0;
+constexpr platform::FunctionFact kJumpEnded{L"the jump box's OnEnded invoker", 0x143387694, kJumpEndedBytes};
+constexpr std::uintptr_t kDriftSlot       = 0x14651F8E0;  // the drift action's state 1 tick (state table; anim worker)
+constexpr std::uintptr_t kDrift           = 0x142FA1FF0;
+constexpr std::uintptr_t kBrakeOneSlot    = 0x146F30380;  // the brake move's phase 1 and 2 (phase table; anim worker)
+constexpr std::uintptr_t kBrakeOne        = 0x142F9EC8C;
+constexpr std::uintptr_t kBrakeTwoSlot    = 0x146F30388;
+constexpr std::uintptr_t kBrakeTwo        = 0x142F9D430;
 constexpr std::uint32_t  kStateOwner      = 0x8;    // the scooter move state's scooter; the glide state's move owner
 constexpr std::uint32_t  kOwnerWeak       = 0x8;    // ... whose weak at +8 is the chocobo
 constexpr std::uint32_t  kGlideState      = 0x18;   // the glide delegate instance's captured glide state
@@ -363,17 +363,13 @@ std::uint64_t BrakeTwo(void* move, std::uint64_t event, double xmm2, double xmm3
 bool PlaceJumpListLoad(const platform::GameImage& image) noexcept
 {
     using namespace traversal_rumble_code;
-    if (platform::RunningBuild() != platform::BuildIndex::Research)
-    {
-        return false;
-    }
-    const auto site = image.Rebase(kJumpListLoad, sizeof(kJumpListLoadBytes));
+    const auto site = image.OwnAddress(platform::BuildIndex::V1004, kJumpListLoad1004, kJumpListLoadBytes1004);
     if (!site)
     {
         return false;
     }
     const auto code = JumpListLoadCode(&g_jumpSlots);
-    return g_jumpListLoad.Install(*site, kJumpListLoadBytes, code, *site + sizeof(kJumpListLoadBytes));
+    return g_jumpListLoad.Install(*site, kJumpListLoadBytes1004, code, *site + sizeof(kJumpListLoadBytes1004));
 }
 
 /// A slot of a source, checked against the function the research read. Logged by the caller.
@@ -459,10 +455,10 @@ std::wstring Install(const platform::GameImage& image) noexcept
         on[i] = PlaceSource(image, kSources[i]);
     }
     // 1.004's add is inline: its list load must follow the invoker, so the invoker waits for it there.
-    const bool research = platform::RunningBuild() == platform::BuildIndex::Research;
-    const bool load     = research && PlaceJumpListLoad(image);
+    const bool v1004    = platform::RunningBuild() == platform::BuildIndex::V1004;
+    const bool load     = v1004 && PlaceJumpListLoad(image);
     const auto jumpAt   = platform::FindFunction(image, kJumpEnded);
-    const bool jump     = (load || !research) && jumpAt &&
+    const bool jump     = (load || !v1004) && jumpAt &&
                       g_jumpEnded.Install(*jumpAt, image.EntryInstruction(kJumpEnded.address, kJumpEnded.entryBytes),
                                           reinterpret_cast<std::uintptr_t>(&JumpEnded));
     if (!jump && g_jumpListLoad.IsInstalled())
@@ -475,7 +471,7 @@ std::wstring Install(const platform::GameImage& image) noexcept
         return std::format(L"players 2 and 3's sources outside their scopes: scooter {}, glide {}, jump box {}{}, drift {}, "
                            L"brake {}",
                            part(on[kScooterAt]), part(on[kGlideAt]), part(jump),
-                           research && jump ? L" (1.004: its inline add's list load)" : L"", part(on[kDriftAt]),
+                           v1004 && jump ? L" (1.004: its inline add's list load)" : L"", part(on[kDriftAt]),
                            part(on[kBrakeAt]));
     }
     catch (...)

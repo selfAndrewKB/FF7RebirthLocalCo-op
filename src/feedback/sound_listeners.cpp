@@ -45,47 +45,47 @@ constexpr int kColumns   = views::columns::kMaxColumns;   // the engine listener
 
 // 1.004 addresses (1.005 through replaced-audio-listener.json and replaced-sound-listeners.json; the slot table and
 // the gate C measure from research/RE-listener-per-seat.md, each read in both exes).
-constexpr std::uintptr_t kPushSlot          = 0x1465E6058;  // SEAD audio device vt+0x1B8
-constexpr std::uintptr_t kPush              = 0x14082ECE4;  // SeadAudioDevice_PushListener0ToSead(device)
-constexpr std::uintptr_t kDynamicTestSlot   = 0x1457DA960;  // SQEX::Sd::Lay::DynamicSound vt+0x160
-constexpr std::uintptr_t kDynamicTest       = 0x140B94018;  // SEAD_LayDynamic_UpdateAudible(object)
-constexpr std::uintptr_t kDynamicUpdateSlot = 0x1457DA858;  // Lay::DynamicSound vt+0x58
-constexpr std::uintptr_t kDynamicUpdate     = 0x1414624C0;  // SEAD_LayDynamic_Update_Doppler(object, dt): then the base
-constexpr std::uintptr_t kPointTestSlot     = 0x1457DA5D0;  // Lay::PointSound vt+0x160
-constexpr std::uintptr_t kPointTest         = 0x14127585C;  // SEAD_LayPoint_UpdateAudible(object): Point and SphWedge
-constexpr std::uintptr_t kPointUpdateSlot   = 0x1457DA4C8;  // Lay::PointSound vt+0x58
-constexpr std::uintptr_t kWedgeTestSlot     = 0x1457DA250;  // Lay::SphericalWedgeSound vt+0x160 (Point's test)
-constexpr std::uintptr_t kWedgeUpdateSlot   = 0x1457DA148;  // Lay::SphericalWedgeSound vt+0x58 (the base update)
-constexpr std::uintptr_t kPolygonTestSlot   = 0x1457DA410;  // Lay::PolygonSound vt+0x160
-constexpr std::uintptr_t kSectorTestSlot    = 0x1457DA090;  // Lay::CylindricalSectorSound vt+0x160 (Polygon's test)
-constexpr std::uintptr_t kAreaTest          = 0x14073F16C;  // SEAD_LayPolygon_UpdateAudible(object)
-constexpr std::uintptr_t kBaseUpdate        = 0x1407AC83C;  // SEAD_LayObj_Update_Base(object, dt): Calc3D, wedge gain, voice
-constexpr std::uintptr_t kVelocityCall      = 0x14082D51B;  // SEAD_Lay_UpdateFrame: E8 SEAD_LayListener_UpdateVelocity
-constexpr std::uintptr_t kVelocity          = 0x14161261C;  // SEAD_LayListener_UpdateVelocity(): the singleton's velocity
-constexpr std::uintptr_t kListenerGlobal    = 0x14939BAB0;  // g_SeadLayListener: the one SQEX::Sd::Lay::Listener
-constexpr std::uintptr_t kClipReturn        = 0x140807DE8;  // the AutoSe processor update's distance clip, after its read
-constexpr std::uintptr_t kClipUpdateCall    = 0x1408072F8;  // SeadAutoSeProc_TickById: E8 the processor update
-constexpr std::uintptr_t kClipUpdate        = 0x140807D24;  // SeadAutoSeProc_Update_ClipAndLodFilter(proc, dt, frame, ...)
-constexpr std::uintptr_t kMeasureCall       = 0x140807F05;  // the processor update: E8 the frame measure (gate C)
-constexpr std::uintptr_t kMeasureReturn     = 0x140808365;  // SeadAutoSeProc_AnalyzeFrame_ListenerDistSq, after its read
-constexpr std::uintptr_t kConvert           = 0x1470E3C48;  // AutoSe's position converter (a pointer; a copy by default)
-constexpr std::uintptr_t kLodSlot           = 0x145D72670;  // UEndAutoSeCallback vt+0x2A8
-constexpr std::uintptr_t kLod               = 0x143D6E0EC;  // EndAutoSeCallback_GetProcLODLevel_P1Listener(callback, char)
-constexpr std::uintptr_t kPcListener        = 0x140BF1968;  // the player controller's GetAudioListenerPosition
-inline constexpr platform::PerBuild<std::uint32_t> kPcListenerSlot{0xC70, 0xC78};
+constexpr std::uintptr_t kPushSlot          = 0x1464711E8;  // SEAD audio device vt+0x1B8
+constexpr std::uintptr_t kPush              = 0x140A11310;  // SeadAudioDevice_PushListener0ToSead(device)
+constexpr std::uintptr_t kDynamicTestSlot   = 0x145659A98;  // SQEX::Sd::Lay::DynamicSound vt+0x160
+constexpr std::uintptr_t kDynamicTest       = 0x140A0D918;  // SEAD_LayDynamic_UpdateAudible(object)
+constexpr std::uintptr_t kDynamicUpdateSlot = 0x145659990;  // Lay::DynamicSound vt+0x58
+constexpr std::uintptr_t kDynamicUpdate     = 0x1414A8424;  // SEAD_LayDynamic_Update_Doppler(object, dt): then the base
+constexpr std::uintptr_t kPointTestSlot     = 0x145659C58;  // Lay::PointSound vt+0x160
+constexpr std::uintptr_t kPointTest         = 0x1419D7B90;  // SEAD_LayPoint_UpdateAudible(object): Point and SphWedge
+constexpr std::uintptr_t kPointUpdateSlot   = 0x145659B50;  // Lay::PointSound vt+0x58
+constexpr std::uintptr_t kWedgeTestSlot     = 0x1456598D8;  // Lay::SphericalWedgeSound vt+0x160 (Point's test)
+constexpr std::uintptr_t kWedgeUpdateSlot   = 0x1456597D0;  // Lay::SphericalWedgeSound vt+0x58 (the base update)
+constexpr std::uintptr_t kPolygonTestSlot   = 0x145659E18;  // Lay::PolygonSound vt+0x160
+constexpr std::uintptr_t kSectorTestSlot    = 0x145659718;  // Lay::CylindricalSectorSound vt+0x160 (Polygon's test)
+constexpr std::uintptr_t kAreaTest          = 0x140857590;  // SEAD_LayPolygon_UpdateAudible(object)
+constexpr std::uintptr_t kBaseUpdate        = 0x14079FCCC;  // SEAD_LayObj_Update_Base(object, dt): Calc3D, wedge gain, voice
+constexpr std::uintptr_t kVelocityCall      = 0x140A10BDB;  // SEAD_Lay_UpdateFrame: E8 SEAD_LayListener_UpdateVelocity
+constexpr std::uintptr_t kVelocity          = 0x1416452F8;  // SEAD_LayListener_UpdateVelocity(): the singleton's velocity
+constexpr std::uintptr_t kListenerGlobal    = 0x1491D8350;  // g_SeadLayListener: the one SQEX::Sd::Lay::Listener
+constexpr std::uintptr_t kClipReturn        = 0x140E7AEB4;  // the AutoSe processor update's distance clip, after its read
+constexpr std::uintptr_t kClipUpdateCall    = 0x140E7AD80;  // SeadAutoSeProc_TickById: E8 the processor update
+constexpr std::uintptr_t kClipUpdate        = 0x140E7ADF0;  // SeadAutoSeProc_Update_ClipAndLodFilter(proc, dt, frame, ...)
+constexpr std::uintptr_t kMeasureCall       = 0x140E7AFD1;  // the processor update: E8 the frame measure (gate C)
+constexpr std::uintptr_t kMeasureReturn     = 0x140E7B425;  // SeadAutoSeProc_AnalyzeFrame_ListenerDistSq, after its read
+constexpr std::uintptr_t kConvert           = 0x146F16EB8;  // AutoSe's position converter (a pointer; a copy by default)
+constexpr std::uintptr_t kLodSlot           = 0x145BD2720;  // UEndAutoSeCallback vt+0x2A8
+constexpr std::uintptr_t kLod               = 0x143AD8B84;  // EndAutoSeCallback_GetProcLODLevel_P1Listener(callback, char)
+constexpr std::uintptr_t kPcListener        = 0x1409D4164;  // the player controller's GetAudioListenerPosition
+inline constexpr platform::PerBuild<std::uint32_t> kPcListenerSlot{0xC78, 0xC70};
 
 // SEAD_LayListener_Set(listener, position, front, up): writes the listener's position, previous position, front, up
 // and matrix; 0, or -1 if the matrix fails.
 constexpr std::uint8_t kListenerSetBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x55, 0x48, 0x8D, 0x6C, 0x24, 0xD9, 0xB8};
-constexpr platform::FunctionFact kListenerSet{L"SEAD_LayListener_Set", 0x1413E3AD0, kListenerSetBytes};
+constexpr platform::FunctionFact kListenerSet{L"SEAD_LayListener_Set", 0x140A11A6C, kListenerSetBytes};
 // SeadLayListener_GetPosition(out): the singleton's position, through SEAD's coordinate hook. Its first instruction,
 // `mov [rsp+10h], rbx` (5 bytes, no RIP-relative operand, no branch lands inside it), takes the entry redirect.
 constexpr std::uint8_t kGetPositionBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x57, 0xB8, 0x60, 0x00, 0x00, 0x00, 0xE8};
-constexpr platform::FunctionFact kGetPosition{L"SeadLayListener_GetPosition", 0x140808FA0, kGetPositionBytes};
+constexpr platform::FunctionFact kGetPosition{L"SeadLayListener_GetPosition", 0x140E7C068, kGetPositionBytes};
 constexpr std::size_t kGetPositionFirst = 5;
 // The gate C measure (record, analysis): `mov [rsp+18h], rbx; push rbp, rsi, rdi, r12, r13`, the same in both builds.
 constexpr std::uint8_t kMeasureBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x18, 0x55, 0x56, 0x57, 0x41, 0x54, 0x41, 0x55};
-constexpr platform::FunctionFact kMeasure{L"SeadAutoSeProc_AnalyzeFrame_ListenerDistSq", 0x140808208, kMeasureBytes};
+constexpr platform::FunctionFact kMeasure{L"SeadAutoSeProc_AnalyzeFrame_ListenerDistSq", 0x140E7B2C8, kMeasureBytes};
 
 using PushFn       = std::uint64_t (*)(void* device);
 using TestFn       = std::uint64_t (*)(void* object);               // UpdateAudible (vt+0x160)

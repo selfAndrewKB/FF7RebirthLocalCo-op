@@ -32,22 +32,22 @@ namespace generation = players::generation;
 // The holder update's icon loop (research/RE-p2-minimap-cost.md). Both calls take `mov rdx,[r15+r12]` (the source's
 // FName key, a qword) and `mov rcx,rdi` (the holder); neither result is read. Each call's five bytes cross a 16-byte
 // block.
-constexpr std::uintptr_t kUpdateCall          = 0x1408447BF;  // in range: AreaMapIcon_Update(holder, key, source)
+constexpr std::uintptr_t kUpdateCall          = 0x140B7C399;  // in range: AreaMapIcon_Update(holder, key, source)
 constexpr std::uint8_t   kUpdateBytes[]       = {0x48, 0x8B, 0xC4, 0x48, 0x89, 0x58, 0x08, 0x48, 0x89, 0x70, 0x18, 0x48,
                                                  0x89, 0x78, 0x20, 0x48, 0x89, 0x50, 0x10, 0x55, 0x41, 0x54, 0x41, 0x55};
-constexpr platform::FunctionFact kUpdate{L"AreaMapIcon_Update", 0x140C26810, kUpdateBytes};
+constexpr platform::FunctionFact kUpdate{L"AreaMapIcon_Update", 0x140DD2AD0, kUpdateBytes};
 constexpr std::uint8_t   kUpdateArgsBytes[]   = {0x4B, 0x8B, 0x14, 0x27, 0x4C, 0x8B, 0xC6, 0x48, 0x8B, 0xCF};
-constexpr platform::FunctionFact kUpdateArgs{L"the update call's arguments", 0x1408447B5, kUpdateArgsBytes};
+constexpr platform::FunctionFact kUpdateArgs{L"the update call's arguments", 0x140B7C38F, kUpdateArgsBytes};
 constexpr std::uint8_t   kUpdateAfterBytes[]  = {0xE9, 0x08, 0xFF, 0xFF, 0xFF};
-constexpr platform::FunctionFact kUpdateAfter{L"after the update call", 0x1408447C4, kUpdateAfterBytes};
-constexpr std::uintptr_t kRemoveCall          = 0x1408446CC;  // out of range: NaviMapHolder_RemoveIconEntry_DestroysWidget
+constexpr platform::FunctionFact kUpdateAfter{L"after the update call", 0x140B7C39E, kUpdateAfterBytes};
+constexpr std::uintptr_t kRemoveCall          = 0x140B7C2A6;  // out of range: NaviMapHolder_RemoveIconEntry_DestroysWidget
 constexpr std::uint8_t   kRemoveBytes[]       = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x48, 0x89, 0x6C, 0x24, 0x18,
                                                  0x56, 0x57, 0x41, 0x56, 0xB8, 0x40, 0x00, 0x00, 0x00, 0xE8};
-constexpr platform::FunctionFact kRemove{L"NaviMapHolder_RemoveIconEntry_DestroysWidget", 0x140843C44, kRemoveBytes};
+constexpr platform::FunctionFact kRemove{L"NaviMapHolder_RemoveIconEntry_DestroysWidget", 0x14078BFD0, kRemoveBytes};
 constexpr std::uint8_t   kRemoveArgsBytes[]   = {0x4B, 0x8B, 0x14, 0x27, 0x48, 0x8B, 0xCF};
-constexpr platform::FunctionFact kRemoveArgs{L"the remove call's arguments", 0x1408446C5, kRemoveArgsBytes};
+constexpr platform::FunctionFact kRemoveArgs{L"the remove call's arguments", 0x140B7C29F, kRemoveArgsBytes};
 constexpr std::uint8_t   kRemoveAfterBytes[]  = {0x8A, 0x9C, 0x24, 0x81, 0x00, 0x00, 0x00};
-constexpr platform::FunctionFact kRemoveAfter{L"after the remove call", 0x1408446D1, kRemoveAfterBytes};
+constexpr platform::FunctionFact kRemoveAfter{L"after the remove call", 0x140B7C2AB, kRemoveAfterBytes};
 
 // The holder's entries: a TSet at holder+0xE8 of 160-byte elements, the FName key at +0, the entry after it:
 // entry+0x8 the SEndMapIcon, entry+0x1C the icon kind. The widget's Slate visibility byte at +0x1B0 (stock 4.26

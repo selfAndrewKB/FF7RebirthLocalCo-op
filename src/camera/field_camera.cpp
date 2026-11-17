@@ -58,7 +58,7 @@ std::atomic<unsigned> g_uiRefusals{0};  // battle updates that ran without the s
 // UpdateCamera's call of the Field operator's Activate when a special camera (a shop's) first blends out: the resume
 // before it gave the Field operator that camera's last rotation (research/RE-p2-shop-camera-skip.md). Its return address,
 // this build (0 when not found): logged, to settle whether the mirror below snaps a seat's camera to it.
-constexpr std::uintptr_t kBlendOutResume = 0x140E5629C;
+constexpr std::uintptr_t kBlendOutResume = 0x140D520BC;
 std::uintptr_t           g_blendOutResume = 0;
 
 // By seat; index 0 (player 1) unused.

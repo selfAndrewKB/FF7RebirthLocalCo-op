@@ -32,8 +32,8 @@ namespace lss::camera::camera_override {
 namespace {
 
 // Facts read from the database (research/RE-p2-battle-camera.md; this build).
-constexpr std::uintptr_t kModuleGlobal   = 0x1491A4B78;  // TWeakPtr {object, reference controller}
-constexpr std::uintptr_t kModuleVTable   = 0x1466B70D0;  // FEndNotifyOverrideCameraModule
+constexpr std::uintptr_t kModuleGlobal   = 0x148FDCBF8;  // TWeakPtr {object, reference controller}
+constexpr std::uintptr_t kModuleVTable   = 0x1465446D0;  // FEndNotifyOverrideCameraModule
 constexpr std::uint32_t  kSlotFour       = 4;            // layer 4, NotifyOverride (camera/camera_access.h)
 constexpr std::uint32_t  kModuleOwner    = 0x50;         // the owner operator
 constexpr std::uint32_t  kModuleActive   = 0x44;         // entering / active bytes
@@ -46,18 +46,18 @@ constexpr std::uint32_t  kFieldOperator  = 0x2CB0;       // operator 12
 // CONFIRMED, OnLeaderChanged swaps each 0x40-byte delegate whole at +0x17C0 / +0x1800 (1.004: +0x17A0 / +0x17E0), so
 // the payload keeps its place inside it. The count: CONFIRMED, RemoveCameraOverride reads `mov esi,[rcx+1790h]` (1.004
 // [rcx+1770h]); research/RE-1005-offsets-B.md.
-constexpr platform::PerBuild<std::uint32_t> kAddedFn        = {0x17A0, 0x17C0};
-constexpr platform::PerBuild<std::uint32_t> kAddedPayload   = {0x17C8, 0x17E8};
-constexpr platform::PerBuild<std::uint32_t> kRemovedFn      = {0x17E0, 0x1800};
-constexpr platform::PerBuild<std::uint32_t> kRemovedPayload = {0x1808, 0x1828};
-constexpr platform::PerBuild<std::uint32_t> kHeldRequests   = {0x1770, 0x1790};
+constexpr platform::PerBuild<std::uint32_t> kAddedFn        = {0x17C0, 0x17A0};
+constexpr platform::PerBuild<std::uint32_t> kAddedPayload   = {0x17E8, 0x17C8};
+constexpr platform::PerBuild<std::uint32_t> kRemovedFn      = {0x1800, 0x17E0};
+constexpr platform::PerBuild<std::uint32_t> kRemovedPayload = {0x1828, 0x1808};
+constexpr platform::PerBuild<std::uint32_t> kHeldRequests   = {0x1790, 0x1770};
 
-constexpr std::uint8_t kAddedBytes[]   = {0x48, 0x89, 0x4C, 0x24, 0x08, 0x55, 0x53, 0x56, 0x57, 0x41, 0x57, 0x48, 0x8D,
-                                          0xAC, 0x24, 0x20, 0xFF, 0xFF, 0xFF, 0xB8, 0xE0, 0x01, 0x00, 0x00, 0xE8};
-constexpr std::uint8_t kRemovedBytes[] = {0x40, 0x57, 0xB8, 0x40, 0x00, 0x00, 0x00, 0xE8};
-constexpr platform::FunctionFact kAdded{L"NotifyOverride_OnSubjectCameraOverrideAdded_GlobalModule", 0x1423E30C0,
+constexpr std::uint8_t kAddedBytes[]   = {0x40, 0x53, 0xB8, 0x50, 0x00, 0x00, 0x00, 0xE8, 0x44, 0x1F, 0x95, 0x00, 0x48,
+                                          0x2B, 0xE0, 0x48, 0x8B, 0x84, 0x24, 0x90, 0x00, 0x00, 0x00, 0x48, 0x8B};
+constexpr std::uint8_t kRemovedBytes[] = {0xB8, 0x38, 0x00, 0x00, 0x00, 0xE8, 0xF6, 0x01};
+constexpr platform::FunctionFact kAdded{L"NotifyOverride_OnSubjectCameraOverrideAdded_GlobalModule", 0x141819C30,
                                         kAddedBytes};
-constexpr platform::FunctionFact kRemoved{L"NotifyOverride_OnSubjectCameraOverrideRemoved_GlobalModule", 0x1423E3730,
+constexpr platform::FunctionFact kRemoved{L"NotifyOverride_OnSubjectCameraOverrideRemoved_GlobalModule", 0x14186B980,
                                           kRemovedBytes};
 
 struct Pair  // a TWeakPtr as the global holds it

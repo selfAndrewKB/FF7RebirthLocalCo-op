@@ -56,60 +56,60 @@ constexpr std::size_t IndexOf(Kind kind) noexcept
 // The switch class's slots, the executer's tick slot and the point setter (research/RE-further-player-levers.md).
 constexpr std::uint8_t kNotifyBytes[] = {0x48, 0x8B, 0xC4, 0x48, 0x89, 0x58, 0x08, 0x48,
                                          0x89, 0x68, 0x10, 0x48, 0x89, 0x70, 0x18, 0x48};
-constexpr platform::SlotFact kNotifySlot{L"the switch's notify slot", 0x145871E20,
-                                         {L"SwitchAccess_Vt748_NotifyNear_StartOnHoldProgress", 0x140E83420, kNotifyBytes}};
+constexpr platform::SlotFact kNotifySlot{L"the switch's notify slot", 0x14567EB40,
+                                         {L"SwitchAccess_Vt748_NotifyNear_StartOnHoldProgress", 0x1410CE368, kNotifyBytes}};
 constexpr std::uint8_t kRegisterBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x57, 0xB8, 0x20,
-                                           0x00, 0x00, 0x00, 0xE8, 0xB8, 0x9D, 0xCC, 0x00};
-constexpr platform::SlotFact kRegisterSlot{L"the switch's register slot", 0x145871DF8,
-                                           {L"SwitchAccess_Vt720_RegisterWithLeaderPC_Set9E0_PointOn", 0x1413E5168,
+                                           0x00, 0x00, 0x00, 0xE8, 0x3C, 0xC9, 0x3E, 0x01};
+constexpr platform::SlotFact kRegisterSlot{L"the switch's register slot", 0x14567EB18,
+                                           {L"SwitchAccess_Vt720_RegisterWithLeaderPC_Set9E0_PointOn", 0x140D7F234,
                                             kRegisterBytes}};
 constexpr std::uint8_t kUnregisterBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x57, 0xB8, 0x20,
-                                             0x00, 0x00, 0x00, 0xE8, 0x64, 0x9D, 0xCC, 0x00};
-constexpr platform::SlotFact kUnregisterSlot{L"the switch's unregister slot", 0x145871E00,
+                                             0x00, 0x00, 0x00, 0xE8, 0x48, 0xC7, 0x3E, 0x01};
+constexpr platform::SlotFact kUnregisterSlot{L"the switch's unregister slot", 0x14567EB20,
                                              {L"SwitchAccess_Vt728_UnregisterLeader_PointOff_Clear9E0",
                                               facts::kSwitchAccessUnregister, kUnregisterBytes}};
 constexpr std::uint8_t kExecTickBytes[] = {0x40, 0x53, 0xB8, 0x30, 0x00, 0x00, 0x00, 0xE8,
-                                           0xF8, 0x4E, 0x8F, 0x01, 0x48, 0x2B, 0xE0, 0x80};
-constexpr platform::SlotFact kExecTickSlot{L"the switch executer's tick slot", 0x145796F38,
-                                           {L"SwitchAccessExecuter_Vt20_Tick_CallsVt88", 0x1407BA02C, kExecTickBytes}};
+                                           0x88, 0x7B, 0xA3, 0x00, 0x48, 0x2B, 0xE0, 0x80};
+constexpr platform::SlotFact kExecTickSlot{L"the switch executer's tick slot", 0x145679490,
+                                           {L"SwitchAccessExecuter_Vt20_Tick_CallsVt88", 0x141733FEC, kExecTickBytes}};
 // The setter's entry: mov [rsp+10h],rbx (the 5 bytes replaced), inside one 16-byte block.
 constexpr std::uint8_t kSetterBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x48, 0x89, 0x74,
                                          0x24, 0x18, 0x57, 0x41, 0x54, 0x41, 0x55, 0x41};
-constexpr platform::FunctionFact kSetter{L"SwitchAccess_SetFieldActionMgrPoint_HoldTime728", 0x140E835F8, kSetterBytes};
+constexpr platform::FunctionFact kSetter{L"SwitchAccess_SetFieldActionMgrPoint_HoldTime728", 0x1410CE540, kSetterBytes};
 // The setter's callers whose off is the actor's own, never a player's wish: the actor tick's (its point-off request)
 // and EndPlay's (an unconditional off for an actor leaving play). Known by the return address.
-constexpr std::uintptr_t kSetterOwnOffs[] = {0x140E8302D, 0x141444DE0};
+constexpr std::uintptr_t kSetterOwnOffs[] = {0x1410CDF75, 0x140D85C5C};
 
 // The tower terminal class's slots, its executer's tick slot and its point setter (research/RE-tower-activation.md).
 constexpr std::uint8_t kTowerNotifyBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x6C,
                                               0x24, 0x10, 0x48, 0x89, 0x74, 0x24, 0x18, 0x57};
-constexpr platform::SlotFact kTowerNotifySlot{L"the tower terminal's notify slot", 0x1458728F0,
-                                              {L"OneShotAccess_Vt748_NotifyNear_StartOnHoldProgress", 0x1436A13AC,
+constexpr platform::SlotFact kTowerNotifySlot{L"the tower terminal's notify slot", 0x14567E058,
+                                              {L"OneShotAccess_Vt748_NotifyNear_StartOnHoldProgress", 0x1433D8DCC,
                                                kTowerNotifyBytes}};
 constexpr std::uint8_t kTowerRegisterBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x74,
                                                 0x24, 0x10, 0x57, 0xB8, 0x20, 0x00, 0x00, 0x00};
-constexpr platform::SlotFact kTowerRegisterSlot{L"the tower terminal's register slot", 0x1458728C8,
-                                                {L"OneShotAccess_Vt720_RegisterWithLeaderPC_StoreLeader8B0", 0x1436A0A70,
+constexpr platform::SlotFact kTowerRegisterSlot{L"the tower terminal's register slot", 0x14567E030,
+                                                {L"OneShotAccess_Vt720_RegisterWithLeaderPC_StoreLeader8B0", 0x1433D8420,
                                                  kTowerRegisterBytes}};
 constexpr std::uint8_t kTowerUnregisterBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x57, 0xB8, 0x20,
-                                                  0x00, 0x00, 0x00, 0xE8, 0x80, 0xE3, 0xA0, 0xFE};
-constexpr platform::SlotFact kTowerUnregisterSlot{L"the tower terminal's unregister slot", 0x1458728D0,
+                                                  0x00, 0x00, 0x00, 0xE8, 0x20, 0x36, 0xD9, 0xFE};
+constexpr platform::SlotFact kTowerUnregisterSlot{L"the tower terminal's unregister slot", 0x14567E038,
                                                   {L"OneShotAccess_Vt728_UnregisterLeader_PointOff_Clear8B0",
                                                    facts::kOneShotAccessUnregister, kTowerUnregisterBytes}};
 // The executer's tick is the one other executers share: only the tower executer's slot is replaced.
-constexpr platform::SlotFact kTowerExecTickSlot{L"the tower terminal executer's tick slot", 0x146706CF0,
+constexpr platform::SlotFact kTowerExecTickSlot{L"the tower terminal executer's tick slot", 0x1465947A8,
                                                 traversal::traversal_camera::kSharedTick};
 // The setter's entry: mov [rsp+10h],rbx (the 5 bytes replaced), inside one 16-byte block.
 constexpr std::uint8_t kTowerSetterBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x48, 0x89, 0x74,
                                               0x24, 0x18, 0x57, 0xB8, 0x70, 0x01, 0x00, 0x00};
-constexpr platform::FunctionFact kTowerSetter{L"OneShotAccess_SetFieldActionMgrPoint", 0x141445AC0, kTowerSetterBytes};
+constexpr platform::FunctionFact kTowerSetter{L"OneShotAccess_SetFieldActionMgrPoint", 0x1412FC278, kTowerSetterBytes};
 // The actor's own offs: its tick's point-off request (which the executer's end asks for), EndPlay's, the wake timer's
 // (never on a tower; checked all the same, a site the research named).
-constexpr std::uintptr_t kTowerSetterOwnOffs[] = {0x1436AA034, 0x141444FE1, 0x1436A0653};
+constexpr std::uintptr_t kTowerSetterOwnOffs[] = {0x1433E191C, 0x1412FBB95, 0x1433D8003};
 // The one call outside a notify that is a player's: the unregister's off (that player's leave). The actor's state
 // update ends in the decide, which calls the setter outside any notify on every actor tick: such a call is the actor's,
 // never a player's wish.
-constexpr std::uintptr_t kTowerSetterLeaves[] = {0x1436A0BE2};
+constexpr std::uintptr_t kTowerSetterLeaves[] = {0x1433D8592};
 
 /// What differs between the two classes: their words in the log, their slots and setter, and the actor's own fields.
 struct KindFacts

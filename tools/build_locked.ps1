@@ -6,15 +6,11 @@
 .DESCRIPTION
     Two MSBuild runs in one build tree collide on the same intermediate files and PDBs. Every build
     goes through this script instead; a second caller waits for the first to finish.
-    -Regenerate first rebuilds src/platform/builds/build_1_005_replaced.h from every
-    tools/version_match/out-1.005/replaced-*.json (tools/version_match/replaced_header.py), inside the
-    same lock, so hand-found addresses from several investigators end up in one header.
 
 .EXAMPLE
-    .\tools\build_locked.ps1 -Regenerate -Tests
+    .\tools\build_locked.ps1 -Tests
 #>
 param(
-    [switch]$Regenerate,
     [switch]$Tests,
     [string]$Target = '',          # e.g. LocalSplitScreen; empty builds everything (the tests too; -Tests builds them anyway)
     [int]$WaitMinutes = 30
@@ -33,12 +29,6 @@ try {
 if (-not $owned) { throw "the build lock was not free within $WaitMinutes minutes" }
 try {
     if ($waited.Elapsed.TotalSeconds -ge 1) { "waited {0:N0} s for the build lock" -f $waited.Elapsed.TotalSeconds }
-    if ($Regenerate) {
-        $vm = Join-Path $root 'tools\version_match'
-        python (Join-Path $vm 'replaced_header.py') (Join-Path $vm 'out-1.005') '1.005' `
-            (Join-Path $root '..\builds\1.005\ff7rebirth_.exe') (Join-Path $root 'src\platform\builds\build_1_005_replaced.h')
-        if ($LASTEXITCODE -ne 0) { throw 'replaced_header.py failed' }
-    }
     $buildArgs = @('--build', $build, '--config', 'Game__Shipping__Win64')
     if ($Target) { $buildArgs += @('--target', $Target) }
     $output = & cmake @buildArgs 2>&1

@@ -43,14 +43,14 @@ struct Spot
     bool               update;   // the jump box's per-frame update, not a try-begin
 };
 constexpr Spot kSpots[] = {
-    {L"launch pad", {L"the chocobo launch pad's try-begin slot", 0x1466F5508,
-                     {L"ChocoboJumpStandActor_TryLaunchGlide", 0x1436663C0, kPadTryBytes}}, true, false},
-    {L"jump box", {L"the chocobo jump box's try-begin slot", 0x1466F6B40,
-                   {L"ChocoboJumpBoxActor_TryBegin", 0x143665FE8, kBoxTryBytes}}, false, false},
-    {L"slider", {L"the chocobo slider's try-begin slot", 0x1466F6090,
-                 {L"ChocoboSliderActor_TryBegin", 0x14366664C, kSliderTryBytes}}, false, false},
-    {L"jump box", {L"the chocobo jump box's update slot", 0x1466F6B48,
-                   {L"ChocoboJumpBoxActor_Update_ComboJumpFrame", 0x143662B60, kBoxUpdateBytes}}, false, true},
+    {L"launch pad", {L"the chocobo launch pad's try-begin slot", 0x146583C38,
+                     {L"ChocoboJumpStandActor_TryLaunchGlide", 0x14339BAD0, kPadTryBytes}}, true, false},
+    {L"jump box", {L"the chocobo jump box's try-begin slot", 0x146584598,
+                   {L"ChocoboJumpBoxActor_TryBegin", 0x14339B6F8, kBoxTryBytes}}, false, false},
+    {L"slider", {L"the chocobo slider's try-begin slot", 0x146582E90,
+                 {L"ChocoboSliderActor_TryBegin", 0x14339BD5C, kSliderTryBytes}}, false, false},
+    {L"jump box", {L"the chocobo jump box's update slot", 0x1465845A0,
+                   {L"ChocoboJumpBoxActor_Update_ComboJumpFrame", 0x1433981B4, kBoxUpdateBytes}}, false, true},
 };
 constexpr std::size_t kSpotCount = std::size(kSpots);
 constexpr std::size_t kBoxTry = 1, kBoxUpdate = 3;  // the jump box's two slots go in together

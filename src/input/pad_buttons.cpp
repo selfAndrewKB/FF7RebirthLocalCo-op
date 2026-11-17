@@ -42,8 +42,8 @@ namespace {
 // (this, float DeltaTime, FSlateApplication&, TSharedRef<ICursor> by address.)
 constexpr std::uint8_t kInputTickBytes[] = {0x40, 0x55, 0x53, 0x56, 0x57, 0x41, 0x54, 0x41, 0x55, 0x41, 0x56, 0x41,
                                             0x57, 0x48, 0x8D, 0xAC, 0x24, 0x18, 0xFD, 0xFF, 0xFF, 0xB8, 0xE8, 0x03};
-constexpr platform::SlotFact kInputTick{L"the Square input processor's Tick slot (1)", 0x145D40588,
-                                        {L"SquareInput__InputProcessorTick_AggregateDevices", 0x1407C057C, kInputTickBytes}};
+constexpr platform::SlotFact kInputTick{L"the Square input processor's Tick slot (1)", 0x145BA5CD0,
+                                        {L"SquareInput__InputProcessorTick_AggregateDevices", 0x1409F60B4, kInputTickBytes}};
 
 using TickFn = void (*)(void* self, float deltaTime, void* application, void* cursor);
 
@@ -52,9 +52,9 @@ using TickFn = void (*)(void* self, float deltaTime, void* application, void* cu
 // battle commands). Its callers that can carry a seat's pad's presses and whose call fits one aligned
 // block: the XInput main loop (every bound action) and two DirectInput loops.
 constexpr std::uint8_t   kActionDownBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x55, 0x56, 0x57, 0x41, 0x54, 0x41, 0x55,
-                                               0x41, 0x56, 0x41, 0x57, 0xB8, 0x00, 0x01, 0x00, 0x00, 0xE8, 0x6A, 0xB1};
-constexpr platform::FunctionFact kActionDown{L"SquareInput's action-down dispatcher", 0x1407C3DAC, kActionDownBytes};
-constexpr std::array<std::uintptr_t, 3> kActionDownCalls{0x140E745A0, 0x140E74141, 0x140E74312};
+                                               0x41, 0x56, 0x41, 0x57, 0xB8, 0x00, 0x01, 0x00, 0x00, 0xE8, 0xA6, 0x39};
+constexpr platform::FunctionFact kActionDown{L"SquareInput's action-down dispatcher", 0x140DD81C0, kActionDownBytes};
+constexpr std::array<std::uintptr_t, 3> kActionDownCalls{0x140E93EC3, 0x140E93A69, 0x140E93C3D};
 // 1.005 (research/RE-1005-field-2.md): the DirectInput key list's call sits at %16 = 13, so it crosses a 16-byte
 // block. It is in KeyDown_MapKeyToActions too, so on 1.005 a dispatch call that crosses a block is changed with the
 // extra-key calls, from the game thread in the input Tick after the game's (outside that function).
@@ -67,7 +67,7 @@ constexpr std::array<std::uintptr_t, 3> kActionDownCalls{0x140E745A0, 0x140E7414
 // that runs them, which runs on the game thread: from Slate's key-down, the Tick and the analog
 // handler [ASSUMPTION]). The DirectInput-only single calls stay
 // the game's.
-constexpr std::array<std::uintptr_t, 2> kExtraKeyCalls{0x140E7468D, 0x140E7477E};
+constexpr std::array<std::uintptr_t, 2> kExtraKeyCalls{0x140E93FAC, 0x140E940A7};
 constexpr unsigned                      kExtraKeyLines = 40;
 constexpr std::size_t                   kActionEventKey = 0x18;  // the action event's key (FName)
 
@@ -91,8 +91,8 @@ constexpr std::array<TableFields, 2> kTables{{{0xF8, L"raw"}, {0x148, L"UI"}}};
 #if LSS_DEV
 // The chocobo's Accel (R2) and Dash actions (research/RE-p2-chocobo-input.md): FName globals, traced frame by frame (dev
 // tools).
-constexpr std::uintptr_t kAccelKeyName = 0x1491E4550;
-constexpr std::uintptr_t kDashKeyName  = 0x1491E4580;
+constexpr std::uintptr_t kAccelKeyName = 0x14901C630;
+constexpr std::uintptr_t kDashKeyName  = 0x14901C660;
 #endif
 
 constexpr std::uint32_t kTableNum        = 0x08;
@@ -843,7 +843,7 @@ bool Install(const platform::GameImage& image) noexcept
         for (std::size_t i = 0; i < kActionDownCalls.size(); ++i)
         {
             const auto site = image.Rebase(kActionDownCalls[i], 5);
-            if (site && platform::RunningBuild() == platform::BuildIndex::V1005 && !players::call_site::FitsOneBlock(*site))
+            if (site && platform::RunningBuild() != platform::BuildIndex::V1004 && !players::call_site::FitsOneBlock(*site))
             {
                 g_lateActionDownSites[i] = *site;  // changed by the first Tick (InstallExtraKeyCalls)
                 continue;

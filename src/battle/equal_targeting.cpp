@@ -32,7 +32,7 @@ namespace {
 // The Condition select's one read of the leader type: BuildCandidates' call of UEndPartyAPI_GetPartyLeaderType
 // (PM ? PM[+0x150] : 16), once before its per-type loop; only al is used. On this build the call's five bytes cross a
 // 16-byte block (1.005: inside one). The target is checked by the redirect itself (the site must call it).
-constexpr std::uintptr_t kLeaderTypeCall = 0x140FA5E1F;
+constexpr std::uintptr_t kLeaderTypeCall = 0x141114547;
 using facts::kGetPartyLeaderType;
 
 // The Condition select, bool(selector, u8 reason, UObject** out), in its vtable's slot +0x88 (the out is written on
@@ -43,7 +43,7 @@ using facts::kCondTargetSelect;
 using facts::kCharacterByPlayerType;
 constexpr std::uint8_t kValidTargetBytes[] = {0x48, 0x8B, 0xC4, 0x48, 0x89, 0x58, 0x08, 0x48,
                                               0x89, 0x68, 0x18, 0x48, 0x89, 0x70, 0x20, 0x48};
-constexpr platform::FunctionFact kValidTarget{L"EnemyTargetSel_IsValidTarget", 0x140CB9B78, kValidTargetBytes};
+constexpr platform::FunctionFact kValidTarget{L"EnemyTargetSel_IsValidTarget", 0x140F743B4, kValidTargetBytes};
 
 constexpr std::uint8_t  kPartyLane = 0;  // the battle/field party's slots
 // The selector's excluded player types: TArray<u8, TInlineAllocator<10>> holding 15, so the data is on the heap
@@ -228,7 +228,7 @@ bool Install(const platform::GameImage& image) noexcept
     g_partyManager    = manager;
     g_crossing        = (*site & ~std::uintptr_t{0xF}) != ((*site + 4) & ~std::uintptr_t{0xF});
     // This runs in on_unreal_init: no world and no enemy exist yet, so no thread can be at the call. That is what
-    // InstallFromOwnThread needs for a call crossing two blocks (the research build's).
+    // InstallFromOwnThread needs for a call crossing two blocks (1.004's).
     const auto replacement = reinterpret_cast<std::uintptr_t>(&LeaderType);
     if (!(g_crossing ? g_leaderTypeCall.InstallFromOwnThread(*site, *target, replacement)
                      : g_leaderTypeCall.Install(*site, *target, replacement)))

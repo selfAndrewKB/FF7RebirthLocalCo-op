@@ -11,7 +11,7 @@
 //
 // A module queues its placement at install (before the engine-tick callback is live) and makes its own
 // install line when the placement runs; most do so through platform/deferred_sites.h, which queues itself
-// with a context. On the research build nothing is queued: its sites fit one block and are installed at
+// with a context. On 1.004 nothing is queued: its sites fit one block and are installed at
 // startup, as they always were.
 
 #include <array>

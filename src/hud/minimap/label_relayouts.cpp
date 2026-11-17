@@ -35,10 +35,10 @@ namespace generation = players::generation;
 // SEndTextBlock (research/RE-p2-minimap-cost.md). Tick, slot 1 of its vtable: writes the allotted size to +0x558;
 // with wrap (+0x408), +0x498 or justification on and that width ≠ +0x560, stores it in +0x560 and sets +0x565; then, if
 // +0x565 is set, clears it and relayouts. The entry bytes run up to its `vmovsd [rcx+558h], xmm0`.
-constexpr std::uint8_t kTickBytes[] = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0xA4, 0xEA, 0x22, 0x01, 0x48, 0x2B,
+constexpr std::uint8_t kTickBytes[] = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0x6C, 0xA9, 0x04, 0x01, 0x48, 0x2B,
                                        0xE0, 0xC5, 0xFB, 0x10, 0x02, 0xC5, 0xFB, 0x11, 0x81, 0x58, 0x05, 0x00, 0x00};
-constexpr platform::SlotFact kTick{L"the text block's Tick slot (1)", 0x1457936F8,
-                                   {L"SEndTextBlock__Tick_RelayoutIfWidthChanged", 0x140E80480, kTickBytes}};
+constexpr platform::SlotFact kTick{L"the text block's Tick slot (1)", 0x1455EA0D0,
+                                   {L"SEndTextBlock__Tick_RelayoutIfWidthChanged", 0x141121208, kTickBytes}};
 
 constexpr std::uint32_t kText      = 0x2C8;  // FString {TCHAR* data, int32 Num (with the null), int32 Max}
 constexpr std::uint32_t kTextNum   = 0x2D0;

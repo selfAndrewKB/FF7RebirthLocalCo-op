@@ -21,7 +21,7 @@ namespace lss::hud::wrangle_targets {
 namespace {
 
 // research/RE-chocobo-wrangle-targets.md (the offsets are the same in both builds).
-constexpr std::uintptr_t kCaptureManager = 0x1490FEDC8;  // g_EndChocoboCaptureManager (data)
+constexpr std::uintptr_t kCaptureManager = 0x148F32598;  // g_EndChocoboCaptureManager (data)
 constexpr std::uint32_t  kController     = 0x18;  // -> the capture controller (ctl)
 constexpr std::uint32_t  kEntries        = 664;   // ctl: the chocobo entries (data)
 constexpr std::uint32_t  kEntryCount     = 672;   // ctl: their count (i32)
@@ -37,14 +37,14 @@ constexpr std::size_t    kMaxEntries     = 16;
 // projection helper (a world point to the root overlay, with the edge clamp and the arrow's angle).
 constexpr std::uint8_t kPlaceEntryBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x18, 0x48, 0x89, 0x74, 0x24, 0x20, 0x55,
                                              0x57, 0x41, 0x56, 0x48, 0x8B, 0xEC, 0xB8, 0x50, 0x00, 0x00, 0x00};
-constexpr platform::FunctionFact kPlaceEntry{L"ChocoboCapture__PlaceStatusIconAndArrow_PrimaryPC", 0x14357CB40,
+constexpr platform::FunctionFact kPlaceEntry{L"ChocoboCapture__PlaceStatusIconAndArrow_PrimaryPC", 0x1432ACE18,
                                              kPlaceEntryBytes};
 constexpr std::uint8_t kProjectBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x6C, 0x24, 0x18, 0x56,
                                           0x57, 0x41, 0x56, 0xB8, 0xC0, 0x00, 0x00, 0x00};
-constexpr platform::FunctionFact kProject{L"EndUI__ProjectWorldToRootOverlay_PrimaryPC_EdgeAngle", 0x143BAD5E8,
+constexpr platform::FunctionFact kProject{L"EndUI__ProjectWorldToRootOverlay_PrimaryPC_EdgeAngle", 0x1438FEDCC,
                                           kProjectBytes};
 /// The edge margin the build's own placers pass the helper (read at their call sites: 1.004 0.0, 1.005 50.0).
-constexpr platform::PerBuild<float> kEdgeMargin = {0.0f, 50.0f};
+constexpr platform::PerBuild<float> kEdgeMargin = {50.0f, 0.0f};
 
 using PlaceEntryFn = void (*)(void* entry);
 using ProjectFn    = void (*)(const void* location, std::uint8_t* edge, float* out, float margin);

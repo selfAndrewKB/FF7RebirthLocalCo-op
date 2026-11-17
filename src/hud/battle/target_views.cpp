@@ -39,28 +39,28 @@ using platform::CallGuarded;
 
 // Facts read from the database (research/RE-p2-hud-targets.md; this build).
 constexpr std::uint8_t kCollectBytes[] = {0x48, 0x8B, 0xC4, 0x48, 0x89, 0x58, 0x10, 0x48, 0x89, 0x70, 0x18, 0x48, 0x89, 0x78,
-                                          0x20, 0x55, 0x41, 0x54, 0x41, 0x55, 0x41, 0x56, 0x41, 0x57, 0x48, 0x8D, 0xA8, 0xF8,
-                                          0xE7, 0xFF, 0xFF, 0xB8, 0xE0, 0x18, 0x00, 0x00, 0xE8, 0x6F, 0x2D, 0x2F, 0x01};
+                                          0x20, 0x55, 0x41, 0x54, 0x41, 0x55, 0x41, 0x56, 0x41, 0x57, 0x48, 0x8D, 0xA8, 0x08,
+                                          0xE8, 0xFF, 0xFF, 0xB8, 0xD0, 0x18, 0x00, 0x00, 0xE8, 0xFB, 0x52, 0x5F, 0x01};
 constexpr std::uint8_t kMainTargetBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x48, 0x89, 0x6C, 0x24, 0x18, 0x56, 0x57,
-                                             0x41, 0x56, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0xAC, 0xA0, 0xA9, 0x00};
-constexpr std::uint8_t kEnemyAiBytes[]    = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0x68, 0x23, 0x2F, 0x01};
+                                             0x41, 0x56, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0x08, 0x5E, 0x7F, 0x01};
+constexpr std::uint8_t kEnemyAiBytes[]    = {0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8, 0xBA, 0x49, 0x5F, 0x01, 0x48, 0x2B};
 
-constexpr platform::FunctionFact kCollect{L"EndUI__CollectLockOnTargets", 0x140DBC198, kCollectBytes};
-constexpr platform::FunctionFact kMainTarget{L"EndUI__GetMainTargetOfLockOnTarget", 0x141614E6C, kMainTargetBytes};
-constexpr platform::FunctionFact kEnemyAi{L"EndCharacter_GetEnemyAIComponent", 0x140DBCBBC, kEnemyAiBytes};
+constexpr platform::FunctionFact kCollect{L"EndUI__CollectLockOnTargets", 0x140B7685C, kCollectBytes};
+constexpr platform::FunctionFact kMainTarget{L"EndUI__GetMainTargetOfLockOnTarget", 0x140975D60, kMainTargetBytes};
+constexpr platform::FunctionFact kEnemyAi{L"EndCharacter_GetEnemyAIComponent", 0x140B771BC, kEnemyAiBytes};
 
 // The red ability label's lookup of its enemy's gauge: the entry for the character whose source is
 // the targeted key and whose widget is not Collapsed (EndUI__MF8_FindStatusScreenPointForCharacter;
 // its one call, in the ability-name tick; research/RE-p2-battle-popups.md).
 constexpr std::uint8_t kLookupBytes[] = {0x48, 0x8B, 0xC4, 0x48, 0x89, 0x58, 0x08, 0x4C, 0x89, 0x48, 0x20, 0x4C,
                                          0x89, 0x40, 0x18, 0x48, 0x89, 0x50, 0x10, 0x55, 0x56, 0x57, 0x41, 0x54};
-constexpr platform::FunctionFact kLookup{L"EndUI__MF8_FindStatusScreenPointForCharacter", 0x140A68C84, kLookupBytes};
-constexpr std::uintptr_t         kLookupCall = 0x140A68826;
+constexpr platform::FunctionFact kLookup{L"EndUI__MF8_FindStatusScreenPointForCharacter", 0x140F6DE00, kLookupBytes};
+constexpr std::uintptr_t         kLookupCall = 0x140F6EEFF;
 constexpr std::uint32_t          kTargetedKey = 0x140;  // the bar manager's targeted key, a TWeakPtr {object, controller}
 // The gauge manager's two calls to the collection: creating entries for new sources, and keeping only
 // collected ones.
-constexpr std::uintptr_t kCreateCall = 0x140A66B85;
-constexpr std::uintptr_t kSyncCall   = 0x140B20F39;
+constexpr std::uintptr_t kCreateCall = 0x140F6F67D;
+constexpr std::uintptr_t kSyncCall   = 0x140F73B8D;
 
 // The battle system's displayed target and cursor (player 1's outside every scope).
 using facts::kBattleStateGlobal;
@@ -457,7 +457,7 @@ bool Install(const platform::GameImage& image) noexcept
 
 namespace {
 
-/// The label lookup's call and both collection calls, then the install line. At install on the research build; on
+/// The label lookup's call and both collection calls, then the install line. At install on 1.004; on
 /// 1.005 from the game thread.
 bool InstallSites(const platform::GameImage& image) noexcept
 {

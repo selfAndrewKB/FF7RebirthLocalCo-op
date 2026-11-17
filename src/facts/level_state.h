@@ -19,21 +19,21 @@ using platform::FunctionFact;
 
 // ---- The row accessors (DataAcc_<Table>_Ctor(acc, FName)): 32 bytes of caller storage, the row at +8 ----
 inline constexpr std::uint8_t kRowAccessorBytes[] = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00};  // push rbx; mov eax, 20h
-inline constexpr FunctionFact kStateChangeRow{L"DataAcc_StateChange_Ctor", 0x14087B56C, kRowAccessorBytes};
-inline constexpr FunctionFact kStateTriggerRow{L"DataAcc_StateTrigger_Ctor", 0x140F7A0C8, kRowAccessorBytes};
+inline constexpr FunctionFact kStateChangeRow{L"DataAcc_StateChange_Ctor", 0x1409A891C, kRowAccessorBytes};
+inline constexpr FunctionFact kStateTriggerRow{L"DataAcc_StateTrigger_Ctor", 0x14196FF7C, kRowAccessorBytes};
 
 // ---- The state manager ([g_EndGameRoot]+0x170, facts/world.h kRootGameState) ----
 /// GS_CollectActiveSlotKeys(out): `out` fresh storage of 24 bytes (it never frees what was there); a TArray<int32> of
 /// every active slot's key, reserved to 1 MB through the game's allocator: freed with kFreeArrayData every call.
 inline constexpr std::uint8_t kCollectActiveSlotKeysBytes[] = {0x48, 0x8B, 0xC4, 0x48, 0x89, 0x58, 0x08, 0x48,
                                                                0x89, 0x68, 0x10, 0x48, 0x89, 0x70, 0x18, 0x48};
-inline constexpr FunctionFact kCollectActiveSlotKeys{L"GS_CollectActiveSlotKeys", 0x140973D74, kCollectActiveSlotKeysBytes};
+inline constexpr FunctionFact kCollectActiveSlotKeys{L"GS_CollectActiveSlotKeys", 0x1409AC184, kCollectActiveSlotKeysBytes};
 /// GS_GetObjectSlot_ByIndex(SM, key): the slot, or null when the key is not in the map (key 0 answers element 0).
 inline constexpr std::uint8_t kObjectSlotByKeyBytes[] = {0x8B, 0xC2, 0x44, 0x8B, 0xC2, 0x25, 0x00, 0x00,
                                                          0x00, 0xC0, 0x4C, 0x8B, 0xD1, 0x3D, 0x00, 0x00};
-inline constexpr FunctionFact kObjectSlotByKey{L"GS_GetObjectSlot_ByIndex", 0x140973AD8, kObjectSlotByKeyBytes};
+inline constexpr FunctionFact kObjectSlotByKey{L"GS_GetObjectSlot_ByIndex", 0x1409AC0B4, kObjectSlotByKeyBytes};
 /// g_StateTriggerLock: the CRITICAL_SECTION every state-trigger send runs under (recursive).
-inline constexpr std::uintptr_t kStateTriggerLock = 0x1491B33B0;
+inline constexpr std::uintptr_t kStateTriggerLock = 0x14864FC80;
 inline constexpr std::int32_t   kMaxActiveSlots   = 0x40000;  // the collector's own reserve
 // A slot: its owner object's FName and its current state row's FName.
 inline constexpr std::uint32_t kSlotOwner = 0x08;
@@ -41,12 +41,12 @@ inline constexpr std::uint32_t kSlotState = 0x10;
 /// GS_FindObjectByKeyAndAttribute(SM, FName object, attribute): the object's slot for that attribute, or null.
 inline constexpr std::uint8_t kFindObjectByKeyAndAttributeBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x54,
                                                                      0x24, 0x10, 0x57, 0xB8, 0x20, 0x00, 0x00, 0x00};
-inline constexpr FunctionFact kFindObjectByKeyAndAttribute{L"GS_FindObjectByKeyAndAttribute", 0x14087AD50,
+inline constexpr FunctionFact kFindObjectByKeyAndAttribute{L"GS_FindObjectByKeyAndAttribute", 0x140C23D4C,
                                                            kFindObjectByKeyAndAttributeBytes};
 /// GSObjectSlot_GetOffCode(slot): the slot's on/off code (its linked base entry's, else its own); 1 = switched off.
-inline constexpr std::uint8_t kSlotOffCodeBytes[] = {0x48, 0x8B, 0x05, 0x69, 0xEA, 0x61, 0x08, 0x4C,
+inline constexpr std::uint8_t kSlotOffCodeBytes[] = {0x48, 0x8B, 0x05, 0x85, 0xBB, 0x58, 0x08, 0x4C,
                                                      0x8B, 0xD9, 0x44, 0x8B, 0x41, 0x38};
-inline constexpr FunctionFact kSlotOffCode{L"GSObjectSlot_GetOffCode", 0x140AE0378, kSlotOffCodeBytes};
+inline constexpr FunctionFact kSlotOffCode{L"GSObjectSlot_GetOffCode", 0x1409A6A2C, kSlotOffCodeBytes};
 inline constexpr std::uint8_t kSlotOff = 1;
 
 // ---- A StateChange row (mapped; data_rows) ----
@@ -77,21 +77,21 @@ inline constexpr std::uint32_t kRootTriggerManager = 0x178;
 inline constexpr std::uint8_t kBoxBeginFirst[] = {0x48, 0x89, 0x5C, 0x24, 0x08};
 inline constexpr std::uint8_t kBoxBeginBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x54, 0x24,
                                                   0x10, 0x55, 0x56, 0x57, 0x41, 0x56, 0x41, 0x57};
-inline constexpr FunctionFact kBoxBegin{L"FieldStateTrigger_OnColliderBeginOverlap", 0x1409DF6F0, kBoxBeginBytes};
+inline constexpr FunctionFact kBoxBegin{L"FieldStateTrigger_OnColliderBeginOverlap", 0x141173484, kBoxBeginBytes};
 inline constexpr std::uint8_t kBoxEndBytes[] = {0x48, 0x89, 0x54, 0x24, 0x10, 0x55, 0x53, 0x57, 0x41,
                                                 0x55, 0x41, 0x56, 0x48, 0x8B, 0xEC, 0xB8, 0x30};
-inline constexpr FunctionFact kBoxEnd{L"FieldStateTrigger_OnColliderEndOverlap", 0x1409DE02C, kBoxEndBytes};
+inline constexpr FunctionFact kBoxEnd{L"FieldStateTrigger_OnColliderEndOverlap", 0x14117377C, kBoxEndBytes};
 /// LayoutVolumeTag_FindObjectName(FName* out, const FName* volumeTag): the box's layout object (0: none).
 inline constexpr std::uint8_t kBoxLayoutObjectBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x74, 0x24, 0x10};
-inline constexpr FunctionFact kBoxLayoutObject{L"LayoutVolumeTag_FindObjectName", 0x1409DEBD8, kBoxLayoutObjectBytes};
+inline constexpr FunctionFact kBoxLayoutObject{L"LayoutVolumeTag_FindObjectName", 0x141174CB4, kBoxLayoutObjectBytes};
 /// DataObjRegistry_FindRowByName(registry, FName, 16-byte scratch, u8* flag): a row or null; the ObjectLayout registry.
-inline constexpr std::uint8_t kFindRowByNameBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x4C, 0x89, 0x4C, 0x24, 0x20,
+inline constexpr std::uint8_t kFindRowByNameBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x4C, 0x89, 0x4C, 0x24, 0x20,
                                                        0x4C, 0x89, 0x44, 0x24, 0x18};
-inline constexpr FunctionFact   kFindRowByName{L"DataObjRegistry_FindRowByName", 0x1408BD0C0, kFindRowByNameBytes};
-inline constexpr std::uintptr_t kObjectLayoutRegistry = 0x1488DF470;
+inline constexpr FunctionFact   kFindRowByName{L"DataObjRegistry_FindRowByName", 0x14076A330, kFindRowByNameBytes};
+inline constexpr std::uintptr_t kObjectLayoutRegistry = 0x148712D00;
 inline constexpr std::uint32_t  kLayoutRowActorGroup  = 0x40;  // ObjectLayout: OverlapActorGroup (FName)
 /// DataAcc_ActorGroup_Ctor: the ActorGroup row (data_rows accessor); its ActorList (FNames) at +0, the first 32 read.
-inline constexpr FunctionFact kActorGroupRow{L"DataAcc_ActorGroup_Ctor", 0x140F6C0EC, kRowAccessorBytes};
+inline constexpr FunctionFact kActorGroupRow{L"DataAcc_ActorGroup_Ctor", 0x141217A24, kRowAccessorBytes};
 inline constexpr std::int32_t kActorGroupActorsRead = 32;
 inline constexpr std::int32_t kBoxSlotAttribute     = 1;  // the box object's state slot whose Status is the trigger sent
 /// A character's own trigger tracker (both builds): the boxes it stood in at the last pass (FNames, inline 32, sorted),
@@ -114,7 +114,7 @@ inline constexpr std::uint32_t kComponentWorldScale       = 0x1E0;
 
 // ---- The AI system's setting groups (EndAISystem_GetFromGameModeWorld()+0x540, a TMap<FName, TArray<entry>>) ----
 inline constexpr std::uint8_t kAiSystemBytes[] = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00};
-inline constexpr FunctionFact kAiSystem{L"EndAISystem_GetFromGameModeWorld", 0x140C92B2C, kAiSystemBytes};
+inline constexpr FunctionFact kAiSystem{L"EndAISystem_GetFromGameModeWorld", 0x140897BE4, kAiSystemBytes};
 inline constexpr std::uint32_t kAiSystemGroups     = 0x540;
 inline constexpr std::uint32_t kGroupPairStride    = 32;   // {FName key, entry* data +8, i32 count +16, ...}
 inline constexpr std::uint32_t kGroupPairData      = 8;
@@ -150,11 +150,11 @@ inline constexpr std::int32_t  kRoutePointsMax    = 256;    // far above any rou
 // ---- The field's named points (FieldPoint_FindByNameGlobal(const FName*): the registry in the manager at
 // kRootTriggerManager, read inside without a null check; an FTransform* or null for a point not loaded) ----
 inline constexpr std::uint8_t  kFieldPointFindBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x8B, 0x05};
-inline constexpr FunctionFact  kFieldPointFind{L"FieldPoint_FindByNameGlobal", 0x140EEB718, kFieldPointFindBytes};
+inline constexpr FunctionFact  kFieldPointFind{L"FieldPoint_FindByNameGlobal", 0x140F50EBC, kFieldPointFindBytes};
 inline constexpr std::uint32_t kFieldPointLocation = 0x10;  // the transform's translation
 
 // ---- The field icons (g_FieldIconSystem, a pointer; its +0x500 the icon manager) ----
-inline constexpr std::uintptr_t kFieldIconSystem   = 0x14939BC78;
+inline constexpr std::uintptr_t kFieldIconSystem   = 0x1491D8488;
 inline constexpr std::uint32_t  kIconSystemManager = 0x500;
 inline constexpr std::uint32_t  kIconManagerKeys   = 0x1E0;  // TSparseArray of 20-byte {FName key, i32 index +8}
 inline constexpr std::uint32_t  kIconKeyStride     = 20;

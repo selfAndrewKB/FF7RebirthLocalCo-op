@@ -53,12 +53,12 @@ using GetCoordinatorFn = void* (*)(void* controller, std::uint8_t type);
 
 constexpr std::uint8_t kBeginRideBytes[] = {0x48, 0x8B, 0xC4, 0x48, 0x89, 0x58, 0x08, 0x48, 0x89, 0x68, 0x10, 0x48,
                                             0x89, 0x70, 0x18, 0x48, 0x89, 0x78, 0x20, 0x41, 0x56, 0xB8, 0x30, 0x00};
-constexpr platform::FunctionFact kBeginRide{L"ChocoboCoordinator_BeginRide_SetActive", 0x143DAB214, kBeginRideBytes};
+constexpr platform::FunctionFact kBeginRide{L"ChocoboCoordinator_BeginRide_SetActive", 0x143B18214, kBeginRideBytes};
 using BeginRideFn = void (*)(void* coordinator, void* chocobo, void* rider, bool instant, bool applyNow);
 
 constexpr std::uint8_t kEndRideBytes[] = {0x48, 0x8B, 0xC4, 0x48, 0x89, 0x58, 0x08, 0x48, 0x89, 0x68, 0x10, 0x48,
                                           0x89, 0x70, 0x18, 0x48, 0x89, 0x78, 0x20, 0x41, 0x56, 0xB8, 0x90, 0x00};
-constexpr platform::FunctionFact kEndRide{L"ChocoboCoordinator_EndRide_ClearActive", 0x143DAAB98, kEndRideBytes};
+constexpr platform::FunctionFact kEndRide{L"ChocoboCoordinator_EndRide_ClearActive", 0x143B17AEC, kEndRideBytes};
 struct CharacterArray  // TArray<AEndCharacter*>, which EndRide fills with the riders it let go of
 {
     void**       data = nullptr;
@@ -102,7 +102,7 @@ using facts::kChocoboCoordinatorVTable;
 using facts::kChocoboMoveStateVTable;
 using facts::kBattlePlayerComponentVTable;
 using facts::kChocoboCameraModuleVTable;
-constexpr std::uintptr_t kVehicleKeyName    = 0x1491E4538;  // FName "Vehicle": the getoff button
+constexpr std::uintptr_t kVehicleKeyName    = 0x14901C618;  // FName "Vehicle": the getoff button
 // The chocobo move state's row request bytes (handle +0x48): the summon rows, then Dash, Dismount, Jet, Scent, Scour
 // (research/RE-p2-chocobo-rows.md); 1 = lit, 2 = dim.
 constexpr std::uint32_t kRowRequests[] = {0xE8, 0x138, 0x188, 0x248, 0x298, 0x2E8, 0x338, 0x388};

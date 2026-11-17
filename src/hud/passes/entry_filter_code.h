@@ -63,20 +63,20 @@ struct EntryFilterFields
 
 /// The instruction each site replaces, as the research read it.
 inline constexpr std::uint8_t kLoadVertexBufferBytes[] = {0x48, 0x8B, 0x87, 0x90, 0x00, 0x00, 0x00};  // mov rax,[rdi+90h]
-// The same load in pool 0's consume (FEndMenuRenderer__OnRenderToTexture_ConsumePool0; r13 = the
-// renderer, r9 = the entry, the index buffer and SRM slot already at [rsp+28h]/[rsp+30h]; research/RE-p2-own-minimap.md):
-// the minimap's map entries, so each further column's minimap entry gets its own buffers the same way.
+// Pool 0's consume (FEndMenuRenderer__OnRenderToTexture_ConsumePool0; r13 = the renderer, r9 = the entry, the index
+// buffer and SRM slot already at [rsp+28h]/[rsp+30h]; research/RE-p2-own-minimap.md, RE-1005-hud-2.md): the minimap's
+// map entries, so each further column's minimap entry gets its own buffers the same way. Its load of pool 0's vertex
+// buffer crosses a 16-byte block, so the site is the next instruction, the store of the vertex-buffer argument
+// (`mov [rsp+20h],rax`, one block; the call of DrawLayerEntry follows). rax already holds pool 0's vertex buffer
+// there, r9 the entry.
+inline constexpr std::uint8_t kStoreVertexBufferArgBytes[] = {0x48, 0x89, 0x44, 0x24, 0x20};  // mov [rsp+20h],rax
+// Game version 1.004: the same load fits one block and is the site itself.
 inline constexpr std::uint8_t kLoadPoolZeroVertexBufferBytes[] = {0x49, 0x8B, 0x85, 0x80, 0x00, 0x00, 0x00};  // mov rax,[r13+80h]
 inline constexpr std::uint8_t kDrawGateBytes[]         = {0x41, 0x83, 0x79, 0x08, 0x00};              // cmp dword [r9+8],0
-// Game version 1.005 (research/RE-1005-hud-2.md): pool 0's load crosses a 16-byte block, so the site is the
-// next instruction, the store of the vertex-buffer argument (`mov [rsp+20h],rax`, one block; the call of
-// DrawLayerEntry follows). rax already holds pool 0's vertex buffer there, r9 the entry.
-inline constexpr std::uint8_t kStoreVertexBufferArgBytes1005[] = {0x48, 0x89, 0x44, 0x24, 0x20};  // mov [rsp+20h],rax
 
 // One column's test and loads, the same length in both buffer builders (74 bytes), then the replaced instruction.
-inline constexpr std::size_t kEntryBuffersCodeSize          = 74 * kFurtherColumns + sizeof(kLoadVertexBufferBytes);
-inline constexpr std::size_t kEntryBuffersStoreCodeSize1005 =
-    74 * kFurtherColumns + sizeof(kStoreVertexBufferArgBytes1005);
+inline constexpr std::size_t kEntryBuffersCodeSize      = 74 * kFurtherColumns + sizeof(kLoadVertexBufferBytes);
+inline constexpr std::size_t kEntryBuffersStoreCodeSize = 74 * kFurtherColumns + sizeof(kStoreVertexBufferArgBytes);
 // The family test (23 bytes), one name test per overlay entry (23 bytes each: the further columns', then column 0's),
 // the skip's tail (6 bytes), then the replaced instruction.
 inline constexpr std::size_t kEntryDrawGateCodeSize = 23 + 23 * (kFurtherColumns + 1) + 6 + sizeof(kDrawGateBytes);
@@ -84,7 +84,7 @@ inline constexpr std::size_t kEntryDrawGateCodeSize = 23 + 23 * (kFurtherColumns
 // Every jump is a short one (rel8, at most 127 bytes forward): the longest are the first column's jump past the other
 // columns to the end, and the gate's first jump past every name test to the replaced instruction.
 static_assert(74 * (kFurtherColumns - 1) + sizeof(kLoadVertexBufferBytes) <= 127, "a buffers jump needs rel32");
-static_assert(74 * (kFurtherColumns - 1) <= 127, "a 1.005 store jump needs rel32");
+static_assert(74 * (kFurtherColumns - 1) <= 127, "a store jump needs rel32");
 static_assert(5 + 23 * (kFurtherColumns + 1) + 6 <= 127, "a draw gate jump needs rel32");
 
 namespace detail {
@@ -189,10 +189,10 @@ inline std::array<std::uint8_t, kEntryBuffersCodeSize> EntryBuffersCode(
 /// vertex buffer and must survive for every other entry, so the code reads its fields through r10, which is volatile
 /// and carries no argument of the call that follows (DrawLayerEntry: rcx, rdx, r8, r9 and the stack); the flags are
 /// not read before that call either.
-inline std::array<std::uint8_t, kEntryBuffersStoreCodeSize1005> EntryBuffersStoreCode1005(
+inline std::array<std::uint8_t, kEntryBuffersStoreCodeSize> EntryBuffersStoreCode(
     const EntryFilterFields& fields) noexcept
 {
-    std::array<std::uint8_t, kEntryBuffersStoreCodeSize1005> code{};
+    std::array<std::uint8_t, kEntryBuffersStoreCodeSize> code{};
     detail::Emitter emit(code);
     std::size_t     toStore[kFurtherColumns] = {};
     for (int i = 0; i < kFurtherColumns; ++i)
@@ -217,7 +217,7 @@ inline std::array<std::uint8_t, kEntryBuffersStoreCodeSize1005> EntryBuffersStor
         emit.Land(jump);
     }
     // store: the replaced instruction (the jump back is appended)
-    emit.Bytes(kStoreVertexBufferArgBytes1005, sizeof(kStoreVertexBufferArgBytes1005));
+    emit.Bytes(kStoreVertexBufferArgBytes, sizeof(kStoreVertexBufferArgBytes));
     return code;
 }
 

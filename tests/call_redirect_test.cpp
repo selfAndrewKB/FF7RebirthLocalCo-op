@@ -231,8 +231,8 @@ void TestTailJump()
 }
 void TestInstallThroughTheImage()
 {
-    std::puts("call redirect: a site given as a research address is rebased through the image, the target live or "
-              "research");
+    std::puts("call redirect: a site given as a source address is rebased through the image, the target live or "
+              "a source address");
     const GameLikeCode game;
     constexpr std::uintptr_t kIdaBase = 0x140000000;
     const auto image = lss::platform::GameImage::At(game.At(0), 0x1000);  // the page as the image
@@ -241,13 +241,13 @@ void TestInstallThroughTheImage()
     lss::platform::CallRedirect redirect;
     g_redirect = &redirect;
     EXPECT(!redirect.Install(image, kIdaBase + 0x2000, game.At(GameLikeCode::kTargetOffset), replacement));  // outside
-    EXPECT(!redirect.InstallResearch(image, kIdaBase + GameLikeCode::kCallOffset, kIdaBase + 0x2000, replacement));
+    EXPECT(!redirect.InstallSource(image, kIdaBase + GameLikeCode::kCallOffset, kIdaBase + 0x2000, replacement));
     EXPECT(game.Run() == 1);
     EXPECT(redirect.Install(image, kIdaBase + GameLikeCode::kCallOffset, game.At(GameLikeCode::kTargetOffset),
                             replacement));
     EXPECT(game.Run() == 3);
     EXPECT(redirect.Restore());
-    EXPECT(redirect.InstallResearch(image, kIdaBase + GameLikeCode::kCallOffset, kIdaBase + GameLikeCode::kTargetOffset,
+    EXPECT(redirect.InstallSource(image, kIdaBase + GameLikeCode::kCallOffset, kIdaBase + GameLikeCode::kTargetOffset,
                                     replacement));
     EXPECT(game.Run() == 3);
     EXPECT(redirect.Restore());

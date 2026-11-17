@@ -31,38 +31,38 @@ constexpr std::uint8_t kEnemyBytes[]  = {0x48, 0x8B, 0xC4, 0x48, 0x89, 0x58, 0x0
                                          0x89, 0x68, 0x10, 0x48, 0x89, 0x70, 0x18, 0x48};
 constexpr std::uint8_t kPlayerBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x6C,
                                          0x24, 0x10, 0x48, 0x89, 0x74, 0x24, 0x18, 0x57};
-constexpr std::uint8_t kMoogleBytes[] = {0xB8, 0x38, 0x00, 0x00, 0x00, 0xE8, 0x7A, 0x28,
-                                         0xC9, 0xFE, 0x48, 0x2B, 0xE0, 0x41, 0x80, 0x79};
-constexpr std::uint8_t kSummonBytes[] = {0xB8, 0x38, 0x00, 0x00, 0x00, 0xE8, 0x76, 0xCE,
-                                         0xC8, 0xFE, 0x48, 0x2B, 0xE0, 0x48, 0x83, 0xC4};
+constexpr std::uint8_t kMoogleBytes[] = {0xB8, 0x38, 0x00, 0x00, 0x00, 0xE8, 0xCA, 0x3B,
+                                         0x03, 0xFF, 0x48, 0x2B, 0xE0, 0x41, 0x80, 0x79};
+constexpr std::uint8_t kSummonBytes[] = {0xB8, 0x38, 0x00, 0x00, 0x00, 0xE8, 0xA6, 0xD5,
+                                         0x02, 0xFF, 0x48, 0x2B, 0xE0, 0x48, 0x83, 0xC4};
 constexpr std::uint8_t kCondorBytes[] = {0x40, 0x53, 0xB8, 0x30, 0x00, 0x00, 0x00, 0xE8,
-                                         0x5C, 0xCE, 0xC8, 0xFE, 0x48, 0x2B, 0xE0, 0x48};
+                                         0x8C, 0xD5, 0x02, 0xFF, 0x48, 0x2B, 0xE0, 0x48};
 constexpr std::uint8_t kGatedBytes[]  = {0x48, 0x85, 0xD2, 0x0F, 0x84, 0x7C, 0x02, 0x00,
                                          0x00, 0x48, 0x8B, 0xC4, 0x48, 0x89, 0x58, 0x08};
 
-constexpr platform::FunctionFact kBase{L"BattleCtrlComp_ApplyTakeDamage_FireAIEvents", 0x1418E6AC8, kBaseBytes};
-constexpr platform::FunctionFact kEnemy{L"EnemyBattleComp_Vt380_OnTakeDamage", 0x140CB40D4, kEnemyBytes};
-constexpr platform::FunctionFact kPlayer{L"BattlePlayerComp_Vt380_OnTakeDamage", 0x140CB27B4, kPlayerBytes};
-constexpr platform::FunctionFact kMoogle{L"FatMoogleComp_Vt380_OnTakeDamage_IfNotHeal", 0x14341C6AC, kMoogleBytes};
-constexpr platform::FunctionFact kSummon{L"SummonComp_Vt380_OnTakeDamage", 0x1434220B0, kSummonBytes};
-constexpr platform::FunctionFact kCondor{L"CondorFortComp_Vt380_OnTakeDamage", 0x1434220C8, kCondorBytes};
-constexpr platform::FunctionFact kGated{L"BattleComp2_Vt380_OnTakeDamage_Gated", 0x143422120, kGatedBytes};
+constexpr platform::FunctionFact kBase{L"BattleCtrlComp_ApplyTakeDamage_FireAIEvents", 0x14152024C, kBaseBytes};
+constexpr platform::FunctionFact kEnemy{L"EnemyBattleComp_Vt380_OnTakeDamage", 0x1412E1DE8, kEnemyBytes};
+constexpr platform::FunctionFact kPlayer{L"BattlePlayerComp_Vt380_OnTakeDamage", 0x1412E05D4, kPlayerBytes};
+constexpr platform::FunctionFact kMoogle{L"FatMoogleComp_Vt380_OnTakeDamage_IfNotHeal", 0x143137FAC, kMoogleBytes};
+constexpr platform::FunctionFact kSummon{L"SummonComp_Vt380_OnTakeDamage", 0x14313E5D0, kSummonBytes};
+constexpr platform::FunctionFact kCondor{L"CondorFortComp_Vt380_OnTakeDamage", 0x14313E5E8, kCondorBytes};
+constexpr platform::FunctionFact kGated{L"BattleComp2_Vt380_OnTakeDamage_Gated", 0x14313E640, kGatedBytes};
 
 // Every vtable entry holding one of them (the only references to the six overrides; the base is otherwise called only
 // by the overrides as their parent, so it runs inside a wrapped call).
 constexpr std::size_t        kSlots      = 10;
 constexpr std::size_t        kPlayerSlot = 2;  // a member's own component: the battle-player slot, where a human is the victim
 constexpr platform::SlotFact kSlotFacts[kSlots] = {
-    {L"the Enemy battle component's damage slot", 0x1457F1040, kEnemy},
-    {L"the EnemyEN2228 battle component's damage slot", 0x1466B7678, kEnemy},
-    {L"the BattlePlayer component's damage slot", 0x145796258, kPlayer},
-    {L"the PlayerBase battle component's damage slot", 0x145795B40, kBase},
-    {L"the Friend battle component's damage slot", 0x14580B078, kBase},
-    {L"the Battle battle component's damage slot", 0x145CE3E58, kBase},
-    {L"the PlayerBase2 battle component's damage slot", 0x14580BA48, kMoogle},
-    {L"the Summon battle component's damage slot", 0x145902A48, kSummon},
-    {L"the CondorFort battle component's damage slot", 0x1466B87F8, kCondor},
-    {L"the Battle2 battle component's damage slot", 0x1466B7F08, kGated},
+    {L"the Enemy battle component's damage slot", 0x1455FEBB0, kEnemy},
+    {L"the EnemyEN2228 battle component's damage slot", 0x145B4DDD8, kEnemy},
+    {L"the BattlePlayer component's damage slot", 0x145611AC8, kPlayer},
+    {L"the PlayerBase battle component's damage slot", 0x1455FE270, kBase},
+    {L"the Friend battle component's damage slot", 0x1456BA658, kBase},
+    {L"the Battle battle component's damage slot", 0x145B4D5D0, kBase},
+    {L"the PlayerBase2 battle component's damage slot", 0x1456B9DE8, kMoogle},
+    {L"the Summon battle component's damage slot", 0x14576FCA8, kSummon},
+    {L"the CondorFort battle component's damage slot", 0x146545818, kCondor},
+    {L"the Battle2 battle component's damage slot", 0x146544FF8, kGated},
 };
 constexpr const wchar_t* kSlotNames[kSlots] = {L"Enemy",    L"EnemyEN2228", L"BattlePlayer", L"PlayerBase",
                                                L"Friend",   L"Battle",      L"PlayerBase2",  L"Summon",
@@ -71,15 +71,15 @@ constexpr const wchar_t* kSlotNames[kSlots] = {L"Enemy",    L"EnemyEN2228", L"Ba
 // The summon gauge's one leader read (EnemyBattleComp_SummonGauge_AddOnHit_LeaderPtr: attacker == leader → the
 // "Player" charge scale, else "Guest"), called from the Enemy override after the base. Inside one 16-byte block in both
 // builds; no branch lands inside it.
-constexpr std::uintptr_t kLeaderReadCall = 0x140CB3D51;
+constexpr std::uintptr_t kLeaderReadCall = 0x1412E19B1;
 
 // The enemy AI's reaction sensing (AIBrainReactionSensing_Vt20_Tick): its two blueprint events, whose second argument
 // is the attacking character. The first call is inside one 16-byte block in both builds; the second crosses one in
 // both (InstallFromOwnThread, at on_unreal_init). No branch lands inside either.
-constexpr std::uintptr_t kSensingCall     = 0x1409B7A91;  // OnReactionSensingInvoke(ctrl, causer, handle, type, dir)
-constexpr std::uintptr_t kSensing         = 0x14176F28C;
-constexpr std::uintptr_t kTakeAbilityCall = 0x1409B7ACF;  // OnReactionSensingTakeAbilityInvoke(ctrl, causer, handle)
-constexpr std::uintptr_t kTakeAbility     = 0x1417B7008;
+constexpr std::uintptr_t kSensingCall     = 0x140A58971;  // OnReactionSensingInvoke(ctrl, causer, handle, type, dir)
+constexpr std::uintptr_t kSensing         = 0x1417F86E0;
+constexpr std::uintptr_t kTakeAbilityCall = 0x140A589AF;  // OnReactionSensingTakeAbilityInvoke(ctrl, causer, handle)
+constexpr std::uintptr_t kTakeAbility     = 0x141850EBC;
 
 using DamageFn = std::uint64_t (*)(std::uint64_t component, std::uint64_t attacker, std::uint64_t hit,
                                    std::uint64_t damage, std::uint64_t e);

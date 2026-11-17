@@ -16,7 +16,7 @@ namespace lss::facts {
 using platform::FunctionFact;
 
 /// g_EndGameRoot: a pointer global the game mode fills, the root of the field's managers. Its slots (each a pointer):
-inline constexpr std::uintptr_t kEndGameRoot    = 0x1490FEDE8;
+inline constexpr std::uintptr_t kEndGameRoot    = 0x148F325B8;
 inline constexpr std::uint32_t  kRootGameState  = 0x170;  // the game state: the on/off table's owner and its counters
 inline constexpr std::uint32_t  kRootCharaPop   = 0x180;  // the CharaPop manager (world/charapop_facts.h)
 inline constexpr std::uint32_t  kRootModeHolder = 0x1B8;  // the mode holder (the encounter manager; +0x3D558 its state)
@@ -30,14 +30,14 @@ inline constexpr std::uint32_t  kWorldItemMapHashNext = 0xC0;  // i32
 
 /// g_LocationVolumeManager (a pointer): the AEndLocationVolumes and the game's own containment test,
 /// LocationVolume_ContainsPoint(volume, &position, margin), a pure read (RE-p2-framing.md).
-inline constexpr std::uintptr_t kLocationVolumeManager = 0x14939BCA0;
-inline constexpr std::uint8_t   kLocationVolumeContainsPointBytes[] = {0x40, 0x53, 0xB8, 0x50, 0x00, 0x00, 0x00, 0xE8, 0xE4,
-                                                                       0xF6, 0x60, 0x01, 0x48, 0x2B, 0xE0, 0x33, 0xDB};
-inline constexpr FunctionFact   kLocationVolumeContainsPoint{L"LocationVolume_ContainsPoint", 0x140A9F840,
+inline constexpr std::uintptr_t kLocationVolumeManager = 0x1491D84C0;
+inline constexpr std::uint8_t   kLocationVolumeContainsPointBytes[] = {0x40, 0x53, 0xB8, 0x50, 0x00, 0x00, 0x00, 0xE8, 0xD4,
+                                                                       0xA9, 0x47, 0x01, 0x48, 0x2B, 0xE0, 0x33, 0xDB};
+inline constexpr FunctionFact   kLocationVolumeContainsPoint{L"LocationVolume_ContainsPoint", 0x140CF11A0,
                                                            kLocationVolumeContainsPointBytes};
 
 /// g_AnimWorldManager (a pointer): the SE world manager the animation budget and CharaPop read (0xE00 bytes).
-inline constexpr std::uintptr_t kAnimWorldManager = 0x14939BC48;
+inline constexpr std::uintptr_t kAnimWorldManager = 0x1491D8458;
 
 /// The game's catch-up move, as its battle gather calls it (RE-member-story-boxes.md):
 /// Nav_FindPointAround_AnglesDistances(unused, querier, const FTransform* origin, const FNavAgentProperties* agent,
@@ -46,14 +46,14 @@ inline constexpr std::uintptr_t kAnimWorldManager = 0x14939BC48;
 /// a navmesh raycast from it; the first accepted wins.
 inline constexpr std::uint8_t kNavPointAroundBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x55, 0x56, 0x57, 0x41, 0x54, 0x41,
                                                         0x55, 0x41, 0x56, 0x41, 0x57, 0x48, 0x8D, 0xAC, 0x24, 0x40, 0xF8};
-inline constexpr FunctionFact kNavPointAround{L"Nav_FindPointAround_AnglesDistances", 0x1431EBAB8, kNavPointAroundBytes};
+inline constexpr FunctionFact kNavPointAround{L"Nav_FindPointAround_AnglesDistances", 0x141284B14, kNavPointAroundBytes};
 /// The querier's nav agent: its interface sub-object at +0x228, the agent getter at that vtable's +0x10 (argument 0).
 inline constexpr std::uint32_t kCharacterNavAgentInterface = 0x228;
 inline constexpr std::uint32_t kNavAgentGetterSlot         = 0x10;
 /// EndCharacter_BattleTeleport_FadeIn(character, const FVector* look, const FRotator* rotation, const FVector* dest,
 /// bool snapToGround, bool resetControlHolder): a queued warp to `dest` and a short fade-in; nothing battle-only.
 inline constexpr std::uint8_t kBattleTeleportFadeInBytes[] = {0x48, 0x85, 0xC9, 0x0F, 0x84, 0xF7, 0x01, 0x00, 0x00};
-inline constexpr FunctionFact kBattleTeleportFadeIn{L"EndCharacter_BattleTeleport_FadeIn", 0x1407B5334,
+inline constexpr FunctionFact kBattleTeleportFadeIn{L"EndCharacter_BattleTeleport_FadeIn", 0x141328EB4,
                                                     kBattleTeleportFadeInBytes};
 
 /// The fight's own state and area (RE-arena-warp.md): the encounter's state in the mode holder (3 in battle, 4
@@ -64,9 +64,9 @@ inline constexpr std::uint8_t  kEncounterInBattle      = 3;
 inline constexpr std::uint8_t  kEncounterEscaping      = 4;
 inline constexpr std::uint32_t kGameStateEventCounterA = 0x1A123B8;  // [[g_EndGameRoot]+0x170]+..., i32
 inline constexpr std::uint32_t kGameStateEventCounterB = 0x1A12668;
-inline constexpr std::uint8_t  kInsideAnyBattleAreaBytes[] = {0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8, 0xA2, 0xAB, 0x3F,
-                                                              0x01, 0x48, 0x2B, 0xE0, 0x48, 0x8B, 0xD1, 0x48, 0x8B};
-inline constexpr FunctionFact  kInsideAnyBattleArea{L"EndFieldAPI_IsCharacterInsideAnyBattleArea_Body", 0x140CB4384,
+inline constexpr std::uint8_t  kInsideAnyBattleAreaBytes[] = {0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8, 0xF2, 0x94, 0xE8,
+                                                              0x00, 0x48, 0x2B, 0xE0, 0x48, 0x8B, 0xD1, 0x48, 0x8B};
+inline constexpr FunctionFact  kInsideAnyBattleArea{L"EndFieldAPI_IsCharacterInsideAnyBattleArea_Body", 0x1412E2684,
                                                    kInsideAnyBattleAreaBytes};
 
 }  // namespace lss::facts

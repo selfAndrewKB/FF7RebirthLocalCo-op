@@ -69,7 +69,7 @@ void TestGate()
 
     const auto code = lss::battle::PanelGateCode(gate, chunk.At(ChunkLike::kSkipOffset));
     lss::platform::CodeRedirect redirect;
-    EXPECT(redirect.Install(chunk.At(ChunkLike::kSiteOffset), lss::battle::kPanelGateSiteBytes, code,
+    EXPECT(redirect.Install(chunk.At(ChunkLike::kSiteOffset), lss::battle::kPanelGateSiteBytes1004, code,
                             chunk.At(ChunkLike::kResumeOffset)));
 
     EXPECT(chunk.Call(0x5678) == 0x5678);  // open: the replaced store ran, the game's path went on

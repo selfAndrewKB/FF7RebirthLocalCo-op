@@ -62,8 +62,8 @@ constexpr std::uint32_t kLeadDestination = 0x3E8;  // three floats
 
 // The character's movement object (embedded at +0x1400; its flags at +0x1408) and its anim instance, a
 // weak pointer at +0x160 of it.
-constexpr platform::PerBuild<std::uint32_t> kCharacterMove = {0x1400, 0x1420};  // 1.005: AIState_ApplyStateParams / RevertStateParams, the FollowState reset's mov rcx,[rsi+1420h]
-constexpr platform::PerBuild<std::uint32_t> kCharacterFlags = {0x1408, 0x1428};  // u8; bit 2 set by LEAD's and FOLLOW's Enter; the +0x4B8 interface's vt+0xB8 flag setter reads [rcx+0F70h] (1.004 [rcx+0F50h])
+constexpr platform::PerBuild<std::uint32_t> kCharacterMove = {0x1420, 0x1400};  // 1.005: AIState_ApplyStateParams / RevertStateParams, the FollowState reset's mov rcx,[rsi+1420h]
+constexpr platform::PerBuild<std::uint32_t> kCharacterFlags = {0x1428, 0x1408};  // u8; bit 2 set by LEAD's and FOLLOW's Enter; the +0x4B8 interface's vt+0xB8 flag setter reads [rcx+0F70h] (1.004 [rcx+0F50h])
 constexpr std::uint32_t kMoveAnimInstance = 0x160;
 
 // UEndCharacterAnimInstance: the root-motion and rotation-rate products and their TMap<u8, float>

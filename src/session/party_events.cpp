@@ -26,7 +26,7 @@ namespace {
 // Facts read from the database (research/RE-p2-session-levers.md; this build).
 // OnLeaderTransition's one call of SwitchLeaderInternal: rcx = the party manager's controller (+0x140),
 // rdx = the new leader, r8b = input-triggered, r9b = force.
-constexpr std::uintptr_t kLeaderCall = 0x141204E09;
+constexpr std::uintptr_t kLeaderCall = 0x140F8B28D;
 // 1.005 (research/RE-1005-field-2.md): that call sits at %16 = 13, so it crosses a 16-byte block. There it is
 // heard at SwitchLeaderInternal's entry instead (first instruction `mov [rsp+18h], rbx`, 5 bytes at %16 = 4; its only
 // code caller is that call), by its return address; other calls (the mod's own, from party_member) pass through.
@@ -35,16 +35,16 @@ constexpr std::size_t kSwitchLeaderFirstInstruction = 5;
 // new r9b), called once, from the status TFunction's thunk.
 constexpr std::uint8_t kStatusChangedBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x6C, 0x24, 0x10,
                                                 0x48, 0x89, 0x74, 0x24, 0x18, 0x57, 0xB8, 0x20, 0x00, 0x00,
-                                                0x00, 0xE8, 0x5E, 0xCC, 0x8A, 0x00};
-constexpr platform::FunctionFact kStatusChanged{L"PartyManager_OnPlayerStatusChanged", 0x1418022B8,
+                                                0x00, 0xE8, 0x76, 0x0E, 0x8E, 0x00};
+constexpr platform::FunctionFact kStatusChanged{L"PartyManager_OnPlayerStatusChanged", 0x14188ACF0,
                                                 kStatusChangedBytes};
-constexpr std::uintptr_t kStatusCall = 0x1418022AB;
+constexpr std::uintptr_t kStatusCall = 0x14188ACE3;
 // AEndPartyCoordinator_Tick's one call of PartyManager_ApplyPartyDataAndRefresh(party manager), made
 // once a party stream finished (RE-p2-member-change.md; its only code caller).
-constexpr std::uint8_t kPartyAppliedBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x20, 0x48, 0x89, 0x4C, 0x24, 0x08, 0x55, 0x56,
-                                               0x57, 0x41, 0x54, 0x41, 0x55, 0x41, 0x56, 0x41, 0x57, 0x48, 0x8D, 0x6C};
-constexpr platform::FunctionFact kPartyApplied{L"PartyManager_ApplyPartyDataAndRefresh", 0x1411BBAD8, kPartyAppliedBytes};
-constexpr std::uintptr_t         kAppliedCall = 0x140F7F5A6;
+constexpr std::uint8_t kPartyAppliedBytes[] = {0x48, 0x89, 0x4C, 0x24, 0x08, 0x55, 0x53, 0x56, 0x57, 0x41, 0x54, 0x41,
+                                               0x55, 0x41, 0x56, 0x41, 0x57, 0x48, 0x8D, 0x6C, 0x24, 0xF8, 0xB8, 0x08};
+constexpr platform::FunctionFact kPartyApplied{L"PartyManager_ApplyPartyDataAndRefresh", 0x14144729C, kPartyAppliedBytes};
+constexpr std::uintptr_t         kAppliedCall = 0x14110E26A;
 
 
 using SwitchLeaderFn  = void (*)(void* controller, void* character, bool inputTriggered, bool force);
@@ -98,10 +98,11 @@ void SwitchLeaderEntry(void* controller, void* character, bool inputTriggered, b
     reinterpret_cast<SwitchLeaderFn>(g_leaderEntry.Original())(controller, character, inputTriggered, force);
 }
 
-/// The leader change: OnLeaderTransition's call redirected on the research build; on 1.005, the entry.
+/// The leader change: SwitchLeaderInternal's entry (OnLeaderTransition's call crosses a block); on 1.004 that call,
+/// redirected.
 bool InstallLeader(const platform::GameImage& image, std::uintptr_t switchLeader, std::uintptr_t leaderAt) noexcept
 {
-    if (platform::RunningBuild() != platform::BuildIndex::V1005)
+    if (platform::RunningBuild() == platform::BuildIndex::V1004)
     {
         return g_leaderCall.Install(leaderAt, switchLeader, reinterpret_cast<std::uintptr_t>(&SwitchLeader));
     }

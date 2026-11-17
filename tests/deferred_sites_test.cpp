@@ -121,8 +121,8 @@ void TestNoRoom()
 
 void TestDefaultIsTheBuild()
 {
-    std::puts("deferred sites: by default the placement is deferred on 1.005 and not on the research build");
-    SetRunningBuild(BuildIndex::V1005);
+    std::puts("deferred sites: by default the placement is deferred on the source build and not on 1.004");
+    SetRunningBuild(BuildIndex::Source);
     EXPECT(DeferredSites::Deferred());
     DeferredSites sites;
     g_placed = 0;
@@ -131,10 +131,11 @@ void TestDefaultIsTheBuild()
     Run();
     EXPECT(g_placed == 1);
 
-    SetRunningBuild(BuildIndex::Research);
+    SetRunningBuild(BuildIndex::V1004);
     EXPECT(!DeferredSites::Deferred());
     EXPECT(sites.Install(GameImage::At(0x5000, 0x100), &Place));
     EXPECT(g_placed == 2 && !sites.Pending());
+    SetRunningBuild(BuildIndex::Source);
 }
 
 }  // namespace

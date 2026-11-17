@@ -154,15 +154,15 @@ constexpr int           kHashChecks     = 2000;  // lookups also checked against
 
 // The game's functions, each checked by its first bytes.
 constexpr std::uint8_t kTestFlagBytes[] = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8,
-                                           0x9C, 0x0A, 0x68, 0x01, 0x48, 0x2B, 0xE0, 0x0F};
-constexpr std::uint8_t kModeClassBytes[] = {0x48, 0x8B, 0x05, 0x7D, 0x12, 0x94, 0x08, 0x48,
+                                           0x50, 0xAA, 0x8B, 0x01, 0x48, 0x2B, 0xE0, 0x0F};
+constexpr std::uint8_t kModeClassBytes[] = {0x48, 0x8B, 0x05, 0x41, 0xD3, 0xE5, 0x07, 0x48,
                                             0x8B, 0x88, 0xB8, 0x01, 0x00, 0x00, 0xB8, 0x02};
-constexpr std::uint8_t kUIEntryBytes[] = {0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8, 0xA2, 0x53,
-                                          0x42, 0x01, 0x48, 0x2B, 0xE0, 0xE8, 0xAA, 0xCD};
-constexpr std::uint8_t kIsHeldBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x57, 0xB8, 0x40,
-                                         0x00, 0x00, 0x00, 0xE8, 0x44, 0x8B, 0x8A, 0x01};
+constexpr std::uint8_t kUIEntryBytes[] = {0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8, 0x2E, 0x84,
+                                          0x25, 0x01, 0x48, 0x2B, 0xE0, 0xE8, 0x32, 0x24};
+constexpr std::uint8_t kIsHeldBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x57, 0xB8, 0x40,
+                                         0x00, 0x00, 0x00, 0xE8, 0xBC, 0x38, 0x09, 0x01};
 constexpr std::uint8_t kPollSlot0Bytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x57, 0xB8, 0x30,
-                                            0x00, 0x00, 0x00, 0xE8, 0x60, 0x52, 0xC0, 0x00};
+                                            0x00, 0x00, 0x00, 0xE8, 0x64, 0x73, 0xD2, 0xFE};
 constexpr std::uint8_t kPoll8Bytes[] = {0x48, 0x8B, 0xC4, 0x48, 0x89, 0x58, 0x08, 0x48,
                                         0x89, 0x68, 0x10, 0x48, 0x89, 0x70, 0x18, 0x48};
 constexpr std::uint8_t kLatchBytes[] = {0x48, 0x2B, 0xD1, 0x4C, 0x8D, 0x89, 0x38, 0x87,
@@ -173,23 +173,23 @@ constexpr std::uint8_t kUpdateBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x48, 0x8
                                          0x24, 0x18, 0x57, 0x41, 0x54, 0x41, 0x55, 0x41};
 constexpr std::uint8_t kFieldEnterBytes[] = {0x48, 0x89, 0x54, 0x24, 0x10, 0x48, 0x89, 0x4C,
                                              0x24, 0x08, 0x53, 0x55, 0x56, 0x57, 0x41, 0x54};
-constexpr std::uint8_t kFieldExitBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x48, 0x89, 0x6C,
-                                            0x24, 0x18, 0x48, 0x89, 0x74, 0x24, 0x20, 0x57};
-constexpr platform::FunctionFact kTestFlag{L"GameFlags3A8_TestBit", 0x140A2E488, kTestFlagBytes};
-constexpr platform::FunctionFact kModeClass{L"Root1B8_GetModeClass_2BlocksFieldAction", 0x1407BDB64, kModeClassBytes};
-constexpr platform::FunctionFact kUIEntry{L"EndUI23_IsEntry34ValuePositive", 0x140C89B84, kUIEntryBytes};
-constexpr platform::FunctionFact kIsHeld{L"SquareInput_IsActionHeld_Global", 0x1408063DC, kIsHeldBytes};
+constexpr std::uint8_t kFieldExitBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x18, 0x55, 0x56, 0x57,
+                                            0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0xB6, 0xD1};
+constexpr platform::FunctionFact kTestFlag{L"GameFlags3A8_TestBit", 0x1408B1124, kTestFlagBytes};
+constexpr platform::FunctionFact kModeClass{L"Root1B8_GetModeClass_2BlocksFieldAction", 0x1410D5270, kModeClassBytes};
+constexpr platform::FunctionFact kUIEntry{L"EndUI23_IsEntry34ValuePositive", 0x140F13748, kUIEntryBytes};
+constexpr platform::FunctionFact kIsHeld{L"SquareInput_IsActionHeld_Global", 0x1410D82B4, kIsHeldBytes};
 using facts::kInputKeyCopy;
-constexpr platform::FunctionFact kPollSlot0{L"FieldActionMgr_PollSlotButtons_Slot0Only", 0x1414A9CC0, kPollSlot0Bytes};
-constexpr platform::FunctionFact kPoll8{L"FieldActionMgr_PollSlotButtons8", 0x1414A9D7C, kPoll8Bytes};
-constexpr platform::FunctionFact kLatch{L"FieldActionMgr_LatchSlotButtons", 0x1414FA05C, kLatchBytes};
-constexpr platform::FunctionFact kTickSlots{L"FieldActionMgr_TickSlots_ExecuteOnPress", 0x1414AA14C, kTickSlotsBytes};
-constexpr platform::FunctionFact kUpdate{L"FieldActionMgr_Update_CandidatesSlotsRows", 0x140E7A700, kUpdateBytes};
-constexpr platform::FunctionFact kFieldEnter{L"FieldActionMgr_OnFieldEnter_ResetSlots", 0x14161B4E0, kFieldEnterBytes};
-constexpr platform::FunctionFact kFieldExit{L"FieldActionMgr_OnFieldExit_ClearCandidatesRows", 0x14161B408, kFieldExitBytes};
+constexpr platform::FunctionFact kPollSlot0{L"FieldActionMgr_PollSlotButtons_Slot0Only", 0x14344480C, kPollSlot0Bytes};
+constexpr platform::FunctionFact kPoll8{L"FieldActionMgr_PollSlotButtons8", 0x1410D7D64, kPoll8Bytes};
+constexpr platform::FunctionFact kLatch{L"FieldActionMgr_LatchSlotButtons", 0x140824C28, kLatchBytes};
+constexpr platform::FunctionFact kTickSlots{L"FieldActionMgr_TickSlots_ExecuteOnPress", 0x14117DB24, kTickSlotsBytes};
+constexpr platform::FunctionFact kUpdate{L"FieldActionMgr_Update_CandidatesSlotsRows", 0x140AFC1B4, kUpdateBytes};
+constexpr platform::FunctionFact kFieldEnter{L"FieldActionMgr_OnFieldEnter_ResetSlots", 0x141866A44, kFieldEnterBytes};
+constexpr platform::FunctionFact kFieldExit{L"FieldActionMgr_OnFieldExit_ClearCandidatesRows", 0x1418DE9B8, kFieldExitBytes};
 // Their one call site each, in AEndGameMode_FieldStepTick.
-constexpr std::uintptr_t kFieldEnterCall = 0x140D9C309;
-constexpr std::uintptr_t kFieldExitCall  = 0x140D9FFD8;
+constexpr std::uintptr_t kFieldEnterCall = 0x1410D8951;
+constexpr std::uintptr_t kFieldExitCall  = 0x1410DC6B7;
 // The visibility request: its point-side preset's screen test projects the point through the world's first
 // local player (the first controller in World->PlayerControllerList at World+0x1F0 whose player is local; RE-p2-hud.md
 // reads it as the PlayerControllerList through GetFirstPlayerController, the field-interact doc names it
@@ -197,19 +197,19 @@ constexpr std::uintptr_t kFieldExitCall  = 0x140D9FFD8;
 // list. Entry: mov [rsp+18h],rbx (the 5 bytes replaced), then push rbp/rsi/rdi/r12/r13/r14/r15.
 constexpr std::uint8_t   kRequestBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x18, 0x55, 0x56, 0x57,
                                             0x41, 0x54, 0x41, 0x55, 0x41, 0x56, 0x41, 0x57};
-constexpr platform::FunctionFact kRequest{L"the world items' screen-visibility request", 0x140ADE688, kRequestBytes};
+constexpr platform::FunctionFact kRequest{L"the world items' screen-visibility request", 0x1409A3C34, kRequestBytes};
 constexpr std::size_t    kRequestFirst   = 5;
 
 // The pass's hooks: the game mode tick's call of the selection update (the pass runs right after it),
 // WorldItemMgr's mark by key (a key a seat's pass marks is noted; its entry's first instruction, 5 bytes) and the
 // WorldItem tick's call of the grant (run with that seat's controller as the primary one for a noted key).
-constexpr std::uintptr_t kUpdateCall      = 0x1423EF160;
-constexpr std::uint8_t   kMarkByKeyBytes[] = {0x48, 0x89, 0x54, 0x24, 0x10, 0x53, 0xB8, 0x30, 0x00, 0x00, 0x00};
+constexpr std::uintptr_t kUpdateCall      = 0x140B38CC6;
+constexpr std::uint8_t   kMarkByKeyBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x20, 0x48, 0x89, 0x54, 0x24, 0x10, 0x57};
 // u8(wim, FName key by value)
-constexpr platform::FunctionFact kMarkByKey{L"WorldItemMgr's mark by key", 0x140C10F94, kMarkByKeyBytes};
+constexpr platform::FunctionFact kMarkByKey{L"WorldItemMgr's mark by key", 0x14117D034, kMarkByKeyBytes};
 constexpr std::size_t    kMarkFirst       = 5;
-constexpr std::uintptr_t kAcquireCall     = 0x140DBE165;
-constexpr std::uintptr_t kAcquire         = 0x140C07A3C;  // (wim, entry); the caller ignores its result
+constexpr std::uintptr_t kAcquireCall     = 0x1410B2D48;
+constexpr std::uintptr_t kAcquire         = 0x141531EE0;  // (wim, entry); the caller ignores its result
 using facts::kFieldActionEntryKeyBack;
 using MarkByKeyFn = std::uint8_t (*)(void* items, std::uint64_t key);
 using AcquireFn   = void (*)(void* items, void* entry);
@@ -218,8 +218,8 @@ using AcquireFn   = void (*)(void* items, void* entry);
 // its parts, pools the Slate widget and removes the element, at once. Entry: push rbx; mov eax,20h; call (stack probe).
 constexpr std::uint32_t kMarkerEntry    = 140;
 constexpr std::uint8_t  kDestroyBytes[] = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8,
-                                           0x28, 0xFD, 0xEE, 0x00, 0x48, 0x2B, 0xE0, 0x48};
-constexpr platform::FunctionFact kDestroy{L"FieldTargetMarker_Destroy", 0x1411BF1FC, kDestroyBytes};
+                                           0x30, 0x2B, 0x9A, 0x00, 0x48, 0x2B, 0xE0, 0x48};
+constexpr platform::FunctionFact kDestroy{L"FieldTargetMarker_Destroy", 0x1417C9044, kDestroyBytes};
 
 using TestFlagFn  = std::uint8_t (*)(std::uint8_t bit);
 using ModeClassFn = std::uint8_t (*)();
@@ -1657,9 +1657,9 @@ void Install(const platform::GameImage& image) noexcept
         g_seatMarkersNow.reserve(kFieldActionMaxPoints);
         g_oneMarkers.reserve(kFieldActionMaxPoints);
         g_doomed.reserve(3 * kFieldActionMaxPoints);  // Before's, After's and KeepSeatMarkers': one per point each
-        resets = g_enterCall.InstallResearch(image, kFieldEnterCall, kFieldEnter.address,
+        resets = g_enterCall.InstallSource(image, kFieldEnterCall, kFieldEnter.address,
                                              reinterpret_cast<std::uintptr_t>(&FieldEnter)) &&
-                 g_exitCall.InstallResearch(image, kFieldExitCall, kFieldExit.address,
+                 g_exitCall.InstallSource(image, kFieldExitCall, kFieldExit.address,
                                             reinterpret_cast<std::uintptr_t>(&FieldExit));
         if (!resets)
         {
@@ -1673,7 +1673,7 @@ void Install(const platform::GameImage& image) noexcept
         const auto markAt    = platform::FindFunction(image, kMarkByKey);
         const auto acquireAt = image.Rebase(kAcquireCall, 5);
         const auto acquire   = image.Rebase(kAcquire);
-        hooks = g_updateCall.InstallResearch(image, kUpdateCall, kUpdate.address,
+        hooks = g_updateCall.InstallSource(image, kUpdateCall, kUpdate.address,
                                              reinterpret_cast<std::uintptr_t>(&UpdateCall)) && markAt &&
                 g_markByKey.Install(*markAt,
                                     image.EntryInstruction(kMarkByKey.address, kMarkByKey.entryBytes.first(kMarkFirst)),

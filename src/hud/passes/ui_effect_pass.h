@@ -16,7 +16,7 @@
 // appends the viewport command: the mod's replacement runs the engine's own, then sets the command it appended to the
 // box, after checking it holds the whole extent. The column is the family's, as the composite redirect
 // (hud/passes/column_hud_images.cpp) decides it earlier on the same thread; the boxes come from the overlay's rect
-// call of the frame's last pass (game thread, through a seqlock). On the research build the call crosses a 16-byte
+// call of the frame's last pass (game thread, through a seqlock). On 1.004 the call crosses a 16-byte
 // block, so the render thread installs it from the composite redirect at the first frame.
 
 #include "hud/layout/viewport_placement.h"

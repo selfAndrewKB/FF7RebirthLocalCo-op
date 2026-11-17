@@ -32,16 +32,16 @@ namespace rules = enemy_leader_rules;
 
 // The game's leader-change walk (research/RE-enemy-leader-reads.md): its snapshot of the battle's flagged characters, the
 // snapshot's step to the next live character, and the call that runs a battle AI blueprint's OnChangeLeader.
-constexpr std::uint8_t kSnapshotBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x48, 0x89, 0x6C,
-                                           0x24, 0x18, 0x56, 0x57, 0x41, 0x56, 0xB8, 0x50};
+constexpr std::uint8_t kSnapshotBytes[] = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8,
+                                           0xD4, 0x4E, 0x5F, 0x01, 0x48, 0x2B, 0xE0, 0x48};
 constexpr std::uint8_t kSnapshotNextBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x7C,
                                                0x24, 0x10, 0x41, 0x56, 0xB8, 0x80, 0x00, 0x00};
 constexpr std::uint8_t kOnChangeLeaderBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x57, 0xB8, 0x20,
-                                                 0x00, 0x00, 0x00, 0xE8, 0xD0, 0xA3, 0xEA, 0x00};
-constexpr platform::FunctionFact kSnapshot{L"BattleCharMgr_SnapshotFlaggedEntries", 0x140DBC660, kSnapshotBytes};
-constexpr platform::FunctionFact kSnapshotNext{L"BattleCharSnapshot_SkipToLiveEndCharacter", 0x140DBCA24,
+                                                 0x00, 0x00, 0x00, 0xE8, 0xB4, 0x0E, 0x1E, 0x01};
+constexpr platform::FunctionFact kSnapshot{L"BattleCharMgr_SnapshotFlaggedEntries", 0x140B76CA0, kSnapshotBytes};
+constexpr platform::FunctionFact kSnapshotNext{L"BattleCharSnapshot_SkipToLiveEndCharacter", 0x140B76E9C,
                                                kSnapshotNextBytes};
-constexpr platform::FunctionFact kOnChangeLeader{L"AIControllerBP_CallOnChangeLeader", 0x141204B50, kOnChangeLeaderBytes};
+constexpr platform::FunctionFact kOnChangeLeader{L"AIControllerBP_CallOnChangeLeader", 0x140F8ACBC, kOnChangeLeaderBytes};
 
 // The snapshot as the game's leader change keeps it on its stack: the index at +8, 128 inline 48-byte entries from
 // +0x10 (the character first), the heap pointer at +0x1810 (null while inline) and the count at +0x1818. The snapshot

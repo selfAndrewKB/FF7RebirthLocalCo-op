@@ -34,19 +34,19 @@ using Kind = platform::ByteContext::Kind;
 // Facts read from the database (research/RE-p2-party-list-views.md; this build).
 constexpr std::uint8_t kCellTickBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x48, 0x89, 0x6C, 0x24, 0x18, 0x56, 0x57,
                                            0x41, 0x55, 0x41, 0x56, 0x41, 0x57, 0xB8, 0x80, 0x00, 0x00, 0x00, 0xE8};
-constexpr platform::SlotFact kCellTick{L"the party-list cell's NativeTick slot (102)", 0x146748958,
-                                       {L"UEndMenuStatusPaneCell_NativeTick", 0x140F3D0CC, kCellTickBytes}};
-constexpr std::uint8_t kGuideTickBytes[] = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0xAC,
-                                            0x6E, 0x17, 0x01, 0x48, 0x2B, 0xE0, 0x48, 0x8B, 0xD9};
-constexpr platform::FunctionFact kGuideTick{L"EndUI__M1A8_Tick", 0x140F38078, kGuideTickBytes};
-constexpr std::uintptr_t         kGuideTickCall = 0x140F37F48;  // in MasterHUD_Tick, with EndUISystem[53]
+constexpr platform::SlotFact kCellTick{L"the party-list cell's NativeTick slot (102)", 0x1465D1F28,
+                                       {L"UEndMenuStatusPaneCell_NativeTick", 0x140806814, kCellTickBytes}};
+constexpr std::uint8_t kGuideTickBytes[] = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0x48,
+                                            0x5F, 0x1F, 0x01, 0x48, 0x2B, 0xE0, 0x48, 0x8B, 0xD9};
+constexpr platform::FunctionFact kGuideTick{L"EndUI__M1A8_Tick", 0x140F75C2C, kGuideTickBytes};
+constexpr std::uintptr_t         kGuideTickCall = 0x140F75AF0;  // in MasterHUD_Tick, with EndUISystem[53]
 // The synergy pane (UEndCmdLinkupPane, one in each controller's command menu; RE-p2-synergy-pane.md): its
 // NativeTick rebuilds its rows whenever the party leader's type (PM+0x150) differs from the character it
 // shows (+0x3D0). Its owner is recorded at menu setup (+0x3C8, the controller).
-constexpr std::uint8_t kPaneTickBytes[] = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0xBC,
-                                           0x04, 0x08, 0x01, 0x48, 0x2B, 0xE0, 0x48, 0x8B, 0xD9};
-constexpr platform::SlotFact kPaneTick{L"the synergy pane's NativeTick slot (102)", 0x146725260,
-                                       {L"UEndCmdLinkupPane_NativeTick_RebuildOnPM150", 0x14102EA68, kPaneTickBytes}};
+constexpr std::uint8_t kPaneTickBytes[] = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0xE0,
+                                           0x9B, 0x7F, 0x01, 0x48, 0x2B, 0xE0, 0x48, 0x8B, 0xD9};
+constexpr platform::SlotFact kPaneTick{L"the synergy pane's NativeTick slot (102)", 0x1465AFEE0,
+                                       {L"UEndCmdLinkupPane_NativeTick_RebuildOnPM150", 0x140971F94, kPaneTickBytes}};
 constexpr std::uint32_t      kPaneOwner = 0x3C8;
 constexpr std::uint32_t      kPaneType  = 0x3D0;  // u8: the character whose synergy skills it lists
 

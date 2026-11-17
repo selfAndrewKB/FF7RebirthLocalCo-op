@@ -77,8 +77,8 @@ std::vector<std::uint8_t> BuffersHarnessCode(std::uintptr_t base, const EntryFil
     return code;
 }
 
-/// Game version 1.005's pool 0 site: the store of the vertex-buffer argument, after the game's load into rax.
-std::vector<std::uint8_t> BuffersStoreHarnessCode1005(std::uintptr_t base, const EntryFilterFields& fields)
+/// Pool 0's site: the store of the vertex-buffer argument, after the game's load into rax.
+std::vector<std::uint8_t> BuffersStoreHarnessCode(std::uintptr_t base, const EntryFilterFields& fields)
 {
     const std::uint8_t prologue[] = {
         0x41, 0x55,                                      // push r13
@@ -99,7 +99,7 @@ std::vector<std::uint8_t> BuffersStoreHarnessCode1005(std::uintptr_t base, const
         0x48, 0x83, 0xC4, 0x40,                          // add  rsp, 40h
         0x41, 0x5D, 0xC3};                               // pop r13 ; ret
     std::vector<std::uint8_t> code(std::begin(prologue), std::end(prologue));
-    const auto site = lss::hud::EntryBuffersStoreCode1005(fields);
+    const auto site = lss::hud::EntryBuffersStoreCode(fields);
     AppendWithJumpBack(code, base, site.data(), site.size());
     code.insert(code.end(), std::begin(epilogue), std::end(epilogue));
     return code;
@@ -207,18 +207,18 @@ void TestBuffers()
     });
 }
 
-void TestBuffersStore1005()
+void TestBuffersStore()
 {
-    std::puts("entry buffers (1.005, pool 0 at the argument store): player 2's entry gets player 2's buffer set");
+    std::puts("entry buffers (pool 0 at the argument store): player 2's entry gets player 2's buffer set");
     EntryFilterFields fields;
-    WithPage(fields, BuffersStoreHarnessCode1005, [](void* page) {
+    WithPage(fields, BuffersStoreHarnessCode, [](void* page) {
         const auto stock = RunBuffers(page, kPlayerTwoName);  // no player-2 name set yet
         EXPECT(stock.vertexBuffer == 0x33 && stock.indexBuffer == 0x11 && stock.srmSlot == 0x22);
     });
 
     fields.Column(1) = {kPlayerTwoName, 0xAA, 0xBB, 0xCC};
     fields.Column(2) = {kPlayerThreeName, 0xA3, 0xB3, 0xC3};
-    WithPage(fields, BuffersStoreHarnessCode1005, [](void* page) {
+    WithPage(fields, BuffersStoreHarnessCode, [](void* page) {
         const auto own = RunBuffers(page, kPlayerTwoName);
         EXPECT(own.vertexBuffer == 0xAA && own.indexBuffer == 0xBB && own.srmSlot == 0xCC);
         const auto three = RunBuffers(page, kPlayerThreeName);
@@ -302,9 +302,9 @@ void TestSizes()
                        lss::hud::kLoadVertexBufferBytes, sizeof(lss::hud::kLoadVertexBufferBytes)) == 0);
     EXPECT(std::memcmp(gate.data() + gate.size() - sizeof(lss::hud::kDrawGateBytes), lss::hud::kDrawGateBytes,
                        sizeof(lss::hud::kDrawGateBytes)) == 0);
-    const auto store = lss::hud::EntryBuffersStoreCode1005(fields);
-    EXPECT(std::memcmp(store.data() + store.size() - sizeof(lss::hud::kStoreVertexBufferArgBytes1005),
-                       lss::hud::kStoreVertexBufferArgBytes1005, sizeof(lss::hud::kStoreVertexBufferArgBytes1005)) == 0);
+    const auto store = lss::hud::EntryBuffersStoreCode(fields);
+    EXPECT(std::memcmp(store.data() + store.size() - sizeof(lss::hud::kStoreVertexBufferArgBytes),
+                       lss::hud::kStoreVertexBufferArgBytes, sizeof(lss::hud::kStoreVertexBufferArgBytes)) == 0);
 }
 
 }  // namespace
@@ -313,7 +313,7 @@ int main()
 {
     TestBuffers<false>();
     TestBuffers<true>();
-    TestBuffersStore1005();
+    TestBuffersStore();
     TestDrawGate();
     TestSizes();
 

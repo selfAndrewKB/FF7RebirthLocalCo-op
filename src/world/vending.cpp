@@ -43,28 +43,28 @@ namespace lss::world::vending {
 namespace {
 
 // research/RE-p2-field-interact.md (this build).
-constexpr std::uintptr_t kVendingPreset     = 0x149347278;  // the FName global rpaVendingMachine (the point-side preset)
+constexpr std::uintptr_t kVendingPreset     = 0x149183A48;  // the FName global rpaVendingMachine (the point-side preset)
 constexpr std::uint8_t   kEnd2KeyBytes[]    = {0x48, 0x89, 0x5C, 0x24, 0x08};  // mov [rsp+8], rbx
 // FieldActionKeyListener_End2FieldActionActor_CallVt6A0(mgr, &key)
-constexpr platform::FunctionFact kEnd2Key{L"FieldActionKeyListener_End2FieldActionActor_CallVt6A0", 0x1414A8A94,
+constexpr platform::FunctionFact kEnd2Key{L"FieldActionKeyListener_End2FieldActionActor_CallVt6A0", 0x14117CF38,
                                           kEnd2KeyBytes};
 constexpr std::uint8_t   kCameraBytes[]     = {0x48, 0x89, 0x5C, 0x24, 0x20};  // mov [rsp+20h], rbx
 // ShopMenu_ActivateShopCamera_TargetOrSlot0Key(FName target, FName preset)
-constexpr platform::FunctionFact kCamera{L"ShopMenu_ActivateShopCamera_TargetOrSlot0Key", 0x143550CC4, kCameraBytes};
+constexpr platform::FunctionFact kCamera{L"ShopMenu_ActivateShopCamera_TargetOrSlot0Key", 0x14327FE5C, kCameraBytes};
 constexpr std::uint8_t   kCameraOffBytes[]  = {0xB8, 0x28, 0x00, 0x00, 0x00};  // mov eax, 28h
 // ShopMenu_DeactivateShopCamera
-constexpr platform::FunctionFact kCameraOff{L"ShopMenu_DeactivateShopCamera", 0x143550C90, kCameraOffBytes};
-// 1.005 (research/RE-1005-field-2.md): the camera's entry sits at %16 = 12, so its first instruction crosses a
-// 16-byte block and cannot take an entry redirect. Its seven callers (the same seven shop paths as in this build, one
-// call each, each inside one block in 1.005) are redirected instead, to the same replacement.
+constexpr platform::FunctionFact kCameraOff{L"ShopMenu_DeactivateShopCamera", 0x14327FE28, kCameraOffBytes};
+// The camera's entry sits at %16 = 12 (research/RE-1005-field-2.md), so its first instruction crosses a 16-byte block
+// and cannot take an entry redirect. Its seven callers (the seven shop paths, one call each, each inside one block) are
+// redirected instead, to the same replacement. In 1.004 the entry fits one block and is redirected itself.
 constexpr std::array<std::uintptr_t, 7> kCameraCalls{
-    0x1435387D8,  // sub_143538398
-    0x14353D73F,  // sub_14353D5AC
-    0x14353FA6F,  // sub_14353F7F4
-    0x14354EE92,  // FEndShowChadleyShopMenu_Begin
-    0x14354F409,  // sub_14354F1F0
-    0x14354FD23,  // FEndShowShopMenu_Begin (the vending path)
-    0x1435502E2,  // FEndShowSkillTreeMenu_Begin
+    0x143267594,  // sub_143538398
+    0x14326C63B,  // sub_14353D5AC
+    0x14326EB97,  // sub_14353F7F4
+    0x14327E02A,  // FEndShowChadleyShopMenu_Begin
+    0x14327E5A1,  // sub_14354F1F0
+    0x14327EEBB,  // FEndShowShopMenu_Begin (the vending path)
+    0x14327F47A,  // FEndShowSkillTreeMenu_Begin
 };
 constexpr std::size_t kChadleyCall = 3;  // kCameraCalls' FEndShowChadleyShopMenu_Begin
 using Clock = std::chrono::steady_clock;
@@ -142,7 +142,7 @@ std::uint64_t PresetName() noexcept
 std::uintptr_t CallerOf(const void* returnAddress) noexcept
 {
     const auto at = reinterpret_cast<std::uintptr_t>(returnAddress);
-    return g_image ? g_image->ResearchAddress(at) : at;
+    return g_image ? g_image->SourceAddress(at) : at;
 }
 
 const wchar_t* Whose(const void* character) noexcept
@@ -526,9 +526,9 @@ void Install(const platform::GameImage& image) noexcept
     const auto chadley = image.Rebase(kCameraCalls[kChadleyCall], 5);
     g_chadleyReturn    = chadley ? *chadley + 5 : 0;  // the call is 5 bytes (E8 rel32)
     const bool presses = g_partyManager != 0 && Entry(image, g_end2Key, kEnd2Key, &End2Key);
-    const bool cameras = platform::RunningBuild() == platform::BuildIndex::V1005
-                             ? CameraCalls(image)
-                             : Entry(image, g_camera, kCamera, &Camera);
+    const bool cameras = platform::RunningBuild() == platform::BuildIndex::V1004
+                             ? Entry(image, g_camera, kCamera, &Camera)
+                             : CameraCalls(image);
     const bool closes  = Entry(image, g_cameraOff, kCameraOff, &CameraOff);
     const bool ready   = g_vendingPreset != nullptr && presses && cameras && closes;
     platform::Log(L"vending: {} (presses {}, the shop camera's activation {}, its deactivation {}; Chadley's camera call {})",

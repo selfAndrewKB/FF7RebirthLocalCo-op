@@ -47,20 +47,20 @@ using namespace synergy_rules;
 // (LinkMgr_Request's two command branches, LinkPartner_StartForType; its only callers; 1.005: the first crosses a
 // block). T1: its hand-over test for modes 2/3 (mode 3 never reaches the AI request below), partner comp type ==
 // GetPartyLeaderType() (both builds: crosses a block).
-constexpr std::uintptr_t kStartCalls[] = {0x140F2C3B7, 0x1429A9B47, 0x143375806};
+constexpr std::uintptr_t kStartCalls[] = {0x14129DDAE, 0x14129D7DB, 0x14308A8A6};
 constexpr std::uint8_t   kStartBytes[] = {0x48, 0x8B, 0xC4, 0x48, 0x89, 0x58, 0x10, 0x4C,
                                           0x89, 0x48, 0x20, 0x48, 0x89, 0x48, 0x08, 0x55};
-constexpr platform::FunctionFact kStart{L"LinkPartner_Start_HandLeaderToAI", 0x140F2CDE0, kStartBytes};
-constexpr std::uintptr_t kStartLeaderTest = 0x140F2D03C;
+constexpr platform::FunctionFact kStart{L"LinkPartner_Start_HandLeaderToAI", 0x1411CAC80, kStartBytes};
+constexpr std::uintptr_t kStartLeaderTest = 0x1411CAEDC;
 // R: the three calls of LinkPartner_RequestAI_HandLeaderToAI(rcx unused, record, initiator, partner, partner comp, weak,
 // weak): LinkMgr_TickMode2 (modes 2/3), LinkPartner_Mode1_StartOrRequestAI (the deferred mode-1 start, both from
 // LinkMgr_Tick), and LinkPartner_Start_HandLeaderToAI (mode 1 at the request). They are its only callers.
-constexpr std::uintptr_t kRequestCalls[] = {0x140ED637A, 0x14337BD83, 0x140F2D000};
+constexpr std::uintptr_t kRequestCalls[] = {0x14129E784, 0x143090C87, 0x1411CAEA0};
 constexpr std::uint8_t   kRequestAiBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x55, 0x56, 0x57,
                                               0x41, 0x54, 0x41, 0x55, 0x41, 0x56, 0x41, 0x57};
-constexpr platform::FunctionFact kRequestAi{L"LinkPartner_RequestAI_HandLeaderToAI", 0x140F2AC8C, kRequestAiBytes};
+constexpr platform::FunctionFact kRequestAi{L"LinkPartner_RequestAI_HandLeaderToAI", 0x14129C548, kRequestAiBytes};
 // T2: its hand-over test, partner comp type == UEndPartyAPI_GetPartyLeaderType() (1.004: crosses a block).
-constexpr std::uintptr_t kRequestLeaderTest = 0x140F2AD1E;
+constexpr std::uintptr_t kRequestLeaderTest = 0x14129C5DA;
 using facts::kGetPartyLeaderType;
 // E1: LinkMember_End_RepossessLeaderWithPrimaryPC(rcx unused, record, member, index): every link member's end (sync
 // start for the partner, command end, record end, battle teardown). 1.005: the first instruction crosses a block, the
@@ -69,19 +69,19 @@ using facts::kGetPartyLeaderType;
 // both cross a block).
 constexpr std::uint8_t   kMemberEndBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x74,
                                               0x24, 0x10, 0x57, 0xB8, 0x20, 0x00, 0x00, 0x00};
-constexpr platform::FunctionFact kMemberEnd{L"LinkMember_End_RepossessLeaderWithPrimaryPC", 0x140F2AB58,
+constexpr platform::FunctionFact kMemberEnd{L"LinkMember_End_RepossessLeaderWithPrimaryPC", 0x14149F86C,
                                             kMemberEndBytes};
 constexpr std::size_t    kFirstInstruction  = 5;  // mov [rsp+8], rbx
 constexpr std::size_t    kSecondInstruction = 5;  // mov [rsp+10h], rsi
-constexpr std::uintptr_t kEndLeaderTest   = 0x140F2AB8A;
-constexpr std::uintptr_t kEndPrimary      = 0x140F2ABBA;
+constexpr std::uintptr_t kEndLeaderTest   = 0x14149F89E;
+constexpr std::uintptr_t kEndPrimary      = 0x14149F8CE;
 using facts::kGetPrimaryEndPlayerController;
 // The type the give-back test compares: the same function, on the remembered character.
 using facts::kPlayerTypeFromComponent;
 // Classic mode (deferred): the game's Classic hand-over keeps the controller (AI pause reason 5), so it is left alone.
-constexpr std::uint8_t kClassicBytes[] = {0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8, 0xBE, 0xBB, 0x74, 0x01, 0x48, 0x2B,
-                                          0xE0, 0x48, 0x8B, 0x05, 0xDC, 0x89, 0xA3, 0x08, 0x48, 0x8B, 0x88, 0x00};
-constexpr platform::FunctionFact kClassic{L"Option_IsClassicMode_AutoPlayOn_NotHard", 0x140963368, kClassicBytes};
+constexpr std::uint8_t kClassicBytes[] = {0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8, 0x0A, 0x42, 0x7F, 0x01, 0x48, 0x2B,
+                                          0xE0, 0x48, 0x8B, 0x05, 0x00, 0x0C, 0x86, 0x08, 0x48, 0x8B, 0x88, 0x00};
+constexpr platform::FunctionFact kClassic{L"Option_IsClassicMode_AutoPlayOn_NotHard", 0x14097796C, kClassicBytes};
 // G: the give-back LinkMember_End calls, AEndCharacter::SwitchAIControl_Async(member, 1, controller); on the game thread
 // it possesses at once (also chocobo_ride, wheelie_ride).
 using facts::kSwitchAiControlAsync;
@@ -92,7 +92,7 @@ using facts::kSwitchAiControlAsync;
 // Counterfire's eight rows only (ChainCounter_PC0000_*). The game asks for such a skill's partner only when the counter
 // animation opens the record's combination window (rec+0x50), through the AI request (T2); nothing before that reads
 // the partner's AI.
-constexpr std::uintptr_t kAbilityHandleVtable = 0x145793088;
+constexpr std::uintptr_t kAbilityHandleVtable = 0x1455F0EB0;
 constexpr std::uint32_t  kHandleRow           = 0x08;
 constexpr std::uint32_t  kRowKinds            = 0x90;
 constexpr std::uint32_t  kRowKindCount        = 0x98;

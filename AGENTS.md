@@ -52,8 +52,10 @@ maintainer and a rule here disagree, follow the maintainer and say which rule yo
    - A global's address says nothing about whether it holds the object or a pointer to it. Look at how the game reads
      it (`mov reg, [rip+g]` loads a pointer, `lea reg, [rip+g]` takes the object's address) and at any module that
      already uses it, and write which it is in the fact's comment. Getting this wrong once hung the game.
-   - Addresses belong to one game build. The source keeps 1.004's; 1.005's come through `src/platform/builds/`
-     (`tools/version_match/README.md`). Never carry one over from another build or from the sibling Remake mod.
+   - Addresses belong to one game build. The source is written for 1.005: a new address is a 1.005 address with its
+     1.005 bytes, nothing more. 1.004 (deprecated) is reached through the tables in `src/platform/builds/`; a fact only
+     1.004 has carries a `1004` suffix and goes through `GameImage::OwnAddress`. Never carry an address over from
+     another build or from the sibling Remake mod. `tools/version_match/README.md` covers a new game version.
 4. **Fail safe, whole or none.** A feature whose checks fail logs why and stands aside. It never crashes the game and
    never half-installs.
    - Place a group of redirects that only work together all at once, or not at all; undo the first if the second fails.

@@ -40,7 +40,7 @@ using RC::Unreal::UObject;
 // mov [rsp+8], rbx (the 5 bytes replaced), position-independent; no branch into +1..+4.
 constexpr std::uint8_t   kNoteLastDeviceBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x74,
                                                    0x24, 0x10, 0x48, 0x89, 0x7C, 0x24, 0x18, 0x41};
-constexpr platform::FunctionFact kNoteLastDevice{L"SquareInput__NoteLastActiveDevice", 0x1415F4900,
+constexpr platform::FunctionFact kNoteLastDevice{L"SquareInput__NoteLastActiveDevice", 0x140E936D4,
                                                  kNoteLastDeviceBytes};
 constexpr std::size_t    kNoteLastDeviceFirst   = 5;
 constexpr std::uint32_t  kOwnerPad      = 0x74;         // i32: the last XInput pad

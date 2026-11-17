@@ -36,7 +36,7 @@ class GameImage;
 namespace lss::battle::equal_targeting {
 
 /// Places the leader-type redirect (logged). Needs leader_answer's slot. Call from on_unreal_init,
-/// before any world exists: on the research build the call crosses a 16-byte block, which is safe to change only
+/// before any world exists: on 1.004 the call crosses a 16-byte block, which is safe to change only
 /// while no thread can be running it.
 bool Install(const platform::GameImage& image) noexcept;
 

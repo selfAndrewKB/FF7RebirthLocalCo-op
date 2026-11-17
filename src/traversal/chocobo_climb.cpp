@@ -30,16 +30,16 @@ namespace lss::traversal::chocobo_climb {
 namespace {
 
 // 1.004 addresses (1.005 through replaced-chocobo-climb.json and the generated table; every one read in both exes).
-constexpr std::uintptr_t kTryBeginSlot = 0x1466F7698;  // AEndFieldActionChocoboClimbActor vt+0x740 (1.005 +0x748)
-constexpr std::uintptr_t kTryBegin     = 0x143665CE0;  // ChocoboClimbActor_TryBegin(actor, dt, pawn)
-constexpr std::uintptr_t kEnterSlot    = 0x1466F8C68;  // the climb executer's state table: row 1's enter
-constexpr std::uintptr_t kEnter        = 0x143654DE4;  // ChocoboClimbExecuter_State1_Enter(executer): the camera setup
+constexpr std::uintptr_t kTryBeginSlot = 0x146585878;  // AEndFieldActionChocoboClimbActor vt+0x740 (1.005 +0x748)
+constexpr std::uintptr_t kTryBegin     = 0x14339B3F0;  // ChocoboClimbActor_TryBegin(actor, dt, pawn)
+constexpr std::uintptr_t kEnterSlot    = 0x146585DA8;  // the climb executer's state table: row 1's enter
+constexpr std::uintptr_t kEnter        = 0x14338A56C;  // ChocoboClimbExecuter_State1_Enter(executer): the camera setup
 // The pass calls the try-begin with the frame time in xmm1 and the pawn in r8 (both builds' disassembly).
 using TryBeginFn    = void (*)(void* actor, float dt, void* pawn);
 using EnterFn       = void (*)(void* executer);
 #if LSS_DEV
 // The game's own answers, read for the log alone (dev tools).
-constexpr std::uintptr_t kHolderState  = 0x1409F0FBC;  // CharCtrlHolder_GetResolvedStateByte68(holder)
+constexpr std::uintptr_t kHolderState  = 0x14085FCB0;  // CharCtrlHolder_GetResolvedStateByte68(holder)
 using IsRiddenFn    = bool (*)(const void* character);
 using HolderStateFn = std::uint8_t (*)(const void* holder);
 #endif
@@ -49,7 +49,7 @@ constexpr std::uint32_t kExecuterChocobo      = 0x74;   // FWeakObjectPtr: the c
 constexpr std::uint32_t kControlHolder        = 0x638;  // the character's control holder (state 8: a field action)
 constexpr std::uint32_t kFieldActionCharacter = 0x5A0;  // AEndPlayerController: the character its field actions test
 // TWeakPtr<FEndChocoboCameraModule>: the object, then its reference controller (shared count at +8), as Setup reads it.
-inline constexpr platform::PerBuild<std::uint32_t> kCameraModule{0x1A30, 0x1A50};
+inline constexpr platform::PerBuild<std::uint32_t> kCameraModule{0x1A50, 0x1A30};
 constexpr std::uint32_t kModuleCurrent = 0xB60 + 0x18;  // the module's state machine (+0xB60): current entry, id first
 constexpr std::uint32_t kModulePending = 0xB60 + 0x20;  // ... the requested entry (EndStateMachine_RequestStateById)
 constexpr int           kNone          = -1;

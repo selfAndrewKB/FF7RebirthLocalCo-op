@@ -41,8 +41,8 @@ struct Game
 {
     std::uintptr_t openWindowAt = 0;
     std::uintptr_t textSlot = 0, textWas = 0, helpSlot = 0, helpWas = 0, orderWord = 0;
-    std::uintptr_t demoName = 0;                  // 1.004: the builder's name global
-    std::uintptr_t demoCall = 0, demoTest = 0;    // 1.005: the builder's call of the demo-mode test, and its target
+    std::uintptr_t demoCall = 0, demoTest = 0;    // the builder's call of the demo-mode test, and its target
+    std::uintptr_t demoName = 0;                  // 1.004: the builder's name global instead
 };
 
 // Set at install and on the first tick, then only read.
@@ -68,7 +68,7 @@ void OpenWindow(void* mgr, std::uint8_t kind)
     original(mgr, kind);
 }
 
-/// 1.005: the row builder's demo-mode test, answered yes (its one call there).
+/// The row builder's demo-mode test, answered yes (its one call there).
 bool BuilderAppendsRow()
 {
     return true;
@@ -172,24 +172,21 @@ try
     const auto helpSlot   = image.Rebase(f::kTopRowHelpSlot, 8);
     const auto helpWas    = image.Rebase(f::kTopRowHelpWas);
     const auto orderWord  = image.Rebase(f::kTopRowOrderWord, 8);
-    // The builder's gate: 1.004's name global through the table; 1.005's call at this build's own address, its bytes
-    // checked (no research address: 1.004 has no such call).
+    // The builder's gate: the demo-mode call and its target; on 1.004 the name global, that build's own address.
     bool gate = false;
-    if (platform::RunningBuild() == platform::BuildIndex::V1005)
+    if (platform::RunningBuild() == platform::BuildIndex::V1004)
     {
-        const std::uintptr_t call = image.Base() + (f::kTopRowDemoCall - 0x140000000);
-        const std::uintptr_t test = image.Base() + (f::kTopRowDemoTest - 0x140000000);
-        std::uint8_t         bytes[sizeof f::kTopRowDemoCallBytes]{};
-        gate = image.Contains(call) && image.Contains(test) && platform::CopyGuarded(bytes, reinterpret_cast<const void*>(call), sizeof bytes) &&
-               std::memcmp(bytes, f::kTopRowDemoCallBytes, sizeof bytes) == 0;
-        g.demoCall = gate ? call : 0;
-        g.demoTest = gate ? test : 0;
+        const auto name = image.OwnAddress(platform::BuildIndex::V1004, f::kTopRowDemoName1004, {}, 8);
+        gate            = name.has_value();
+        g.demoName      = name.value_or(0);
     }
     else
     {
-        const auto name = image.Rebase(f::kTopRowDemoName, 8);
-        gate            = name.has_value();
-        g.demoName      = name.value_or(0);
+        const auto call = platform::FindFunction(image, f::kTopRowDemoCall);
+        const auto test = image.Rebase(f::kTopRowDemoTest);
+        gate            = call && test;
+        g.demoCall      = gate ? *call : 0;
+        g.demoTest      = gate ? *test : 0;
     }
     // The shared pieces first: the page writes its strings with their copy.
     if (!openWindow || !textSlot || !textWas || !helpSlot || !helpWas || !orderWord || !gate || !game_ui::Install(image) ||

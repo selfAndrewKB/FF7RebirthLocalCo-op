@@ -1,13 +1,13 @@
 // Host-side tests for the ME shadow feedback skip code (renderer/me_shadow_feedback_code.h), run without the game.
 //
 // The bytes the mod places over the `jbe` entering the shadow pass's feedback region are EXECUTED here, for both
-// builds, in a harness that recreates the site: the view in r13 (research) or r12 (1.005), its family copy's
-// bAdditionalViewFamily at +0x74, the chunk count in [r14+18h], and for 1.005 the transition array at [rbp-68h].
-// Where the code jumps (the array's free, the jbe's target) and where it resumes, stubs return a distinct value:
+// builds, in a harness that recreates the site: the view in r12 (1.004: r13), its family copy's bAdditionalViewFamily
+// at +0x74, the chunk count in [r14+18h], and the transition array at [rbp-68h]. Where the code jumps (the array's
+// free, the jbe's target) and where it resumes, stubs return a distinct value:
 //   0xF   fell through: the count is not zero, the region runs (the game's path)
 //   0xE   jumped to the jbe's target: the count is zero
-//   skip  jumped to the array's free, with the registers that code needs: r15d = 30h (research, returned), or
-//         rbx = the array and edi = 0 (1.005, returned as rbx << 8 | edi)
+//   skip  jumped to the array's free, with the registers that code needs: rbx = the array and edi = 0 (returned as
+//         rbx << 8 | edi), or r15d = 30h (1.004, returned)
 // and the counters in the fields say which path counted itself.
 
 #include "renderer/me_shadow_feedback_code.h"
@@ -23,16 +23,16 @@
 
 namespace {
 
-using lss::renderer::kShadowFeedbackCodeSize;
+using lss::renderer::kShadowFeedbackCodeSize1004;
+using lss::renderer::ShadowFeedbackCode1004;
 using lss::renderer::ShadowFeedbackCode;
-using lss::renderer::ShadowFeedbackCode1005;
 using lss::renderer::ShadowFeedbackFields;
 
 constexpr std::uint64_t kFellThrough = 0xF;
 constexpr std::uint64_t kEmpty       = 0xE;
-constexpr std::uint64_t kArray       = 0x11;  // what [rbp-68h] holds for 1.005
-constexpr std::uint64_t kSkipResearch = 0x30;
-constexpr std::uint64_t kSkip1005     = kArray << 8;
+constexpr std::uint64_t kArray       = 0x11;  // what [rbp-68h] holds
+constexpr std::uint64_t kSkip        = kArray << 8;
+constexpr std::uint64_t kSkip1004    = 0x30;
 
 /// std::uint64_t harness(void* view /*rcx -> r13*/, void* chunk /*rdx -> r14*/, void* view /*r8 -> r12*/,
 ///                       void* frame /*r9 -> rbp*/)
@@ -43,7 +43,7 @@ ShadowFeedbackFields g_fields;  // the code embeds its address
 class SiteLike
 {
 public:
-    explicit SiteLike(bool v1005)
+    explicit SiteLike(bool source)  // the source build's site, else 1.004's
     {
         std::vector<std::uint8_t> code;
         const auto put = [&code](std::initializer_list<std::uint8_t> bytes) { code.insert(code.end(), bytes); };
@@ -56,13 +56,13 @@ public:
         put({0xBF, 0x07, 0x00, 0x00, 0x00});                                      // mov edi, 7
         put({0x31, 0xDB});                                                        // xor ebx, ebx
         const std::size_t codeAt = code.size();
-        code.resize(codeAt + kShadowFeedbackCodeSize);  // the mod's bytes, once the stubs' addresses are known
+        code.resize(codeAt + kShadowFeedbackCodeSize1004);  // the mod's bytes, once the stubs' addresses are known
         // resume: the byte after the code, where the redirect appends its jump back
         put({0xB8, 0x0F, 0x00, 0x00, 0x00});  // mov eax, 0Fh
         const std::size_t jumpFromResume = code.size();
         put({0xEB, 0x00});
         const std::size_t skipAt = code.size();
-        if (v1005)
+        if (source)
         {
             put({0x48, 0x89, 0xD8, 0x48, 0xC1, 0xE0, 0x08, 0x09, 0xF8});  // mov rax, rbx ; shl rax, 8 ; or eax, edi
         }
@@ -79,8 +79,8 @@ public:
         code[jumpFromResume + 1] = static_cast<std::uint8_t>(epilogue - (jumpFromResume + 2));
         code[jumpFromSkip + 1]   = static_cast<std::uint8_t>(epilogue - (jumpFromSkip + 2));
 
-        const auto bytes = v1005 ? ShadowFeedbackCode1005(g_fields, page_.At(skipAt), page_.At(emptyAt))
-                                 : ShadowFeedbackCode(g_fields, page_.At(skipAt), page_.At(emptyAt));
+        const auto bytes = source ? ShadowFeedbackCode(g_fields, page_.At(skipAt), page_.At(emptyAt))
+                                  : ShadowFeedbackCode1004(g_fields, page_.At(skipAt), page_.At(emptyAt));
         std::memcpy(code.data() + codeAt, bytes.data(), bytes.size());
         page_.Write(0, code);
         page_.Seal();
@@ -103,13 +103,13 @@ private:
     lss::test::ExecutablePage page_;
 };
 
-void TestPaths(const char* build, bool v1005)
+void TestPaths(const char* build, bool source)
 {
     std::printf("shadow feedback code (%s): player 1's family always runs the region; player 2's runs it with the "
                 "switch off and skips to the free with it on; an empty count takes the jbe; each path counts\n",
                 build);
-    const SiteLike site(v1005);
-    const auto     skipValue = v1005 ? kSkip1005 : kSkipResearch;
+    const SiteLike site(source);
+    const auto     skipValue = source ? kSkip : kSkip1004;
     g_fields = {};
 
     EXPECT(site.Run(false, 0, 5) == kFellThrough);
@@ -135,16 +135,16 @@ void TestPaths(const char* build, bool v1005)
 void TestTheBytes()
 {
     std::puts("shadow feedback code: the two builds differ only in the view's register and the free's fix-up");
-    const auto research = ShadowFeedbackCode(g_fields, 0x1111, 0x2222);
-    const auto v1005    = ShadowFeedbackCode1005(g_fields, 0x1111, 0x2222);
-    EXPECT(std::memcmp(research.data() + 4, v1005.data() + 4, 26) == 0);
-    EXPECT(std::memcmp(research.data() + 36, v1005.data() + 36, research.size() - 36) == 0);
+    const auto source = ShadowFeedbackCode(g_fields, 0x1111, 0x2222);
+    const auto v1004  = ShadowFeedbackCode1004(g_fields, 0x1111, 0x2222);
+    EXPECT(std::memcmp(v1004.data() + 4, source.data() + 4, 26) == 0);
+    EXPECT(std::memcmp(v1004.data() + 36, source.data() + 36, v1004.size() - 36) == 0);
     std::uint64_t embedded = 0;
-    std::memcpy(&embedded, research.data() + 10, sizeof(embedded));
+    std::memcpy(&embedded, v1004.data() + 10, sizeof(embedded));
     EXPECT(embedded == reinterpret_cast<std::uint64_t>(&g_fields));
-    std::memcpy(&embedded, research.data() + 42, sizeof(embedded));
+    std::memcpy(&embedded, v1004.data() + 42, sizeof(embedded));
     EXPECT(embedded == 0x1111);
-    std::memcpy(&embedded, research.data() + 75, sizeof(embedded));
+    std::memcpy(&embedded, v1004.data() + 75, sizeof(embedded));
     EXPECT(embedded == 0x2222);
 }
 
@@ -153,8 +153,8 @@ void TestTheBytes()
 int main()
 {
     TestTheBytes();
-    TestPaths("research", false);
     TestPaths("1.005", true);
+    TestPaths("1.004", false);
 
     return lss::test::Report();
 }

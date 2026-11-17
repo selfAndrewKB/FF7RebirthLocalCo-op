@@ -25,7 +25,7 @@ namespace {
 
 // UUserWidget::execSetPositionInViewport's call to SetPositionInViewport (bytes read from the running game):
 //   call UUserWidget__SetPositionInViewport (the start of its 16-byte block).
-constexpr std::uintptr_t kBlueprintSetPositionCall = 0x144CED910;
+constexpr std::uintptr_t kBlueprintSetPositionCall = 0x144AD2184;
 
 // The widget's viewport slot as UUserWidget keeps it (anchors +0x210, offsets +0x220,
 // alignment +0x230; read, never written).

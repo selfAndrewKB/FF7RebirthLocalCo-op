@@ -39,51 +39,51 @@ using label_states::Parked;
 // `mov rdx,rbp` (the FString*), `mov rcx,rdi` (the SEndTextBlock, never null here), the call, then only rsi/rbp/rdi and
 // the stack are read (rax unread).
 constexpr std::uint8_t   kSetLabelTextBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x6C, 0x24, 0x10, 0x48, 0x89,
-                                                 0x74, 0x24, 0x18, 0x57, 0xB8, 0x40, 0x00, 0x00, 0x00, 0xE8, 0x9A, 0x03,
-                                                 0x72, 0x01, 0x48, 0x2B, 0xE0, 0x48, 0x8B, 0xB9, 0xC0, 0x03, 0x00, 0x00};
-constexpr platform::FunctionFact kSetLabelText{L"SEndMapIcon__SetLabelText", 0x14098EB7C, kSetLabelTextBytes};
+                                                 0x74, 0x24, 0x18, 0x57, 0xB8, 0x40, 0x00, 0x00, 0x00, 0xE8, 0x5E, 0x3D,
+                                                 0xFC, 0x00, 0x48, 0x2B, 0xE0, 0x48, 0x8B, 0xB9, 0xC0, 0x03, 0x00, 0x00};
+constexpr platform::FunctionFact kSetLabelText{L"SEndMapIcon__SetLabelText", 0x1411A7E08, kSetLabelTextBytes};
 constexpr std::uint8_t   kSetTextArgsBytes[]  = {0x48, 0x8B, 0xD5, 0x48, 0x8B, 0xCF};
-constexpr platform::FunctionFact kSetTextArgs{L"the SetText call's arguments", 0x14098EBAB, kSetTextArgsBytes};
-constexpr std::uintptr_t kSetTextCall         = 0x14098EBB1;  // E8 rel32, inside one 16-byte block
+constexpr platform::FunctionFact kSetTextArgs{L"the SetText call's arguments", 0x1411A7E37, kSetTextArgsBytes};
+constexpr std::uintptr_t kSetTextCall         = 0x1411A7E3D;  // E8 rel32, inside one 16-byte block
 constexpr std::uint8_t   kSetTextAfterBytes[] = {0x80, 0xBE, 0x3C, 0x04, 0x00, 0x00, 0x00};
-constexpr platform::FunctionFact kSetTextAfter{L"after the SetText call", 0x14098EBB6, kSetTextAfterBytes};
+constexpr platform::FunctionFact kSetTextAfter{L"after the SetText call", 0x1411A7E42, kSetTextAfterBytes};
 // SEndTextBlock_SetText_RelayoutIfChanged: the game's own compare (≤ 20 characters) in front of its relayout.
 constexpr std::uint8_t   kSetTextBytes[]      = {0x48, 0x8B, 0xC4, 0x48, 0x89, 0x58, 0x08, 0x48, 0x89, 0x70, 0x10,
                                                  0x48, 0x89, 0x78, 0x18, 0x4C, 0x89, 0x70, 0x20, 0x55, 0x48, 0x8B,
-                                                 0xEC, 0xB8, 0x50, 0x00, 0x00, 0x00, 0xE8, 0xEB, 0x02, 0x72};
-constexpr platform::FunctionFact kSetText{L"SEndTextBlock_SetText_RelayoutIfChanged", 0x14098EC24, kSetTextBytes};
-constexpr std::uint8_t   kRelayoutBytes[]     = {0x48, 0x8B, 0xC4, 0x48, 0x89, 0x58, 0x10, 0x48, 0x89, 0x70, 0x18,
-                                                 0x48, 0x89, 0x78, 0x20, 0x55, 0x41, 0x54, 0x41, 0x55, 0x41, 0x56,
-                                                 0x41, 0x57, 0x48, 0x8D, 0xA8, 0x78, 0xF6, 0xFF, 0xFF, 0xB8};
+                                                 0xEC, 0xB8, 0x50, 0x00, 0x00, 0x00, 0xE8, 0xAF, 0x3C, 0xFC};
+constexpr platform::FunctionFact kSetText{L"SEndTextBlock_SetText_RelayoutIfChanged", 0x1411A7EB0, kSetTextBytes};
+constexpr std::uint8_t   kRelayoutBytes[]     = {0x40, 0x55, 0x53, 0x56, 0x57, 0x41, 0x54, 0x41, 0x55, 0x41, 0x56,
+                                                 0x41, 0x57, 0x48, 0x8D, 0xAC, 0x24, 0xD8, 0xFE, 0xFF, 0xFF, 0xB8,
+                                                 0x28, 0x02, 0x00, 0x00, 0xE8, 0xB1, 0x9D, 0x04, 0x01, 0x48};
 // checked only: the state it writes is what is swapped
-constexpr platform::FunctionFact kRelayout{L"the text block's relayout", 0x14106DA88, kRelayoutBytes};
+constexpr platform::FunctionFact kRelayout{L"the text block's relayout", 0x141121DB0, kRelayoutBytes};
 // The text block's destructor frees the ranges with these (its offsets are checked below).
 constexpr std::uint8_t   kArrayDtorBytes[]    = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x74,
                                                  0x24, 0x10, 0x57, 0xB8, 0x20, 0x00, 0x00, 0x00};
 // TArray<TArray<Run52>>
-constexpr platform::FunctionFact kRunsDtor{L"the runs array's destructor", 0x14098E3B4, kArrayDtorBytes};
+constexpr platform::FunctionFact kRunsDtor{L"the runs array's destructor", 0x14088675C, kArrayDtorBytes};
 // TArray<TArray<Quad80>>
-constexpr platform::FunctionFact kQuadsDtor{L"the quads array's destructor", 0x14098E35C, kArrayDtorBytes};
+constexpr platform::FunctionFact kQuadsDtor{L"the quads array's destructor", 0x140886704, kArrayDtorBytes};
 constexpr std::uint8_t   kDtorQuadsLeaBytes[] = {0x48, 0x8D, 0x8B, 0xA0, 0x05, 0x00, 0x00};
 // lea rcx,[rbx+5A0h]
-constexpr platform::FunctionFact kDtorQuadsLea{L"the destructor's quads lea", 0x14098E221, kDtorQuadsLeaBytes};
+constexpr platform::FunctionFact kDtorQuadsLea{L"the destructor's quads lea", 0x1408865C9, kDtorQuadsLeaBytes};
 constexpr std::uint8_t   kDtorRunsLeaBytes[]  = {0x48, 0x8D, 0x8B, 0x30, 0x05, 0x00, 0x00};
 // lea rcx,[rbx+530h]
-constexpr platform::FunctionFact kDtorRunsLea{L"the destructor's runs lea", 0x14098E25D, kDtorRunsLeaBytes};
-constexpr std::uint8_t   kReleaseWeakBytes[]  = {0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8, 0x7A, 0x54,
-                                                 0x48, 0x01, 0x48, 0x2B, 0xE0, 0x83, 0x69, 0x0C};
-constexpr platform::FunctionFact kReleaseWeak{L"RefController_ReleaseWeakReference", 0x140C29AAC, kReleaseWeakBytes};
+constexpr platform::FunctionFact kDtorRunsLea{L"the destructor's runs lea", 0x140886605, kDtorRunsLeaBytes};
+constexpr std::uint8_t   kReleaseWeakBytes[]  = {0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8, 0xE2, 0x61,
+                                                 0x39, 0x01, 0x48, 0x2B, 0xE0, 0x83, 0x69, 0x0C};
+constexpr platform::FunctionFact kReleaseWeak{L"RefController_ReleaseWeakReference", 0x140DD5994, kReleaseWeakBytes};
 constexpr std::uint8_t   kInvalidateBytes[]   = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x74, 0x24, 0x10, 0x48, 0x89,
                                                  0x7C, 0x24, 0x18, 0x55, 0x41, 0x56, 0x41, 0x57, 0x48, 0x8B, 0xEC, 0xB8};
-constexpr platform::FunctionFact kInvalidate{L"SWidget::Invalidate", 0x140970724, kInvalidateBytes};
+constexpr platform::FunctionFact kInvalidate{L"SWidget::Invalidate", 0x140B12B74, kInvalidateBytes};
 constexpr std::uint32_t  kInvalidateLayout    = 5;  // what the game's SetText passes after a relayout
 
 // The text block and its MakeShared block: the reference controller sits 0x10 before the widget (shared count +8, weak
 // count +0xC, not thread-safe), and TSharedFromThis keeps {widget, controller} at +0x8/+0x10.
-constexpr std::uintptr_t kTextBlockVTable  = 0x1457936F0;
-constexpr std::uintptr_t kPaintVTable      = 0x1457936C8;  // at +0x2B0
-constexpr std::uintptr_t kGcObjectVTable   = 0x1457936D0;  // at +0x2B8
-constexpr std::uintptr_t kControllerVTable = 0x1457936B8;
+constexpr std::uintptr_t kTextBlockVTable  = 0x1455EA0C8;
+constexpr std::uintptr_t kPaintVTable      = 0x1455E9E08;  // at +0x2B0
+constexpr std::uintptr_t kGcObjectVTable   = 0x1455E9E10;  // at +0x2B8
+constexpr std::uintptr_t kControllerVTable = 0x1455E9DF8;
 constexpr std::uint32_t  kControllerBefore = 0x10;
 constexpr std::uint32_t  kWeakThisObject   = 0x08;
 constexpr std::uint32_t  kWeakThisCounter  = 0x10;

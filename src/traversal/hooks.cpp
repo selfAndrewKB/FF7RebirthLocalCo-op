@@ -50,70 +50,70 @@ using world::field_rules::PointView;
 // The gun's functions, slots and call sites (research/RE-hooks-for-seats.md).
 constexpr std::uint8_t kShotPointBytes[] = {0x48, 0x8B, 0xC4, 0x48, 0x89, 0x58, 0x08, 0x48, 0x89, 0x70, 0x10, 0x48,
                                             0x89, 0x78, 0x18, 0x4C, 0x89, 0x60, 0x20, 0x41, 0x55, 0x41, 0x56, 0x41};
-constexpr platform::FunctionFact kShotPoint{L"HookShotChild_SetFieldActionMgrPoint_ReadsLeader", 0x143645008, kShotPointBytes};
+constexpr platform::FunctionFact kShotPoint{L"HookShotChild_SetFieldActionMgrPoint_ReadsLeader", 0x143379A0C, kShotPointBytes};
 // Its three callers: the notify's two (on and off) and the unregister's (off), each five bytes inside one block. The
 // actor's EndPlay is a fourth caller, left alone: an unconditional off for an actor leaving play.
-constexpr std::uintptr_t kShotPointCalls[] = {0x143642D07, 0x143642D88, 0x143642985};
+constexpr std::uintptr_t kShotPointCalls[] = {0x143377757, 0x1433777D8, 0x1433773D5};
 // The pin's removal from the primary controller's leader-action component, by the point's key: what the setter's off
 // branch calls.
-constexpr std::uint8_t kRemovePinBytes[] = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0x1C, 0xE2, 0x98, 0xFE,
+constexpr std::uint8_t kRemovePinBytes[] = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0x00, 0x63, 0xD1, 0xFE,
                                             0x48, 0x2B, 0xE0, 0x48};
-constexpr platform::FunctionFact kRemovePin{L"FieldActionPoint_RemoveLeaderActionInteractPoint1490_PrimaryPC", 0x143720D08,
+constexpr platform::FunctionFact kRemovePin{L"FieldActionPoint_RemoveLeaderActionInteractPoint1490_PrimaryPC", 0x143455874,
                                             kRemovePinBytes};
 constexpr std::uint8_t kShotInstallBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x74, 0x24, 0x10, 0x48, 0x89,
                                               0x7C, 0x24, 0x18, 0x55, 0x48, 0x8B, 0xEC, 0xB8, 0x70, 0x00, 0x00, 0x00};
-constexpr platform::SlotFact kShotInstallSlot{L"the gun point's camera installer slot", 0x1466F1888,
-                                              {L"HookShotChild_InstallCameraModule_PerActor", 0x14364610C, kShotInstallBytes}};
+constexpr platform::SlotFact kShotInstallSlot{L"the gun point's camera installer slot", 0x14657E448,
+                                              {L"HookShotChild_InstallCameraModule_PerActor", 0x14337A6E8, kShotInstallBytes}};
 constexpr std::uint8_t kShotLeaveBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x48, 0x89, 0x7C, 0x24, 0x18, 0x55, 0x48,
                                             0x8B, 0xEC, 0xB8, 0x30, 0x00, 0x00, 0x00};
-constexpr platform::SlotFact kShotLeaveSlot{L"the gun point's camera leave slot", 0x1466F1890,
-                                            {L"HookShotChild_LeaveCameraModule", 0x143646E60, kShotLeaveBytes}};
+constexpr platform::SlotFact kShotLeaveSlot{L"the gun point's camera leave slot", 0x14657E450,
+                                            {L"HookShotChild_LeaveCameraModule", 0x14337B43C, kShotLeaveBytes}};
 constexpr std::uint8_t kShotBeginBytes[] = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00};
-constexpr platform::SlotFact kShotBeginSlot{L"the hookshot move's Begin slot", 0x146694898,
-                                            {L"HookShotMove_Begin_Vt98", 0x1432C3CA0, kShotBeginBytes}};
+constexpr platform::SlotFact kShotBeginSlot{L"the hookshot move's Begin slot", 0x146521220,
+                                            {L"HookShotMove_Begin_Vt98", 0x142FD52A0, kShotBeginBytes}};
 constexpr std::uint8_t kShotEndBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x48, 0x89, 0x6C, 0x24, 0x18, 0x48, 0x89,
                                           0x74, 0x24, 0x20, 0x57, 0x41, 0x56, 0x41, 0x57, 0xB8, 0x60, 0x00, 0x00};
-constexpr platform::SlotFact kShotEndSlot{L"the hookshot move's End slot", 0x146694920,
-                                          {L"HookShotMove_End_Vt120_CameraOff_MarkFinished", 0x1432BE76C, kShotEndBytes}};
+constexpr platform::SlotFact kShotEndSlot{L"the hookshot move's End slot", 0x1465212A8,
+                                          {L"HookShotMove_End_Vt120_CameraOff_MarkFinished", 0x142FCFD6C, kShotEndBytes}};
 // The hit effect's entry crosses a block in both builds: the redirect goes at the second instruction (a store into the
 // caller's home area that no branch lands on).
 constexpr std::uint8_t kHitBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x74, 0x24, 0x10, 0x48, 0x89,
                                       0x7C, 0x24, 0x18, 0x41, 0x55, 0x41, 0x56, 0x41, 0x57, 0xB8, 0x50, 0x01};
-constexpr platform::FunctionFact kHit{L"HookShotChild_HitFFB_Hookshot0", 0x143D6500C, kHitBytes};
+constexpr platform::FunctionFact kHit{L"HookShotChild_HitFFB_Hookshot0", 0x143ACE74C, kHitBytes};
 // The press flag path (research/RE-hook-follow.md): the point's press listener sets the actor's one flag (its entry and
 // its second instruction both cross a block, so the flag is watched after each selection update instead), and every
 // holder's notify of that frame starts the hookshot on its own character while it is set.
 constexpr std::uint8_t kShotNotifyBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x55, 0x56, 0x57, 0x41, 0x54, 0x41, 0x56,
                                              0x48, 0x8D, 0x6C, 0x24};
-constexpr platform::SlotFact kShotNotifySlot{L"the gun point's notify slot", 0x1466F16E0,
-                                             {L"HookShotChild_Vt748_NotifyNear", 0x143642BA4, kShotNotifyBytes}};
+constexpr platform::SlotFact kShotNotifySlot{L"the gun point's notify slot", 0x14657E2A0,
+                                             {L"HookShotChild_Vt748_NotifyNear", 0x1433775F4, kShotNotifyBytes}};
 // The follower path: the AI world manager's queue reaches this slot for a follower the trail-follow step chose; the
 // game's only notion of a follower there is a character an AI controller possessed, a seat's member included.
 constexpr std::uint8_t kShotAIEnterBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x74, 0x24, 0x10, 0x57, 0xB8,
                                               0x70, 0x00, 0x00, 0x00};
-constexpr platform::SlotFact kShotAIEnterSlot{L"the gun point's follower-enter slot", 0x1466F1648,
-                                              {L"HookShotChild_Vt6B0_AIEnter_RequestState8", 0x143643E98, kShotAIEnterBytes}};
+constexpr platform::SlotFact kShotAIEnterSlot{L"the gun point's follower-enter slot", 0x14657E208,
+                                              {L"HookShotChild_Vt6B0_AIEnter_RequestState8", 0x14337889C, kShotAIEnterBytes}};
 
 // The rope's (the same source). Its switch's entry crosses a block in one build only; the same second-instruction
 // placement, checked the same way.
 constexpr std::uint8_t kRopeActiveBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x48, 0x89, 0x74, 0x24, 0x20, 0x57, 0x41,
                                              0x54, 0x41, 0x55, 0x41, 0x56, 0x41, 0x57, 0xB8, 0x00, 0x01, 0x00, 0x00};
-constexpr platform::FunctionFact kRopeActive{L"HookRope_SetActive_PointAndAnim", 0x14368064C, kRopeActiveBytes};
+constexpr platform::FunctionFact kRopeActive{L"HookRope_SetActive_PointAndAnim", 0x14124A6A8, kRopeActiveBytes};
 constexpr std::uint8_t kRopeInstallBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x7C, 0x24, 0x10, 0x55, 0x48,
                                               0x8B, 0xEC, 0xB8, 0x40, 0x00, 0x00, 0x00};
-constexpr platform::SlotFact kRopeInstallSlot{L"the hook rope's camera installer slot", 0x145884C50,
-                                              {L"HookRope_InstallGlobalModule", 0x143681EE0, kRopeInstallBytes}};
+constexpr platform::SlotFact kRopeInstallSlot{L"the hook rope's camera installer slot", 0x14565A9A8,
+                                              {L"HookRope_InstallGlobalModule", 0x1433B7BB8, kRopeInstallBytes}};
 constexpr std::uint8_t kRopeLeaveBytes[] = {0xB8, 0x38, 0x00, 0x00, 0x00};
-constexpr platform::SlotFact kRopeLeaveSlot{L"the hook rope's camera leave slot", 0x145884C58,
-                                            {L"HookRope_LeaveGlobalModule", 0x143682514, kRopeLeaveBytes}};
+constexpr platform::SlotFact kRopeLeaveSlot{L"the hook rope's camera leave slot", 0x14565A9B0,
+                                            {L"HookRope_LeaveGlobalModule", 0x1433B81EC, kRopeLeaveBytes}};
 constexpr std::uint8_t kRopeBeginBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x48, 0x89, 0x6C, 0x24, 0x18, 0x48, 0x89,
                                             0x74, 0x24, 0x20, 0x57, 0x41, 0x54, 0x41, 0x55, 0x41, 0x56, 0x41, 0x57};
-constexpr platform::SlotFact kRopeBeginSlot{L"the hook rope move's Begin slot", 0x146694B18,
-                                            {L"HookRopeAction_CameraOnIfUCPC", 0x1432C3758, kRopeBeginBytes}};
+constexpr platform::SlotFact kRopeBeginSlot{L"the hook rope move's Begin slot", 0x146521580,
+                                            {L"HookRopeAction_CameraOnIfUCPC", 0x142FD4D58, kRopeBeginBytes}};
 constexpr std::uint8_t kRopeEndBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x48, 0x89, 0x6C, 0x24, 0x18, 0x48, 0x89,
                                           0x74, 0x24, 0x20, 0x57, 0x41, 0x56, 0x41, 0x57, 0xB8, 0xB0, 0x00, 0x00};
-constexpr platform::SlotFact kRopeEndSlot{L"the hook rope move's End slot", 0x146694BA0,
-                                          {L"HookRopeMove_End_Vt120_CameraOff", 0x1432BE130, kRopeEndBytes}};
+constexpr platform::SlotFact kRopeEndSlot{L"the hook rope move's End slot", 0x146521608,
+                                          {L"HookRopeMove_End_Vt120_CameraOff", 0x142FCF730, kRopeEndBytes}};
 
 constexpr std::size_t kHandleSize = 16;  // a camera-module handle: the module, then its weak reference controller
 constexpr std::size_t kMaxActors  = 8;   // gun points and ropes with recorded wishes or handles at once

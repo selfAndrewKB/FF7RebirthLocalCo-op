@@ -41,7 +41,7 @@ inline constexpr std::size_t kDevice         = 0x148;  // FD3D12Device*
 // device: the direct contexts' array; [0] is the default.
 // 1.005: FD3D12Device grew; ME_RenderDevice_EndFrame reads [device+13D8h], then [[..]] -> ClearState (1.004
 // [rsi+0F70h]); the async array moved 0xFB8 -> 0x1420 likewise.
-inline constexpr platform::PerBuild<std::size_t> kDeviceDirect = {0xF70, 0x13D8};
+inline constexpr platform::PerBuild<std::size_t> kDeviceDirect = {0x13D8, 0xF70};
 }  // namespace context
 
 inline constexpr std::size_t   kNodeSize     = 0x10;  // {vtable, next}

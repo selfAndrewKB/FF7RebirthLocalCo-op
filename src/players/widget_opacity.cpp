@@ -12,8 +12,8 @@ namespace lss::players::widget_opacity {
 namespace {
 
 // Facts read from the database (research/RE-p2-hud-targets.md; this build).
-constexpr std::uint8_t kSetOpacityBytes[] = {0x40, 0x53, 0xB8, 0x40, 0x00, 0x00, 0x00, 0xE8, 0x9C, 0x8F, 0x64, 0x01};
-constexpr platform::FunctionFact kSetOpacity{L"UWidget::SetRenderOpacity", 0x140A65F88, kSetOpacityBytes};
+constexpr std::uint8_t kSetOpacityBytes[] = {0x40, 0x53, 0xB8, 0x40, 0x00, 0x00, 0x00, 0xE8, 0x80, 0xC8, 0x39, 0x01};
+constexpr platform::FunctionFact kSetOpacity{L"UWidget::SetRenderOpacity", 0x140DCF2F4, kSetOpacityBytes};
 constexpr std::uint32_t kRenderOpacity = 0xC4;  // UWidget: float
 
 using SetOpacityFn = void (*)(void* widget, float opacity);

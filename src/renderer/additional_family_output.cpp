@@ -19,13 +19,12 @@ platform::CodeRedirect g_redirect;
 
 bool InstallAdditionalFamilyOutput(const platform::GameImage& image) noexcept
 {
-    // 1.005 compiled the store differently (its own bytes and code; output_load_action_code.h).
-    const bool v1005 = platform::RunningBuild() == platform::BuildIndex::V1005;
+    // 1.004 compiled the store differently (its own bytes and code; output_load_action_code.h).
+    const bool v1004 = platform::RunningBuild() == platform::BuildIndex::V1004;
     const std::span<const std::uint8_t> store =
-        v1005 ? std::span<const std::uint8_t>(facts::kOutputLoadActionStoreBytes1005)
-              : facts::kOutputLoadActionStoreBytes;
+        v1004 ? std::span<const std::uint8_t>(facts::kOutputLoadActionStoreBytes1004) : facts::kOutputLoadActionStoreBytes;
     const std::span<const std::uint8_t> code =
-        v1005 ? std::span<const std::uint8_t>(kFirstUnlessAdditionalLoadAction1005) : kFirstUnlessAdditionalLoadAction;
+        v1004 ? std::span<const std::uint8_t>(kFirstUnlessAdditionalLoadAction1004) : kFirstUnlessAdditionalLoadAction;
     const auto site   = image.Rebase(facts::kOutputLoadActionStore, store.size());
     const auto resume = image.Rebase(facts::kOutputLoadActionResume);
     if (!site || !resume)

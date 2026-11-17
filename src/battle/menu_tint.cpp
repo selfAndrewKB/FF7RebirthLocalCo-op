@@ -31,25 +31,25 @@ namespace {
 // (EndUIFilter_RefInc/RefDec on EndUISystem[41], keeping their own "holds it" byte). Each seat's menu does
 // the same; player 1's keeps the latch. The wait sound's off is one mode slot: it is skipped while the
 // other menu is still in wait mode.
-constexpr std::uint8_t kMenuSoundBytes[] = {0x40, 0x53, 0xB8, 0x30, 0x00, 0x00, 0x00, 0xE8, 0xE8, 0x50, 0x51, 0x01};
+constexpr std::uint8_t kMenuSoundBytes[] = {0x40, 0x53, 0xB8, 0x30, 0x00, 0x00, 0x00, 0xE8, 0x70, 0x8F, 0x75, 0x01};
 using facts::kFilterOn;
 using facts::kFilterOff;
-constexpr platform::FunctionFact kMenuSound{L"EndSound_PostMenuEventIdx", 0x140B99E3C, kMenuSoundBytes};
+constexpr platform::FunctionFact kMenuSound{L"EndSound_PostMenuEventIdx", 0x140A12C04, kMenuSoundBytes};
 using facts::kRefInc;
 using facts::kRefDec;
 // The wait's muffle at its open: the sound event (event table entry 12) and the audio mode "WaitMode", both inlined in
 // the wait machine (research/RE-menu-slow.md).
 constexpr std::uint8_t kSoundEventBytes[] = {0x48, 0x89, 0x4C, 0x24, 0x08, 0xB8, 0x38, 0x04,
-                                             0x00, 0x00, 0xE8, 0xA9, 0x4F, 0x51, 0x01, 0x48};
+                                             0x00, 0x00, 0xE8, 0xD1, 0x8F, 0x75, 0x01, 0x48};
 constexpr std::uint8_t kSoundModeBytes[]  = {0x40, 0x53, 0xB8, 0x30, 0x00, 0x00, 0x00, 0xE8,
-                                             0x68, 0x4C, 0x51, 0x01, 0x48, 0x2B, 0xE0, 0xC5};
-constexpr platform::FunctionFact kSoundEvent{L"EndSound_PostEvent", 0x140B99F78, kSoundEventBytes};
-constexpr platform::FunctionFact kSoundMode{L"EndSound_SetAudioModeByName", 0x140B9A2BC, kSoundModeBytes};
-constexpr std::uintptr_t kFilterOnCall    = 0x140963943;  // wait mode 0 -> 1
-constexpr std::uintptr_t kSoundOnCall     = 0x14096394F;  // 0 -> 1, the muffle's event
-constexpr std::uintptr_t kSoundModeOnCall = 0x14096397F;  // 0 -> 1, the muffle's audio mode
-constexpr std::uintptr_t kFilterOffCall   = 0x140963839;  // 5 -> 4
-constexpr std::uintptr_t kSoundOffCall    = 0x14096384B;  // 4 -> 0 (event 13, the audio mode cleared)
+                                             0x90, 0x8D, 0x75, 0x01, 0x48, 0x2B, 0xE0, 0xC5};
+constexpr platform::FunctionFact kSoundEvent{L"EndSound_PostEvent", 0x140A12BA0, kSoundEventBytes};
+constexpr platform::FunctionFact kSoundMode{L"EndSound_SetAudioModeByName", 0x140A12DE4, kSoundModeBytes};
+constexpr std::uintptr_t kFilterOnCall    = 0x14088B08B;  // wait mode 0 -> 1
+constexpr std::uintptr_t kSoundOnCall     = 0x14088B097;  // 0 -> 1, the muffle's event
+constexpr std::uintptr_t kSoundModeOnCall = 0x14088B0C7;  // 0 -> 1, the muffle's audio mode
+constexpr std::uintptr_t kFilterOffCall   = 0x14088AF81;  // 5 -> 4
+constexpr std::uintptr_t kSoundOffCall    = 0x14088AF93;  // 4 -> 0 (event 13, the audio mode cleared)
 // EndSound_PostMenuEventIdx's two wait entries: 12 the muffle's event and audio mode together, 13 their end.
 constexpr std::uint8_t kWaitSoundOn  = 12;
 constexpr std::uint8_t kWaitSoundOff = 13;
@@ -354,7 +354,7 @@ bool Place(const platform::GameImage& image, platform::DeferredSites& placement)
         const auto live = image.Rebase(site, 5);
         return live && placement.Place(call, *live, target, reinterpret_cast<std::uintptr_t>(with));
     };
-    // The muffle's two on calls cross a 16-byte block on the research build (only the opcode in the first). They are
+    // The muffle's two on calls cross a 16-byte block on 1.004 (only the opcode in the first). They are
     // placed from their own thread's side: at install no world exists, so no thread can be in the wait machine;
     // otherwise the placement runs on the game thread between its ticks. After the grey's: the first block holds the
     // grey's call too, and Remove puts the muffle's back first.

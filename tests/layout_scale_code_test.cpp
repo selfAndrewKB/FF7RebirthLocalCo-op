@@ -3,8 +3,8 @@
 // The bytes the mod places over the overlay's layout-scale instruction are EXECUTED here: a harness takes the rect's
 // width in ecx and height in edx, as the game has them at the site, runs the code and returns xmm0. The result must be
 // the contain rule, min(H/1080, W/1920), with the game's constants, and for the 16:9 rects the game makes it must be
-// exactly the game's own H/1080. The research build's code follows the game's two instructions before the site; the
-// 1.005 code carries those two itself.
+// exactly the game's own H/1080. The code carries the game's two instructions before the site itself; 1.004's follows
+// them.
 
 #include "hud/layout/layout_scale_code.h"
 
@@ -32,7 +32,7 @@ constexpr std::uint8_t kRestoreXmm7[] = {0xC5, 0xF8, 0x10, 0x3C, 0x24,   // vmov
 constexpr std::uint8_t kGamesTwo[] = {0xC5, 0xC0, 0x57, 0xFF,   // vxorps xmm7, xmm7, xmm7      (the game's, before the site)
                                       0xC5, 0xC2, 0x2A, 0xFA};  // vcvtsi2ss xmm7, xmm7, edx    H
 
-void FillResearch(lss::test::ExecutablePage& page)
+void Fill1004(lss::test::ExecutablePage& page)
 {
     std::size_t at = 0;
     page.Write(at, kSaveXmm7);
@@ -45,13 +45,13 @@ void FillResearch(lss::test::ExecutablePage& page)
     page.Seal();
 }
 
-void Fill1005(lss::test::ExecutablePage& page)
+void FillSource(lss::test::ExecutablePage& page)
 {
     std::size_t at = 0;
     page.Write(at, kSaveXmm7);
     at += sizeof(kSaveXmm7);
-    page.Write(at, kCode1005);
-    at += sizeof(kCode1005);
+    page.Write(at, kContextCode);
+    at += sizeof(kContextCode);
     page.Write(at, kRestoreXmm7);
     page.Seal();
 }
@@ -77,14 +77,15 @@ bool Near(float a, float b)
 
 void TestTheBytes()
 {
-    std::puts("layout scale code: the constants are the game's 1/1080 and 1/1920; 1.005's code is the two replaced "
-              "instructions then the research code; the site offsets agree");
+    std::puts("layout scale code: the constants are the game's 1/1080 and 1/1920; the context code is the two replaced "
+              "instructions then the contain rule; the site offsets agree; 1.004's vmulss differs in its distance only");
     EXPECT(Near(Constant(kConstant1080) * 1080.0f, 1.0f));
     EXPECT(Near(Constant(kConstant1920) * 1920.0f, 1.0f));
-    EXPECT(std::memcmp(kCode1005, kContextBytes, kReplaced1005) == 0);
-    EXPECT(std::memcmp(kCode1005 + kReplaced1005, kCode, sizeof(kCode)) == 0);
+    EXPECT(std::memcmp(kContextCode, kContextBytes, kContextReplaced) == 0);
+    EXPECT(std::memcmp(kContextCode + kContextReplaced, kCode, sizeof(kCode)) == 0);
     EXPECT(kSite - kContext.address == 8);
     EXPECT(kResume - kSite == kReplaced);
+    EXPECT(sizeof(kSiteBytes1004) == kReplaced && std::memcmp(kSiteBytes1004, kContextBytes + 8, 4) == 0);
     EXPECT(kCode[24] == 0xEB && kCode[25] == sizeof(kCode) - 26);  // the jump lands right after the constants
 }
 
@@ -119,8 +120,8 @@ void TestContainRule(const char* build, void (*fill)(lss::test::ExecutablePage&)
 int main()
 {
     TestTheBytes();
-    TestContainRule("research", &FillResearch);
-    TestContainRule("1.005", &Fill1005);
+    TestContainRule("1.005", &FillSource);
+    TestContainRule("1.004", &Fill1004);
 
     return lss::test::Report();
 }

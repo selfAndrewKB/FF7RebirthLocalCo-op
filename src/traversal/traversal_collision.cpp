@@ -78,7 +78,7 @@ void WatchCollision(int player, const void* cameraManager)
         }
         w        = CollisionWatch{};
         w.module = module;
-        w.vtable = g_image ? g_image->ResearchAddress(vt) : vt;
+        w.vtable = g_image ? g_image->SourceAddress(vt) : vt;
     }
     if (w.module == nullptr || cameraManager == nullptr)
     {

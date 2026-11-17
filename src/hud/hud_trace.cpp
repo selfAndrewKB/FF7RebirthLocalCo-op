@@ -28,27 +28,27 @@ namespace {
 
 constexpr std::uint8_t   kMasterHudTickPrologue[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x57, 0xB8, 0x30, 0x00, 0x00, 0x00};
 // void (EndUISystem*, float DeltaTime)
-constexpr platform::FunctionFact kMasterHudTick{L"EndUISystem MasterHUD_Tick", 0x140F37E08, kMasterHudTickPrologue};
-constexpr std::uintptr_t kMasterHudTickCall = 0x1423EF4A1;  // in AEndGameMode__Tick530_Body
+constexpr platform::FunctionFact kMasterHudTick{L"EndUISystem MasterHUD_Tick", 0x140F759B0, kMasterHudTickPrologue};
+constexpr std::uintptr_t kMasterHudTickCall = 0x140B38A66;  // in AEndGameMode__Tick530_Body
 
 
 // bool (APlayerController*, UUserWidget* marker, const FVector*, float* inout)
 constexpr std::uint8_t   kPlaceMarkerPrologue[] = {0x48, 0x8B, 0xC4, 0x48, 0x89, 0x58, 0x10, 0x48, 0x89, 0x70,
                                                    0x18, 0x48, 0x89, 0x78, 0x20, 0x55, 0x41, 0x56, 0x41, 0x57};
-constexpr platform::FunctionFact kPlaceMarker{L"EndUI__PlaceMarkerWidgetAtWorld_Clamped", 0x140A59A30,
+constexpr platform::FunctionFact kPlaceMarker{L"EndUI__PlaceMarkerWidgetAtWorld_Clamped", 0x140E8EA08,
                                               kPlaceMarkerPrologue};
-constexpr std::uintptr_t kPlaceMarkerCall = 0x140C8D620;  // in EndUI__MarkerList_Tick
+constexpr std::uintptr_t kPlaceMarkerCall = 0x140F75348;  // in EndUI__MarkerList_Tick
 
 // bool (APlayerController*, const FVector*, FVector2D* out)
 constexpr std::uint8_t   kProjectPrologue[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x74,
                                                0x24, 0x10, 0x57, 0xB8, 0x40, 0x00, 0x00, 0x00};
-constexpr platform::FunctionFact kProject{L"the HUD's project-to-screen (controller, point, out)", 0x140CBF974,
+constexpr platform::FunctionFact kProject{L"the HUD's project-to-screen (controller, point, out)", 0x140BC8AB8,
                                           kProjectPrologue};
 constexpr std::array<std::uintptr_t, 4> kProjectCalls{{
-    0x1409F94FA,  // AreaMapIcon_FrameUpdate
-    0x1409FA4F6,  // AreaMapIcon_FrameUpdate
-    0x1408607C5,  // AreaMapIcon__ProjectIconElement
-    0x140860829,  // AreaMapIcon__ProjectIconElement
+    0x1409B810C,  // AreaMapIcon_FrameUpdate
+    0x1409B9134,  // AreaMapIcon_FrameUpdate
+    0x140808949,  // AreaMapIcon__ProjectIconElement
+    0x140808AEE,  // AreaMapIcon__ProjectIconElement
 }};
 
 // GFrameNumber: facts::kFrameNumber (facts/engine.h; per build, the 1.005 twin in the hand-found table).
@@ -224,11 +224,11 @@ bool InstallHudTrace(const platform::GameImage& image) noexcept
                                         reinterpret_cast<std::uintptr_t>(&TracedHudTick)) &&
                      g_markerCall.Install(image, kPlaceMarkerCall, *marker,
                                           reinterpret_cast<std::uintptr_t>(&TracedMarker));
-    const bool v1005 = platform::RunningBuild() == platform::BuildIndex::V1005;
+    const bool crossing = platform::RunningBuild() != platform::BuildIndex::V1004;  // two project calls cross a block
     for (std::size_t i = 0; installed && i < kProjectCalls.size(); ++i)
     {
         const auto site = image.Rebase(kProjectCalls[i], 5);
-        if (v1005 && site && (*site & 0xF) + 5 > 16)
+        if (crossing && site && (*site & 0xF) + 5 > 16)
         {
             g_projectPending[i] = *site;  // installed from the game thread (above)
             g_projectCrosses[i] = true;
@@ -245,7 +245,7 @@ bool InstallHudTrace(const platform::GameImage& image) noexcept
     }
     g_installed = true;
     platform::Log(L"HUD trace: installed{}",
-                  v1005 ? L" (the project calls crossing a block follow at the next overlay render)" : L"");
+                  crossing ? L" (the project calls crossing a block follow at the next overlay render)" : L"");
     return true;
 }
 

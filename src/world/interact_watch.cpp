@@ -94,11 +94,11 @@ using facts::kFieldActionEntryKeyBack;
 constexpr std::uint8_t   kAddPointBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x4C, 0x89, 0x4C,
                                              0x24, 0x20, 0x55, 0x56, 0x57, 0x41, 0x54, 0x41};
 // void(mgr, talk, key*, owner*, u64*, loc*, rot*, preset*, presetPlayer*, float, kind, u8, u8, FName, FName)
-constexpr platform::FunctionFact kAddPoint{L"FieldActionMgr's AddPoint", 0x1411BDE60, kAddPointBytes};
+constexpr platform::FunctionFact kAddPoint{L"FieldActionMgr's AddPoint", 0x140FED95C, kAddPointBytes};
 constexpr std::uint8_t   kExecuteSlotBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x55, 0x56, 0x57,
                                                 0x41, 0x54, 0x41, 0x55, 0x41, 0x56, 0x41, 0x57};
 // void(mgr, u8 slot)
-constexpr platform::FunctionFact kExecuteSlot{L"FieldActionMgr's ExecuteSlot", 0x1414A90E4, kExecuteSlotBytes};
+constexpr platform::FunctionFact kExecuteSlot{L"FieldActionMgr's ExecuteSlot", 0x14117D390, kExecuteSlotBytes};
 constexpr std::size_t    kFirstInstruction = 5;
 // 1.005 (research/RE-1005-field-2.md): AddPoint's entry sits at %16 = 12, so its first instruction crosses a
 // 16-byte block. Its second (mov [rsp+20h], r9 at %16 = 1) takes the redirect instead: the first only stores rbx into
@@ -107,11 +107,11 @@ constexpr std::size_t    kFirstInstruction = 5;
 constexpr std::size_t    kSecondInstruction = 5;
 // The Wheelie ride-on point's key (an FName global, research/RE-p2-wheelie-ride.md): no analysed code adds it, so its
 // registration is logged at Info to name the registrar.
-constexpr std::uintptr_t kScooterKey = 0x1491E6D10;
-constexpr std::uintptr_t kMarkFromListener = 0x1414A90AD;  // the WorldItem key listener's call returns here
+constexpr std::uintptr_t kScooterKey = 0x14901EDC0;
+constexpr std::uintptr_t kMarkFromListener = 0x14117CFFD;  // the WorldItem key listener's call returns here
 // The candidate query, called read-only for the dry run: void(octree, node, context, box*, cap*).
-constexpr std::uint8_t   kQueryBytes[] = {0x41, 0x55, 0x41, 0x56, 0xB8, 0x28, 0x01, 0x00, 0x00};
-constexpr platform::FunctionFact kQuery{L"the octree's candidate query", 0x1422BA490, kQueryBytes};
+constexpr std::uint8_t   kQueryBytes[] = {0x40, 0x53, 0x56, 0x57, 0x41, 0x54, 0x41, 0x55, 0x41};
+constexpr platform::FunctionFact kQuery{L"the octree's candidate query", 0x1409A41E4, kQueryBytes};
 constexpr float          kQueryExtent  = 10.0f;  // as the update's call (cm)
 
 constexpr float     kNearCm         = 2000.0f;  // the census: points within 20 m of any player
@@ -196,7 +196,7 @@ const std::uint8_t* PointerAt(const void* base, std::size_t offset) noexcept
 
 std::uintptr_t Ida(std::uintptr_t live) noexcept
 {
-    return g_image ? g_image->ResearchAddress(live) : live;
+    return g_image ? g_image->SourceAddress(live) : live;
 }
 
 std::wstring Name(std::uint64_t name)
@@ -768,7 +768,7 @@ void Install(const platform::GameImage& image) noexcept
         return at && redirect.Install(*at, image.EntryInstruction(fact.address, first), replacement);
     };
     bool add = false;
-    if (platform::RunningBuild() == platform::BuildIndex::V1005)
+    if (platform::RunningBuild() != platform::BuildIndex::V1004)
     {
         const auto bytes = kAddPoint.entryBytes;
         const auto at    = platform::FindFunction(image, kAddPoint);

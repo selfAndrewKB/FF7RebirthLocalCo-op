@@ -33,10 +33,10 @@ namespace {
 // once per view by the pass's execute, right before the draw.
 constexpr std::uint8_t kSetupPrologue[] = {0x40, 0x55, 0x53, 0x56, 0x57, 0x41, 0x56, 0x41, 0x57,
                                            0x48, 0x8D, 0xAC, 0x24, 0x58, 0xEB, 0xFF};
-constexpr platform::FunctionFact kSetup{L"CompositeSDRForeground_UpdateViewUB_SetViewport_ForTarget", 0x14164AC98,
+constexpr platform::FunctionFact kSetup{L"CompositeSDRForeground_UpdateViewUB_SetViewport_ForTarget", 0x140C0BC94,
                                         kSetupPrologue};
 /// The execute's call of it (the first of its two calls; the second is the draw).
-constexpr std::uintptr_t kSetupCall = 0x14252B8BF;
+constexpr std::uintptr_t kSetupCall = 0x140C0BC69;
 /// FRHICommandListBase: the link to the last appended command's Next field.
 constexpr std::uint32_t kCommandLink = 0x8;
 /// FRHICommandBase: the Next field's offset inside a command (the link above points at it).

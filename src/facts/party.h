@@ -25,76 +25,76 @@ using platform::SlotFact;
 /// The party manager (a native singleton): +0x140 is the primary player controller, an FWeakObjectPtr {index, serial}
 /// read by GetPrimaryEndPlayerController_FromPartyManager (its only read, RE-p2-camera-movement-ida.md); +0x148
 /// the leader (an FWeakObjectPtr, read by ResolvePartyLeaderWeakPtr); +0x150 the leader's player type (u8).
-inline constexpr std::uintptr_t kPartyManagerGlobal            = 0x14939BCE0;
+inline constexpr std::uintptr_t kPartyManagerGlobal            = 0x1491D8510;
 inline constexpr std::uint32_t  kPartyManagerPrimaryController = 0x140;
 inline constexpr std::uint32_t  kPartyManagerLeader            = 0x148;
 inline constexpr std::uint32_t  kPartyManagerLeaderType        = 0x150;
 /// GetPrimaryEndPlayerController_FromPartyManager: a redirect target only; the call sites it is placed at prove it.
-inline constexpr std::uintptr_t kGetPrimaryEndPlayerController = 0x140A61D1C;
+inline constexpr std::uintptr_t kGetPrimaryEndPlayerController = 0x140763D40;
 /// UEndPartyAPI_GetPartyLeaderType (a leaf): PM ? PM[+0x150] : 16, in al (RE-p2-enemy-target-bias.md).
-inline constexpr std::uint8_t kGetPartyLeaderTypeBytes[] = {0x48, 0x8B, 0x05, 0x15, 0x4C, 0xB9, 0x08, 0x48, 0x85, 0xC0,
+inline constexpr std::uint8_t kGetPartyLeaderTypeBytes[] = {0x48, 0x8B, 0x05, 0xD5, 0xA3, 0x8A, 0x08, 0x48, 0x85, 0xC0,
                                                             0x74, 0x07, 0x8A, 0x80, 0x50, 0x01, 0x00, 0x00, 0xC3, 0xB0,
                                                             0x10, 0xC3};
-inline constexpr FunctionFact kGetPartyLeaderType{L"UEndPartyAPI_GetPartyLeaderType", 0x1408070C4,
+inline constexpr FunctionFact kGetPartyLeaderType{L"UEndPartyAPI_GetPartyLeaderType", 0x14092E134,
                                                   kGetPartyLeaderTypeBytes};
 /// Party_IsTypeDead_AIHolder6(unused, u8 type): the member of `type`'s control state is Dead (6); the type in dl
 /// (RE-downed-ally-commands.md).
 inline constexpr std::uint8_t kIsTypeDeadBytes[] = {0x40, 0x53, 0xB8, 0x80, 0x00, 0x00, 0x00};
-inline constexpr FunctionFact kIsTypeDead{L"Party_IsTypeDead_AIHolder6", 0x140805200, kIsTypeDeadBytes};
+inline constexpr FunctionFact kIsTypeDead{L"Party_IsTypeDead_AIHolder6", 0x140C24A3C, kIsTypeDeadBytes};
 /// PartyType_HasStateId(u8 type, u8 status): the member of `type` has the status; the battle switch's own member test
 /// and the command menu's gates ask it for Petrify (RE-downed-ally-commands.md, RE-p2-party-switch.md).
 inline constexpr std::uint8_t kTypeHasStateIdBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x74,
                                                         0x24, 0x10, 0x57, 0xB8, 0x80, 0x00, 0x00, 0x00};
-inline constexpr FunctionFact kTypeHasStateId{L"PartyType_HasStateId", 0x140A40050, kTypeHasStateIdBytes};
+inline constexpr FunctionFact kTypeHasStateId{L"PartyType_HasStateId", 0x1409B047C, kTypeHasStateIdBytes};
 inline constexpr std::uint8_t kPetrifyStateId = 22;
 /// Party_GetHpByType(u8 type): the member's HP, 0 for a knocked-out member (the command chooser's and the low-health
 /// decision's read).
 inline constexpr std::uint8_t kPartyHpBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x57, 0xB8, 0x20,
-                                                 0x00, 0x00, 0x00, 0xE8, 0x9C, 0x2B, 0x67, 0x01};
-inline constexpr FunctionFact kPartyHp{L"Party_GetHpByType", 0x140A3C384, kPartyHpBytes};
+                                                 0x00, 0x00, 0x00, 0xE8, 0x20, 0x61, 0x54, 0x01};
+inline constexpr FunctionFact kPartyHp{L"Party_GetHpByType", 0x140C25A50, kPartyHpBytes};
 /// Party roster: lane 0 is the field lane; a type of 0x10 or more is "none".
 inline constexpr std::uint8_t kFieldLane       = 0;
 inline constexpr std::uint8_t kNoPlayerType    = 0x10;
 inline constexpr std::int32_t kMaxRosterEntries = 16;
 inline constexpr std::uint8_t kRosterCountBytes[] = {
-    0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0x10, 0xF9, 0x66, 0x01,
-    0x48, 0x2B, 0xE0, 0x4C, 0x8B, 0x05, 0xCE, 0x5F, 0x7E, 0x08, 0x45, 0x33};
-inline constexpr FunctionFact kRosterCount{L"the party roster count", 0x140A3F614, kRosterCountBytes};
+    0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0x4C, 0xC0, 0x7B, 0x01,
+    0x48, 0x2B, 0xE0, 0x4C, 0x8B, 0x05, 0x2A, 0xDC, 0x6A, 0x08, 0x45, 0x33};
+inline constexpr FunctionFact kRosterCount{L"the party roster count", 0x1409AFB28, kRosterCountBytes};
 inline constexpr std::uint8_t kRosterPlayerTypeBytes[] = {
-    0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0x1C, 0xFA, 0x66, 0x01,
-    0x48, 0x2B, 0xE0, 0x4C, 0x8B, 0x05, 0xDA, 0x60, 0x7E, 0x08, 0x44, 0x8B};
-inline constexpr FunctionFact kRosterPlayerType{L"the party roster's player type", 0x140A3F508, kRosterPlayerTypeBytes};
+    0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0x58, 0xC1, 0x7B, 0x01,
+    0x48, 0x2B, 0xE0, 0x4C, 0x8B, 0x05, 0x36, 0xDD, 0x6A, 0x08, 0x44, 0x8B};
+inline constexpr FunctionFact kRosterPlayerType{L"the party roster's player type", 0x1409AFA1C, kRosterPlayerTypeBytes};
 inline constexpr std::uint8_t kCharacterByPlayerTypeBytes[] = {
-    0x4C, 0x8B, 0x05, 0xA5, 0xA6, 0x96, 0x08, 0x44, 0x0F, 0xB6, 0xC9, 0x4D,
+    0x4C, 0x8B, 0x05, 0x21, 0xA3, 0x82, 0x08, 0x44, 0x0F, 0xB6, 0xC9, 0x4D,
     0x85, 0xC0, 0x0F, 0x84, 0x87, 0x00, 0x00, 0x00, 0x80, 0xFA, 0x0F, 0x73};
-inline constexpr FunctionFact kCharacterByPlayerType{L"PartyManager::GetCharacterByPlayerType", 0x140A31634,
+inline constexpr FunctionFact kCharacterByPlayerType{L"PartyManager::GetCharacterByPlayerType", 0x1409AE1E8,
                                                      kCharacterByPlayerTypeBytes};
 inline constexpr std::uint8_t kFieldLeaderTypeBytes[] = {
-    0x48, 0x8B, 0x05, 0x9D, 0x3F, 0x7C, 0x08, 0x48, 0x85, 0xC0, 0x74, 0x1A,
+    0x48, 0x8B, 0x05, 0xF9, 0x8B, 0x8F, 0x08, 0x48, 0x85, 0xC0, 0x74, 0x1A,
     0x48, 0x8B, 0x48, 0x48, 0x48, 0x85, 0xC9, 0x75, 0x0D, 0x48, 0x8B, 0x48};
-inline constexpr FunctionFact kFieldLeaderType{L"PartyData_GetFieldLeaderType", 0x140A61654, kFieldLeaderTypeBytes};
+inline constexpr FunctionFact kFieldLeaderType{L"PartyData_GetFieldLeaderType", 0x140764B68, kFieldLeaderTypeBytes};
 inline constexpr std::uint8_t kDefaultBattleLeaderTypeBytes[] = {
-    0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8, 0xB6, 0xAC, 0xBA, 0x00, 0x48, 0x2B,
-    0xE0, 0x48, 0x8B, 0x0D, 0x74, 0x13, 0xD2, 0x07, 0x48, 0x85, 0xC9, 0x74};
-inline constexpr FunctionFact kDefaultBattleLeaderType{L"PartyData_GetDefaultBattleLeaderType", 0x141504270,
+    0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8, 0x92, 0x31, 0x5E, 0x01, 0x48, 0x2B,
+    0xE0, 0x48, 0x8B, 0x0D, 0x70, 0x4D, 0x4D, 0x08, 0x48, 0x85, 0xC9, 0x74};
+inline constexpr FunctionFact kDefaultBattleLeaderType{L"PartyData_GetDefaultBattleLeaderType", 0x140B889E4,
                                                        kDefaultBattleLeaderTypeBytes};
 inline constexpr std::uint8_t kResolvePartyLeaderBytes[] = {
-    0x48, 0x8B, 0x05, 0xC9, 0xAA, 0x93, 0x08, 0x45, 0x33, 0xC0, 0x48, 0x85,
+    0x48, 0x8B, 0x05, 0x61, 0x3B, 0xA7, 0x08, 0x45, 0x33, 0xC0, 0x48, 0x85,
     0xC0, 0x74, 0x70, 0x44, 0x8B, 0x88, 0x4C, 0x01, 0x00, 0x00, 0x45, 0x85};
-inline constexpr FunctionFact kResolvePartyLeader{L"the party leader resolver", 0x140A61210, kResolvePartyLeaderBytes};
+inline constexpr FunctionFact kResolvePartyLeader{L"the party leader resolver", 0x1407649A8, kResolvePartyLeaderBytes};
 inline constexpr std::uint8_t kIsBattleMemberBytes[] = {
-    0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8, 0xAA, 0xAE, 0xD8, 0x00, 0x48, 0x2B,
-    0xE0, 0x44, 0x8A, 0xC9, 0xE8, 0x9B, 0xB6, 0x71, 0xFF, 0x3C, 0x06, 0x74};
-inline constexpr FunctionFact kIsBattleMember{L"UEndPartyAPI_IsBattleMember", 0x14132407C, kIsBattleMemberBytes};
+    0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8, 0xC6, 0xD5, 0xFB, 0x00, 0x48, 0x2B,
+    0xE0, 0x44, 0x8A, 0xC9, 0xE8, 0x73, 0x16, 0x80, 0xFF, 0x3C, 0x06, 0x74};
+inline constexpr FunctionFact kIsBattleMember{L"UEndPartyAPI_IsBattleMember", 0x1411AE5B0, kIsBattleMemberBytes};
 /// The battle-player component's "is the party leader" test returns (vt+0x68 player type == the
 /// party manager's leader type); the movement gate's first character clause ends in it.
 inline constexpr std::uint32_t kPlayerTypeSlotOffset = 0x68;
 inline constexpr std::uint8_t kIsPartyLeaderBytes[] = {
-    0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0x98, 0x7E, 0x8A, 0x01,
-    0x48, 0x2B, 0xE0, 0x48, 0x8B, 0x05, 0x3E, 0x4C, 0xB9, 0x08, 0x48, 0x85};
+    0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0x78, 0xDA, 0x83, 0x01,
+    0x48, 0x2B, 0xE0, 0x48, 0x8B, 0x05, 0xFE, 0xA3, 0x8A, 0x08, 0x48, 0x85};
 inline constexpr SlotFact kIsPartyLeader{
-    L"the battle-player component's leader-test slot (+0x70)", 0x145795F48,
-    {L"IsPartyLeader_ForActor", 0x14080708C, kIsPartyLeaderBytes}};
+    L"the battle-player component's leader-test slot (+0x70)", 0x1456117B0,
+    {L"IsPartyLeader_ForActor", 0x14092E0FC, kIsPartyLeaderBytes}};
 
 // Characters (AEndCharacter)
 inline constexpr std::uint32_t kCharacterRequestedController = 0x578;
@@ -113,7 +113,7 @@ inline constexpr std::uint8_t  kActorTypeParty          = 1;
 // The character's control holder (IsUCPC_Core: mov rcx,[rcx+638h]): its vt+0x40 gives the input component, its
 // vt+0x48 the BattlePlayer component (BattlePlayerControllerComp, whose vtable's +0x70 is the leader test above).
 inline constexpr std::uint32_t  kCharacterControlHolder      = 0x638;
-inline constexpr std::uintptr_t kBattlePlayerComponentVTable = 0x145795ED8;
+inline constexpr std::uintptr_t kBattlePlayerComponentVTable = 0x145611740;
 /// The holder's character (a weak) and the action controller the holder makes on demand (its +8 is the holder). The
 /// field attack's request on that controller: (ctrl, hold, throw) -> 1 requested, 0 refused while the move owner runs
 /// a behaviour action that refuses it; the request switches the character's control state synchronously
@@ -122,42 +122,42 @@ inline constexpr std::uint32_t kCharCtrlHolderCharacter = 0x8;
 inline constexpr std::uint32_t kCharActionCtrlHolder    = 0x8;
 inline constexpr std::uint8_t  kCharActionCtrlBeginFieldAttackBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x74,
                                                                          0x24, 0x10, 0x57, 0xB8, 0x70, 0x00, 0x00, 0x00};
-inline constexpr FunctionFact kCharActionCtrlBeginFieldAttack{L"CharActionCtrl_Vt70_BeginFieldAttack_SetsThrow21", 0x14188E978,
+inline constexpr FunctionFact kCharActionCtrlBeginFieldAttack{L"CharActionCtrl_Vt70_BeginFieldAttack_SetsThrow21", 0x14150F718,
                                                               kCharActionCtrlBeginFieldAttackBytes};
 // 1.005: EndCharacter tick 0x140E8A44A mov rcx,[rdi+1770h] (1.004 0x14125B20A [rdi+1750h]); GetMoveState
 // 0x141985320.
-inline constexpr platform::PerBuild<std::uint32_t> kCharacterMoveState = {0x1750, 0x1770};
+inline constexpr platform::PerBuild<std::uint32_t> kCharacterMoveState = {0x1770, 0x1750};
 inline constexpr std::uint8_t kIsEndCharacterBytes[] = {
     0x48, 0x89, 0x5C, 0x24, 0x08, 0x57, 0xB8, 0x80, 0x00, 0x00, 0x00, 0xE8,
-    0xD8, 0x58, 0x1B, 0x01, 0x48, 0x2B, 0xE0, 0x48, 0x8B, 0x05, 0xE6, 0x01};
-inline constexpr FunctionFact kIsEndCharacter{L"IsEndCharacter", 0x140EF9648, kIsEndCharacterBytes};
+    0x10, 0x65, 0x80, 0x00, 0x48, 0x2B, 0xE0, 0x48, 0x8B, 0x05, 0xCE, 0xD5};
+inline constexpr FunctionFact kIsEndCharacter{L"IsEndCharacter", 0x141965660, kIsEndCharacterBytes};
 // Player 1's battle switch's member test T (RE-p2-deployed-party.md, RE-p2-party-switch.md)
 // as the game's own function (al only; 167 callers, so called, never hooked): the character is live,
 // has its battle controller component, is not in the dead state (6) and is not petrified (id 22).
 // And the two leader types the game hands back to player 1, and the deployed test itself.
 inline constexpr std::uint8_t kIsBattleActiveBytes[] = {
-    0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0x68, 0xED, 0x66, 0x01,
+    0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0xB4, 0x62, 0x54, 0x01,
     0x48, 0x2B, 0xE0, 0x4C, 0x8B, 0xC1, 0x48, 0x85, 0xC9, 0x0F, 0x84, 0xA1};
-inline constexpr FunctionFact kIsBattleActive{L"Character_IsBattleActive_NotDeadNotPetrified", 0x140A401BC,
+inline constexpr FunctionFact kIsBattleActive{L"Character_IsBattleActive_NotDeadNotPetrified", 0x140C258C0,
                                               kIsBattleActiveBytes};
 /// AEndCharacter::SwitchAIControl_Async(character, toPlayer, controller): on the game thread it possesses at once
 /// (the rides and the synergy partner call it).
 inline constexpr std::uint8_t kSwitchAiControlAsyncBytes[] = {
     0x40, 0x55, 0x48, 0x8D, 0x6C, 0x24, 0xA9, 0xB8, 0x90, 0x00, 0x00, 0x00,
-    0xE8, 0x23, 0x93, 0x5B, 0x01, 0x48, 0x2B, 0xE0, 0x80, 0x3D, 0x3A, 0x72};
-inline constexpr FunctionFact kSwitchAiControlAsync{L"AEndCharacter::SwitchAIControl_Async", 0x140AF5BFC,
+    0xE8, 0x47, 0x28, 0xD5, 0x00, 0x48, 0x2B, 0xE0, 0x80, 0x3D, 0xD6, 0x72};
+inline constexpr FunctionFact kSwitchAiControlAsync{L"AEndCharacter::SwitchAIControl_Async", 0x141419328,
                                                     kSwitchAiControlAsyncBytes};
 /// EndCharacter_GetPlayerTypeFromComponent: the player type of a character's battle component (al).
 inline constexpr std::uint8_t kPlayerTypeFromComponentBytes[] = {
-    0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8, 0xD6, 0xF0, 0x6B, 0x01, 0x48, 0x2B,
+    0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8, 0xEE, 0x92, 0x7B, 0x01, 0x48, 0x2B,
     0xE0, 0x48, 0x8B, 0x89, 0x38, 0x06, 0x00, 0x00, 0x48, 0x85, 0xC9, 0x74};
-inline constexpr FunctionFact kPlayerTypeFromComponent{L"EndCharacter_GetPlayerTypeFromComponent", 0x1409EFE50,
+inline constexpr FunctionFact kPlayerTypeFromComponent{L"EndCharacter_GetPlayerTypeFromComponent", 0x1409B2888,
                                                        kPlayerTypeFromComponentBytes};
 
 // The AI: enemy controllers, the active brain and its state, the follow state
 /// The AI follow state's player-subject class (vtable, data): FollowState_TickTeleportEQS at its +0x58, ForceTeleport
 /// +0x270, FinishForcedTeleportNow +0x278 (world/party_warp).
-inline constexpr std::uintptr_t kFollowStatePlayerVTable = 0x14580C8F8;
+inline constexpr std::uintptr_t kFollowStatePlayerVTable = 0x145657190;
 // Enemy AI controllers (EndAIControllerEnemyBase, both builds): an FWeakObjectPtr to the enemy character.
 inline constexpr std::uint32_t kEnemyControllerCharacter = 0x464;
 // The AI controller's active brain and its state (RE-p2-member-handover.md)
@@ -196,48 +196,48 @@ inline constexpr std::uint32_t kAiPauseAnimationBudget = 0x2000;
 inline constexpr std::uint32_t kFollowStateTeleportRange = 0x344;  // float
 inline constexpr std::uint32_t kFollowStateForced        = 0x39D;  // u8
 inline constexpr std::uint8_t kAiControllerComponentBytes[] = {
-    0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8, 0x02, 0xF0, 0x6B, 0x01, 0x48, 0x2B,
+    0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8, 0x1A, 0x92, 0x7B, 0x01, 0x48, 0x2B,
     0xE0, 0x48, 0x8B, 0x89, 0x38, 0x06, 0x00, 0x00, 0x48, 0x85, 0xC9, 0x74};
-inline constexpr FunctionFact kAiControllerComponent{L"EndCharacter::GetAIControllerComponent", 0x1409EFF24,
+inline constexpr FunctionFact kAiControllerComponent{L"EndCharacter::GetAIControllerComponent", 0x1409B295C,
                                                      kAiControllerComponentBytes};
 inline constexpr std::uint8_t kValidateAiControllerBytes[] = {
-    0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0xA8, 0xEF, 0x6B, 0x01,
+    0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0xC0, 0x91, 0x7B, 0x01,
     0x48, 0x2B, 0xE0, 0x48, 0x8B, 0xD9, 0x48, 0x85, 0xC9, 0x74, 0x1B, 0x48};
-inline constexpr FunctionFact kValidateAiController{L"EndCharacter::ValidateAIController", 0x1409EFF7C,
+inline constexpr FunctionFact kValidateAiController{L"EndCharacter::ValidateAIController", 0x1409B29B4,
                                                     kValidateAiControllerBytes};
 
 // The tag registry
 /// The tag registry: a weak pointer to the world's EndCharacterMovementActor (the trigger registry, FieldTick's `this`;
 /// world/seat_triggers), whose +0x278 is a TMap<FName, int32> with 20-byte elements {FName, int32 count, ...}; and
 /// the trigger actor's tag.
-inline constexpr std::uintptr_t kTagRegistryWeak         = 0x1470C94C0;
+inline constexpr std::uintptr_t kTagRegistryWeak         = 0x146EFC6E0;
 inline constexpr std::uint32_t  kTagRegistryMap          = 0x278;
 inline constexpr std::uint32_t  kTagRegistryElementSize  = 20;
 inline constexpr std::uint32_t  kTagRegistryCount        = 8;
-inline constexpr std::uintptr_t kTriggerTagName          = 0x1491E3EE0;
+inline constexpr std::uintptr_t kTriggerTagName          = 0x14901BFB8;
 /// The tag registry's read-only lookup: TSet<TPair<FName, int32>>::FindId.
 inline constexpr std::uint8_t kTagSetFindIdBytes[] = {
     0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x7C, 0x24, 0x10, 0x8B, 0x41, 0x08, 0x48, 0x8B, 0xFA};
-inline constexpr FunctionFact kTagSetFindId{L"the tag registry lookup", 0x1408428F0, kTagSetFindIdBytes};
+inline constexpr FunctionFact kTagSetFindId{L"the tag registry lookup", 0x14078CD70, kTagSetFindIdBytes};
 
 // Battle targeting: the Condition target selector's select, bool(selector, u8 reason, UObject** out), in its vtable's
 // slot +0x88 (the out is written on every path; 0 keeps the current target). RE-p2-enemy-target-bias.md; the slot
 // is replaced by battle/equal_targeting, watched by target_census.
 inline constexpr std::uint8_t kCondTargetSelectBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x55, 0x56, 0x57,
                                                           0x41, 0x54, 0x41, 0x55, 0x41, 0x56, 0x41, 0x57};
-inline constexpr SlotFact kCondTargetSelect{L"the Condition target selector's select slot (vt+0x88)", 0x14580C260,
-                                            {L"CondTargetSel_Select_Vt88", 0x140FA5230, kCondTargetSelectBytes}};
+inline constexpr SlotFact kCondTargetSelect{L"the Condition target selector's select slot (vt+0x88)", 0x14566CB18,
+                                            {L"CondTargetSel_Select_Vt88", 0x141113AF8, kCondTargetSelectBytes}};
 
 // Game globals: the option holder and the battle state
 /// Two game objects that exist once the game has started and are missing at the title and early in
 /// a load: the holder of the system option data ([it]+0x100, RE-p2-classic-autoplay.md) and the
 /// battle system (IsInBattle reads [it]).
-inline constexpr std::uintptr_t kOptionHolderGlobal     = 0x14939BD58;
+inline constexpr std::uintptr_t kOptionHolderGlobal     = 0x1491D8580;
 inline constexpr std::uint32_t  kOptionHolderData       = 0x100;
-inline constexpr std::uintptr_t kBattleStateGlobal      = 0x14939BC58;
+inline constexpr std::uintptr_t kBattleStateGlobal      = 0x1491D8468;
 inline constexpr std::uint8_t kIsInBattleBytes[] = {
-    0x48, 0x8B, 0x05, 0x25, 0x98, 0xAB, 0x08, 0x33, 0xC9, 0x38, 0x88, 0x00,
-    0x03, 0x00, 0x00, 0x75, 0x2A, 0x48, 0x8B, 0x05, 0xA4, 0xC9, 0x81, 0x08};
-inline constexpr FunctionFact kIsInBattle{L"UEndBattleAPI::IsInBattle", 0x1408E242C, kIsInBattleBytes};
+    0x48, 0x8B, 0x05, 0x51, 0x77, 0x8A, 0x08, 0x33, 0xC9, 0x38, 0x88, 0x00,
+    0x03, 0x00, 0x00, 0x75, 0x2A, 0x48, 0x8B, 0x05, 0x90, 0x18, 0x60, 0x08};
+inline constexpr FunctionFact kIsInBattle{L"UEndBattleAPI::IsInBattle", 0x140930D10, kIsInBattleBytes};
 
 }  // namespace lss::facts

@@ -112,7 +112,7 @@ void TestDefaultDirectContext()
     constexpr std::uintptr_t kContextVtable = 0x14697BFA8;
     alignas(16) std::array<std::byte, 0x200>  context{};
     alignas(16) std::array<std::byte, 0x200>  other{};
-    alignas(16) std::array<std::byte, 0x1000> device{};
+    alignas(16) std::array<std::byte, 0x1800> device{};  // room for either build's direct-contexts field
     const std::byte*                          directs[2] = {context.data(), other.data()};
 
     boundary::Write<std::uintptr_t>(device.data(), boundary::context::kDeviceDirect,

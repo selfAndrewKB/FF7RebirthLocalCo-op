@@ -19,19 +19,18 @@ using namespace layout_scale_code;  // the site, its bytes and the code placed t
 namespace {
 
 platform::CodeRedirect  g_redirect;
-platform::DeferredSites g_placement;  // 1.005: placed from the game thread, outside the overlay render
-std::uintptr_t          g_site   = 0;  // the instruction replaced (1.005: the two before it)
+platform::DeferredSites g_placement;  // placed from the game thread, outside the overlay render (1.004: at install)
+std::uintptr_t          g_site   = 0;  // the instruction replaced (the two before it; 1.004: the vmulss itself)
 std::uintptr_t          g_resume = 0;
 
-/// The redirect: at install, or on 1.005 from the game thread between its ticks, where the two instructions before the
-/// site are replaced instead (hud/layout/layout_scale_code.h).
+/// The redirect: from the game thread between its ticks, where the two instructions before the site are replaced
+/// (hud/layout/layout_scale_code.h); on 1.004 at install, the vmulss itself.
 bool PlaceScale(const platform::GameImage&) noexcept
 {
     const std::span<const std::uint8_t> context(kContextBytes);
     const bool ok = g_placement.FromGameThread()
-                        ? g_redirect.Install(g_site, context.first(kReplaced1005), kCode1005, g_resume)
-                        : g_redirect.Install(g_site, context.subspan(kSite - kContext.address, kReplaced), kCode,
-                                             g_resume);
+                        ? g_redirect.Install(g_site, context.first(kContextReplaced), kContextCode, g_resume)
+                        : g_redirect.Install(g_site, kSiteBytes1004, kCode, g_resume);
     platform::Log(L"HUD layout scale: {}",
                   !ok ? L"the overlay's layout-scale code could not be redirected; left alone (side-by-side halves "
                         L"keep the game's height rule)"
@@ -52,7 +51,7 @@ bool InstallLayoutScale(const platform::GameImage& image) noexcept
         return false;
     }
     const bool deferred = platform::DeferredSites::Deferred();
-    const auto site     = image.Rebase(deferred ? kContext.address : kSite, deferred ? kReplaced1005 : kReplaced);
+    const auto site     = image.Rebase(deferred ? kContext.address : kSite, deferred ? kContextReplaced : kReplaced);
     const auto resume   = image.Rebase(kResume);
     if (!site || !resume || !platform::FindFunction(image, kContext))
     {

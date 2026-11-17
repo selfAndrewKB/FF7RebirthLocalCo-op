@@ -28,19 +28,19 @@ namespace {
 
 // The lock-group family's only two leader reads, each a call of ResolvePartyLeaderWeakPtr (UObject* (), the leader
 // character; Pick requires an EndCharacter that is a key of its count map, i.e. in the group's TargetList).
-constexpr std::uintptr_t kPickLeaderCall  = 0x1431EB28B;  // in LockGroup_PickTarget_PrioritizeUCPC; fits both builds
-constexpr std::uintptr_t kCountLeaderCall = 0x1431DFC57;  // in LockGroup_CountLocksPerTarget; crosses a block on 1.005
+constexpr std::uintptr_t kPickLeaderCall  = 0x142EF2AC3;  // in LockGroup_PickTarget_PrioritizeUCPC; fits both builds
+constexpr std::uintptr_t kCountLeaderCall = 0x142EE860F;  // in LockGroup_CountLocksPerTarget; crosses a block on 1.005
 // The rebalance, void(group*), the battle tick's per-group call before its re-picks (game thread; its only caller; the
 // call crosses a block in both builds).
-constexpr std::uintptr_t kRebalanceCall = 0x14295F34C;  // in LockGroups_TickPruneAndRepick
-constexpr std::uintptr_t kRebalance     = 0x1431DAD5C;  // LockGroup_RebalanceLevelLocks
+constexpr std::uintptr_t kRebalanceCall = 0x14260771E;  // in LockGroups_TickPruneAndRepick
+constexpr std::uintptr_t kRebalance     = 0x142EE3608;  // LockGroup_RebalanceLevelLocks
 // The pick, bool Pick(group*, FWeakObjectPtr* out), from the battle tick's re-pick and the Blueprint registration
 // (both sites fit one 16-byte block in both builds).
 constexpr std::uint8_t kPickBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x18, 0x55, 0x56, 0x57,
                                        0x41, 0x54, 0x41, 0x55, 0x41, 0x56, 0x41, 0x57};
-constexpr platform::FunctionFact kPick{L"LockGroup_PickTarget_PrioritizeUCPC", 0x1431EB200, kPickBytes};
-constexpr std::uintptr_t         kRepickCall   = 0x14295F387;  // in LockGroups_TickPruneAndRepick
-constexpr std::uintptr_t         kRegisterCall = 0x143E42D05;  // in execRegisterTargetLockGroup
+constexpr platform::FunctionFact kPick{L"LockGroup_PickTarget_PrioritizeUCPC", 0x142EF2A38, kPickBytes};
+constexpr std::uintptr_t         kRepickCall   = 0x142607759;  // in LockGroups_TickPruneAndRepick
+constexpr std::uintptr_t         kRegisterCall = 0x143BB211B;  // in execRegisterTargetLockGroup
 
 // Lock group (a TMap value, both builds): +0 TArray<member, 20 B> {data, num}; member +0 FWeakObjectPtr enemy,
 // +8 FWeakObjectPtr target (none: no lock); +0x24 u8 bPrioritizeUCPC.
