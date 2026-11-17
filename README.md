@@ -101,9 +101,9 @@ piece came from, and how the two mods differ, is in the topic's History in the d
 `src/facts/` and `src/platform/builds/`, research in `../Documentation/research`: a comment names the game's function
 without its address (in a machine-code stub, the file's named constant, with an offset where needed), and may name a
 research file, without a section number or pass tag. It may mark a claim `[CONFIRMED]` or `[ASSUMPTION]`.
-A hook enforces this (`../../.claude/hooks/comment_style.py`): an edit or a commit whose new comment text breaks the
-rule is refused with the line and the reason; `python ../../.claude/hooks/comment_style.py check src tests` runs the
-same check by hand, and a game term that matches by accident goes in `comment_style_allow.txt` beside it.
+A hook enforces this (`../../Remake/LocalSplitScreen/tools/checks/comment_style.py`): an edit or a commit whose new
+comment text breaks the rule is refused with the line and the reason;
+`python ../../Remake/LocalSplitScreen/tools/checks/comment_style.py check src tests` runs the same check by hand, and a game term that matches by accident goes in `comment_style_allow.txt` beside it.
 
 ## Layout
 
