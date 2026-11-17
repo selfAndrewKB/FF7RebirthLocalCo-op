@@ -10,6 +10,17 @@ Local split-screen co-op for up to three players in FINAL FANTASY VII REBIRTH, a
 - To build: Visual Studio 2022 with the C++ desktop workload, CMake 3.18 or later, a Rust toolchain (UE4SS builds part
   of itself with it), Python 3 and PowerShell 7.
 
+## Installing
+
+1. Copy `LocalSplitScreen.dll` to `<game>\End\Binaries\Win64\ue4ss\Mods\LocalSplitScreen\dlls\main.dll`.
+2. Copy `MultiMonitorSetup.exe` into `Mods\LocalSplitScreen\`.
+3. Add `LocalSplitScreen : 1` to `Mods\mods.txt`, or put an empty `enabled.txt` in the mod's folder.
+
+`tools/relaunch.ps1 -Deploy -Label <name>` copies both files and starts the game. The build also makes a `UE4SS.dll`,
+which is only there to link the mod against; the game keeps the Nexus one.
+
+The mod writes its settings to `LocalSplitScreen.ini` in its folder.
+
 ## Building
 
 The build compiles UE4SS from the source of the Nexus loader, which needs a prepared checkout. By default it is
@@ -38,17 +49,6 @@ python package.py
 ```
 
 `package.py` runs the tests, builds the players' build and zips the mod folder into `dist/`.
-
-## Installing
-
-1. Copy `LocalSplitScreen.dll` to `<game>\End\Binaries\Win64\ue4ss\Mods\LocalSplitScreen\dlls\main.dll`.
-2. Copy `MultiMonitorSetup.exe` into `Mods\LocalSplitScreen\`.
-3. Add `LocalSplitScreen : 1` to `Mods\mods.txt`, or put an empty `enabled.txt` in the mod's folder.
-
-`tools/relaunch.ps1 -Deploy -Label <name>` copies both files and starts the game. The build also makes a `UE4SS.dll`,
-which is only there to link the mod against; the game keeps the Nexus one.
-
-The mod writes its settings to `LocalSplitScreen.ini` in its folder.
 
 ## Game versions
 
