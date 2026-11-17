@@ -129,6 +129,7 @@ using facts::kFieldActionMaxPoints;
 using facts::kFieldActionPointKey;
 using facts::kFieldActionPointPreset;
 using facts::kFieldActionPointFlags;
+using facts::kFieldActionPointKind;
 constexpr std::uint8_t  kTargetBits     = facts::kFieldActionPointTargetBits;  // carried per player
 constexpr std::uint8_t  kDisabledBit    = facts::kFieldActionPointDisabled;    // the candidate query skips it
 constexpr std::uint8_t  kNotUsableBit   = facts::kFieldActionPointNotUsable;   // the update makes it no target
@@ -824,7 +825,7 @@ void AddView(field_rules::PointView view, std::uint8_t& mask, std::uint8_t& set)
 /// Before the calls: each point's target bits and marker widget become the seat's (on every live point: the far-marker
 /// sweep walks them all). With `filter`, every point that is neither a WorldItem, a chest, a vending machine, a
 /// shopkeeper, the seat's own box, a hook point nor a delivered switch's gets the disabled bit (only where it is clear),
-/// and a gun or switch point the seat's own view (AddView). Player 1's are kept for After. The seat's widgets whose point left since are doomed.
+/// and a gun point, the rope's landing point or a switch point the seat's own view (AddView). Player 1's are kept for After. The seat's widgets whose point left since are doomed.
 void Before(Pickup& p, void* mgr, const std::uint8_t* items, const std::uint8_t* chests, bool filter) noexcept
 {
     g_saved.clear();
@@ -860,6 +861,7 @@ void Before(Pickup& p, void* mgr, const std::uint8_t* items, const std::uint8_t*
             if (hook)
             {
                 AddView(traversal::hooks::GunPointViewFor(key, p.seat), mask, set);
+                AddView(traversal::hooks::LandingPointViewFor(key, point[kFieldActionPointKind], p.seat), mask, set);
             }
             if (lever)
             {
@@ -899,6 +901,7 @@ void Before(Pickup& p, void* mgr, const std::uint8_t* items, const std::uint8_t*
     {
         LogSelection(p.seat, boxKey, boxSeen);
         traversal::hooks::LogGunPointViews();
+        traversal::hooks::AfterLandingScan(false);
         levers::LogPointViews();
     }
     for (const auto& [key, marker] : p.markers)
@@ -1300,8 +1303,9 @@ void FieldEnter(void* mgr) noexcept
 /// Player 1's own selection sees the points as player 1 alone would. A seat's box point (the point a seat's
 /// leader-action component added for the box Yuffie's throw picked) is not player 1's to offer, and their press on it
 /// did nothing: it gets the game's disabled bit (each seat's pass admits its own box, the other seats' are disabled by
-/// the pass's filter). A gun point gets player 1's own view (AddGunView). Set around the game's update, the bits put
-/// back as they were after it. The boxes logged on change per seat, the gun points by traversal/hooks.
+/// the pass's filter). A gun point, the rope's landing point while a seat's swing owns it, and a switch point get player
+/// 1's own view (AddView). Set around the game's update, the bits put back as they were after it. The boxes logged on
+/// change per seat, the gun and landing points by traversal/hooks, the switches by world/levers.
 struct OneView
 {
     std::uint8_t* point;
@@ -1349,6 +1353,7 @@ void OpenPlayerOneView(void* mgr) noexcept
             if (mask == 0 && traversal::hooks::AdmitsPoint(key, ReadField<std::uint64_t>(point, kFieldActionPointPreset)))
             {
                 AddView(traversal::hooks::GunPointViewFor(key, 0), mask, set);
+                AddView(traversal::hooks::LandingPointViewFor(key, point[kFieldActionPointKind], 0), mask, set);
             }
             else if (mask == 0 && levers::AdmitsPoint(key))
             {
@@ -1377,6 +1382,7 @@ void OpenPlayerOneView(void* mgr) noexcept
         }
     }
     traversal::hooks::LogGunPointViews();
+    traversal::hooks::AfterLandingScan(true);
     levers::LogPointViews();
 }
 

@@ -69,6 +69,21 @@ void TestTriggers()
     EXPECT(TriggerVerdictOf(2, false, 0) == TriggerVerdict::Deliver);
 }
 
+void TestLandingView()
+{
+    std::puts("rope landing point: the owning seat's selection makes the row, every other player's sees it off, player "
+              "1's keeps a next rope's; no seat owning it is the game's own");
+    EXPECT(LandingView(0, 0, false) == PointView::NotTracked);  // player 1's swing, or none
+    EXPECT(LandingView(0, 1, false) == PointView::NotTracked);
+    EXPECT(LandingView(1, 1, false) == PointView::NotTracked);  // the owner
+    EXPECT(LandingView(1, 1, true) == PointView::NotTracked);
+    EXPECT(LandingView(1, 0, false) == PointView::Off);         // player 1, a jump or climbing target
+    EXPECT(LandingView(1, 0, true) == PointView::NotTracked);   // player 1, a next rope: its press reads player 1's
+    EXPECT(LandingView(1, 2, false) == PointView::Off);         // the other seat
+    EXPECT(LandingView(2, 1, true) == PointView::Off);
+    static_assert(LandingView(2, 0, false) == PointView::Off, "constexpr");
+}
+
 void TestSecondsBefore()
 {
     std::puts("seconds before: adding the frame's dt the game's way lands exactly on the target");
@@ -89,6 +104,7 @@ int main()
     TestNames();
     TestMappedPointer();
     TestTriggers();
+    TestLandingView();
     TestSecondsBefore();
 
     return lss::test::Report();

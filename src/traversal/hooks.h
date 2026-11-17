@@ -51,8 +51,11 @@
 //    gun on a seat's member the test answers the seat's type on that thread and the seat owns the add
 //    (feedback/traversal_rumble); the flight's effects on the worker are the climb context's (the move's Tick names
 //    the seat as the owner).
-// Not handled: the rope's held Dash and Accel on the worker read the merged pads (not logged). Game thread, except the
-// camera handle swaps and the End's finish path.
+//  - the rope's landing prompt: one field-action point for the swing's landing target (the B to jump row), made by the
+//    selection that picks it: the swinging seat's selection takes it and every other player's skips it
+//    (LandingPointViewFor).
+// Not handled: the rope's held Dash and Accel on the worker read the merged pads (not logged); the landing point's
+// compass pin and world marker stay player 1's. Game thread, except the camera handle swaps and the End's finish path.
 //
 // Per seat (players/seats.h): the seat comes from the move's character, the primary controller of the open scope, or
 // the climb context's player; the wishes are per actor and player; the handle copies per seat.
@@ -80,8 +83,9 @@ bool RopeReady() noexcept;
 /// A delivered rope's actor (its first tag is its point's key): the seat's pass admits that point from here on.
 void NoteRope(const void* actor) noexcept;
 
-/// Whether a field-action point is a gun point (by `preset`) or a noted rope's (by `key`): the seat's pass leaves it
-/// open. Game thread.
+/// Whether a field-action point is a gun point (by `preset`), a noted rope's (by `key`), or the rope's landing point
+/// while a seat owns it: the seat's pass leaves it open (each player's view of the landing point: LandingPointViewFor).
+/// Game thread (the landing point's sighting is noted for AfterLandingScan).
 bool AdmitsPoint(std::uint64_t key, std::uint64_t preset) noexcept;
 
 /// After a selection update ran for `player` (0: the game's own; a seat: its pass): a gun point whose press flag came
@@ -96,5 +100,21 @@ world::field_rules::PointView GunPointViewFor(std::uint64_t key, int player) noe
 
 /// Each player's view of each gun point that changed since it was last said (Debug). Game thread, outside the lock.
 void LogGunPointViews() noexcept;
+
+/// The hook rope's landing point (research/RE-rope-landing-prompt.md): the one field-action point a swing adds for the
+/// target its search found, whose row is the B to jump prompt. Its key is the game's FName global, checked at install.
+bool IsLandingPoint(std::uint64_t key) noexcept;
+
+/// The view of the landing point (its `kind`, the point's kind byte) for `player` (0 player 1, a seat) while a seat
+/// owns it (world/field_rules.h LandingView): the owner is the last seat whose swing began, handed to another seat
+/// still swinging at its end, and kept until the game has removed the point. NotTracked when it is not the landing point
+/// or no seat owns it (player 1's swing is the game's own). AdmitsPoint admits the point while a seat owns it. Game
+/// thread; like GunPointViewFor, no call, allocation or log (it may run under the point lock).
+world::field_rules::PointView LandingPointViewFor(std::uint64_t key, std::uint8_t kind, int player) noexcept;
+
+/// After a scan of the points (`playerOneScan`: player 1's own selection, which asks about every point each tick): a
+/// point an ended swing still owned and the scan no longer met is released to the game; each player's view that
+/// changed is said (Debug). Game thread, outside the lock.
+void AfterLandingScan(bool playerOneScan) noexcept;
 
 }  // namespace lss::traversal::hooks

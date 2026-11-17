@@ -1048,6 +1048,11 @@ int SeatHere() noexcept
     return t_climb.player >= 2 ? t_climb.player - 1 : 0;
 }
 
+int PlayerOfMove(const void* move) noexcept
+{
+    return move != nullptr ? PlayerOf(move) : 0;
+}
+
 bool TicksPlaced() noexcept
 {
     return g_ticksPlaced == kClimbCount;

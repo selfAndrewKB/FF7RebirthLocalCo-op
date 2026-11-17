@@ -2,6 +2,7 @@
 
 #include "facts/controller.h"
 #include "facts/engine.h"
+#include "facts/field_action.h"
 #include "facts/traversal.h"
 #include "feedback/traversal_rumble.h"
 #include "input/climb_context.h"
@@ -28,6 +29,7 @@
 #include "traversal/traversal_shared.h"
 
 #include <array>
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -187,6 +189,24 @@ std::size_t                           g_nextRopeKey    = 0;
 const std::uint64_t*                  g_shotPreset     = nullptr;  // the FName globals of the gun point's presets, live
 const std::uint64_t*                  g_shotPlayerPreset = nullptr;
 thread_local int                      t_seat           = 0;  // the seat whose move's Begin or End this thread runs (0: none)
+
+// The rope's landing point (research/RE-rope-landing-prompt.md): the swing adds one field-action point for the target its
+// search found, keyed by the FName HookRopeIconName; the prompt row (the B to jump) is made by whichever player's
+// selection picks it. The global holds the FName itself (the game passes its address as the key's), its text checked
+// at install.
+constexpr std::uintptr_t kLandingName = 0x148FD5A60;
+const std::uint64_t*     g_landingName = nullptr;  // live, null when its check failed
+// Any thread. Each seat whose rope swing is on (its Begin to its End), and the seat that owns the one landing point:
+// the last seat to begin, handed to another still swinging when it ends, and once none is, kept until the game has
+// removed the point (its removal is queued to the game thread; player 1's selection must not offer it meanwhile).
+std::array<std::atomic<bool>, players::kMaxPlayers> g_swinging{};
+std::atomic<int>                                    g_owner{0};  // 0: none, the game's own (player 1's swing)
+std::atomic<bool>                                   g_ownerEnded{false};
+// Game thread: the landing point seen in the scan under way (AdmitsPoint), each player's last view and what was said.
+bool                                        g_landingSeen = false;
+std::array<PointView, players::kMaxPlayers> g_landingView{}, g_landingViewLogged{};
+std::uint8_t                                g_landingKind  = 0;
+int                                         g_landingOwner = 0;  // the owner the views were taken for
 
 // Any thread: each seat's copies of the gun points' camera handles, and of the rope's global one, under one lock (the
 // installer and leave run on the game thread or the animation worker; a leave reached from inside an installer takes
@@ -721,14 +741,84 @@ std::uintptr_t ShotEnd(void* move, std::uint8_t abort) noexcept
     return End(L"hookshot", g_shotEnd, move, abort);
 }
 
+/// A swing begins: a seat's takes the landing point (before its first one is added); player 1's frees a point an ended
+/// seat's swing still held, so player 1's own row is the game's. Game thread.
+void SwingBegins(const void* move) noexcept
+{
+    const int player = input::climb_context::PlayerOfMove(move);
+    if (player == 1)
+    {
+        if (g_ownerEnded.exchange(false, std::memory_order_acq_rel))
+        {
+            g_owner.store(0, std::memory_order_release);
+        }
+        else if (const int owner = g_owner.load(std::memory_order_acquire); owner != 0)
+        {
+            platform::LogDebug(L"hooks: player 1's rope swing begins while {}'s goes on; the one landing point stays {}'s",
+                               players::SeatName(owner), players::SeatName(owner));
+        }
+        return;
+    }
+    const int seat = player >= 2 ? player - 1 : 0;
+    if (!players::SeatBuilt(seat))
+    {
+        return;  // an AI member's: the point stays with whoever has it
+    }
+    g_swinging[static_cast<std::size_t>(seat)].store(true, std::memory_order_release);
+    g_ownerEnded.store(false, std::memory_order_release);
+    const int before = g_owner.exchange(seat, std::memory_order_acq_rel);
+    if (before != 0 && before != seat && g_swinging[static_cast<std::size_t>(before)].load(std::memory_order_acquire))
+    {
+        platform::LogDebug(L"hooks: {}'s rope swing begins while {}'s goes on; the one landing point is {}'s from here",
+                           players::SeatName(seat), players::SeatName(before), players::SeatName(seat));
+    }
+}
+
+/// A seat's swing ends (on the game thread or the worker): the point goes to another seat still swinging, else is kept
+/// until it is gone (AfterLandingScan).
+void SwingEnds(int seat) noexcept
+{
+    if (!players::SeatBuilt(seat))
+    {
+        return;
+    }
+    g_swinging[static_cast<std::size_t>(seat)].store(false, std::memory_order_release);
+    if (g_owner.load(std::memory_order_acquire) != seat)
+    {
+        return;
+    }
+    for (int other = 1; other <= players::kSeatsBuilt; ++other)
+    {
+        int expected = seat;
+        if (g_swinging[static_cast<std::size_t>(other)].load(std::memory_order_acquire) &&
+            g_owner.compare_exchange_strong(expected, other, std::memory_order_acq_rel))
+        {
+            return;
+        }
+    }
+    g_ownerEnded.store(true, std::memory_order_release);
+}
+
+/// The seat that owns the landing point, or 0: one whose player is out of the game owns nothing (a swing whose End never
+/// came, as when the player left mid-swing). Game thread.
+int LiveOwner() noexcept
+{
+    const int owner = g_owner.load(std::memory_order_acquire);
+    return owner != 0 && players::generation::Active(owner) ? owner : 0;
+}
+
 std::uintptr_t RopeBegin(void* move) noexcept
 {
+    SwingBegins(move);
     return Begin(L"rope swing", g_ropeBegin, move, true);
 }
 
 std::uintptr_t RopeEnd(void* move, std::uint8_t abort) noexcept
 {
-    return End(L"rope swing", g_ropeEnd, move, abort);
+    const int  player = input::climb_context::PlayerOfMove(move);  // before the game's End lets the move go
+    const auto result = End(L"rope swing", g_ropeEnd, move, abort);
+    SwingEnds(player >= 2 ? player - 1 : 0);
+    return result;
 }
 
 // ---- the camera handles ----
@@ -986,6 +1076,22 @@ void Install(const platform::GameImage& image) noexcept
         RestoreRope();
     }
     g_rope = rope;
+    // The landing point's key, the FName global the swing names its point by, taken only when its text is the name.
+    g_landingName   = nullptr;
+    const auto name = rope ? image.Rebase(kLandingName, sizeof(std::uint64_t)) : std::nullopt;
+    std::uint64_t value = 0;
+    const bool    read  = name && platform::CopyGuarded(&value, reinterpret_cast<const void*>(*name), sizeof(value)) && value != 0;
+    if (read && players::unreal::NameText(value) == L"HookRopeIconName")
+    {
+        g_landingName = reinterpret_cast<const std::uint64_t*>(*name);
+    }
+    if (rope)
+    {
+        platform::Log(L"hooks: the rope's landing prompt {}",
+                      g_landingName != nullptr ? L"is the swinging player's own (their selection makes the B to jump row)"
+                      : !name                  ? L"stays player 1's (its point's name is not in this game version's image)"
+                                               : L"stays player 1's (its point's name did not read as HookRopeIconName)");
+    }
     const bool hit = gun && platform::InstallAtEntryOrSecond(g_hit, image, kHit, reinterpret_cast<std::uintptr_t>(&Hit));
     if (gun && rope && hit)
     {
@@ -1112,6 +1218,13 @@ void Remove() noexcept
         (void)g_hit.Restore();
     }
     g_gun = g_rope = false;
+    g_landingName  = nullptr;
+    g_owner.store(0, std::memory_order_release);
+    g_ownerEnded.store(false, std::memory_order_release);
+    for (std::atomic<bool>& swinging : g_swinging)
+    {
+        swinging.store(false, std::memory_order_release);
+    }
     g_shotWishes.fill({});
     g_ropeWishes.fill({});
     g_pressers.fill({});
@@ -1185,8 +1298,104 @@ bool AdmitsPoint(std::uint64_t key, std::uint64_t preset) noexcept
                 return true;
             }
         }
+        if (IsLandingPoint(key))
+        {
+            if (players::generation::OnGameThread())
+            {
+                g_landingSeen = true;
+            }
+            return LiveOwner() != 0;  // a seat's: each player's view (LandingPointViewFor)
+        }
     }
     return false;
+}
+
+bool IsLandingPoint(std::uint64_t key) noexcept
+{
+    std::uint64_t name = 0;
+    return key != 0 && g_landingName != nullptr && platform::CopyGuarded(&name, g_landingName, sizeof(name)) && name == key;
+}
+
+PointView LandingPointViewFor(std::uint64_t key, std::uint8_t kind, int player) noexcept
+{
+    if (!g_rope || player < 0 || player >= static_cast<int>(players::kMaxPlayers) || !players::generation::OnGameThread())
+    {
+        return PointView::NotTracked;
+    }
+    const int owner = LiveOwner();
+    if (owner == 0 || !IsLandingPoint(key))
+    {
+        return PointView::NotTracked;  // player 1's swing, or none: the game's own selection
+    }
+    const PointView view = world::field_rules::LandingView(owner, player, kind == facts::kFieldActionPointKindNextRope);
+    // For the log: Off as skipped, anything else as taken.
+    g_landingView[static_cast<std::size_t>(player)] = view == PointView::Off ? PointView::Off : PointView::Usable;
+    g_landingKind                                   = kind;
+    g_landingOwner                                  = owner;
+    return view;
+}
+
+void AfterLandingScan(bool playerOneScan) noexcept
+{
+    if (g_landingName == nullptr || !players::generation::OnGameThread())
+    {
+        return;
+    }
+    // An owner whose player left mid-swing (its End never came) is let go.
+    if (const int owner = g_owner.load(std::memory_order_acquire); owner != 0 && LiveOwner() == 0)
+    {
+        int left = owner;
+        if (g_owner.compare_exchange_strong(left, 0, std::memory_order_acq_rel))
+        {
+            g_swinging[static_cast<std::size_t>(owner)].store(false, std::memory_order_release);
+            g_ownerEnded.store(false, std::memory_order_release);
+            g_landingView.fill(PointView::NotTracked);
+            g_landingViewLogged.fill(PointView::NotTracked);
+            platform::LogDebug(L"hooks: {} is out of the game during their rope swing; the landing point is the game's own",
+                               players::SeatName(owner));
+        }
+    }
+    // Only player 1's scan, which runs every tick and asks about every point, can tell the point is gone.
+    const bool gone = playerOneScan && !g_landingSeen && g_ownerEnded.load(std::memory_order_acquire);
+    g_landingSeen   = false;
+    if (gone)
+    {
+        const int owner = g_owner.load(std::memory_order_acquire);
+        int       ended = owner;
+        if (owner != 0 && g_ownerEnded.exchange(false, std::memory_order_acq_rel) &&
+            g_owner.compare_exchange_strong(ended, 0, std::memory_order_acq_rel))
+        {
+            g_landingView.fill(PointView::NotTracked);
+            g_landingViewLogged.fill(PointView::NotTracked);
+            platform::LogDebug(L"hooks: the rope's landing point is gone after {}'s swing; the next is the game's own "
+                               L"until a player 2's or 3's swing begins",
+                               players::SeatName(owner));
+        }
+    }
+    if (!platform::Enabled(platform::Level::Debug))
+    {
+        return;
+    }
+    for (int player = 0; player < static_cast<int>(players::kMaxPlayers); ++player)
+    {
+        const auto      index = static_cast<std::size_t>(player);
+        const PointView view  = g_landingView[index];
+        if (view == PointView::NotTracked || view == g_landingViewLogged[index])
+        {
+            continue;
+        }
+        g_landingViewLogged[index] = view;
+        try
+        {
+            platform::LogDebug(L"hooks: {}'s selection {} the rope's landing point (kind {}{}) of {}'s swing",
+                               players::SeatName(player), view == PointView::Off ? L"skips" : L"takes", g_landingKind,
+                               g_landingKind == facts::kFieldActionPointKindNextRope ? L", a next rope" : L"",
+                               players::SeatName(g_landingOwner));
+        }
+        catch (...)
+        {
+        }
+    }
 }
 
 }  // namespace lss::traversal::hooks

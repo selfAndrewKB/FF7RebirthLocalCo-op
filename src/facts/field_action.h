@@ -57,6 +57,11 @@ inline constexpr std::uint32_t kFieldActionPointFlags  = 0x104;
 inline constexpr std::uint8_t  kFieldActionPointTargetBits = 0x06;  // slot target and runner-up: one player's selection
 inline constexpr std::uint8_t  kFieldActionPointNotUsable  = 0x08;
 inline constexpr std::uint8_t  kFieldActionPointDisabled   = 0x10;
+// The point's kind (research/RE-rope-landing-prompt.md, both builds): the hook rope's landing point is 3 for a jump or
+// climbing target (the Dodge key), 0 for a climbing rope (FieldAction), 6 for a next rope (Catch), whose press the move
+// accepts only while the point is the selection's slot target.
+inline constexpr std::uint32_t kFieldActionPointKind         = 0xE8;
+inline constexpr std::uint8_t  kFieldActionPointKindNextRope = 6;
 
 // A map element's entry, as AcquireEntry hands it out: element + 0x10 (the FName key is 0x10 bytes before the entry).
 inline constexpr std::uint32_t kFieldActionEntryKeyBack = 0x10;

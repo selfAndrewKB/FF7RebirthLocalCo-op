@@ -81,6 +81,10 @@ int PlayerHere() noexcept;
 /// thread.
 int SeatHere() noexcept;
 
+/// Whose character a traversal move moves, by player number (1 player 1's pawn, 2 and 3 a seat's member, as
+/// PlayerHere), or 0: an AI member's, or none. By the move's character weak against the players' weaks; any thread.
+int PlayerOfMove(const void* move) noexcept;
+
 /// The climbs' Tick slots are placed (each climb's Tick names its player on its thread): what the seats' own climb
 /// holders need.
 bool TicksPlaced() noexcept;

@@ -139,6 +139,20 @@ constexpr int FirstOn(const bool (&wishes)[N]) noexcept
     return -1;
 }
 
+/// The hook rope's landing point (research/RE-rope-landing-prompt.md: one point a swing adds for its landing target,
+/// whose row is the B to jump prompt) for `player` (0 player 1, a seat) while `owner` (a seat; 0: player 1's swing, or
+/// none) owns it: the owner's selection makes the row, as the game leaves the point; every other player's sees it off,
+/// but player 1's keeps a next rope's point (`nextRope`), whose press the move accepts only while it is the selection's
+/// slot target, which outside a seat's pass is player 1's. With no seat owning it, the game's own.
+constexpr PointView LandingView(int owner, int player, bool nextRope) noexcept
+{
+    if (owner <= 0 || player == owner || (player == 0 && nextRope))
+    {
+        return PointView::NotTracked;
+    }
+    return PointView::Off;
+}
+
 // ---- scope_leaks: the input clock ----
 
 /// The seconds from which adding `deltaTime` the game's way (float added to double) lands exactly on `target`, if one
