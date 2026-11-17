@@ -410,6 +410,27 @@ int InsideSeat() noexcept
     return g_inside;
 }
 
+std::uint8_t AppliedShotPriority() noexcept
+{
+    if (g_inside != 0)
+    {
+        return g_saved.lastPriority;  // a seat's copy is in the list: player 1's is the one saved
+    }
+    const void* list = ListNow();
+    if (list == nullptr)
+    {
+        return 0;
+    }
+    // Only while a shot of that priority is still in the list: the byte is cleared only by a camera's apply, so a value
+    // no camera rewrote is not taken.
+    const std::uint8_t last = ReadField<std::uint8_t>(list, kLastPriority);
+    bool               held = false;
+    ForEachEntry(list, [&held, last](const void* entry) {
+        held = held || ReadField<std::uint8_t>(entry, kSequenceEntryPriority) == last;
+    });
+    return held ? last : 0;
+}
+
 void Tick() noexcept
 {
     const auto now = Clock::now();

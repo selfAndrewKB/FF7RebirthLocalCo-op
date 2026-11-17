@@ -83,6 +83,41 @@ void TestEachSignal()
     EXPECT(ReasonOf(signals) == WholeScreenReason::Title);
 }
 
+void TestSceneShots()
+{
+    std::puts("whole screen: a summon's entrance and a boss's phase change or finish take the screen in a battle; grabs, "
+              "party skills, enemy specials, stagger shots, menus and no shot do not; outside a battle no priority counts");
+    auto signals         = Readable();
+    signals.inBattle     = true;
+    for (const std::uint8_t priority : {lss::views::kShotSummon, lss::views::kShotChangePhase})
+    {
+        signals.shotPriority = priority;
+        EXPECT(ReasonOf(signals) == WholeScreenReason::SceneShot);
+    }
+    for (const std::uint8_t priority : {0, 10, 20, 30, 40, 70, 71})
+    {
+        signals.shotPriority = priority;
+        EXPECT(ReasonOf(signals) == WholeScreenReason::None);
+    }
+    signals.shotPriority = lss::views::kShotSummon;
+    signals.inBattle     = false;
+    EXPECT(ReasonOf(signals) == WholeScreenReason::None);
+    // A menu over the shot still wins (the pause menu during a summon's entrance), and the shot wins over a cutscene
+    // that starts under it.
+    signals.inBattle  = true;
+    signals.gameState = lss::views::kStatePauseMenu;
+    EXPECT(ReasonOf(signals) == WholeScreenReason::PauseMenu);
+    signals.gameState = Readable().gameState;
+    signals.cutscene  = true;
+    EXPECT(ReasonOf(signals) == WholeScreenReason::SceneShot);
+    signals.cutscene  = false;
+    signals.skippable = true;  // a skippable scene under it: the shot is named
+    EXPECT(ReasonOf(signals) == WholeScreenReason::SceneShot);
+    signals.skippable    = false;
+    signals.gbike        = true;  // a minigame's stage wins
+    EXPECT(ReasonOf(signals) == WholeScreenReason::Minigame);
+}
+
 void TestMenuWidgets()
 {
     std::puts("whole screen: the pause-family widgets, the slot menus and the full-screen Blueprint menus give their reasons");
@@ -362,6 +397,7 @@ void TestSharedPlay()
         WholeScreenReason::None,         WholeScreenReason::PauseMenu,   WholeScreenReason::CinemaPause,
         WholeScreenReason::ScriptMenu,   WholeScreenReason::JobBoard,    WholeScreenReason::PauseWidget,
         WholeScreenReason::NativeMenu,   WholeScreenReason::ScreenWidget, WholeScreenReason::ArenaMenu,
+        WholeScreenReason::SceneShot,
         WholeScreenReason::Cutscene,     WholeScreenReason::SkippableScene, WholeScreenReason::CutsceneSkip,
         WholeScreenReason::Title,
     };
@@ -380,6 +416,7 @@ int main()
     TestNothingKnown();
     TestSignalsCompare();
     TestEachSignal();
+    TestSceneShots();
     TestMenuWidgets();
     TestMinigames();
     TestFieldUseNames();

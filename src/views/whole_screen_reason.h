@@ -38,9 +38,25 @@ struct ScreenSignals
     bool          inBattle    = false;  // the game's UEndBattleAPI::IsInBattle test
     bool          gbike       = false;  // the G-Bike manager lives
     bool          minigameMap = false;  // the location is a minigame-only map (chocobo race, coaster, G-Bike, Moogle)
+    std::uint8_t  shotPriority = 0;     // the battle camera shot the cameras applied this tick (0: none; read in a
+                                        // battle only)
 
     bool operator==(const ScreenSignals&) const = default;  // every field (the log's change test)
 };
+
+/// The battle camera shots' priorities the game itself plays as scenes (research/RE-scene-like-battle-shots.md): active
+/// on every player's camera, whoever's leader they involve, and read by the game's own summon and leader-change checks.
+/// A summon's entrance and the few summon specials with a shot play at Summon; every boss phase change and the boss
+/// finish at ChangePhase. The rest stay split: grabs and party skills (limit breaks) play on one player's camera only,
+/// and enemy specials and stagger shots play from each player's own side of the fight.
+inline constexpr std::uint8_t kShotSummon      = 50;
+inline constexpr std::uint8_t kShotChangePhase = 60;
+
+/// A scene-like battle shot plays, in a battle.
+constexpr bool SceneShot(const ScreenSignals& signals) noexcept
+{
+    return signals.inBattle && (signals.shotPriority == kShotSummon || signals.shotPriority == kShotChangePhase);
+}
 
 /// The field-exclusion bits the minigame rule reads (UEnum EndFieldExclusion).
 inline constexpr std::uint32_t kExclusionMiniGame = 1u << 21;  // DisableController_MiniGame
@@ -88,6 +104,7 @@ enum class WholeScreenReason : std::uint8_t
     ScreenWidget,
     ArenaMenu,
     Minigame,
+    SceneShot,  // a summon's entrance, a boss's phase change or finish (SceneShot above)
     Cutscene,
     SkippableScene,
     CutsceneSkip,

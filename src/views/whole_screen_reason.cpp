@@ -90,6 +90,10 @@ WholeScreenReason ReasonOf(const ScreenSignals& signals) noexcept
     {
         return WholeScreenReason::Minigame;
     }
+    if (SceneShot(signals))
+    {
+        return WholeScreenReason::SceneShot;
+    }
     if (signals.cutscene)
     {
         return WholeScreenReason::Cutscene;
@@ -119,6 +123,8 @@ const wchar_t* NameOf(WholeScreenReason reason) noexcept
         case WholeScreenReason::ScreenWidget: return L"a full-screen Blueprint menu";
         case WholeScreenReason::ArenaMenu: return L"a VR or colosseum menu or result (on/off 153, the minigame bit, not in battle)";
         case WholeScreenReason::Minigame: return L"a minigame on its own stage";
+        case WholeScreenReason::SceneShot:
+            return L"a scene-like battle shot (a summon's entrance, a boss's phase change or finish)";
         case WholeScreenReason::Cutscene: return L"a cutscene";
         case WholeScreenReason::SkippableScene: return L"a skippable scene (on/off 12)";
         case WholeScreenReason::CutsceneSkip: return L"a cutscene skip";

@@ -31,6 +31,8 @@
 
 #include "players/seats.h"
 
+#include <cstdint>
+
 namespace lss::platform {
 class GameImage;
 }
@@ -62,6 +64,12 @@ private:
 /// Game thread: the seat whose camera update is open (a SeatUpdate holds the list), so "this camera" is that
 /// seat's; 0 outside every seat's update (player 1's camera).
 int InsideSeat() noexcept;
+
+/// Game thread: the priority of the battle shot player 1's camera applied in its last update (the list's last active
+/// priority, which the game's own summon and leader-change checks read; research/RE-scene-like-battle-shots.md); 0 when
+/// none plays, outside a battle, or when no entry of that priority is left in the list (so a value the cameras stopped
+/// writing is not kept).
+std::uint8_t AppliedShotPriority() noexcept;
 
 /// Game thread, once per engine tick: the status line (Debug, every 10 s with activity).
 void Tick() noexcept;

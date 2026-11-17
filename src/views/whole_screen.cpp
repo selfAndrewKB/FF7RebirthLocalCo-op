@@ -1,5 +1,6 @@
 #include "views/whole_screen.h"
 
+#include "camera/attack_cameras.h"
 #include "facts/engine.h"
 #include "facts/in_battle.h"
 #include "facts/party.h"
@@ -473,12 +474,12 @@ void LogOnChange(const ScreenSignals& now) noexcept
     platform::LogDebug(L"whole screen: {}game state {} (menu kind {}), script menu {}, job board {}, pause widget {}, slot "
                        L"menus {:#x}, full-screen widget {}, cutscene {}, skippable scene {}, skip {}, title {}; on/off 153 "
                        L"{}, 92 {}, Chadley state {}; exclusion {:#x}, minigame playing {} (field use {}), 139/140 {}, "
-                       L"frog {}, in battle {}, G-Bike {}, minigame map {} -> {}",
+                       L"frog {}, in battle {}, G-Bike {}, minigame map {}, battle shot priority {} -> {}",
                        now.readable ? L"" : L"(no game state) ", now.gameState, now.menuKind, now.scriptMenu,
                        now.jobBoard, now.pauseWidget, now.nativeMenus, now.screenWidget, now.cutscene, now.skippable,
                        now.skipping, now.title, now.colosseumFlag, now.miniGameMenu, now.chadleyState, now.exclusion,
                        now.minigamePlaying, now.fieldMinigame, now.minigameIds, now.frogGuys, now.inBattle, now.gbike,
-                       now.minigameMap, NameOf(ReasonOf(now)));
+                       now.minigameMap, now.shotPriority, NameOf(ReasonOf(now)));
 }
 
 }  // namespace
@@ -538,6 +539,10 @@ bool InstallWholeScreen(const platform::GameImage& image) noexcept
                   L"its field-exclusion mask before a game's 36{}{}{}",
                   g_battleSystem != 0 ? L"" : L" (NO battle test: the minigame bit is not read)",
                   g_frogManager != 0 ? L"" : L" (no frog-guys manager)", g_gbikeManager != 0 ? L"" : L" (no G-Bike)");
+    platform::Log(L"whole screen: {}", g_battleSystem != 0
+                                           ? L"a summon's entrance, a boss's phase change and its finish take the whole "
+                                             L"screen, by the battle shot's priority the game's own summon check reads"
+                                           : L"battle shots stay split (NO battle test)");
     platform::Log(L"whole screen: menus, {}the map, skippable scenes, cutscenes and the title are read from the game's "
                   L"own state; {}; {}",
                   g_jobBoardSlot != 0 ? L"the job board, " : L"(NOT the job board: its check failed) ",
@@ -629,6 +634,9 @@ ScreenSignals ReadScreenSignals() noexcept
         }
         signals.chadleyState = ChadleyState(root);
         ReadMinigame(signals, root, root != 0 ? ReadAt<std::uintptr_t>(root + kRootGameState) : 0);
+        // The battle shot by its priority, the byte the game's own summon check reads (SceneShot); in a battle only, as
+        // the list lives with the battle system.
+        signals.shotPriority = g_battleSystem != 0 && signals.inBattle ? camera::attack_cameras::AppliedShotPriority() : 0;
         signals.pauseWidget  = PauseWidgetAlive();
         signals.nativeMenus  = NativeMenusOpen();
         signals.screenWidget = g_screenWidgets && screen_widgets::FullScreenOpen();
