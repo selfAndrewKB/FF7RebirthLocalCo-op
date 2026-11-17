@@ -1,16 +1,18 @@
 """Symbolize LocalSplitScreen main.dll RVAs with its PDB via llvm-symbolizer (dbghelp via ctypes failed, error 126).
 The build output LocalSplitScreen.dll (SHA-256 7BC841AB...2FA0) is byte-identical to the deployed main.dll of both captures."""
-import os, subprocess, functools, pefile
-from tidcfg import GT, RT, RHI, PID, FPS  # perf-2026-10-03c: LSS_CAP=old|new
+import os, shutil, subprocess, functools, pefile
+from tidcfg import GT, RT, RHI, PID, FPS  # LSS_CAP picks the capture
 
-BUILD = r'C:\_Projects\FinalFantasy7Modding\Rebirth\LocalSplitScreen\build\Game__Shipping__Win64'
-# perf-2026-10-04 (v056b): LSS_MODDLL points at a saved copy of the matching build DLL (its PDB beside it), because the
-# build folder moves on; check its SHA-256 against the capture's modDllHash first.
-DLL = os.environ.get('LSS_MODDLL', BUILD + r'\LocalSplitScreen.dll')
-# perf-2026-10-08: the captured DLL has no PDB; its RVAs are mapped to the current build first (modmap.py -> modmap.json)
+BUILD = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'build', 'Game__Shipping__Win64')
+# LSS_MODDLL points at a saved copy of the matching build DLL (its PDB beside it), because the build folder moves on;
+# check its SHA-256 against the capture's modDllHash first.
+DLL = os.environ.get('LSS_MODDLL', os.path.join(BUILD, 'LocalSplitScreen.dll'))
+# A captured DLL without a PDB has its RVAs mapped to the current build first (modmap.py -> modmap.json).
 import json
 _MAP = {int(k): v for k, v in json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'modmap.json'))).items()} if os.path.exists(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'modmap.json')) else None
-SYMBOLIZER = r'C:\Users\Andrew\scoop\apps\llvm\current\bin\llvm-symbolizer.exe'
+SYMBOLIZER = os.environ.get('LSS_SYMBOLIZER') or shutil.which('llvm-symbolizer')  # LLVM's, on PATH or named
+if not SYMBOLIZER:
+    raise SystemExit('llvm-symbolizer is not on PATH: set LSS_SYMBOLIZER to it')
 IMAGE_BASE = pefile.PE(DLL, fast_load=True).OPTIONAL_HEADER.ImageBase
 _cache = {}
 

@@ -93,5 +93,5 @@ commits ahead of the pin (the script-hook branch, merged upstream in April 2025)
 ## Checking a build
 
 `check_exports.py <mod main.dll> <UE4SS.dll>` lists every symbol the mod imports from UE4SS.dll that the Nexus DLL
-does not export (none is the gate). The DLL itself: `Remake\UE4SS-Rebirth_FFVII_ReMenu (1.005 Compatible) ...\ue4ss\UE4SS.dll`
-(the zip in `Downloads`).
+does not export (none is the gate). The DLL itself is `ue4ss\UE4SS.dll` in the Nexus zip, or in the game folder once
+installed.

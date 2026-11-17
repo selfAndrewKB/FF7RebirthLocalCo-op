@@ -2,7 +2,7 @@
 with tools/version_match's masked-pattern Matcher; writes modmap.json {rva_captured: [rva_current, how]}.
 usage: python modmap.py <dumpdir> <captured main.dll copy> <current LocalSplitScreen.dll>; then LSS_MODDLL=<current DLL>."""
 import sys, os, json, collections
-sys.path.insert(0, r'C:\_Projects\FinalFantasy7Modding\Rebirth\LocalSplitScreen\tools\version_match')
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'version_match'))
 from pe_image import Image, IDA_BASE
 from match import Matcher
 os.environ['LSS_DUMP'] = sys.argv[1]

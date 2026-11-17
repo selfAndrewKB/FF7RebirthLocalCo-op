@@ -1,8 +1,10 @@
 """The in-game regression: deploys a build, launches the game, reaches the save, runs the scripts in order and checks
 each one's `# expect:` / `# expect-not:` lines against the slice of UE4SS.log it produced.
 
-    python tools/regression/run.py                       the dev build on the live game (1.005)
-    python tools/regression/run.py --version 1.004       the dev build on the 1.004 copy (its exe started directly)
+    python tools/regression/run.py                       the dev build on the live game (1.005, found through Steam;
+                                                         FF7REBIRTH_GAME_DIR overrides)
+    python tools/regression/run.py --version 1.004       the dev build on a kept copy of 1.004, its exe started directly;
+                                                         FF7REBIRTH_1004_GAME_DIR names the copy's End\\Binaries\\Win64
     python tools/regression/run.py --build release       the release build: the scripts driven by the mod's hotkeys
     python tools/regression/run.py --in-field 10 20      the game is already at the save: run scripts 10 and 20 only
 
@@ -32,6 +34,7 @@ as `control: to console client <n>: ok <line> <command> -- <detail>`, which the 
 """
 import argparse
 import datetime as dt
+import os
 import pathlib
 import re
 import shutil
@@ -46,15 +49,10 @@ TOOLS = ROOT / "tools"
 SCRIPTS = HERE / "scripts"
 OUT = HERE / "out"
 
+# "dir" is filled in by game_dir() for the version a run uses.
 GAMES = {
-    "1.005": {
-        "dir": pathlib.Path(r"G:\_SSD Games\SteamLibrary\steamapps\common\FINAL FANTASY VII REBIRTH\End\Binaries\Win64"),
-        "direct": False,
-    },
-    "1.004": {
-        "dir": pathlib.Path(r"G:\_SSD Games\SteamLibrary\steamapps\common\FINAL FANTASY VII REBIRTH - Copy 1.004\End\Binaries\Win64"),
-        "direct": True,
-    },
+    "1.005": {"dir": None, "direct": False},  # the live game, launched through Steam
+    "1.004": {"dir": None, "direct": True},  # a kept copy of the old version, its exe started directly
 }
 BUILDS = {
     "dev": ROOT / "build" / "Game__Shipping__Win64" / "LocalSplitScreen.dll",
@@ -71,6 +69,20 @@ CONDITION_OF = {text: name for name, text in CONDITIONS.items()}
 # A tick of `wait`/`wait-until` is one frame; the key route counts them at the slowest frame rate the game is played at,
 # so its waits are never shorter than the control route's.
 SECONDS_PER_TICK = 1.0 / 60.0
+
+
+def game_dir(version: str) -> pathlib.Path:
+    """A version's End\\Binaries\\Win64: the live game found through Steam (tools/game_dir.ps1, FF7REBIRTH_GAME_DIR
+    overrides); the 1.004 copy named by FF7REBIRTH_1004_GAME_DIR, never through Steam, which would start the live game."""
+    if version == "1.004":
+        copy = os.environ.get("FF7REBIRTH_1004_GAME_DIR")
+        if not copy:
+            sys.exit("--version 1.004 needs FF7REBIRTH_1004_GAME_DIR: the copy's End\\Binaries\\Win64 folder")
+        return pathlib.Path(copy)
+    proc = powershell(TOOLS / "game_dir.ps1", timeout=60)
+    if proc.returncode != 0:
+        sys.exit((proc.stderr or proc.stdout).strip())
+    return pathlib.Path(proc.stdout.strip().splitlines()[-1])
 
 
 def mod_dir(game: pathlib.Path) -> pathlib.Path:
@@ -488,6 +500,7 @@ def main() -> int:
 
     stamp = dt.datetime.now().strftime("%Y%m%d-%H%M%S")
     game = GAMES[args.version]
+    game["dir"] = game_dir(args.version)
     route_name = args.route or ("keys" if args.build == "release" else "control")
     route = Keys(game["dir"]) if route_name == "keys" else Control(game["dir"])
     log = Log(log_path(game["dir"]))

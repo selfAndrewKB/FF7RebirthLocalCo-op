@@ -1,10 +1,10 @@
 """Debug one address: how its function's masked prefix matches in old and new as it grows."""
 import sys
 
-from pe_image import Image
+from pe_image import Image, build_exe
 
-OLD = r"C:\_Projects\FinalFantasy7Modding\Rebirth\builds\1.004\ff7rebirth_.exe"
-NEW = r"C:\_Projects\FinalFantasy7Modding\Rebirth\builds\1.005\ff7rebirth_.exe"
+OLD = build_exe("1.004")
+NEW = build_exe("1.005")
 
 old, new = Image(OLD), Image(NEW)
 for arg in sys.argv[1:]:

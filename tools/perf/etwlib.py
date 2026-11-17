@@ -1,17 +1,18 @@
-"""Shared loaders for the perf-2026-10-03 ETW analysis (copied from lss-cpu/etwlib.py) (TraceProcessor dump -> pandas).
+"""Shared loaders for the ETW analysis (TraceProcessor dump -> pandas).
 
 Dump produced by tp.exe (Program.cs in this folder) into DUMP. Times are ns from trace start
 (TraceProcessor TraceTimestamp.Nanoseconds); trace StartTime is read from meta.txt.
 """
 import gzip, os, bisect, struct
-from tidcfg import GT, RT, RHI, PID, FPS  # perf-2026-10-03c: LSS_CAP=old|new
+from tidcfg import GT, RT, RHI, PID, FPS  # LSS_CAP picks the capture
 from datetime import datetime, timedelta
 import pandas as pd
 import pefile
 
 DUMP = os.environ.get('LSS_DUMP', '')  # set per capture: <scratch>\perf\solo or \split
 GAME_PID = PID
-GAME_EXE = os.environ.get('LSS_GAME_EXE', r'C:/_Projects/FinalFantasy7Modding/Rebirth/builds/1.005/ff7rebirth_.exe')  # cloud PC ran 1.005
+GAME_EXE = os.environ.get('LSS_GAME_EXE') or os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', '..',
+                                                           'builds', '1.005', 'ff7rebirth_.exe')  # the kept 1.005 exe
 IDA_BASE = 0x140000000
 
 

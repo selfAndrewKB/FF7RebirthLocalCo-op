@@ -14,7 +14,8 @@
     4. The game is launched through Steam (or, with -Direct, its exe is started directly: the 1.004
        copy must never go through Steam, which starts the live game), and this returns once the mod
        has logged its ready line for this launch (or reports that it did not). With -NoLaunch it is
-       left closed. -GameDir names another game folder (the 1.004 copy's End\Binaries\Win64).
+       left closed. The game is found through Steam (tools\game_dir.ps1; FF7REBIRTH_GAME_DIR overrides it);
+       -GameDir names another game folder (the 1.004 copy's End\Binaries\Win64).
     Title and load menus are left to keys.ps1 and shot.ps1, so each one is checked on screen first.
 
 .EXAMPLE
@@ -26,12 +27,12 @@ param(
     [string]$Label = '',
     [string]$Build = "$PSScriptRoot\..\build\Game__Shipping__Win64\LocalSplitScreen.dll",
     [int]$ReadyTimeoutSeconds = 150,
-    [string]$GameDir = 'G:\_SSD Games\SteamLibrary\steamapps\common\FINAL FANTASY VII REBIRTH\End\Binaries\Win64',
+    [string]$GameDir = '',  # the game's End\Binaries\Win64; empty: found through Steam (game_dir.ps1)
     [switch]$Direct  # start ff7rebirth_.exe from $GameDir instead of Steam's -applaunch (the 1.004 copy)
 )
 
 $ErrorActionPreference = 'Stop'
-$gameDir = $GameDir
+$gameDir = if ($GameDir) { $GameDir } else { & "$PSScriptRoot\game_dir.ps1" }
 $modDir  = "$gameDir\ue4ss\Mods\LocalSplitScreen"
 $log     = "$gameDir\ue4ss\UE4SS.log"
 # The mod's console (a dev build) on 127.0.0.1:4419: one per machine, so one game at a time (the 1.004 copy and the
@@ -108,7 +109,7 @@ $start = Get-Date
 if ($Direct) {
     Start-Process "$gameDir\ff7rebirth_.exe" -WorkingDirectory $gameDir
 } else {
-    Start-Process 'c:/program files (x86)/steam/steam.exe' -ArgumentList '-applaunch', '2909400'
+    Start-Process (& "$PSScriptRoot\game_dir.ps1" -Steam) -ArgumentList '-applaunch', '2909400'
 }
 for ($i = 0; $i -lt $ReadyTimeoutSeconds; $i++) {
     Start-Sleep 1

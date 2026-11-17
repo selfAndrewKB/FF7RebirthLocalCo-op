@@ -209,13 +209,15 @@ per-session cap: a cap once silenced the failure lines it shared a counter with.
 ## Build, review, commit
 
 - Build: `.\tools\build_locked.ps1 -Tests` (the development DLL, the setup app and the host tests, under the build
-  lock); README.md, Building, has the plain CMake steps. Every change builds clean and passes the tests.
+  lock); README.md, Building, has the plain CMake steps. Every change builds clean and passes the tests. The DLL and
+  the app name their PDB by file name alone, so a dump reader needs the build folder on its symbol path.
 - The players' build is configured with `-DLSS_DEV_TOOLS=OFF`; `python package.py` builds it and makes the release
   zip; `--nexus` makes the Nexus Mods one, without the setup app (Nexus holds uploads with programs in them for a
   manual check). `python tools/release.py vX.Y.Z --notes "..."` makes both from a tag and creates the GitHub release
   (the zip and the setup app attached) with the maintainer's own description, when the maintainer asks.
-- Regression: `python -I tools\regression\run.py` (`--build release` for the player's build), with the game closed and
-  port 4419 free; no builds during a run.
+- Regression: `python -I tools\regression\run.py` (`--build release` for the players' build; `--version 1.004` on a
+  kept copy of the old version, named by `FF7REBIRTH_1004_GAME_DIR`), with the game closed and port 4419 free; no
+  builds during a run.
 - **Review before every commit** by a separate reviewing agent, given the diff, this file and the question "what is
   wrong with this". Fix the findings, send it back, and commit only after it approves. Small optional
   points are cheap: take them.
@@ -230,7 +232,8 @@ per-session cap: a cap once silenced the failure lines it shared a counter with.
 ## Driving the game
 
 - Close the game before installing a DLL (it holds the file open), and close it at the end of a task.
-  `tools\relaunch.ps1 -Deploy -Label <name>` installs and starts it (`-NoLaunch` to install only).
+  `tools\relaunch.ps1 -Deploy -Label <name>` installs and starts it (`-NoLaunch` to install only). The tools find the
+  game through Steam's library list (`tools\game_dir.ps1`); `FF7REBIRTH_GAME_DIR` overrides it.
 - Install only this mod's DLL and the setup app, never the `UE4SS.dll` this build produces: the game keeps the Nexus
   Mods UE4SS build the mod targets (`tools/ue4ss_nexus/README.md`).
 - Never turn on the D3D12 debug layer or GPU validation with the mod loaded: creating the device fails.

@@ -20,6 +20,15 @@ from capstone import x86_const
 IDA_BASE = 0x140000000
 
 
+def build_exe(version: str) -> str:
+    """The kept copy of a game build's exe: Rebirth/builds/<version>/ff7rebirth_.exe beside the mod's repository, or
+    under the folder LSS_BUILDS_DIR names."""
+    import os
+    import pathlib
+    builds = pathlib.Path(os.environ.get("LSS_BUILDS_DIR") or pathlib.Path(__file__).resolve().parents[3] / "builds")
+    return str(builds / version / "ff7rebirth_.exe")
+
+
 @dataclass
 class Insn:
     address: int        # IDA address

@@ -2,10 +2,10 @@
 Short functions compare whole; long ones their first 48 bytes. Usage: vt_bytes.py <old vt> <new vt> <slots>"""
 import sys
 
-from pe_image import Image
+from pe_image import Image, build_exe
 
-OLD = r"C:\_Projects\FinalFantasy7Modding\Rebirth\builds\1.004\ff7rebirth_.exe"
-NEW = r"C:\_Projects\FinalFantasy7Modding\Rebirth\builds\1.005\ff7rebirth_.exe"
+OLD = build_exe("1.004")
+NEW = build_exe("1.005")
 old, new = Image(OLD), Image(NEW)
 
 

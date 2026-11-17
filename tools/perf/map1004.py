@@ -1,10 +1,10 @@
 """Map the 2026-10-03/04 perf doc's 1.004 function addresses to 1.005 with tools/version_match (Matcher.match_code)."""
-import sys
-sys.path.insert(0, r'C:\_Projects\FinalFantasy7Modding\Rebirth\LocalSplitScreen\tools\version_match')
-from pe_image import Image
+import os, sys
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'version_match'))
+from pe_image import Image, build_exe
 from match import Matcher
-OLD = r"C:\_Projects\FinalFantasy7Modding\Rebirth\builds\1.004\ff7rebirth_.exe"
-NEW = r"C:\_Projects\FinalFantasy7Modding\Rebirth\builds\1.005\ff7rebirth_.exe"
+OLD = build_exe("1.004")
+NEW = build_exe("1.005")
 NAMES = {
  0x140E1623C:'GameThreadWaitForTask',0x140E15F68:'FRenderCommandFence_Wait_cand',0x14109EA24:'frame tick (GT RT-fence site)',0x1410A1600:'frame pacing (SleepEx)',
  0x141658D58:'FRHICommandListBase_WaitForDispatch',0x1414FBBA8:'FD3D12Fence_WaitForFence',0x141732094:'D3D12_SyncPointQueue_WaitHoldingLock_cand',

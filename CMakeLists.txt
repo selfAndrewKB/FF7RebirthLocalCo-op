@@ -264,6 +264,8 @@ target_include_directories(LocalSplitScreen PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}
                                                     "${CMAKE_CURRENT_SOURCE_DIR}/src/ue4ss_compat")
 target_compile_features(LocalSplitScreen PRIVATE cxx_std_20)
 target_link_libraries(LocalSplitScreen PUBLIC UE4SS)
+# The binary names its PDB by file name alone, not by the build folder's path.
+target_link_options(LocalSplitScreen PRIVATE "/PDBALTPATH:$<TARGET_FILE_BASE_NAME:LocalSplitScreen>.pdb")
 
 # Development tools (src/dev/dev_tools.h): the console, the HUD trace, the position
 # probe, the dump commands, and the watches that only log (installed and ticked by dev_tools.cpp; a
@@ -351,6 +353,7 @@ target_compile_definitions(SetupApp PRIVATE NOMINMAX)
 target_link_libraries(SetupApp PRIVATE user32 gdi32 msimg32 comctl32 shell32 dwmapi uxtheme)
 set_source_files_properties(setup/app.rc PROPERTIES OBJECT_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/setup/app.ico")  # a new icon rebuilds it
 set_property(TARGET SetupApp PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded")  # one file: no runtime to install
+target_link_options(SetupApp PRIVATE "/PDBALTPATH:$<TARGET_FILE_BASE_NAME:SetupApp>.pdb")  # the PDB by file name alone, as the mod's
 
 # ------------------------------------------------------------------------------------------------
 # Host-side tests: the logic that needs neither the game nor UE4SS

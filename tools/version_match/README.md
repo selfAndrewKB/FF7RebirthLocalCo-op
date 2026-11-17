@@ -7,7 +7,8 @@ tables `src/platform/builds/build_<ver>.h` (generated) and `build_<ver>_replaced
 The 1.004 tables are frozen: they were made when 1.004 was the source build and 1.005 the matched one, then inverted
 when the source moved to 1.005 (`plan/versions.md`). 1.004 is deprecated; nothing regenerates them.
 
-Needs Python 3 with `pefile`, `capstone` 5 and `numpy`. The exes live in `Rebirth/builds/<ver>/ff7rebirth_.exe`.
+Needs Python 3 with `pefile`, `capstone` 5 and `numpy`. The exes live in `Rebirth/builds/<ver>/ff7rebirth_.exe`,
+beside the mod's repository (`LSS_BUILDS_DIR` names another folder).
 
 | Script | What it does |
 |---|---|
