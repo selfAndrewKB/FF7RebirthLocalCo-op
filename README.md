@@ -1,9 +1,6 @@
 # LocalSplitScreen
 
-Local split-screen co-op for up to three players in FINAL FANTASY VII REBIRTH, as a UE4SS C++ mod. Each player gets
-their own controller, character, camera, HUD and battle menu, in one split window or on a monitor each.
-
-How changes are made is in `AGENTS.md`; sending them is in `CONTRIBUTING.md`.
+Local split-screen co-op for up to three players in FINAL FANTASY VII REBIRTH, as a UE4SS C++ mod.
 
 ## Requirements
 
@@ -44,17 +41,14 @@ python package.py
 
 ## Installing
 
-Close the game first: it keeps the DLL open.
-
 1. Copy `LocalSplitScreen.dll` to `<game>\End\Binaries\Win64\ue4ss\Mods\LocalSplitScreen\dlls\main.dll`.
 2. Copy `MultiMonitorSetup.exe` into `Mods\LocalSplitScreen\`.
 3. Add `LocalSplitScreen : 1` to `Mods\mods.txt`, or put an empty `enabled.txt` in the mod's folder.
 
-`tools/relaunch.ps1 -Deploy -Label <name>` copies both files and starts the game. Never install the `UE4SS.dll` this
-build produces: the game keeps the Nexus loader. Run no other split-screen mod beside this one.
+`tools/relaunch.ps1 -Deploy -Label <name>` copies both files and starts the game. The build also makes a `UE4SS.dll`,
+which is only there to link the mod against; the game keeps the Nexus one.
 
-The mod writes its settings to `LocalSplitScreen.ini` in its folder, each option explained there. The in-game Co-op
-page (pause and title menus) changes them.
+The mod writes its settings to `LocalSplitScreen.ini` in its folder.
 
 ## Game versions
 
