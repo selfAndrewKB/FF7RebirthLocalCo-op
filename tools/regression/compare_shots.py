@@ -1,10 +1,10 @@
 """Compares two pictures of the game window taken by the regression's `# shot:` lines (tools/regression/run.py), one
 per build, e.g. the last commit's build against a change's:
 
-    python tools/regression/compare_shots.py before.png after.png [--out DIR] [--layout top-bottom|side-by-side]
+    python tools/regression/compare_shots.py before.png after.png [--out DIR] [--layout side-by-side|top-bottom]
 
-The pictures are split into the two players' views (top and bottom by default, the layout the scripts leave the game
-in). For each view, and for the HUD's own areas in it (its four corner bands, where the minimap, the party and the
+The pictures are split into the two players' views (side by side by default, the mod's default layout, the one the
+scripts leave the game in). For each view, and for the HUD's own areas in it (its four corner bands, where the minimap, the party and the
 prompts sit), it reports the mean difference of the pixels (0 to 255) and the share of pixels that differ by more than
 a threshold. It writes a side-by-side picture and a difference picture (amplified) per view to look at. The 3D scene
 moves on its own between two launches (idle animations, effects), so a small difference is expected everywhere; a HUD
@@ -47,7 +47,7 @@ def main() -> int:
     parser.add_argument("before", type=pathlib.Path)
     parser.add_argument("after", type=pathlib.Path)
     parser.add_argument("--out", type=pathlib.Path, default=None, help="where the pictures go (beside `after`)")
-    parser.add_argument("--layout", choices=("top-bottom", "side-by-side"), default="top-bottom")
+    parser.add_argument("--layout", choices=("top-bottom", "side-by-side"), default="side-by-side")
     args = parser.parse_args()
     before = Image.open(args.before).convert("RGB")
     after = Image.open(args.after).convert("RGB")

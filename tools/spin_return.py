@@ -4,7 +4,7 @@ Detail the renderer dropped while the camera looked away streams back in after t
 difference from the reference frame then starts high and decays. With identical inputs the camera
 comes back to (almost) the same heading, so a scene that kept its detail matches the reference at once.
 
-    python tools/spin_return.py --out DIR --player 2 [--ticks 40] [--rate 1] [--frames 40] [--layout top-bottom]
+    python tools/spin_return.py --out DIR --player 2 [--ticks 40] [--rate 1] [--frames 40] [--layout side-by-side]
 
 Needs the mod's console (tools/remote.py), per-pad sticks, and player 2 in. Writes
 DIR/reference.png, DIR/after-NN.png (a few), DIR/diff-first.png (where the first frame after the return
@@ -50,7 +50,7 @@ def main():
     parser.add_argument('--rate', type=float, default=1.0)
     parser.add_argument('--frames', type=int, default=40)
     parser.add_argument('--settle', type=int, default=90, help='ticks to wait after the return')
-    parser.add_argument('--layout', default='top-bottom', choices=['top-bottom', 'side-by-side', 'solo'])
+    parser.add_argument('--layout', default='side-by-side', choices=['top-bottom', 'side-by-side', 'solo'])
     args = parser.parse_args()
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)

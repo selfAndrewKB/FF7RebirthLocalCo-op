@@ -260,7 +260,7 @@ void TestRegisterOption()
         EXPECT(monitors->set(Value{false}).ok && held == L"off");
         EXPECT(!std::get<bool>(monitors->get()));
     }
-    std::wstring split = L"horizontal";
+    std::wstring split = L"vertical";
     lss::control::RegisterOption(
         kTwoPlayerSplit,
         [&split](const std::wstring& word) {
@@ -274,11 +274,11 @@ void TestRegisterOption()
     {
         EXPECT(layout->shape == Shape::Word && layout->words.size() == 2);
         EXPECT(layout->words[0] == L"vertical" && layout->words[1] == L"horizontal");
-        EXPECT(layout->help.ends_with(L"(default: horizontal)"));
-        EXPECT(RoundTrip(*layout, L"vertical") == L"vertical");
-        EXPECT(Refused(*layout, L"sideways") && Refused(*layout, L"Vertical"));
-        EXPECT(layout->set(Value{std::wstring(L"vertical")}).ok && split == L"vertical");
-        EXPECT(std::get<std::wstring>(layout->get()) == L"vertical");
+        EXPECT(layout->help.ends_with(L"(default: vertical)"));
+        EXPECT(RoundTrip(*layout, L"horizontal") == L"horizontal");
+        EXPECT(Refused(*layout, L"sideways") && Refused(*layout, L"Horizontal"));
+        EXPECT(layout->set(Value{std::wstring(L"horizontal")}).ok && split == L"horizontal");
+        EXPECT(std::get<std::wstring>(layout->get()) == L"horizontal");
     }
 }
 

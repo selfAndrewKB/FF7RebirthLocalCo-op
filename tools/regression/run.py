@@ -179,7 +179,7 @@ class Control:
 # bars, the sticks and the monitor mode persist across a leave; player 2's own camera is the start of every join
 # (views/player_view_point.h).
 KEY_SWITCHES = {
-    "two-player-split": ("Ctrl+F5", "horizontal"),
+    "two-player-split": ("Ctrl+F5", "vertical"),
     "bars": ("Ctrl+F4", "off"),
     "own-camera": ("Ctrl+F6", "on"),
     "sticks": ("Ctrl+F9", "per-pad"),

@@ -80,9 +80,9 @@ void TableConsistent()
     // columns: three equal columns are the span's only).
     EXPECT(kColumnOrder.words.size() == 6 && std::wcscmp(kColumnOrder.fallback, L"123") == 0);
     EXPECT(kThreePlayerSplit.words.size() == 4 && std::wcscmp(kThreePlayerSplit.fallback, L"top") == 0);
-    // The two-player layout's words are the engine's: vertical = side by side, horizontal = top/bottom, the default.
+    // The two-player layout's words are the engine's: vertical = side by side, the default, horizontal = top/bottom.
     EXPECT(std::wcscmp(kTwoPlayerSplit.words[0], L"vertical") == 0 && std::wcscmp(kTwoPlayerSplit.wordLabels[0], L"Vertical") == 0);
-    EXPECT(std::wcscmp(kTwoPlayerSplit.fallback, L"horizontal") == 0);
+    EXPECT(std::wcscmp(kTwoPlayerSplit.fallback, L"vertical") == 0);
     // The FOV weight: 21 words from 0.00 to 1.00 in steps of 0.05, the default the middle.
     EXPECT(kHorizontalFov.words.size() == kFovWeightSteps);
     EXPECT(std::wcscmp(kHorizontalFov.words[0], L"0.00") == 0);
@@ -105,13 +105,13 @@ void JudgeFile()
     EXPECT(Judge(kHorizontalFov, L"0.50").word == L"0.50");
     EXPECT(Judge(kHorizontalFov, L"1 . 0 0").word == L"1.00");
     // No key, or an empty value: the default.
-    EXPECT(Judge(kTwoPlayerSplit, L"").word == L"horizontal");
+    EXPECT(Judge(kTwoPlayerSplit, L"").word == L"vertical");
     EXPECT(Judge(kTwoPlayerSplit, L"").source == Source::Default);
     EXPECT(Judge(kTwoPlayerSplit, L"   ").source == Source::Default);
     // A word that is none of the option's: the default, the file's text kept for the warning.
     const Reading bad = Judge(kTwoPlayerSplit, L" sideways ");
     EXPECT(bad.source == Source::Invalid);
-    EXPECT(bad.word == L"horizontal");
+    EXPECT(bad.word == L"vertical");
     EXPECT(bad.raw == L"sideways");
     EXPECT(Judge(kHorizontalFov, L"0.5").source == Source::Invalid);  // the words are written with two decimals
     EXPECT(Judge(kHorizontalFov, L"0.5").word == L"0.50");
@@ -187,7 +187,7 @@ void FileTextFromTable()
 {
     std::puts("settings: the file's text comes from the table");
     auto readings = Defaults();
-    readings[PlaceOf(kTwoPlayerSplit)] = Judge(kTwoPlayerSplit, L"Vertical");
+    readings[PlaceOf(kTwoPlayerSplit)] = Judge(kTwoPlayerSplit, L"Horizontal");
     readings[PlaceOf(kHorizontalFov)]  = Judge(kHorizontalFov, L"sometimes");
     const std::wstring text = FileText(readings);
     for (std::size_t i = 0; i < kOptions.size(); ++i)
@@ -198,12 +198,12 @@ void FileTextFromTable()
         EXPECT(Count(text, std::wstring(L"[") + option.section + L"]\r\n") == 1);
     }
     EXPECT(text.find(L"\r\nmulti-monitor = off\r\n") != std::wstring::npos);
-    EXPECT(text.find(L"\r\ntwo-player-split = vertical\r\n") != std::wstring::npos);
+    EXPECT(text.find(L"\r\ntwo-player-split = horizontal\r\n") != std::wstring::npos);
     EXPECT(text.find(L"\r\nsplit-fov.horizontal = sometimes\r\n") != std::wstring::npos);
     EXPECT(Count(text, L"none of these words: read as 0.50") == 1);
     EXPECT(text.find(L"; 0.00 to 1.00 (the default: 0.50)") != std::wstring::npos);
     EXPECT(text.find(L"; on | off (the default: off)") != std::wstring::npos);
-    EXPECT(text.find(L"; vertical | horizontal (the default: horizontal)") != std::wstring::npos);
+    EXPECT(text.find(L"; vertical | horizontal (the default: vertical)") != std::wstring::npos);
     EXPECT(text.find(L"LocalSplitScreen (FF7 Rebirth)") != std::wstring::npos);
     // A help's line breaks (the Co-op page's) are spaces in the file: no line starts with the help's words.
     EXPECT(std::wstring_view(kLeadHolder.menuHelp).find(L"\r\n") != std::wstring_view::npos);

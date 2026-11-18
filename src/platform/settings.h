@@ -83,7 +83,7 @@ inline constexpr Option kColumnOrder{  // views/column_layout
     false, L"Screen Order", kColumnOrderLabels,
     L"Controls the order in which Players 1, 2 and 3's screens are arranged. Also affects multi-monitor mode."};
 inline constexpr Option kTwoPlayerSplit{  // players/split_layout
-    L"Views", L"two-player-split", kTwoPlayerSplitWords, L"horizontal",
+    L"Views", L"two-player-split", kTwoPlayerSplitWords, L"vertical",
     L"two players in one window: vertical (side by side) or horizontal (top and bottom); a span of monitors is always side "
     L"by side (Ctrl+F5 switches it for the session)",
     false, L"2-Player Split-Screen Layout", kTwoPlayerSplitLabels,

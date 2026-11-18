@@ -12,9 +12,9 @@
 # Player 1 refuses players 2 and 3's members: the 2nd and 3rd party slots (menu ordinals 0x6), whatever their types:
 # expect: command rules: player 1 may not command member types 0x[0-9a-f]+ \(menu ordinals 0x6\)
 # expect: leave: player 2 left; \d+ leftover actor
-# With player 2 gone, player 3 keeps a split view of their own (two views, top and bottom in the regression's layout).
-# The view is the top or bottom half of the game window, full width and half height, whatever the window's size.
-# expect: HUD layout \(column 2's pass\): UI image \d+x\d+, view {vw}x{vh/2}
+# With player 2 gone, player 3 keeps a split view of their own (two views, side by side, the default layout). The
+# view is the left or right half of the game window, half width and full height, whatever the window's size.
+# expect: HUD layout \(column 2's pass\): UI image \d+x\d+, view {vw/2}x{vh}
 # expect: leave: player 3 left; \d+ leftover actor
 # expect-not: JOIN FAILED
 # expect-not: could not be given back

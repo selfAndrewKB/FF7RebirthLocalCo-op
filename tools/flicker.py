@@ -5,7 +5,7 @@ is detail loading and unloading (or an animation: water, foliage, characters). C
 each half between setups (player 2 on their own camera or on player 1's, a console setting on or off)
 separates the causes.
 
-    python tools/flicker.py --out DIR [--frames 90] [--layout top-bottom|side-by-side|solo] [--skip 20]
+    python tools/flicker.py --out DIR [--frames 90] [--layout side-by-side|top-bottom|solo] [--skip 20]
 
 Writes DIR/first.png, DIR/last.png, DIR/heat.png (the per-tile change count, brighter = more changes,
 over the first frame) and DIR/result.json; prints each half's score. --skip drops the first frames
@@ -65,7 +65,7 @@ def main():
     parser.add_argument('--out', required=True)
     parser.add_argument('--frames', type=int, default=90)
     parser.add_argument('--skip', type=int, default=0)
-    parser.add_argument('--layout', default='top-bottom', choices=['top-bottom', 'side-by-side', 'solo'])
+    parser.add_argument('--layout', default='side-by-side', choices=['top-bottom', 'side-by-side', 'solo'])
     args = parser.parse_args()
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)

@@ -1,6 +1,7 @@
 # Filled halves and the split FOV: the halves fill by default (bars off echoes that), the FOV weight's ends and middle
 # are accepted through the settings file's option (split-fov.horizontal, the words 0.00 to 1.00) and read back, bars on
-# lays the HUD out in a 16:9 view of the half, bars off fills the half again before the leave.
+# lays the HUD out in a 16:9 view of the half, bars off fills the half again before the leave. The weight is the
+# top/bottom layout's, so the script runs on it (chosen while out) and chooses the default, side by side, again after.
 # needs: control
 # expect: ok \d+ bars off -- halves filled
 # expect: ok \d+ split-fov\.horizontal 1\.00
@@ -11,6 +12,7 @@
 # expect: HUD layout \(column 2's pass\): UI image \d+x\d+, view {vw}x{vh/2}
 # expect-not: the view-point entry is not installed
 note regression: fill/fov start
+two-player-split horizontal
 join
 wait-until p2.state == playing 1800
 bars off
@@ -28,4 +30,5 @@ bars off
 wait 90
 leave
 wait-until p2.in == off 900
+two-player-split vertical
 note regression: fill/fov done
