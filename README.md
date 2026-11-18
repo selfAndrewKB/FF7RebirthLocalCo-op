@@ -6,20 +6,16 @@ Local split-screen co-op for up to three players in FINAL FANTASY VII REBIRTH, a
 
 - FINAL FANTASY VII REBIRTH on Steam, version 1.005. Version 1.004 likely still works for the most part but has not been tested as thoroughly and is deprecated: its support will likely
   be removed in the future.
-- UE4SS from Nexus Mods: "UE4SS-Rebirth_FFVII_ReMenu (1.005 Compatible)". The mod is built against that loader's
+- [UE4SS from Nexus Mods](https://www.nexusmods.com/finalfantasy7rebirth/mods/267?tab=files): "UE4SS-Rebirth_FFVII_ReMenu (1.005 Compatible)". The mod is built against that loader's
   source for the time being.
 - To build: Visual Studio 2022 with the C++ desktop workload, CMake 3.18 or later, a Rust toolchain (UE4SS builds part
   of itself with it), Python 3 and PowerShell 7.
 
 ## Installing
 
-1. Unpack UE4SS into `<game>\End\Binaries\Win64\`: `dwmapi.dll` beside the game's exe, and the `ue4ss` folder.
-2. Unpack the mod's zip into the same folder. It holds the mod's primary files in `ue4ss\Mods\LocalSplitScreen\`, and replaces the
-   loader's `UE4SS-settings.ini` and `Mods\mods.txt` with its own copies, one line changed in each: UE4SS's GUI
-   console off (with it on, the game crashed at start) and the loader's bundled Lua split-screen mod off. Keep a copy of
-   those two files if you changed them.
-3. Optional, to play across multiple monitors: put `MultiMonitorSetup.exe` from the GitHub release in
-   `ue4ss\Mods\LocalSplitScreen\` if not already present.
+1. Unpack UE4SS (acquired from the [Nexus Mods page](https://www.nexusmods.com/finalfantasy7rebirth/mods/267?tab=files)) into `FINAL FANTASY VII REBIRTH\End\Binaries\Win64\`: placing the `dwmapi.dll` file and the `ue4ss` folder beside `ff7rebirth_.exe`
+2. Unpack the mod's zip file into the same folder, replacing the `UE4SS-settings.ini` and `mods.txt` included in the UE4SS package. This ensures `GuiConsoleEnabled = 0` is set and that UE4SS's generic SplitScreen mod is disabled. Otherwise they are prone to conflicting and crashing Rebirth upon startup.
+3. Optional, to play across multiple monitors: put `MultiMonitorSetup.exe` in `ue4ss\Mods\LocalSplitScreen\`.
 
 The mod writes its settings to `LocalSplitScreen.ini` in that folder.
 
