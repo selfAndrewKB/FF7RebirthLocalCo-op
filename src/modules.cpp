@@ -127,6 +127,7 @@
 #include "input/pad_sticks.h"
 #include "platform/frame_watch.h"
 #include "players/console_access.h"
+#include "renderer/additional_family_output.h"
 #include "renderer/framegen_watch.h"
 #include "renderer/submission_census.h"
 #include "renderer/view_family_submission.h"
@@ -935,6 +936,7 @@ void RegisterCommands(session::Session& session, views::column_source::Override&
         renderer::RegisterSubmitHintCommands();
         renderer::RegisterSubmissionCensusCommands();
         renderer::framegen_watch::RegisterCommands();
+        renderer::RegisterAdditionalFamilyOutputCommands();
         renderer::RegisterViewFamilyCommands();
         RegisterOwnCommands(session);
     }

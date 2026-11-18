@@ -106,6 +106,16 @@ inline constexpr std::uintptr_t kOutputLoadActionResume       = 0x14118C6B7;
 /// 1.004 code replace the source build's there.
 inline constexpr std::uint8_t kOutputLoadActionStoreBytes1004[] = {0x88, 0x84, 0x24, 0x10, 0x06, 0x00, 0x00};
 
+/// With frame generation active, the tonemap of the final output pass binds two more colour targets beside the back
+/// buffer ("WithoutHUD" and "HUD", the HUD-less colour and UI that DLSS-G reads), with this store of their load action:
+/// `mov byte [rsp+40h], 2` (clear), one 5-byte instruction inside one aligned 16-byte block (research/
+/// RE-p2-framegen-3.md). The D3D12 RHI clears every bound target when any one is set to clear, so a later family's
+/// tonemap clears the whole back buffer despite its own load action. The mod writes 1 (load). A first family's back
+/// buffer clears anyway, which clears these too, so the change shows only in a later family.
+inline constexpr std::uintptr_t kTonemapExtraTargetsLoadStore     = 0x140C16FA5;
+inline constexpr std::uint8_t   kTonemapExtraTargetsClearBytes[] = {0xC6, 0x44, 0x24, 0x40, 0x02};
+inline constexpr std::uint8_t   kTonemapExtraTargetsLoadBytes[]  = {0xC6, 0x44, 0x24, 0x40, 0x01};
+
 // ---------------------------------------------------------------------------------------------
 // A local player's view point (RE-local-player-viewpoint.md)
 // ---------------------------------------------------------------------------------------------
