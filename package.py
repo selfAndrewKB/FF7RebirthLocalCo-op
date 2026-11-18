@@ -13,7 +13,8 @@ in ue4ss/, the loader's UE4SS-settings.ini and Mods/mods.txt as its Nexus zip sh
 one line changed in each: GuiConsoleEnabled = 0 (UE4SS's own window, drawn with OpenGL, crashed the game at start) and
 SplitScreenMod : 0 (the loader turns UE4SS's example Lua split-screen mod on, which switches the engine's own split
 screen on at start). The version is src/mod.cpp's and the setup app's name src/views/display_move.h's, the lines the
-build reads too. No settings file of the mod is packed: the mod writes it.
+build reads too; the zip is named by the version's number alone (LocalSplitScreen-v1.1.0.zip for "1.1.0-name"). No
+settings file of the mod is packed: the mod writes it.
 """
 import argparse
 import hashlib
@@ -40,6 +41,15 @@ def line_value(path: pathlib.Path, pattern: str) -> str:
     if not found:
         sys.exit(f"{path.relative_to(ROOT)}: no line matches {pattern}")
     return found.group(1)
+
+
+def number(version: str) -> str:
+    """The version's number, its name dropped ("1.1.0" for "1.1.0-name"): what the zips and the release tag carry."""
+    return version.split("-")[0]
+
+
+def zip_path(version: str, nexus: bool) -> pathlib.Path:
+    return ROOT / "dist" / f"{FOLDER}-v{number(version)}{'-nexus' if nexus else ''}.zip"
 
 
 def run(*command: str) -> None:
@@ -112,7 +122,7 @@ def main() -> int:
     files.append((f"{mod}/LICENSE-UE4SS", (LOADER / "LICENSE").read_bytes()))
     files += loader_config()
 
-    out = ROOT / "dist" / f"{FOLDER}-v{version}{'-nexus' if args.nexus else ''}.zip"
+    out = zip_path(version, args.nexus)
     out.parent.mkdir(exist_ok=True)
     with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED, compresslevel=9) as archive:
         for name, data in files:
