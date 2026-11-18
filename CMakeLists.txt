@@ -298,6 +298,7 @@ if(LSS_DEV_TOOLS)
         src/traversal/traversal_collision.cpp
         src/rides/wheelie_watch.cpp
         src/renderer/submission_census.cpp
+        src/renderer/framegen_watch.cpp
     )
     target_compile_definitions(LocalSplitScreen PRIVATE LSS_DEV_TOOLS=1)
 else()

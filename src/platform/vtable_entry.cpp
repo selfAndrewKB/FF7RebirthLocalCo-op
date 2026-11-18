@@ -54,11 +54,13 @@ bool VTableEntry::Replace(std::uintptr_t entryAddress, std::uintptr_t expected, 
         return false;
     }
     // Recorded before the swap (a full barrier): the engine may call the replacement on another thread at once, and
-    // it calls through Original().
-    original_ = expected;
+    // it calls through Original(). A refused swap puts the previous value back, never 0: a call still inside the
+    // replacement from an earlier Replace and Restore forwards through it.
+    const std::uintptr_t previous = original_;
+    original_                     = expected;
     if (!SwapPointer(entryAddress, expected, replacement))
     {
-        original_ = 0;
+        original_ = previous;
         return false;
     }
     entry_       = entryAddress;

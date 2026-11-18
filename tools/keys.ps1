@@ -42,7 +42,8 @@ $scan = @{ Enter = @(0x1C, $false); Escape = @(0x01, $false); Space = @(0x39, $f
            W = @(0x11, $false); A = @(0x1E, $false); S = @(0x1F, $false); D = @(0x20, $false)  # walking (hold with -HoldMs)
            F2 = @(0x3C, $false); F3 = @(0x3D, $false)
            F4 = @(0x3E, $false); F5 = @(0x3F, $false); F6 = @(0x40, $false); F7 = @(0x41, $false); F8 = @(0x42, $false)
-           F9 = @(0x43, $false); F10 = @(0x44, $false); F11 = @(0x57, $false) }
+           F9 = @(0x43, $false); F10 = @(0x44, $false); F11 = @(0x57, $false)
+           Insert = @(0x52, $true) }                                      # Insert: the Shader Injector's menu key
 $ctrl = @(0x1D, $false)  # left Ctrl; "Ctrl+<key>" holds it around the key (the mod's switches are Ctrl+F2..F11)
 # By title, not the process's main window: with the UE4SS console open, Windows can report the
 # console as the game process's main window.

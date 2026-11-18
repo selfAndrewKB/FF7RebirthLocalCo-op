@@ -19,6 +19,12 @@ Local split-screen co-op for up to three players in FINAL FANTASY VII REBIRTH, a
 
 The mod writes its settings to `LocalSplitScreen.ini` in that folder.
 
+## Known issues
+
+- **Turn off DLSS Frame Generation for split screen.** With frame generation on, player 1's half of the screen stays
+  black while the screen is split. DLSS upscaling works. Set Frame Generation to Off in the game's graphics options
+  before a second player joins.
+
 ## Building
 
 The build compiles UE4SS from the source of the Nexus loader, which needs a prepared checkout. By default it is

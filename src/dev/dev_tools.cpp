@@ -13,6 +13,7 @@
 #include "input/move_census.h"
 #include "platform/frame_watch.h"
 #include "platform/log.h"
+#include "renderer/framegen_watch.h"
 #include "renderer/submission_census.h"
 #include "rides/ride_watch.h"
 #include "rides/wheelie_watch.h"
@@ -84,6 +85,7 @@ void Remove() noexcept
     battle::menu_focus::Remove();
     battle::target_census::Remove();  // its observers unregistered; its own hooks pass through
     renderer::RemoveSubmissionCensus();
+    renderer::framegen_watch::Remove();  // the game's Streamline pointers back
     feedback::rumble_watch::Remove();  // the first installed, the last out
 }
 
@@ -107,6 +109,7 @@ void TickWatches(bool splitShown) noexcept
     camera::framing_watch::Tick(splitShown);
     world::charapop_watch::Tick(splitShown);
     session::handover_watch::Tick();
+    renderer::framegen_watch::Tick();  // nothing until `fg-watch on`
 }
 
 }  // namespace lss::dev
