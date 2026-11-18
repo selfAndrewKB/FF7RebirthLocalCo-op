@@ -8,6 +8,7 @@
 #include "platform/settings.h"
 #include "platform/settled_log.h"
 #include "platform/vtable_entry.h"
+#include "players/console_access.h"
 #include "players/split_settings_access.h"
 #include "players/unreal_access.h"
 #include "views/axis_records.h"
@@ -331,6 +332,9 @@ Seen* RecordOf(const void* player, bool create) noexcept
     return oldest;
 }
 
+constexpr float kWidenedWindowAspect = 1.8f;   // wider than the game's 16:9 (1.778)
+constexpr float kAspectMatch         = 0.01f;  // a camera aspect within this of the window's is the window's
+
 /// The Info line when a view starts or stops taking a rule, or changes shape while taking it.
 void NoteShape(const void* localPlayer, int slot, const split_fov_rules::Shape& shape, bool wide, bool narrow, float aspect, float fov,
                float split) noexcept
@@ -351,24 +355,30 @@ void NoteShape(const void* localPlayer, int slot, const split_fov_rules::Shape& 
         return;
     }
     const wchar_t* who = slot >= 0 ? players::SeatName(slot) : L"a mirror view";
+    // The game's cameras report 16:9 and the game shows a wider window with bars; a camera reporting a wider window's
+    // own shape has been widened by something else (an ultrawide tool), which the split FOV then scales again.
+    const float        windowAspect = windowH > 0 ? static_cast<float>(windowW) / static_cast<float>(windowH) : 0.0f;
+    const bool         widened      = windowAspect > kWidenedWindowAspect && std::fabs(aspect - windowAspect) < kAspectMatch;
+    const std::wstring note =
+        widened ? L" (the camera reports the window's own shape: an ultrawide tool may be widening it)" : L"";
     if (narrow)
     {
         platform::Log(L"split FOV: {}'s {}x{} view of a {}x{} window takes the narrow view's FOV (width {:.2f} of the single-player "
-                      L"picture, weight {:.2f}): the camera's {:.1f} deg at {:.3f} becomes {:.1f} deg wide",
+                      L"picture, weight {:.2f}): the camera's {:.1f} deg at {:.3f} becomes {:.1f} deg wide{}",
                       who, width, height, windowW, windowH, split_fov_rules::WidthRatio(shape, aspect),
-                      g_narrowWeight.load(std::memory_order_relaxed), fov, aspect, split);
+                      g_narrowWeight.load(std::memory_order_relaxed), fov, aspect, split, note);
     }
     else if (wide)
     {
         platform::Log(L"split FOV: {}'s {}x{} view of a {}x{} window takes the split FOV (height {:.2f} of the single-player picture, "
-                      L"weight {:.2f}): the camera's {:.1f} deg at {:.3f} becomes {:.1f} deg wide",
+                      L"weight {:.2f}): the camera's {:.1f} deg at {:.3f} becomes {:.1f} deg wide{}",
                       who, width, height, windowW, windowH, split_fov_rules::HeightRatio(shape, aspect),
-                      g_fovWeight.load(std::memory_order_relaxed), fov, aspect, split);
+                      g_fovWeight.load(std::memory_order_relaxed), fov, aspect, split, note);
     }
     else
     {
-        platform::Log(L"split FOV: {}'s {}x{} view of a {}x{} window keeps the camera's FOV (the shape of the camera's image)", who,
-                      width, height, windowW, windowH);
+        platform::Log(L"split FOV: {}'s {}x{} view of a {}x{} window keeps the camera's FOV (the shape of the camera's image){}", who,
+                      width, height, windowW, windowH, note);
     }
     seen->applies = applies;
     seen->width   = width;
@@ -684,6 +694,41 @@ void SetViewportSize(std::int32_t width, std::int32_t height) noexcept
     g_viewportHeight.store(known ? height : 0, std::memory_order_relaxed);
 }
 
+/// The size of the image the game's HUD is laid out in (the HUD layout's "UI image"), and whether the game set it. The
+/// game's own rule, at each viewport resize, writes r.CompositeLayer.FixedWidth/FixedHeight: 1920x1080 for a viewport
+/// 1080 high or less, otherwise 3840x2160 (research/RE-hud-wide-native-window.md). Any other size was set by something
+/// else (an ultrawide tool), and the HUD is then laid out in an image of another shape than the game's.
+std::int32_t g_uiImageHeight = 0;  // game thread: a viewport height whose UI image size is still to be read
+
+void LogUiImageSource(std::int32_t viewportHeight) noexcept
+{
+    const auto width  = players::console::VariableInt(L"r.CompositeLayer.FixedWidth");
+    const auto height = players::console::VariableInt(L"r.CompositeLayer.FixedHeight");
+    const int  ruleW  = viewportHeight <= 1080 ? 1920 : 3840;
+    const int  ruleH  = viewportHeight <= 1080 ? 1080 : 2160;
+    if (!width || !height)
+    {
+        platform::Log(L"HUD layout: the UI image size cannot be read (r.CompositeLayer.FixedWidth/FixedHeight)");
+        return;
+    }
+    if (*width == 0 || *height == 0)
+    {
+        platform::Log(L"HUD layout: the UI image size is unset (r.CompositeLayer.FixedWidth/FixedHeight 0); the game "
+                      L"sizes it from its saved window width");
+        return;
+    }
+    if (*width == ruleW && *height == ruleH)
+    {
+        platform::Log(L"HUD layout: the UI image size {}x{} is the game's own rule for a {}-high viewport", *width,
+                      *height, viewportHeight);
+        return;
+    }
+    platform::LogWarning(L"HUD layout: the UI image size {}x{} is set from outside the game "
+                         L"(r.CompositeLayer.FixedWidth/FixedHeight; the game's own rule for a {}-high viewport gives "
+                         L"{}x{}): another tool is changing the HUD's layout",
+                         *width, *height, viewportHeight, ruleW, ruleH);
+}
+
 /// Keeps the viewport's size current while several views show (it changes with the window): read twice a second;
 /// each view's own shape is its fractions of it, read at each view point. Until the first reading the split FOV
 /// leaves the stock rule in place.
@@ -700,11 +745,19 @@ void FollowViewportSize(const SplitFrame& frame) noexcept
     auto**     controller = players::unreal::ControllerField(playerOne);
     const auto size       = controller != nullptr ? players::unreal::ViewportSizeOf(*controller) : std::nullopt;
     SetViewportSize(size ? size->width : 0, size ? size->height : 0);
+    // The UI image's size is read one reading after a size change: the game's own rule runs when it handles the
+    // resize, which may come after the mod first sees the new size.
+    if (g_uiImageHeight != 0 && size && size->height == g_uiImageHeight)
+    {
+        LogUiImageSource(g_uiImageHeight);
+        g_uiImageHeight = 0;
+    }
     if (g_viewportSize.SizeChanged(size ? size->width : 0, size ? size->height : 0))
     {
         if (size)
         {
             platform::Log(L"split views: viewport {}x{}; each view's shape is its part of it", size->width, size->height);
+            g_uiImageHeight = size->height;
         }
         else
         {

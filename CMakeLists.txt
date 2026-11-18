@@ -72,6 +72,7 @@ add_library(LocalSplitScreen SHARED
     src/platform/entry_redirect.cpp
     src/platform/guarded.cpp
     src/platform/frame_watch.cpp
+    src/platform/game_folder_tools.cpp
     src/platform/image.cpp
     src/platform/log.cpp
     src/platform/memory_watch.cpp
@@ -265,6 +266,7 @@ target_include_directories(LocalSplitScreen PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}
                                                     "${CMAKE_CURRENT_SOURCE_DIR}/src/ue4ss_compat")
 target_compile_features(LocalSplitScreen PRIVATE cxx_std_20)
 target_link_libraries(LocalSplitScreen PUBLIC UE4SS)
+target_link_libraries(LocalSplitScreen PRIVATE version)  # platform/game_folder_tools: the other tools' version information
 # The binary names its PDB by file name alone, not by the build folder's path.
 target_link_options(LocalSplitScreen PRIVATE "/PDBALTPATH:$<TARGET_FILE_BASE_NAME:LocalSplitScreen>.pdb")
 

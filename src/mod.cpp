@@ -25,6 +25,7 @@
 #include "modules.h"
 #include "platform/code_memory.h"
 #include "platform/frame_watch.h"
+#include "platform/game_folder_tools.h"
 #include "platform/image.h"
 #include "platform/level_names.h"
 #include "platform/log.h"
@@ -290,6 +291,7 @@ public:
             Log(L"game version {}{}", image->Build()->name,
                 image->Build()->source ? L" (the source build)" : L" (addresses translated from the source build)");
         }
+        lss::platform::LogGameFolderTools();  // the other tools that change what the mod sees, named in the log
         const auto removeLocalPlayer = image ? VerifyEngine(*image) : std::nullopt;
         // The heartbeat first (it passes the tick through until Start, below): without it nothing of the mod runs,
         // so a failed check stands the whole mod aside like any other startup fact.
