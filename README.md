@@ -104,7 +104,8 @@ setup/              the Multi Monitor Setup app
 tests/              host tests, run without the game
 tools/              build lock, deploy, console client, regression runner, version matching, releases
 ```
+`tools/layout_doc.py` generates this map from the folders on disk and the descriptions written in the script. A host test fails when the map is out of date. After adding or moving a folder, add its description to the script and run `python tools/layout_doc.py`.
 
-`tools/layout_doc.py` writes this map, and a test fails when it is out of date. Each module's header comment says what
-it does. Keep the mod's headers `.h` and unlike UE4SS's names: `src/` is searched first, so a same-named header would
-replace UE4SS's.
+For what a module does, read the comment at the top of its header.
+
+Name the mod’s headers `.h` (UE4SS’s use `.hpp`), and don’t reuse a UE4SS header’s name. The build looks in `src/` before UE4SS’s folders, so a mod header with the same name would be used in place of UE4SS’s. The exception is `src/ue4ss_compat/`, which replaces a few UE4SS headers on purpose.
