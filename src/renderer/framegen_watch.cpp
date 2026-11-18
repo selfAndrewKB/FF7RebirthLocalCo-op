@@ -1,10 +1,14 @@
 #include "renderer/framegen_watch.h"
 
+#include "facts/streamline.h"
 #include "platform/command_registry.h"
+#include "platform/guarded.h"
 #include "platform/guarded_read.h"
 #include "platform/image.h"
 #include "platform/log.h"
+#include "platform/module_folder.h"
 #include "platform/vtable_entry.h"
+#include "renderer/frame_generation.h"
 
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
@@ -13,6 +17,7 @@
 
 #include <array>
 #include <atomic>
+#include <cmath>
 #include <cstdint>
 #include <cstring>
 #include <format>
@@ -20,61 +25,30 @@
 #include <mutex>
 #include <string>
 #include <utility>
+#include <variant>
 #include <vector>
 
 namespace lss::renderer::framegen_watch {
 
 namespace {
 
-// The game's Streamline function pointers (research/RE-p2-framegen-2.md). Each global holds a pointer into
-// sl.interposer.dll that the game loads at the call (`call qword ptr [rip+g]`, `mov rax, [rip+g]`), never caching it,
-// filled once when the game creates its D3D12 device (SL_LoadInterposerProcs, SL_InitD3D12DeviceAndFeatures).
-constexpr std::uintptr_t kSlSetTag          = 0x1491F72C8;  // slSetTag(viewport, tags, count, command list)
-constexpr std::uintptr_t kSlSetConstants    = 0x1491F72D8;  // slSetConstants(constants, frame token, viewport)
-constexpr std::uintptr_t kSlFreeResources   = 0x1491F72C0;  // slFreeResources(feature, viewport)
-constexpr std::uintptr_t kSlDLSSGSetOptions = 0x1491F7350;  // slDLSSGSetOptions(viewport, options)
-// The frame generation method's state bytes (the interface's IsEnabled and SetActiveThisFrame slots read and write them).
-constexpr std::uintptr_t kFgEnabled         = 0x146EF8A28;  // u8: DLSS-G initialised
-constexpr std::uintptr_t kFgActiveThisFrame = 0x146EF8A2A;  // u8: r.FrameGeneration.Method != 0 at the last draw
+namespace fg = renderer::frame_generation;
 
-// Streamline's structs, as the game builds them (research/RE-p2-framegen.md; Streamline's sl.h and sl_dlss_g.h).
-constexpr std::size_t   kViewportId     = 0x20;  // u32 in sl::ViewportHandle
-constexpr std::size_t   kTagSize        = 0x40;  // sl::ResourceTag
-constexpr std::size_t   kTagResource    = 0x20;  // sl::Resource*
-constexpr std::size_t   kTagType        = 0x28;  // u32 sl::BufferType
-constexpr std::size_t   kTagLifecycle   = 0x2C;  // u32 sl::ResourceLifecycle
-constexpr std::size_t   kTagExtent      = 0x30;  // u32 top, left, width, height
-constexpr std::size_t   kResourceNative = 0x28;  // ID3D12Resource* in sl::Resource
-constexpr std::size_t   kOptionsSize    = 0x70;  // sl::DLSSGOptions
-constexpr std::size_t   kOptionsMode    = 0x20;  // u32 sl::DLSSGMode
-constexpr std::size_t   kOptionsFrames  = 0x24;  // u32 numFramesToGenerate
-constexpr std::size_t   kOptionsFlags   = 0x28;  // u32 sl::DLSSGFlags
-constexpr std::size_t   kOptionsDynamic = 0x2C;  // u32 dynamic resolution width, height
-constexpr std::uint32_t kOnlyValidNow   = 0;     // sl::ResourceLifecycle::eOnlyValidNow
-constexpr std::uint32_t kModeOff        = 0;     // sl::DLSSGMode::eOff
-constexpr std::size_t   kMaxTags        = 8;     // the game tags one at a time
-constexpr std::uint32_t kEveryViewport  = 0xFFFFFFFF;  // `fg-off-viewport -1`: every viewport's options sent off
+constexpr std::uint32_t kEveryViewport = 0xFFFFFFFF;  // `fg-off-viewport -1`: every viewport's options sent off
+constexpr double        kRadToDeg      = 57.29577951308232;
 
 // The buffer types the game tags (FG_MapTagToSLBufferType), in the summary's order.
 struct BufferKind
 {
     std::uint32_t  type;
     const wchar_t* name;
-    bool           input;  // a frame input `fg-tags-now all` copies (the back buffer is not)
 };
-constexpr std::array<BufferKind, 5> kKinds{{{0, L"depth", true},
-                                            {1, L"motion vectors", true},
-                                            {2, L"HUD-less colour", true},
-                                            {23, L"UI", true},
-                                            {53, L"back buffer", false}}};
-constexpr std::size_t kBackBufferKind = 4;
-
-enum class TagsNow : std::uint8_t
-{
-    Off,
-    Depth,
-    All,
-};
+constexpr std::array<BufferKind, 5> kKinds{{{facts::kSlDepth, L"depth"},
+                                            {facts::kSlMotionVectors, L"motion vectors"},
+                                            {facts::kSlHudLessColor, L"HUD-less colour"},
+                                            {facts::kSlUiColorAlpha, L"UI"},
+                                            {facts::kSlBackbuffer, L"back buffer"}}};
+constexpr int kBackBufferKind = 4;
 
 struct TagSeen
 {
@@ -90,33 +64,56 @@ struct TagSeen
 
 struct ViewportSeen
 {
-    std::uint64_t                      options         = 0;  // calls this window
-    std::uint64_t                      constants       = 0;
-    std::uint64_t                      frees           = 0;
-    std::uint32_t                      modeIn          = 0;
-    std::uint32_t                      modeOut         = 0;
-    std::uint32_t                      frames          = 0;
-    std::uint32_t                      flags           = 0;
-    std::uint32_t                      dynamicW        = 0;
-    std::uint32_t                      dynamicH        = 0;
-    std::int32_t                       optionsResult   = 0;
-    std::int32_t                       constantsResult = 0;
+    // Options
+    std::uint64_t options         = 0;  // calls this window
+    std::uint32_t modeIn          = 0;
+    std::uint32_t modeOut         = 0;
+    std::uint32_t frames          = 0;
+    std::uint32_t flags           = 0;
+    std::uint32_t dynamicW        = 0;
+    std::uint32_t dynamicH        = 0;
+    std::uint64_t dynamicChanges  = 0;  // this window
+    std::int32_t  optionsResult   = 0;
+    // Constants
+    std::uint64_t         constants       = 0;  // calls this window
+    std::int32_t          constantsResult = 0;
+    std::uint32_t         lastFrame       = 0;  // the frame of the last constants call (0: none yet)
+    std::uint32_t         firstFrame      = 0;  // this window's first
+    std::uint64_t         unread          = 0;  // this window: calls whose frame token could not be read
+    bool                  dynamicKnown    = false;  // a dynamic size was seen (kept across windows)
+    std::uint64_t         repeats         = 0;  // this window: a second constants call for the same frame
+    std::uint64_t         skipped         = 0;  // this window: frames with no constants call between two calls
+    std::uint64_t         resets          = 0;  // this window
+    std::array<float, 3>  pos{};
+    std::array<float, 3>  fwd{};
+    std::array<float, 2>  jitter{};
+    float                 fov             = 0.0f;  // radians
+    float                 aspect          = 0.0f;
+    // Frees and tags
+    std::uint64_t                      frees = 0;
     std::array<TagSeen, kKinds.size()> tags{};
 };
 
-using SetTagFn       = std::int32_t (*)(const void*, const void*, std::uint32_t, void*);
+/// One tag of the frame in flight, for the same-frame check.
+struct FrameTag
+{
+    std::uintptr_t native;
+    std::uint32_t  viewport;
+    int            kind;
+    bool           untilPresent;  // sent valid until present (not copied at tag time)
+};
+
 using SetConstantsFn = std::int32_t (*)(const void*, const void*, const void*);
 using FreeFn         = std::int32_t (*)(std::uint32_t, const void*);
 using SetOptionsFn   = std::int32_t (*)(const void*, const void*);
+using FrameIndexFn   = std::uint32_t (*)(const void*);  // sl::FrameToken's first virtual: operator uint32_t
 
-platform::VTableEntry g_setTag;
 platform::VTableEntry g_setConstants;
 platform::VTableEntry g_free;
 platform::VTableEntry g_setOptions;
 
 std::atomic<bool>          g_installed{false};
 std::atomic<std::uint32_t> g_offViewport{0};
-std::atomic<TagsNow>       g_tagsNow{TagsNow::Off};
 
 // Any thread (the wrappers run on the render and RHI threads); the summary takes it on the game thread.
 std::mutex                            g_lock;
@@ -124,6 +121,11 @@ std::map<std::uint32_t, ViewportSeen> g_viewports;
 std::vector<std::uint32_t>            g_backBufferOrder;  // this window's back-buffer tags, by viewport, the first few
 std::vector<std::uint32_t>            g_optionsOrder;     // this window's options calls, by viewport, the first few
 std::uint64_t                         g_windowCalls = 0;
+std::vector<FrameTag>                 g_frameTags;        // the frame in flight's input tags
+bool                                  g_inPresent   = false;  // the last tag was a back-buffer tag
+std::uint64_t                         g_frames      = 0;  // frames closed this window
+std::array<std::uint64_t, kKinds.size()> g_sharedFrames{};  // this window: frames with a kind shared until present
+std::array<bool, kKinds.size()>          g_sharedLogged{};  // the first sharing of each kind logged at Info
 
 // Game thread.
 std::uintptr_t        g_enabledAt   = 0;
@@ -133,11 +135,12 @@ int                   g_lastActive  = -1;
 ULONGLONG             g_nextSummary = 0;
 constexpr ULONGLONG   kSummaryMs    = 5000;
 constexpr std::size_t kOrderKept    = 16;
+constexpr std::size_t kFrameTagsKept = 64;  // a frame's input tags: four per view
 
 std::uint32_t ViewportOf(const void* handle) noexcept
 {
     std::uint32_t id = 0xFFFFFFFF;
-    platform::Read(handle, kViewportId, id);
+    platform::Read(handle, facts::kSlViewportId, id);
     return id;
 }
 
@@ -161,12 +164,6 @@ int KindIndex(std::uint32_t type) noexcept
     return -1;
 }
 
-bool CopiedNow(std::uint32_t type, TagsNow now) noexcept
-{
-    const int kind = KindIndex(type);
-    return kind >= 0 && kKinds[kind].input && (now == TagsNow::All || (now == TagsNow::Depth && kind == 0));
-}
-
 void NoteOrder(std::vector<std::uint32_t>& order, std::uint32_t viewport)
 {
     if (order.size() < kOrderKept)
@@ -175,74 +172,111 @@ void NoteOrder(std::vector<std::uint32_t>& order, std::uint32_t viewport)
     }
 }
 
-std::int32_t SetTag(const void* viewport, const void* tags, std::uint32_t count, void* command)
+/// Closes the frame in flight (under g_lock): any resource of one kind tagged for two viewports and sent valid until
+/// present means a viewport reads another's at present.
+void CloseFrame()
 {
-    const TagsNow                                 now = g_tagsNow.load(std::memory_order_relaxed);
-    std::array<std::uint8_t, kTagSize * kMaxTags> copy{};
-    const bool copied = tags != nullptr && count > 0 && count <= kMaxTags &&
-                        platform::CopyGuarded(copy.data(), tags, kTagSize * count);
-    std::array<std::uint32_t, kMaxTags> lifeIn{};
-    const void*                         forward = tags;
-    if (copied)
+    ++g_frames;
+    for (std::size_t k = 0; k < kKinds.size(); ++k)
     {
-        bool changed = false;
-        for (std::uint32_t i = 0; i < count; ++i)
+        if (static_cast<int>(k) == kBackBufferKind)
         {
-            std::uint8_t* tag = copy.data() + i * kTagSize;
-            lifeIn[i]         = At<std::uint32_t>(tag, kTagLifecycle);
-            // Copying at tag time needs the command list Streamline records the copy on.
-            if (command != nullptr && lifeIn[i] != kOnlyValidNow && CopiedNow(At<std::uint32_t>(tag, kTagType), now))
+            continue;  // the back buffer is one texture by design: each viewport tags its own part
+        }
+        bool shared = false;
+        for (std::size_t i = 0; i < g_frameTags.size() && !shared; ++i)
+        {
+            const FrameTag& a = g_frameTags[i];
+            for (std::size_t j = i + 1; j < g_frameTags.size() && !shared; ++j)
             {
-                std::memcpy(tag + kTagLifecycle, &kOnlyValidNow, sizeof(kOnlyValidNow));
-                changed = true;
+                const FrameTag& b = g_frameTags[j];
+                shared = a.kind == static_cast<int>(k) && b.kind == a.kind && a.native == b.native && a.native != 0 &&
+                         a.viewport != b.viewport && (a.untilPresent || b.untilPresent);
             }
         }
-        forward = changed ? copy.data() : tags;
+        if (shared)
+        {
+            ++g_sharedFrames[k];
+            if (!g_sharedLogged[k])
+            {
+                g_sharedLogged[k] = true;
+                platform::Log(L"frame generation watch: {} tagged for two viewports in one frame, valid until present: "
+                              L"by present every one of them reads the last one's",
+                              kKinds[k].name);
+            }
+        }
     }
-    const std::int32_t result = reinterpret_cast<SetTagFn>(g_setTag.Original())(viewport, forward, count, command);
-    if (!copied)
-    {
-        return result;
-    }
+    g_frameTags.clear();
+}
+
+/// renderer/frame_generation's observer: each slSetTag call as forwarded.
+void ObserveTag(const fg::TagCall& call)
+{
     try
     {
-        const std::uint32_t         id = ViewportOf(viewport);
+        const std::uint32_t         id = ViewportOf(call.viewport);
         std::lock_guard<std::mutex> lock(g_lock);
         ViewportSeen&               seen = g_viewports[id];
         ++g_windowCalls;
-        for (std::uint32_t i = 0; i < count; ++i)
+        for (std::uint32_t i = 0; i < call.count; ++i)
         {
-            const std::uint8_t* tag  = copy.data() + i * kTagSize;
-            const int           kind = KindIndex(At<std::uint32_t>(tag, kTagType));
+            const std::uint8_t* tag  = call.sent + i * facts::kSlTagSize;
+            const int           kind = KindIndex(At<std::uint32_t>(tag, facts::kSlTagType));
             if (kind < 0)
             {
                 continue;
             }
-            TagSeen&             t        = seen.tags[kind];
-            const auto           resource = At<std::uintptr_t>(tag, kTagResource);
-            std::uintptr_t       native   = 0;
+            TagSeen&       t        = seen.tags[kind];
+            const auto     resource = At<std::uintptr_t>(tag, facts::kSlTagResource);
+            std::uintptr_t native   = 0;
             if (resource != 0)
             {
-                platform::Read(reinterpret_cast<const void*>(resource), kResourceNative, native);
+                platform::Read(reinterpret_cast<const void*>(resource), facts::kSlResourceNative, native);
             }
             ++t.calls;
             t.seen    = true;
             t.native  = native;
-            t.extent  = At<std::array<std::uint32_t, 4>>(tag, kTagExtent);
-            t.lifeIn  = lifeIn[i];
-            t.lifeOut = At<std::uint32_t>(tag, kTagLifecycle);
-            t.command = command != nullptr;
-            t.result  = result;
-            if (kind == static_cast<int>(kBackBufferKind))
+            t.extent  = At<std::array<std::uint32_t, 4>>(tag, facts::kSlTagExtent);
+            t.lifeIn  = call.lifeIn[i];
+            t.lifeOut = At<std::uint32_t>(tag, facts::kSlTagLifecycle);
+            t.command = call.command != nullptr;
+            t.result  = call.result;
+            if (kind == kBackBufferKind)
             {
                 NoteOrder(g_backBufferOrder, id);
+                g_inPresent = true;
+                continue;
+            }
+            // The first input tag after the present's back-buffer tags starts the next frame.
+            if (g_inPresent)
+            {
+                CloseFrame();
+                g_inPresent = false;
+            }
+            if (g_frameTags.size() < kFrameTagsKept)
+            {
+                g_frameTags.push_back({native, id, kind, t.lifeOut != facts::kSlOnlyValidNow});
             }
         }
     }
     catch (...)
     {
     }
-    return result;
+}
+
+/// The frame a constants call belongs to, through sl::FrameToken's own operator; 0 if it cannot be read.
+std::uint32_t FrameOf(const void* token) noexcept
+{
+    void*         vtable = nullptr;
+    FrameIndexFn  index  = nullptr;
+    std::uint32_t frame  = 0;
+    if (token == nullptr || !platform::Read(token, vtable) || vtable == nullptr ||
+        !platform::Read(static_cast<const std::uint8_t*>(vtable) + facts::kSlFrameTokenIndexSlot * sizeof(void*), index) ||
+        index == nullptr || !platform::CallGuarded(index, frame, token))
+    {
+        return 0;
+    }
+    return frame;
 }
 
 std::int32_t SetConstants(const void* constants, const void* frame, const void* viewport)
@@ -250,12 +284,49 @@ std::int32_t SetConstants(const void* constants, const void* frame, const void* 
     const std::int32_t result = reinterpret_cast<SetConstantsFn>(g_setConstants.Original())(constants, frame, viewport);
     try
     {
-        const std::uint32_t         id = ViewportOf(viewport);
-        std::lock_guard<std::mutex> lock(g_lock);
-        ViewportSeen&               seen = g_viewports[id];
-        ++seen.constants;
-        seen.constantsResult = result;
-        ++g_windowCalls;
+        std::array<std::uint8_t, facts::kSlConstantsSize> copy{};
+        const bool          read  = constants != nullptr && platform::CopyGuarded(copy.data(), constants, copy.size());
+        const std::uint32_t index = FrameOf(frame);
+        const std::uint32_t id    = ViewportOf(viewport);
+        bool                reset = false;
+        {
+            std::lock_guard<std::mutex> lock(g_lock);
+            ViewportSeen&               seen = g_viewports[id];
+            ++seen.constants;
+            ++g_windowCalls;
+            seen.constantsResult = result;
+            seen.unread += index == 0 ? 1 : 0;
+            if (index != 0)
+            {
+                if (seen.firstFrame == 0)
+                {
+                    seen.firstFrame = index;
+                }
+                if (index == seen.lastFrame)
+                {
+                    ++seen.repeats;
+                }
+                else if (seen.lastFrame != 0 && index > seen.lastFrame + 1)
+                {
+                    seen.skipped += index - seen.lastFrame - 1;
+                }
+                seen.lastFrame = index;
+            }
+            if (read)
+            {
+                seen.pos    = At<std::array<float, 3>>(copy.data(), facts::kSlConstantsPos);
+                seen.fwd    = At<std::array<float, 3>>(copy.data(), facts::kSlConstantsFwd);
+                seen.jitter = At<std::array<float, 2>>(copy.data(), facts::kSlConstantsJitter);
+                seen.fov    = At<float>(copy.data(), facts::kSlConstantsFov);
+                seen.aspect = At<float>(copy.data(), facts::kSlConstantsAspect);
+                reset       = copy[facts::kSlConstantsReset] != 0;
+                seen.resets += reset ? 1 : 0;
+            }
+        }
+        if (reset)
+        {
+            platform::LogDebug(L"frame generation watch: viewport {} resets its generated frames (frame {})", id, index);
+        }
     }
     catch (...)
     {
@@ -282,15 +353,15 @@ std::int32_t FreeResources(std::uint32_t feature, const void* viewport)
 
 std::int32_t SetOptions(const void* viewport, const void* options)
 {
-    const std::uint32_t                    id = ViewportOf(viewport);
-    std::array<std::uint8_t, kOptionsSize> copy{};
-    const bool  copied  = options != nullptr && platform::CopyGuarded(copy.data(), options, kOptionsSize);
-    const auto  modeIn  = copied ? At<std::uint32_t>(copy.data(), kOptionsMode) : 0u;
+    const std::uint32_t                          id = ViewportOf(viewport);
+    std::array<std::uint8_t, facts::kSlOptionsSize> copy{};
+    const bool  copied  = options != nullptr && platform::CopyGuarded(copy.data(), options, facts::kSlOptionsSize);
+    const auto  modeIn  = copied ? At<std::uint32_t>(copy.data(), facts::kSlOptionsMode) : 0u;
     const void* forward = options;
     const std::uint32_t off = g_offViewport.load(std::memory_order_relaxed);
-    if (copied && off != 0 && (id == off || off == kEveryViewport) && modeIn != kModeOff)
+    if (copied && off != 0 && (id == off || off == kEveryViewport) && modeIn != facts::kSlModeOff)
     {
-        std::memcpy(copy.data() + kOptionsMode, &kModeOff, sizeof(kModeOff));
+        std::memcpy(copy.data() + facts::kSlOptionsMode, &facts::kSlModeOff, sizeof(facts::kSlModeOff));
         forward = copy.data();
     }
     const std::int32_t result = reinterpret_cast<SetOptionsFn>(g_setOptions.Original())(viewport, forward);
@@ -300,46 +371,38 @@ std::int32_t SetOptions(const void* viewport, const void* options)
     }
     try
     {
-        std::lock_guard<std::mutex> lock(g_lock);
-        ViewportSeen&               seen = g_viewports[id];
-        ++seen.options;
-        ++g_windowCalls;
-        seen.modeIn        = modeIn;
-        seen.modeOut       = At<std::uint32_t>(copy.data(), kOptionsMode);
-        seen.frames        = At<std::uint32_t>(copy.data(), kOptionsFrames);
-        seen.flags         = At<std::uint32_t>(copy.data(), kOptionsFlags);
-        seen.dynamicW      = At<std::uint32_t>(copy.data(), kOptionsDynamic);
-        seen.dynamicH      = At<std::uint32_t>(copy.data(), kOptionsDynamic + sizeof(std::uint32_t));
-        seen.optionsResult = result;
-        NoteOrder(g_optionsOrder, id);
+        const auto w = At<std::uint32_t>(copy.data(), facts::kSlOptionsDynamic);
+        const auto h = At<std::uint32_t>(copy.data(), facts::kSlOptionsDynamic + sizeof(std::uint32_t));
+        std::uint32_t oldW = 0, oldH = 0;
+        bool          changed = false;
+        {
+            std::lock_guard<std::mutex> lock(g_lock);
+            ViewportSeen&               seen = g_viewports[id];
+            ++seen.options;
+            ++g_windowCalls;
+            changed = seen.dynamicKnown && (seen.dynamicW != w || seen.dynamicH != h);
+            oldW    = seen.dynamicW;
+            oldH    = seen.dynamicH;
+            seen.dynamicChanges += changed ? 1 : 0;
+            seen.dynamicKnown = true;
+            seen.modeIn        = modeIn;
+            seen.modeOut       = At<std::uint32_t>(copy.data(), facts::kSlOptionsMode);
+            seen.frames        = At<std::uint32_t>(copy.data(), facts::kSlOptionsFrames);
+            seen.flags         = At<std::uint32_t>(copy.data(), facts::kSlOptionsFlags);
+            seen.dynamicW      = w;
+            seen.dynamicH      = h;
+            seen.optionsResult = result;
+            NoteOrder(g_optionsOrder, id);
+        }
+        if (changed)
+        {
+            platform::LogDebug(L"frame generation watch: viewport {}'s dynamic size {}x{} -> {}x{}", id, oldW, oldH, w, h);
+        }
     }
     catch (...)
     {
     }
     return result;
-}
-
-/// The file name of the module holding `address`, or empty.
-std::wstring ModuleOf(std::uintptr_t address) noexcept
-{
-    HMODULE module = nullptr;
-    if (!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
-                            reinterpret_cast<LPCWSTR>(address), &module))
-    {
-        return {};
-    }
-    wchar_t     path[MAX_PATH]{};
-    const DWORD length = GetModuleFileNameW(module, path, MAX_PATH);
-    try
-    {
-        std::wstring name(path, length);
-        const auto   slash = name.find_last_of(L"\\/");
-        return slash == std::wstring::npos ? name : name.substr(slash + 1);
-    }
-    catch (...)
-    {
-        return {};
-    }
 }
 
 struct Slot
@@ -350,12 +413,31 @@ struct Slot
     std::uintptr_t         replacement;
 };
 
-/// Places the four wrappers, all or none; `why` says what refused. Game thread.
+void ResetWindow()
+{
+    g_viewports.clear();
+    g_backBufferOrder.clear();
+    g_optionsOrder.clear();
+    g_frameTags.clear();
+    g_windowCalls  = 0;
+    g_frames       = 0;
+    g_inPresent    = false;
+    g_sharedFrames = {};
+    g_sharedLogged = {};
+}
+
+/// Places the three wrappers and the tag observer, all or none; `why` says what refused. Game thread.
 bool Install(std::wstring& why)
 {
     if (g_installed.load())
     {
         return true;
+    }
+    if (!fg::TagWrapperPlaced())
+    {
+        why = L"renderer/frame_generation's slSetTag wrapper is not in (Streamline not loaded yet, or it stood aside: see "
+              L"its start-up line)";
+        return false;
     }
     const auto image = platform::GameImage::Locate();
     if (!image)
@@ -363,13 +445,12 @@ bool Install(std::wstring& why)
         why = L"the game's image was not found";
         return false;
     }
-    const std::array<Slot, 4> slots{
-        {{L"slSetTag", kSlSetTag, &g_setTag, reinterpret_cast<std::uintptr_t>(&SetTag)},
-         {L"slSetConstants", kSlSetConstants, &g_setConstants, reinterpret_cast<std::uintptr_t>(&SetConstants)},
-         {L"slFreeResources", kSlFreeResources, &g_free, reinterpret_cast<std::uintptr_t>(&FreeResources)},
-         {L"slDLSSGSetOptions", kSlDLSSGSetOptions, &g_setOptions, reinterpret_cast<std::uintptr_t>(&SetOptions)}}};
-    std::array<std::uintptr_t, 4> at{};
-    std::array<std::uintptr_t, 4> held{};
+    const std::array<Slot, 3> slots{
+        {{L"slSetConstants", facts::kSlSetConstants, &g_setConstants, reinterpret_cast<std::uintptr_t>(&SetConstants)},
+         {L"slFreeResources", facts::kSlFreeResources, &g_free, reinterpret_cast<std::uintptr_t>(&FreeResources)},
+         {L"slDLSSGSetOptions", facts::kSlDLSSGSetOptions, &g_setOptions, reinterpret_cast<std::uintptr_t>(&SetOptions)}}};
+    std::array<std::uintptr_t, 3> at{};
+    std::array<std::uintptr_t, 3> held{};
     std::wstring                  found;
     for (std::size_t i = 0; i < slots.size(); ++i)
     {
@@ -380,11 +461,11 @@ bool Install(std::wstring& why)
             return false;
         }
         at[i]                    = *live;
-        const std::wstring owner = held[i] != 0 ? ModuleOf(held[i]) : std::wstring{};
+        const std::wstring owner = held[i] != 0 ? platform::ModuleNameAt(held[i]) : std::wstring{};
         if (owner.rfind(L"sl.", 0) != 0)
         {
-            why = held[i] == 0 ? std::format(L"{} is not loaded (the game loads Streamline with its D3D12 device, and "
-                                             L"DLSS-G's functions only where frame generation can run)",
+            why = held[i] == 0 ? std::format(L"{} is not loaded (the game loads DLSS-G's functions only where frame "
+                                             L"generation can run)",
                                              slots[i].name)
                                : std::format(L"{} points into '{}', not a Streamline module (another tool changed it?)",
                                              slots[i].name, owner);
@@ -412,19 +493,19 @@ bool Install(std::wstring& why)
             return false;
         }
     }
-    g_enabledAt = image->Rebase(kFgEnabled).value_or(0);
-    g_activeAt  = image->Rebase(kFgActiveThisFrame).value_or(0);
+    g_enabledAt = image->Rebase(facts::kFgEnabled).value_or(0);
+    g_activeAt  = image->Rebase(facts::kFgActiveThisFrame).value_or(0);
     {
         std::lock_guard<std::mutex> lock(g_lock);
-        g_viewports.clear();
-        g_backBufferOrder.clear();
-        g_optionsOrder.clear();
-        g_windowCalls = 0;
+        ResetWindow();
     }
+    fg::SetTagObserver(&ObserveTag);
     g_lastEnabled = g_lastActive = -1;
     g_nextSummary = GetTickCount64() + kSummaryMs;
     g_installed.store(true);
-    platform::Log(L"frame generation watch: on ({}); every call forwarded as the game makes it", found);
+    platform::Log(L"frame generation watch: on ({}; the tags through renderer/frame_generation's wrapper); every call "
+                  L"forwarded as the game makes it",
+                  found);
     return true;
 }
 
@@ -443,29 +524,37 @@ std::wstring Ids(const std::vector<std::uint32_t>& order)
     return text.empty() ? std::wstring(L"none") : text;
 }
 
-const wchar_t* TagsNowText(TagsNow now) noexcept
+const wchar_t* TagsNowText(fg::TagsNow now) noexcept
 {
-    return now == TagsNow::Off ? L"off" : now == TagsNow::Depth ? L"depth" : L"all";
+    return now == fg::TagsNow::Off ? L"off" : now == fg::TagsNow::Depth ? L"depth" : L"all";
 }
 
 void LogSummary()
 {
-    std::map<std::uint32_t, ViewportSeen> viewports;
-    std::vector<std::uint32_t>            backBuffers;
-    std::vector<std::uint32_t>            options;
-    std::uint64_t                         calls = 0;
+    std::map<std::uint32_t, ViewportSeen>    viewports;
+    std::vector<std::uint32_t>               backBuffers;
+    std::vector<std::uint32_t>               options;
+    std::uint64_t                            calls  = 0;
+    std::uint64_t                            frames = 0;
+    std::array<std::uint64_t, kKinds.size()> shared{};
     {
         std::lock_guard<std::mutex> lock(g_lock);
         viewports   = g_viewports;
         backBuffers = std::move(g_backBufferOrder);
         options     = std::move(g_optionsOrder);
         calls       = g_windowCalls;
+        frames      = g_frames;
+        shared      = g_sharedFrames;
         g_backBufferOrder.clear();
         g_optionsOrder.clear();
-        g_windowCalls = 0;
+        g_windowCalls  = 0;
+        g_frames       = 0;
+        g_sharedFrames = {};
         for (auto& [id, seen] : g_viewports)
         {
-            seen.options = seen.constants = seen.frees = 0;
+            seen.options = seen.constants = seen.frees = seen.repeats = seen.skipped = seen.resets = seen.unread = 0;
+            seen.dynamicChanges = 0;
+            seen.firstFrame     = 0;
             for (TagSeen& t : seen.tags)
             {
                 t.calls = 0;
@@ -477,20 +566,26 @@ void LogSummary()
         return;
     }
     const std::uint32_t off = g_offViewport.load();
-    platform::Log(L"frame generation watch: {} call(s) in {:.0f} s over {} viewport(s); options order {}; back-buffer "
-                  L"tag order {}; switches: viewport off {}, tags copied at tag time {}",
-                  calls, kSummaryMs / 1000.0, viewports.size(), Ids(options), Ids(backBuffers),
+    platform::Log(L"frame generation watch: {} call(s) in {:.0f} s over {} viewport(s), {} frame(s); options order {}; "
+                  L"back-buffer tag order {}; switches: viewport off {}, tags copied at tag time {}",
+                  calls, kSummaryMs / 1000.0, viewports.size(), frames, Ids(options), Ids(backBuffers),
                   off == 0 ? std::wstring(L"none") : off == kEveryViewport ? std::wstring(L"all") : std::to_wstring(off),
-                  TagsNowText(g_tagsNow.load()));
+                  TagsNowText(fg::GetTagsNow()));
     for (const auto& [id, seen] : viewports)
     {
         std::wstring line = std::format(
-            L"  viewport {}: options {} (mode {}{}, frames {}, flags {:#x}, dynamic {}x{}, result {}), constants {} "
-            L"(result {}), frees {}",
+            L"  viewport {}: options {} (mode {}{}, frames {}, flags {:#x}, dynamic {}x{}{}, result {}); constants {} "
+            L"(frames {}..{}{}, repeats {}, skipped {}, resets {}, result {}; camera at ({:.0f}, {:.0f}, {:.0f}) facing "
+            L"({:.2f}, {:.2f}, {:.2f}), FOV {:.1f} deg, aspect {:.3f}, jitter ({:.3f}, {:.3f})); frees {}",
             id, seen.options, seen.modeIn,
             seen.modeOut != seen.modeIn ? std::format(L" sent as {}", seen.modeOut) : std::wstring{}, seen.frames,
-            seen.flags, seen.dynamicW, seen.dynamicH, seen.optionsResult, seen.constants, seen.constantsResult,
-            seen.frees);
+            seen.flags, seen.dynamicW, seen.dynamicH,
+            seen.dynamicChanges != 0 ? std::format(L", changed {} time(s)", seen.dynamicChanges) : std::wstring{},
+            seen.optionsResult, seen.constants, seen.firstFrame, seen.lastFrame,
+            seen.unread != 0 ? std::format(L", {} with no readable frame", seen.unread) : std::wstring{}, seen.repeats,
+            seen.skipped,
+            seen.resets, seen.constantsResult, seen.pos[0], seen.pos[1], seen.pos[2], seen.fwd[0], seen.fwd[1],
+            seen.fwd[2], seen.fov * kRadToDeg, seen.aspect, seen.jitter[0], seen.jitter[1], seen.frees);
         for (std::size_t k = 0; k < kKinds.size(); ++k)
         {
             const TagSeen& t = seen.tags[k];
@@ -505,28 +600,16 @@ void LogSummary()
         }
         platform::Log(L"{}", line);
     }
-    // The same D3D12 resource tagged as one kind for two viewports: by present time it holds the last one's.
-    std::wstring shared;
+    std::wstring sharedText;
     for (std::size_t k = 0; k < kKinds.size(); ++k)
     {
-        std::map<std::uintptr_t, std::vector<std::uint32_t>> owners;
-        for (const auto& [id, seen] : viewports)
+        if (shared[k] != 0)
         {
-            if (seen.tags[k].seen && seen.tags[k].native != 0)
-            {
-                owners[seen.tags[k].native].push_back(id);
-            }
-        }
-        for (const auto& [native, ids] : owners)
-        {
-            if (ids.size() > 1)
-            {
-                shared += std::format(L"{}{} {} for viewports {}", shared.empty() ? L"" : L"; ", kKinds[k].name,
-                                      Hex(native), Ids(ids));
-            }
+            sharedText += std::format(L"{}{} in {} frame(s)", sharedText.empty() ? L"" : L"; ", kKinds[k].name, shared[k]);
         }
     }
-    platform::Log(L"  shared resources: {}", shared.empty() ? std::wstring(L"none") : shared);
+    platform::Log(L"  one resource for two viewports in the same frame, valid until present: {}",
+                  sharedText.empty() ? std::wstring(L"none") : sharedText);
 }
 
 void RemoveWrappers() noexcept
@@ -535,13 +618,13 @@ void RemoveWrappers() noexcept
     {
         return;
     }
+    fg::SetTagObserver(nullptr);
     // In reverse; an entry another tool changed after us stays ours (the DLL is pinned, the wrapper forwards).
     const bool options   = g_setOptions.Restore();
     const bool frees     = g_free.Restore();
     const bool constants = g_setConstants.Restore();
-    const bool tags      = g_setTag.Restore();
     g_installed.store(false);
-    platform::Log(L"frame generation watch: off ({})", options && frees && constants && tags
+    platform::Log(L"frame generation watch: off ({})", options && frees && constants
                                                            ? L"the game's pointers back"
                                                            : L"a pointer changed after us stays wrapped; it forwards");
 }
@@ -629,21 +712,22 @@ void RegisterCommands()
     control::Register({.name  = L"fg-tags-now",
                        .shape = control::Shape::Word,
                        .words = {L"off", L"depth", L"all"},
-                       .help  = L"test: tag depth (all: depth, motion vectors, HUD-less colour and UI) as only valid "
-                                L"now, so Streamline copies it at tag time",
+                       .help  = L"test: which tags go to Streamline as only valid now while views are split: off (the "
+                                L"game's), depth (the mod's rule, the default), all (depth, motion vectors, HUD-less "
+                                L"colour and UI)",
                        .set   = [](const Value& v) {
-                           const auto&   word = std::get<std::wstring>(v);
-                           const TagsNow now  = word == L"depth" ? TagsNow::Depth
-                                                : word == L"all" ? TagsNow::All
-                                                                 : TagsNow::Off;
-                           g_tagsNow.store(now);
-                           platform::Log(L"frame generation watch: tags copied at tag time: {}",
-                                         now == TagsNow::Off     ? L"none (the game's lifecycles)"
-                                         : now == TagsNow::Depth ? L"depth"
-                                                                 : L"depth, motion vectors, HUD-less colour and UI");
+                           const auto&       word = std::get<std::wstring>(v);
+                           const fg::TagsNow now  = word == L"depth" ? fg::TagsNow::Depth
+                                                    : word == L"all" ? fg::TagsNow::All
+                                                                     : fg::TagsNow::Off;
+                           fg::SetTagsNow(now);
+                           platform::Log(L"frame generation: tags copied at tag time while split: {} (the console)",
+                                         now == fg::TagsNow::Off     ? L"none (the game's lifecycles)"
+                                         : now == fg::TagsNow::Depth ? L"depth (the mod's rule)"
+                                                                     : L"depth, motion vectors, HUD-less colour and UI");
                            return Outcome{};
                        },
-                       .get = [] { return Value{std::wstring(TagsNowText(g_tagsNow.load()))}; }});
+                       .get = [] { return Value{std::wstring(TagsNowText(fg::GetTagsNow()))}; }});
 }
 
 }  // namespace lss::renderer::framegen_watch

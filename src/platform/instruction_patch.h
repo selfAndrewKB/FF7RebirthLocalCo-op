@@ -6,8 +6,9 @@
 // on; the submission census's tagged hint vtables), a redirect's jump and code page would only add
 // moving parts. The rules are the redirects' (block_patch.h): the replaced bytes are compared against
 // what the research read before anything is written; they lie inside one aligned 16-byte block, swapped
-// in a single atomic store; the replacement has the original's length, so every instruction keeps its
-// start and a thread stopped anywhere in the block resumes on an instruction boundary either way. A
+// in a single atomic store; the replacement has the original's length (it may be more than one instruction), so
+// the original instruction's start and end stay boundaries and a thread stopped anywhere in the block resumes on an
+// instruction boundary either way. A
 // patch that is toggled goes in again from the same bytes (Reapply). The destructor leaves an applied
 // patch in place, as the redirects do; only Restore() removes it.
 

@@ -4,6 +4,7 @@
 #include "platform/guarded_read.h"
 #include "platform/image.h"
 #include "platform/log.h"
+#include "platform/module_folder.h"
 #include "platform/vtable_entry.h"
 #include "players/generation.h"
 #include "players/seats.h"
@@ -260,17 +261,8 @@ void AwaitReleases() noexcept
 /// The module an address lies in, for the install line.
 std::wstring ModuleOf(std::uintptr_t address)
 {
-    HMODULE module         = nullptr;
-    wchar_t path[MAX_PATH] = {};
-    if (!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
-                            reinterpret_cast<LPCWSTR>(address), &module) ||
-        GetModuleFileNameW(module, path, MAX_PATH) == 0)
-    {
-        return L"no module";
-    }
-    const std::wstring full(path);
-    const auto         slash = full.find_last_of(L"\\/");
-    return slash == std::wstring::npos ? full : full.substr(slash + 1);
+    std::wstring name = platform::ModuleNameAt(address);
+    return name.empty() ? std::wstring(L"no module") : name;
 }
 
 /// Logs the engine's other input devices (a PlayStation pad read through scePad is not moved by the table). At install.

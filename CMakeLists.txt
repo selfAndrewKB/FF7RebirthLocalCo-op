@@ -227,6 +227,7 @@ add_library(LocalSplitScreen SHARED
     src/players/widget_opacity.cpp
 
     src/renderer/additional_family_output.cpp
+    src/renderer/frame_generation.cpp
     src/renderer/family_boundary.cpp
     src/renderer/me_feedback_once.cpp
     src/renderer/submit_hints.cpp

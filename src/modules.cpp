@@ -72,6 +72,7 @@
 #include "players/unreal_access.h"
 #include "players/widget_opacity.h"
 #include "renderer/family_boundary.h"
+#include "renderer/frame_generation.h"
 #include "renderer/me_feedback_once.h"
 #include "renderer/submit_hints.h"
 #include "rides/chocobo_exits.h"
@@ -207,6 +208,8 @@ constexpr std::array kModules{
     Module{Call<&renderer::InstallSubmitHintSkip>, &renderer::RemoveSubmitHintSkip},
     // one scenery-streaming hand-in per frame, player 1's family's
     Module{Call<&renderer::InstallMeFeedbackOnce>, &renderer::RemoveMeFeedbackOnce},
+    // DLSS frame generation per view: each view's own depth and its own camera-cut reset
+    Module{Call<&renderer::frame_generation::Install>, &renderer::frame_generation::Remove},
 
     // The view-point entry serves the filled halves and the choice of the seats' cameras. The split screen runs
     // without it (halves kept 16:9 with bars, each seat on its own camera); those keys then say they are unavailable.
@@ -510,6 +513,7 @@ void TickBeforeSession() noexcept
     // The code placed from the game thread outside the overlay render (platform/deferred_sites.h): its polls.
     renderer::PollFamilyBoundary();
     renderer::PollMeFeedbackOnce();
+    renderer::frame_generation::Poll();  // the depth rule's tag wrapper, once Streamline is loaded
     hud::PollMinimapOnce();
     camera::location_rows::Poll();
     camera::location_rows::Tick();
