@@ -5,7 +5,7 @@
 // Each action in Square's tables keeps the merged held byte and a mask of the sources holding it
 // (research/RE-p2-per-pad-buttons.md; confirmed live: pad 1 is bit 0, pad 2 bit 1). A player's view of
 // the action is "held, and held by one of that player's sources". A seat's sources are its own pad's
-// (players/seats.h: seat s plays pad s, XInput bit s and DirectInput bit 21+s); player 1 has every
+// (players/seats.h: seat s plays pad s, XInput bit s, PlayStation bit 4+s, DirectInput bit 21+s); player 1 has every
 // other source: pad 1, the keyboard, the mouse, the game's own synthetic keys, and the pad of any seat
 // whose player is not in (as the game's one-pad merge has it). Requiring the merged held byte as well
 // keeps the game's releases that leave the mask set (a press the UI consumed, the Tick's auto-released
@@ -23,12 +23,14 @@ namespace lss::input::button_view {
 
 inline constexpr int kPlayers = players::kMaxPlayers;
 
-/// The source bits of controller id `id` (XInput pad and DirectInput pad).
+/// The source bits of controller id `id`: its XInput pad, its PlayStation pad (the game tags a press under the
+/// PlayStation reader's device scope with 4 + id) and its DirectInput pad.
 constexpr std::uint32_t PadBits(int id) noexcept
 {
     const int xinput      = id < 3 ? id : 3;
+    const int playStation = 4 + (id < 3 ? id : 3);
     const int directInput = 21 + (id < 9 ? id : 9);
-    return (1u << xinput) | (1u << directInput);
+    return (1u << xinput) | (1u << playStation) | (1u << directInput);
 }
 
 /// `seat` in a mask of seats (bit s for seat s).

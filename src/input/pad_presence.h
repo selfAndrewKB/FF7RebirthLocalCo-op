@@ -16,11 +16,12 @@
 
 namespace lss::input::pad_presence {
 
-/// The XInput users whose pad is gone (bit N: user N): connected at an earlier poll and not at the last one, a second
-/// old at most. A user no pad has answered since the start (a keyboard player 1's slot) is never gone. One poll decides:
-/// a pad that drops for under a second counts as gone for that second (a spare pad's Start then could take its player;
-/// accepted, as such a Start is rare). Game thread.
-std::uint32_t GoneUsers() noexcept;
+/// The pads that are gone (bit p: pad p, input/pad_rules' numbers): an XInput user connected at an earlier poll and
+/// not at the last one, a second old at most, or a PlayStation pad that answered an earlier read of the pad table's
+/// and not its last. A pad that has never answered since the start (a keyboard player 1's slot) is never gone. One poll
+/// decides: a pad that drops for under a second counts as gone for that second (a spare pad's Start then could take
+/// its player; accepted, as such a Start is rare). Game thread.
+std::uint32_t GonePads() noexcept;
 
 /// Once per frame on the game thread; asks XInput once a second.
 void Tick() noexcept;

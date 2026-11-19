@@ -32,10 +32,10 @@ bool Pressed(const Views& views, int player)
 
 void TestSourceBits()
 {
-    std::puts("buttons: pad bits are XInput min(id,3) and DirectInput 21+id");
-    EXPECT(PadBits(0) == (0x1u | (1u << 21)));
-    EXPECT(PadBits(1) == (0x2u | (1u << 22)));
-    EXPECT(PadBits(5) == ((1u << 3) | (1u << 26)));
+    std::puts("buttons: pad bits are XInput min(id,3), PlayStation 4+min(id,3) and DirectInput 21+id");
+    EXPECT(PadBits(0) == (0x1u | (1u << 4) | (1u << 21)));
+    EXPECT(PadBits(1) == (0x2u | (1u << 5) | (1u << 22)));
+    EXPECT(PadBits(5) == ((1u << 3) | (1u << 7) | (1u << 26)));
 }
 
 void TestEachPlayerSeesOnlyTheirSources()
@@ -122,6 +122,7 @@ void TestTwoPlayerSourcesUnchanged()
     EXPECT(PlayerSources(1, kTwoIn) == PadBits(1));
     EXPECT(Held(1, kPadThree, 0, kTwoIn));  // pad 3 drives player 1 while player 3 is not in
     EXPECT(SeatOfSource(1, kTwoIn) == 1 && SeatOfSource(22, kTwoIn) == 1);  // XInput and DirectInput bit of pad 2
+    EXPECT(SeatOfSource(5, kTwoIn) == 1 && SeatOfSource(4, kTwoIn) == 0);   // PlayStation pads on ids 1 and 0
     EXPECT(SeatOfSource(2, kTwoIn) == 0);  // pad 3's press is player 1's
     EXPECT(SeatOfSource(0, kTwoIn) == 0 && SeatOfSource(17, kTwoIn) == 0);  // pad 1, the keyboard
 }

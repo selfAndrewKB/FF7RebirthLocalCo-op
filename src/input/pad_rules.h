@@ -2,8 +2,10 @@
 
 // The pure rules of each physical pad's input, as the pad table reads it (input/pad_table) and the player windows
 // hear it (session/player_window). Host-tested (tests/pad_rules_test.cpp).
-//   - the pad table: the game's pad slot N (its controller id N, XInput user N as the game asks for it) answered by a
-//     physical XInput user, always a permutation of 0..3; slot N is player N's (seat N), slot 3 the spare;
+//   - the pad table: the game's pad slot N (its controller id N) is read by two readers, XInput (user N as the game
+//     asks for it) and the PlayStation reader (its record N); each answers it with one of its own physical pads, a
+//     permutation per reader; slot N is player N's (seat N), slot 3 the spare. Each slot's player plays on one of the
+//     two pads there, the slot's live reader's; the other reader's pad there is muted while the live one is present;
 //   - the window's opener, View held a second: a shorter View press still reaches the game, as a tap at its let-go;
 //   - B as a tap (let go within a second) or a hold (a second down), never both;
 //   - Start only on a slot a player holds: a pad that plays no one never pauses the game (its Start joins instead);
@@ -11,10 +13,34 @@
 
 #include <array>
 #include <cstdint>
+#include <string>
 
 namespace lss::input::pad_rules {
 
-inline constexpr int kSlots   = 4;  // the game's pad slots and the physical XInput users: 0..3
+inline constexpr int kSlots   = 4;  // the game's pad slots (controller ids 0..3), and each reader's pads
+inline constexpr int kReaders = 2;  // XInput, then the PlayStation reader
+inline constexpr int kPads    = kSlots * kReaders;  // pad p: reader p / kSlots, its number there p % kSlots
+
+inline constexpr int kXInput      = 0;  // pads 0..3: XInput users 0..3
+inline constexpr int kPlayStation = 1;  // pads 4..7: the PlayStation reader's pads by scePad user 1..4
+
+constexpr int ReaderOf(int pad) noexcept
+{
+    return pad / kSlots;
+}
+
+/// The lane of `reader` on `slot`: the table's entry for which of that reader's pads answers the slot.
+constexpr int Lane(int reader, int slot) noexcept
+{
+    return reader * kSlots + slot;
+}
+
+/// "pad 2" for XInput user 1, "PlayStation pad 1" for the PlayStation reader's first pad: the log's and the console's
+/// names.
+inline std::wstring PadName(int pad)
+{
+    return (ReaderOf(pad) == kPlayStation ? L"PlayStation pad " : L"pad ") + std::to_wstring(pad % kSlots + 1);
+}
 
 // XInput's button bits (XINPUT_GAMEPAD_*), kept here so the rules build without Windows headers.
 inline constexpr std::uint16_t kStart     = 0x0010;  // START (Menu)
@@ -24,36 +50,143 @@ inline constexpr std::uint16_t kB         = 0x2000;
 inline constexpr std::uint16_t kX         = 0x4000;
 inline constexpr std::uint16_t kY         = 0x8000;
 
-/// The pad table: slot N's physical user. Identity until a join, the title screen or the console changes it.
-using PadTable = std::array<int, kSlots>;
-inline constexpr PadTable kIdentity{0, 1, 2, 3};
-
-constexpr bool IsPermutation(const PadTable& table) noexcept
+// The PlayStation reader's button bits (ScePadData.buttons, as the library fills them for the game) and the XInput
+// bit each one is to the rules: Options is Start, the touchpad click is View, Cross is A, Circle is B (the keys the
+// game itself sends for them). L2 and R2 have no XInput button (their analog values are the triggers); Create and the
+// PS button never reach the game.
+struct ButtonPair
 {
-    std::array<bool, kSlots> seen{};
+    std::uint32_t playStation;
+    std::uint16_t xinput;
+};
+inline constexpr std::array<ButtonPair, 14> kPlayStationButtons{{
+    {0x000002, 0x0040},  // L3: LEFT_THUMB
+    {0x000004, 0x0080},  // R3: RIGHT_THUMB
+    {0x000008, kStart},  // Options
+    {0x000010, 0x0001},  // up
+    {0x000020, 0x0008},  // right
+    {0x000040, 0x0002},  // down
+    {0x000080, 0x0004},  // left
+    {0x000400, 0x0100},  // L1: LEFT_SHOULDER
+    {0x000800, 0x0200},  // R1: RIGHT_SHOULDER
+    {0x001000, kY},      // triangle
+    {0x002000, kB},      // circle
+    {0x004000, kA},      // cross
+    {0x008000, kX},      // square
+    {0x100000, kView},   // touchpad click
+}};
+
+/// A PlayStation pad's buttons as XInput bits.
+constexpr std::uint16_t FromPlayStation(std::uint32_t buttons) noexcept
+{
+    std::uint16_t out = 0;
+    for (const ButtonPair& b : kPlayStationButtons)
+    {
+        out = static_cast<std::uint16_t>((buttons & b.playStation) != 0 ? out | b.xinput : out);
+    }
+    return out;
+}
+
+/// XInput bits as a PlayStation pad's buttons.
+constexpr std::uint32_t ToPlayStation(std::uint16_t buttons) noexcept
+{
+    std::uint32_t out = 0;
+    for (const ButtonPair& b : kPlayStationButtons)
+    {
+        out = (buttons & b.xinput) != 0 ? out | b.playStation : out;
+    }
+    return out;
+}
+
+/// The PlayStation buttons the game sees after the rules: `raw` less the XInput bits the rules held back, plus the ones
+/// they added (View's tap at its let-go); L2, R2 and any bit without an XInput twin pass as they are.
+constexpr std::uint32_t PlayStationShown(std::uint32_t raw, std::uint16_t rawXInput, std::uint16_t shownXInput) noexcept
+{
+    const auto removed = static_cast<std::uint16_t>(rawXInput & ~shownXInput);
+    const auto added   = static_cast<std::uint16_t>(shownXInput & ~rawXInput);
+    return (raw & ~ToPlayStation(removed)) | ToPlayStation(added);
+}
+
+/// The pad table: per lane (Lane(reader, slot)) the reader's physical pad answering the slot, and per slot its live
+/// reader (whose pad there plays the slot's player). Identity, XInput live, until a join, the title screen or the
+/// console changes it.
+struct PadTable
+{
+    std::array<int, kPads>            lanes{0, 1, 2, 3, 4, 5, 6, 7};
+    std::array<std::uint8_t, kSlots>  live{};
+
+    constexpr bool operator==(const PadTable&) const noexcept = default;
+};
+inline constexpr PadTable kIdentity{};
+
+/// A table whose XInput lanes are `xinput` (the PlayStation lanes identity, XInput live everywhere).
+constexpr PadTable FromXInput(const std::array<int, kSlots>& xinput) noexcept
+{
+    PadTable table{};
     for (int slot = 0; slot < kSlots; ++slot)
     {
-        const int user = table[static_cast<std::size_t>(slot)];
-        if (user < 0 || user >= kSlots || seen[static_cast<std::size_t>(user)])
+        table.lanes[static_cast<std::size_t>(slot)] = xinput[static_cast<std::size_t>(slot)];
+    }
+    return table;
+}
+
+/// Each lane holds one of its own reader's pads, each pad once; each slot's live reader is a reader.
+constexpr bool IsValid(const PadTable& table) noexcept
+{
+    std::array<bool, kPads> seen{};
+    for (int lane = 0; lane < kPads; ++lane)
+    {
+        const int pad = table.lanes[static_cast<std::size_t>(lane)];
+        if (pad < 0 || pad >= kPads || ReaderOf(pad) != ReaderOf(lane) || seen[static_cast<std::size_t>(pad)])
         {
             return false;
         }
-        seen[static_cast<std::size_t>(user)] = true;
+        seen[static_cast<std::size_t>(pad)] = true;
+    }
+    for (const std::uint8_t reader : table.live)
+    {
+        if (reader >= kReaders)
+        {
+            return false;
+        }
     }
     return true;
 }
 
-/// The slot `user` answers, or -1 (never for a permutation).
-constexpr int SlotOf(const PadTable& table, int user) noexcept
+/// The slot `pad` answers, or -1 (never for a valid table).
+constexpr int SlotOf(const PadTable& table, int pad) noexcept
 {
-    for (int slot = 0; slot < kSlots; ++slot)
+    for (int lane = 0; lane < kPads; ++lane)
     {
-        if (table[static_cast<std::size_t>(slot)] == user)
+        if (table.lanes[static_cast<std::size_t>(lane)] == pad)
         {
-            return slot;
+            return lane % kSlots;
         }
     }
     return -1;
+}
+
+/// The pad on `slot` that plays its player: the slot's live reader's.
+constexpr int PadOn(const PadTable& table, int slot) noexcept
+{
+    return table.lanes[static_cast<std::size_t>(Lane(table.live[static_cast<std::size_t>(slot)], slot))];
+}
+
+/// The table with pad `which` on `slot` (swapped, in its own reader, with the pad there) and playing its player: the
+/// slot's live reader becomes the pad's.
+constexpr PadTable WithPadOn(PadTable table, int which, int slot) noexcept
+{
+    const int from = SlotOf(table, which);
+    if (from < 0 || slot < 0 || slot >= kSlots)
+    {
+        return table;
+    }
+    const int  reader = ReaderOf(which);
+    const auto at     = static_cast<std::size_t>(Lane(reader, slot));
+    table.lanes[static_cast<std::size_t>(Lane(reader, from))] = table.lanes[at];
+    table.lanes[at]                                            = which;
+    table.live[static_cast<std::size_t>(slot)]                 = static_cast<std::uint8_t>(reader);
+    return table;
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -157,6 +290,48 @@ constexpr bool PlayerSlot(int slot, std::uint32_t playing) noexcept
 constexpr std::uint16_t StartGate(std::uint16_t buttons, int slot, std::uint32_t playing) noexcept
 {
     return PlayerSlot(slot, playing) ? buttons : static_cast<std::uint16_t>(buttons & ~kStart);
+}
+
+/// `pad` is muted: it answers (`present`, bit p: pad p answers) on a player's slot (`playing`) whose live reader is the
+/// other one, while that reader's pad there answers too. It reads idle to the game and plays no one, so its Start
+/// joins. A slot's other pad while the live one is absent plays on (one person, one pad, whichever kind it is).
+constexpr bool Muted(const PadTable& table, std::uint32_t playing, std::uint32_t present, int pad) noexcept
+{
+    const int slot = SlotOf(table, pad);
+    if ((present >> pad & 1u) == 0 || slot < 0 || !PlayerSlot(slot, playing) ||
+        table.live[static_cast<std::size_t>(slot)] == ReaderOf(pad))
+    {
+        return false;
+    }
+    return (present >> PadOn(table, slot) & 1u) != 0;
+}
+
+// One pad read by both readers: Steam Input shows a PlayStation pad as an XInput pad while the game also reads it
+// itself, so each press comes from two pads, of different readers, in the same poll or the next.
+inline constexpr std::int64_t kTwinMs = 100;
+
+/// Two presses of one button (their polls' clock, 0 for none) are one press read twice.
+constexpr bool Twins(std::int64_t at, std::int64_t otherAt) noexcept
+{
+    return at != 0 && otherAt != 0 && (at > otherAt ? at - otherAt : otherAt - at) <= kTwinMs;
+}
+
+/// A Start read twice: `pad`'s copy joins no one when its twin plays a player (the Start is that player's), or when it
+/// is the XInput copy (one join, the PlayStation copy's: the game's own read of the pad, with its button art).
+constexpr bool TwinStartDropped(int pad, bool twinPlays) noexcept
+{
+    return twinPlays || ReaderOf(pad) == kXInput;
+}
+
+/// The muted pads (bit p: pad p).
+constexpr std::uint32_t MutedPads(const PadTable& table, std::uint32_t playing, std::uint32_t present) noexcept
+{
+    std::uint32_t pads = 0;
+    for (int pad = 0; pad < kPads; ++pad)
+    {
+        pads |= Muted(table, playing, present, pad) ? 1u << pad : 0u;
+    }
+    return pads;
 }
 
 // ---------------------------------------------------------------------------------------------------------------------

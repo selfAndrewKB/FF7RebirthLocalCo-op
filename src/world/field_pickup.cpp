@@ -1502,15 +1502,15 @@ std::wstring LastPresses()
 {
     std::wstring text;
     const auto   now = static_cast<std::int64_t>(GetTickCount64());
-    for (int user = 0; user < players::kXInputUsers; ++user)
+    for (int pad = 0; pad < input::pad_rules::kPads; ++pad)
     {
-        const input::pad_table::Press press = input::pad_table::LastPressOf(user);
+        const input::pad_table::Press press = input::pad_table::LastPressOf(pad);
         if (press.atMs == 0)
         {
             continue;
         }
-        text += std::format(L"{}pad {} {:#06x} {:.1f} s ago", text.empty() ? L"" : L", ", user + 1, press.buttons,
-                            static_cast<double>(now - press.atMs) / 1000.0);
+        text += std::format(L"{}{} {:#06x} {:.1f} s ago", text.empty() ? L"" : L", ", input::pad_rules::PadName(pad),
+                            press.buttons, static_cast<double>(now - press.atMs) / 1000.0);
     }
     return text.empty() ? L"none yet" : text;
 }

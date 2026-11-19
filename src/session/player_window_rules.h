@@ -77,28 +77,21 @@ constexpr Action OnB(int seat, bool tap, bool held) noexcept
     return tap ? Action{Act::Close} : Action{};
 }
 
-/// The pad table with `user`'s pad on player 1's slot (swapped with the pad there).
-constexpr pad::PadTable WithPlayerOne(pad::PadTable table, int user) noexcept
+using pad::WithPadOn;
+
+/// The pad table with pad `which` playing player 1.
+constexpr pad::PadTable WithPlayerOne(const pad::PadTable& table, int which) noexcept
 {
-    const int from = pad::SlotOf(table, user);
-    if (from > 0)
-    {
-        table[static_cast<std::size_t>(from)] = table[0];
-        table[0]                              = user;
-    }
-    return table;
+    return WithPadOn(table, which, 0);
 }
 
-/// The pad table with `user`'s pad on `slot` (swapped with the pad there).
-constexpr pad::PadTable WithPadOn(pad::PadTable table, int user, int slot) noexcept
+/// The pad table after the players on slots `a` and `b` trade numbers: each one's pad plays the other number, whatever
+/// reader either pad is on.
+constexpr pad::PadTable WithPadsTraded(const pad::PadTable& table, int a, int b) noexcept
 {
-    const int from = pad::SlotOf(table, user);
-    if (from >= 0 && slot >= 0 && slot < pad::kSlots && from != slot)
-    {
-        table[static_cast<std::size_t>(from)] = table[static_cast<std::size_t>(slot)];
-        table[static_cast<std::size_t>(slot)] = user;
-    }
-    return table;
+    const int padA = pad::PadOn(table, a);
+    const int padB = pad::PadOn(table, b);
+    return WithPadOn(WithPadOn(table, padA, b), padB, a);
 }
 
 /// `seat` is in while `playing` (bit N: seat N in; player 1 always).
@@ -107,15 +100,20 @@ constexpr bool Plays(std::uint32_t playing, int seat) noexcept
     return seat < kSeats && pad::PlayerSlot(seat, playing);
 }
 
-/// The seat `user`'s pad plays (its slot, while a player holds it; slot 0 always), or -1 for a pad that plays no one.
-constexpr int SeatOf(const pad::PadTable& table, std::uint32_t playing, int user) noexcept
+/// The seat pad `which` plays (its slot, while a player holds it; slot 0 always), or -1 for a pad that plays no one: a
+/// pad on no player's slot, or muted there (`present`, bit p: pad p answers; pad_rules::Muted).
+constexpr int SeatOf(const pad::PadTable& table, std::uint32_t playing, std::uint32_t present, int which) noexcept
 {
-    const int slot = pad::SlotOf(table, user);
+    const int slot = pad::SlotOf(table, which);
+    if (slot < 0 || pad::Muted(table, playing, present, which))
+    {
+        return -1;
+    }
     if (slot == 0)
     {
         return 0;
     }
-    return slot > 0 && Plays(playing, slot) ? slot : -1;
+    return Plays(playing, slot) ? slot : -1;
 }
 
 /// The player `seat` trades numbers with in `dir` (-1 lower, +1 higher): the nearest number that way a player holds,
@@ -143,13 +141,13 @@ constexpr std::array<int, kSeats> Traded(std::array<int, kSeats> seatOn, int a, 
     return seatOn;
 }
 
-/// The lowest player whose pad is gone (`goneUsers`, bit N: XInput user N's pad was connected and is not now), the one
-/// a spare pad's Start takes back, else -1.
-constexpr int SeatWithPadGone(const pad::PadTable& table, std::uint32_t playing, std::uint32_t goneUsers) noexcept
+/// The lowest player whose pad is gone (`gonePads`, bit p: pad p was connected and is not now), the one a spare pad's
+/// Start takes back, else -1.
+constexpr int SeatWithPadGone(const pad::PadTable& table, std::uint32_t playing, std::uint32_t gonePads) noexcept
 {
     for (int seat = 0; seat < kSeats; ++seat)
     {
-        if (Plays(playing, seat) && (goneUsers & (1u << table[static_cast<std::size_t>(seat)])) != 0)
+        if (Plays(playing, seat) && (gonePads & (1u << pad::PadOn(table, seat))) != 0)
         {
             return seat;
         }

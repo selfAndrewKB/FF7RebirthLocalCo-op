@@ -406,9 +406,37 @@ inline constexpr std::uint32_t kCanvasClipY      = 0x34;
 /// UEngine::MediumFont (Roboto), read through GEngine.
 inline constexpr std::uint32_t kEngineMediumFont = 0x70;
 
-/// The PlayStation pad reader's device vtable (the SonyController plugin, scePad): not XInput, so
-/// the pad table does not move its pads.
+/// The PlayStation pad reader's device vtable (the SonyController plugin, Sony's scePad library linked into the exe).
 inline constexpr std::uintptr_t kSonyControllerDeviceVTable = 0x146432E10;
+
+/// The PlayStation reader's poll per record, SonyControllerDevice__SendEventsForSlot: its one call of scePadReadState
+/// (`call rel32`, rcx = the record's scePad handle, rdx = the record's pad data), and the target
+/// (research/RE-playstation-pads.md). The game thread's device poll runs it for records 0..3 every frame.
+inline constexpr std::uintptr_t kSonyReadStateCall = 0x140DDAD09;
+inline constexpr std::uintptr_t kSonyReadState     = 0x141B63C20;
+/// SonyControllerRecord__SendRumbleIfChanged's call of scePadSetVibration(handle, u8 motors[2]) (large, small), and
+/// the target: the record's rumble, sent when its values change.
+inline constexpr std::uintptr_t kSonySetVibrationCall = 0x1411B5044;
+inline constexpr std::uintptr_t kSonySetVibration     = 0x141B641F0;
+
+/// A PlayStation reader record (stride 0x278; record N reads slot N): the pad data scePadReadState fills (0x78
+/// bytes), the record's controller id (i32), its scePad handle (i32; handle & 0xFF = the scePad user 1..4, the pad's
+/// identity), the connected byte of its last poll (a rise runs the game's connect path: controller information,
+/// vibration mode, the connection broadcast), and the last motor values sent (floats; rumble is sent when they
+/// change). Read and written in SendEventsForSlot and SendRumbleIfChanged.
+inline constexpr std::uint32_t kSonyRecordPadData   = 0x78;
+inline constexpr std::uint32_t kSonyRecordId        = 0x210;
+inline constexpr std::uint32_t kSonyRecordHandle    = 0x218;
+inline constexpr std::uint32_t kSonyRecordConnected = 0x228;
+inline constexpr std::uint32_t kSonyRecordLastLarge = 0x26C;
+inline constexpr std::uint32_t kSonyRecordLastSmall = 0x270;
+/// ScePadData: buttons (u32; bit 31 set makes the record skip the frame), the sticks LX LY RX RY (u8, centre 0x80),
+/// the triggers L2 R2 (u8), the touch count (u8), connected (u8).
+inline constexpr std::uint32_t kPadDataButtons    = 0x00;
+inline constexpr std::uint32_t kPadDataSticks     = 0x04;
+inline constexpr std::uint32_t kPadDataTriggers   = 0x08;
+inline constexpr std::uint32_t kPadDataTouchCount = 0x34;
+inline constexpr std::uint32_t kPadDataConnected  = 0x4C;
 
 // ---------------------------------------------------------------------------------------------
 // Slate (stock UE4)

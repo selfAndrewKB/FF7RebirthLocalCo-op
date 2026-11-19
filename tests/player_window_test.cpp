@@ -101,30 +101,34 @@ void NumbersTrade()
     EXPECT((Traded({0, 1, 2}, 1, 2) == std::array<int, kSeats>{0, 2, 1}));
     EXPECT((Traded({0, 1, -1}, 1, 1) == std::array<int, kSeats>{0, 1, -1}));  // with itself: nothing
     // The pads: player 2's pad onto player 1's slot, player 1's onto player 2's.
-    const pad::PadTable pads{2, 0, 1, 3};
-    EXPECT((WithPadOn(pads, pads[1], 0) == pad::PadTable{0, 2, 1, 3}));
+    const pad::PadTable pads = pad::FromXInput({2, 0, 1, 3});
+    EXPECT((WithPadsTraded(pads, 0, 1) == pad::FromXInput({0, 2, 1, 3})));
     EXPECT(!Plays(0b111, 3) && !Plays(0b111, -1) && Plays(0, 0));
 
-    // Every person keeps their pad and their screen through any trade: three players, each pad's screen before and after.
-    const pad::PadTable           before{1, 3, 0, 2};
+    // Every person keeps their pad and their screen through any trade: three players, each pad's screen before and
+    // after; once with XInput pads only, once with player 2 on a PlayStation pad.
     const std::array<int, kSeats> seatOn{2, 0, 1};
     const auto shown = [](const pad::PadTable& t, const std::array<int, kSeats>& on, int s) {
-        return t[static_cast<std::size_t>(on[static_cast<std::size_t>(s)])];  // the pad whose player a screen shows
+        return pad::PadOn(t, on[static_cast<std::size_t>(s)]);  // the pad whose player a screen shows
     };
-    for (int seat = 0; seat < kSeats; ++seat)
+    for (const pad::PadTable& before : {pad::FromXInput({1, 3, 0, 2}), WithPadOn(pad::FromXInput({1, 3, 0, 2}), 6, 1)})
     {
-        for (const int dir : {-1, +1})
+        for (int seat = 0; seat < kSeats; ++seat)
         {
-            const int other = TradePartner(seat, dir, 0b111);
-            if (other < 0)
+            for (const int dir : {-1, +1})
             {
-                continue;
-            }
-            const pad::PadTable           after   = WithPadOn(before, before[static_cast<std::size_t>(seat)], other);
-            const std::array<int, kSeats> screens = Traded(seatOn, seat, other);
-            for (int screen = 0; screen < kSeats; ++screen)
-            {
-                EXPECT(shown(after, screens, screen) == shown(before, seatOn, screen));
+                const int other = TradePartner(seat, dir, 0b111);
+                if (other < 0)
+                {
+                    continue;
+                }
+                const pad::PadTable           after   = WithPadsTraded(before, seat, other);
+                const std::array<int, kSeats> screens = Traded(seatOn, seat, other);
+                EXPECT(pad::IsValid(after));
+                for (int screen = 0; screen < kSeats; ++screen)
+                {
+                    EXPECT(shown(after, screens, screen) == shown(before, seatOn, screen));
+                }
             }
         }
     }
@@ -134,25 +138,43 @@ void NumbersTrade()
 /// no pad ever answered, a keyboard player 1's, is never in the gone set: input/pad_presence.)
 void PadsGone()
 {
-    EXPECT(SeatWithPadGone({0, 1, 2, 3}, 0b011, 0b0010) == 1);
-    EXPECT(SeatWithPadGone({0, 1, 2, 3}, 0b111, 0b0101) == 0);   // player 1's and player 3's: the lowest
-    EXPECT(SeatWithPadGone({0, 1, 2, 3}, 0b011, 0b1100) == -1);  // gone pads no player holds
-    EXPECT(SeatWithPadGone({3, 1, 2, 0}, 0b001, 0b1000) == 0);   // player 1 on pad 4
-    EXPECT(SeatWithPadGone({0, 1, 2, 3}, 0b111, 0) == -1);
+    const pad::PadTable id = pad::kIdentity;
+    EXPECT(SeatWithPadGone(id, 0b011, 0b0010) == 1);
+    EXPECT(SeatWithPadGone(id, 0b111, 0b0101) == 0);   // player 1's and player 3's: the lowest
+    EXPECT(SeatWithPadGone(id, 0b011, 0b1100) == -1);  // gone pads no player holds
+    EXPECT(SeatWithPadGone(pad::FromXInput({3, 1, 2, 0}), 0b001, 0b1000) == 0);  // player 1 on pad 4
+    EXPECT(SeatWithPadGone(id, 0b111, 0) == -1);
+    // Player 2 on the first PlayStation pad: its going counts, pad 2's (muted beside it) does not.
+    const pad::PadTable ps = WithPadOn(id, 4, 1);
+    EXPECT(SeatWithPadGone(ps, 0b011, 0b0001'0000) == 1);
+    EXPECT(SeatWithPadGone(ps, 0b011, 0b0000'0010) == -1);
 }
 
-/// The title screen's press takes player 1's slot; a join's pad takes the new player's; a pad's seat is its slot's.
+/// The title screen's press takes player 1's slot; a join's pad takes the new player's; a pad's seat is its slot's,
+/// unless it is muted there.
 void PadsAndSeats()
 {
-    EXPECT((WithPlayerOne({0, 1, 2, 3}, 2) == pad::PadTable{2, 1, 0, 3}));
-    EXPECT((WithPlayerOne({0, 1, 2, 3}, 0) == pad::kIdentity));  // already player 1's
-    EXPECT((WithPadOn({0, 1, 2, 3}, 3, 1) == pad::PadTable{0, 3, 2, 1}));
-    EXPECT(pad::IsPermutation(WithPadOn({2, 0, 3, 1}, 1, 2)));
-    EXPECT(SeatOf({0, 1, 2, 3}, 0b1, 0) == 0);
-    EXPECT(SeatOf({0, 1, 2, 3}, 0b1, 1) == -1);  // player 2 not in: the pad plays no one
-    EXPECT(SeatOf({0, 1, 2, 3}, 0b11, 1) == 1);
-    EXPECT(SeatOf({0, 1, 2, 3}, 0b111, 3) == -1);  // the spare slot
-    EXPECT(SeatOf({1, 0, 2, 3}, 0b1, 1) == 0);
+    const pad::PadTable id  = pad::kIdentity;
+    constexpr std::uint32_t kAll = 0xFF;
+    EXPECT((WithPlayerOne(id, 2) == pad::FromXInput({2, 1, 0, 3})));
+    EXPECT((WithPlayerOne(id, 0) == pad::kIdentity));  // already player 1's
+    EXPECT((WithPadOn(id, 3, 1) == pad::FromXInput({0, 3, 2, 1})));
+    EXPECT(pad::IsValid(WithPadOn(pad::FromXInput({2, 0, 3, 1}), 1, 2)));
+    EXPECT(SeatOf(id, 0b1, kAll, 0) == 0);
+    EXPECT(SeatOf(id, 0b1, kAll, 1) == -1);  // player 2 not in: the pad plays no one
+    EXPECT(SeatOf(id, 0b11, kAll, 1) == 1);
+    EXPECT(SeatOf(id, 0b111, kAll, 3) == -1);  // the spare slot
+    EXPECT(SeatOf(pad::FromXInput({1, 0, 2, 3}), 0b1, kAll, 1) == 0);
+    // An Xbox pad and a DualSense on player 1's slot: the Xbox pad plays, the DualSense is muted and its Start joins;
+    // with the Xbox pad gone, the DualSense plays player 1.
+    EXPECT(SeatOf(id, 0b1, 0b0001'0001, 4) == -1 && SeatOf(id, 0b1, 0b0001'0001, 0) == 0);
+    EXPECT(SeatOf(id, 0b1, 0b0001'0000, 4) == 0);
+    // The DualSense pressed on the title: it plays player 1, the Xbox pad is muted.
+    const pad::PadTable title = WithPlayerOne(id, 4);
+    EXPECT(SeatOf(title, 0b1, 0b0001'0001, 4) == 0 && SeatOf(title, 0b1, 0b0001'0001, 0) == -1);
+    // The muted DualSense joins as player 2: on record 1, live there; player 1 stays the Xbox pad's.
+    const pad::PadTable joined = WithPadOn(id, 4, 1);
+    EXPECT(SeatOf(joined, 0b11, 0b0001'0001, 4) == 1 && SeatOf(joined, 0b11, 0b0001'0001, 0) == 0);
 }
 
 /// Player 2's open window: the number between left and right, the character, then move, done, leave; one key a line.

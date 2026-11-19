@@ -84,7 +84,7 @@ bool                          g_installed = false;
 Session*                      g_session   = nullptr;
 std::array<bool, kSeats>      g_open{};              // by seat: the player's window is open
 std::array<SeatNote, kSeats>  g_notes{};             // by seat
-std::array<bool, pad::kSlots> g_bSeen{};             // by pad: B went down while its window was open (arms B)
+std::array<bool, pad::kPads>  g_bSeen{};             // by pad: B went down while its window was open (arms B)
 std::array<JoinAsk, kSeats>   g_joins{};             // asked, not yet made
 std::array<int, kSeats>       g_leaves{-1, -1, -1};  // players asked to leave, not yet out
 std::array<bool, kSeats>      g_waiting{};           // by seat: a join that waits; its window opens once in
@@ -93,7 +93,7 @@ std::array<bool, kSeats>      g_waitSaid{};          // by seat: that join's wai
 int                           g_startWhenField = -1;  // a spare pad's Start during a menu or a scene: joins after
 bool                          g_redraw         = false;
 std::uint32_t                 g_playing        = 1;  // the slots a player holds, as of the last tick
-std::uint32_t                 g_idleUsers      = 0;  // the pads read idle now (the open windows' pads)
+std::uint32_t                 g_idlePads       = 0;  // the pads read idle now (the open windows' pads)
 int                           g_lastScreens    = 0;  // the views as last shown
 unsigned long long            g_gameClosedSeen = 0;  // view_window's count of windows the game closed
 std::uint32_t                 g_opens = 0, g_joinsAsked = 0, g_leavesAsked = 0, g_titlePresses = 0, g_trades = 0,
@@ -256,20 +256,26 @@ void ShowWindows()
 /// The pads of the open windows read idle to the game; the others play on.
 void SetIdlePads()
 {
-    std::uint32_t users = 0;
+    std::uint32_t pads  = 0;
     const auto    table = input::pad_table::Table();
     for (int seat = 0; seat < kSeats; ++seat)
     {
         if (g_open[static_cast<std::size_t>(seat)])
         {
-            users |= 1u << table[static_cast<std::size_t>(seat)];
+            pads |= 1u << pad::PadOn(table, seat);
         }
     }
-    if (users != g_idleUsers)
+    if (pads != g_idlePads)
     {
-        g_idleUsers = users;
-        input::pad_table::SetIdleUsers(users, L"the open player windows");
+        g_idlePads = pads;
+        input::pad_table::SetIdlePads(pads, L"the open player windows");
     }
+}
+
+/// The seat pad `which` plays, or -1 (player_window_rules::SeatOf, with the pads answering now).
+int SeatOfPad(int which)
+{
+    return rules::SeatOf(input::pad_table::Table(), g_playing, input::pad_table::PresentPads(), which);
 }
 
 /// A spare pad's Start: takes back the lowest player whose pad is gone (a pad that died and came back on another
@@ -281,10 +287,23 @@ void SpareStart(int user)
         return;  // asked already: its join is made before the session's next tick
     }
     const auto table = input::pad_table::Table();
-    if (const int slot = pad::SlotOf(table, user);
-        slot >= 1 && slot < kSeats && g_session != nullptr && modules::SeatTaken(*g_session, slot))
+    // One pad read by both readers (Steam Input's XInput copy of a PlayStation pad the game also reads) presses Start
+    // on both at once: that Start is the player's whose pad the other copy is, else one join, the PlayStation copy's.
+    if (const int twin = input::pad_table::TwinOf(user, pad::kStart);
+        twin >= 0 && pad::TwinStartDropped(user, SeatOfPad(twin) >= 0))
     {
-        platform::Log(L"player window: pad {} pressed Start, but its player is already joining", user + 1);
+        const int seat = SeatOfPad(twin);
+        platform::Log(L"player window: {} pressed Start at the same moment as {}: one pad read twice (Steam Input); {}",
+                      pad::PadName(user), pad::PadName(twin),
+                      seat >= 0 ? std::format(L"the Start is {}'s, no join", players::SeatName(seat))
+                                : std::format(L"only {} joins", pad::PadName(twin)));
+        return;
+    }
+    if (const int slot = pad::SlotOf(table, user);
+        slot >= 1 && slot < kSeats && pad::PadOn(table, slot) == user && g_session != nullptr &&
+        modules::SeatTaken(*g_session, slot))
+    {
+        platform::Log(L"player window: {} pressed Start, but its player is already joining", pad::PadName(user));
         // Its seat waits for a member: a second Start never takes another seat, and says the wait again in the field.
         if (WaitsForMember(slot) && !views::WholeScreenShown())
         {
@@ -292,14 +311,14 @@ void SpareStart(int user)
         }
         return;
     }
-    if (const int seat = rules::SeatWithPadGone(table, g_playing, input::pad_presence::GoneUsers()); seat >= 0)
+    if (const int seat = rules::SeatWithPadGone(table, g_playing, input::pad_presence::GonePads()); seat >= 0)
     {
         if (AnyRequest())
         {
             // A join or leave on its way names a number from the players as they were; the take-back waits for it.
-            platform::Log(L"player window: pad {} pressed Start to take back {}, whose pad is gone, but a join or leave is "
+            platform::Log(L"player window: {} pressed Start to take back {}, whose pad is gone, but a join or leave is "
                           L"on its way; press again once it is done",
-                          user + 1, players::SeatName(seat));
+                          pad::PadName(user), players::SeatName(seat));
             return;
         }
         if (input::pad_table::Set(rules::WithPadOn(table, user, seat), L"a spare pad takes back a player whose pad is gone"))
@@ -307,8 +326,8 @@ void SpareStart(int user)
             g_bSeen[static_cast<std::size_t>(user)] = false;
             g_redraw                                = true;
             ++g_takenBack;
-            platform::Log(L"player window: pad {} pressed Start: it takes back {}, whose pad {} is gone", user + 1,
-                          players::SeatName(seat), table[static_cast<std::size_t>(seat)] + 1);
+            platform::Log(L"player window: {} pressed Start: it takes back {}, whose {} is gone", pad::PadName(user),
+                          players::SeatName(seat), pad::PadName(pad::PadOn(table, seat)));
         }
         return;
     }
@@ -316,14 +335,14 @@ void SpareStart(int user)
     if (free < 0)
     {
         SetNote(0, text::Note::AllIn, 0);
-        platform::Log(L"player window: pad {} pressed Start, but every player is in or on the way", user + 1);
+        platform::Log(L"player window: {} pressed Start, but every player is in or on the way", pad::PadName(user));
         return;
     }
     if (views::WholeScreenShown())
     {
         g_startWhenField = user;
-        platform::Log(L"player window: pad {} pressed Start during a menu or a scene; it joins once the field shows",
-                      user + 1);
+        platform::Log(L"player window: {} pressed Start during a menu or a scene; it joins once the field shows",
+                      pad::PadName(user));
         return;
     }
     for (JoinAsk& j : g_joins)
@@ -335,7 +354,7 @@ void SpareStart(int user)
         }
     }
     ++g_joinsAsked;
-    platform::Log(L"player window: pad {} pressed Start: it joins as {}", user + 1, players::SeatName(free));
+    platform::Log(L"player window: {} pressed Start: it joins as {}", pad::PadName(user), players::SeatName(free));
 }
 
 /// The session's answer to a join: in (its window opens), or waiting for a member (said on player 1's window).
@@ -348,7 +367,7 @@ void AnswerJoin(const JoinAsk& j)
     if (g_session->In(j.seat))
     {
         g_open[static_cast<std::size_t>(j.seat)] = true;
-        platform::Log(L"player window: {} is in on pad {}; its window opens", players::SeatName(j.seat), j.user + 1);
+        platform::Log(L"player window: {} is in on {}; its window opens", players::SeatName(j.seat), pad::PadName(j.user));
         return;
     }
     if (g_session->AwaitingMember(j.seat))
@@ -397,7 +416,7 @@ void HoldLeave(int seat, int user)
     if (seat == 0)
     {
         SetNote(0, text::Note::PlayerOneStays, 0);
-        platform::Log(L"player window: pad {} held B, but player 1 stays in", user + 1);
+        platform::Log(L"player window: {} held B, but player 1 stays in", pad::PadName(user));
         return;
     }
     if (std::find(g_leaves.begin(), g_leaves.end(), seat) == g_leaves.end())
@@ -411,17 +430,24 @@ void HoldLeave(int seat, int user)
             }
         }
         ++g_leavesAsked;
-        platform::Log(L"player window: pad {} held B: {} leaves", user + 1, players::SeatName(seat));
+        platform::Log(L"player window: {} held B: {} leaves", pad::PadName(user), players::SeatName(seat));
     }
 }
 
 /// On the title screen: the pad that pressed becomes player 1's, said on the game's save-data notice (the title's one
 /// notice) for a few seconds, once per pad that takes the place (its own later presses, the title menu's, say
 /// nothing more; another pad's press says that pad).
-void TitlePress(int user)
+void TitlePress(int user, std::uint16_t pressed)
 {
+    // One pad read by both readers: its PlayStation copy takes player 1 (the game's own read of it: its button art,
+    // trigger effects and light bar), its XInput copy stays muted beside it.
+    if (pad::ReaderOf(user) == pad::kXInput && pressed != 0 &&
+        input::pad_table::TwinOf(user, static_cast<std::uint16_t>(pressed & (~pressed + 1u))) >= 0)
+    {
+        return;
+    }
     const auto table = input::pad_table::Table();
-    if (pad::SlotOf(table, user) != 0)
+    if (pad::PadOn(table, 0) != user)
     {
         ++g_titlePresses;
         input::pad_table::Set(rules::WithPlayerOne(table, user), L"a pad pressed on the title screen: it plays player 1");
@@ -499,8 +525,7 @@ void TradeNumber(int seat, int dir)
     }
     const auto order = views::column_rules::OrderShowing(rules::Traded(SeatOnScreens(), seat, other));
     const auto table = input::pad_table::Table();
-    if (!order || !input::pad_table::Set(rules::WithPadOn(table, table[static_cast<std::size_t>(seat)], other),
-                                         L"two players traded numbers"))
+    if (!order || !input::pad_table::Set(rules::WithPadsTraded(table, seat, other), L"two players traded numbers"))
     {
         platform::Log(L"player window: {} and {} cannot trade numbers ({})", players::SeatName(seat),
                       players::SeatName(other), order ? L"the pad table refused the change" : L"no screen order shows it");
@@ -510,10 +535,10 @@ void TradeNumber(int seat, int dir)
     std::swap(g_open[static_cast<std::size_t>(seat)], g_open[static_cast<std::size_t>(other)]);
     std::swap(g_notes[static_cast<std::size_t>(seat)], g_notes[static_cast<std::size_t>(other)]);
     ++g_trades;
-    platform::Log(L"player window: players {} and {} trade numbers: pad {} plays player {}, pad {} player {}; the screen "
-                  L"order is now {} {} {}",
-                  seat + 1, other + 1, table[static_cast<std::size_t>(seat)] + 1, other + 1,
-                  table[static_cast<std::size_t>(other)] + 1, seat + 1, order->player[0], order->player[1], order->player[2]);
+    platform::Log(L"player window: players {} and {} trade numbers: {} plays player {}, {} player {}; the screen order is "
+                  L"now {} {} {}",
+                  seat + 1, other + 1, pad::PadName(pad::PadOn(table, seat)), other + 1,
+                  pad::PadName(pad::PadOn(table, other)), seat + 1, order->player[0], order->player[1], order->player[2]);
 }
 
 /// One pad's input while its player's window is open.
@@ -534,7 +559,7 @@ void WindowInput(const Event& e, int seat)
         if (a.act == rules::Act::Trade)
         {
             TradeNumber(seat, a.dir);
-            seat = rules::SeatOf(input::pad_table::Table(), g_playing, e.user);  // the press's later buttons are the new number's
+            seat = SeatOfPad(e.user);  // the press's later buttons are the new number's
             if (seat < 0)
             {
                 return;
@@ -642,7 +667,7 @@ catch (...)
 void Remove() noexcept
 {
     input::pad_table::Listen(nullptr);
-    input::pad_table::SetIdleUsers(0, L"the mod's end");
+    input::pad_table::SetIdlePads(0, L"the mod's end");
     hud::view_prompt::ClearAll();
     hud::view_window::CloseAll();
     g_open           = {};
@@ -650,7 +675,7 @@ void Remove() noexcept
     g_joins          = {};
     g_leaves         = {-1, -1, -1};
     g_startWhenField = -1;
-    g_idleUsers      = 0;
+    g_idlePads       = 0;
     g_queued         = 0;
     g_titleClaimedUser = -1;
     g_waiting        = {};
@@ -745,7 +770,7 @@ try
     for (std::size_t i = 0; i < count; ++i)
     {
         const Event e = events[i];
-        if (e.user < 0 || e.user >= pad::kSlots)
+        if (e.user < 0 || e.user >= pad::kPads)
         {
             continue;
         }
@@ -753,11 +778,11 @@ try
         {
             if (e.pressed != 0)
             {
-                TitlePress(e.user);
+                TitlePress(e.user, e.pressed);
             }
             continue;
         }
-        const int seat = rules::SeatOf(input::pad_table::Table(), g_playing, e.user);
+        const int seat = SeatOfPad(e.user);
         if (e.open)
         {
             if (seat < 0)
@@ -770,12 +795,13 @@ try
             }
             else if (frame.single)
             {
-                platform::Log(L"player window: pad {} held View, but the views are one now (a scene or a menu)", e.user + 1);
+                platform::Log(L"player window: {} held View, but the views are one now (a scene or a menu)",
+                              pad::PadName(e.user));
             }
             else
             {
                 g_bSeen[static_cast<std::size_t>(e.user)] = false;
-                Open(seat, std::format(L"pad {} held View", e.user + 1));
+                Open(seat, std::format(L"{} held View", pad::PadName(e.user)));
             }
             continue;
         }
@@ -830,8 +856,8 @@ catch (...)
     g_notes = {};
     hud::view_window::CloseAll();
     hud::view_prompt::ClearAll();
-    input::pad_table::SetIdleUsers(0, L"the player windows' exception");
-    g_idleUsers = 0;
+    input::pad_table::SetIdlePads(0, L"the player windows' exception");
+    g_idlePads = 0;
 }
 
 #if LSS_DEV

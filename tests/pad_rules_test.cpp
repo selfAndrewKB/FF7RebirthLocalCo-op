@@ -10,15 +10,80 @@ namespace {
 
 using namespace lss::input::pad_rules;
 
-/// The table is a permutation; a user's slot is found.
+/// Each reader's lanes hold its own pads once each; a pad's slot is found.
 void TheTable()
 {
-    EXPECT(IsPermutation(kIdentity));
-    EXPECT(IsPermutation({2, 0, 1, 3}));
-    EXPECT(!IsPermutation({0, 0, 1, 3}));
-    EXPECT(!IsPermutation({0, 1, 2, 4}));
-    EXPECT(SlotOf({2, 0, 1, 3}, 0) == 1);
-    EXPECT(SlotOf({2, 0, 1, 3}, 3) == 3);
+    EXPECT(IsValid(kIdentity));
+    EXPECT(IsValid(FromXInput({2, 0, 1, 3})));
+    EXPECT(!IsValid(FromXInput({0, 0, 1, 3})));
+    EXPECT(!IsValid(FromXInput({0, 1, 2, 4})));  // a PlayStation pad in an XInput lane
+    PadTable live = kIdentity;
+    live.live[1]  = 2;
+    EXPECT(!IsValid(live));  // no third reader
+    EXPECT(SlotOf(FromXInput({2, 0, 1, 3}), 0) == 1);
+    EXPECT(SlotOf(FromXInput({2, 0, 1, 3}), 3) == 3);
+    EXPECT(SlotOf(kIdentity, 5) == 1);  // the second PlayStation pad, on record 1
+    EXPECT(PadOn(kIdentity, 2) == 2);   // XInput live
+}
+
+/// A pad put on a slot swaps, in its own reader, with the pad there, and its reader becomes the slot's live one.
+void WithPadOnSwaps()
+{
+    const PadTable t = WithPadOn(kIdentity, 4, 1);  // the first PlayStation pad onto player 2's slot
+    EXPECT(IsValid(t));
+    EXPECT(t.lanes[Lane(kPlayStation, 1)] == 4 && t.lanes[Lane(kPlayStation, 0)] == 5);
+    EXPECT(t.lanes[Lane(kXInput, 1)] == 1);  // XInput's lanes untouched
+    EXPECT(PadOn(t, 1) == 4 && PadOn(t, 0) == 0);
+    const PadTable same = WithPadOn(kIdentity, 4, 0);  // already on the slot: only the live reader changes
+    EXPECT(same.lanes == kIdentity.lanes && PadOn(same, 0) == 4);
+    EXPECT(WithPadOn(kIdentity, 2, 4) == kIdentity);  // no such slot
+}
+
+/// A pad beside the one that plays a player's slot is muted while that one answers; on a slot no player holds, or
+/// beside an absent pad, it plays on.
+void TheMute()
+{
+    constexpr std::uint32_t kBoth   = 0b0001'0001;  // pad 1 and the first PlayStation pad answer
+    constexpr std::uint32_t kPlayer = 0b1;          // player 1 alone
+    EXPECT(Muted(kIdentity, kPlayer, kBoth, 4));    // XInput live on slot 0: the PlayStation pad is muted
+    EXPECT(!Muted(kIdentity, kPlayer, kBoth, 0));
+    EXPECT(!Muted(kIdentity, kPlayer, 0b0001'0000, 4));  // pad 1 absent: the PlayStation pad plays player 1
+    const PadTable ps = WithPadOn(kIdentity, 4, 0);
+    EXPECT(Muted(ps, kPlayer, kBoth, 0) && !Muted(ps, kPlayer, kBoth, 4));
+    EXPECT(!Muted(kIdentity, kPlayer, 0b0010'0010, 5));  // slot 1, no player 2: both pads play on (Start gated)
+    EXPECT(Muted(kIdentity, 0b11, 0b0010'0010, 5));
+    EXPECT(MutedPads(kIdentity, kPlayer, kBoth) == 0b0001'0000);
+    EXPECT(!Muted(kIdentity, kPlayer, 0b0000'0001, 4));  // a PlayStation pad that does not answer is not muted
+}
+
+/// One pad read by both readers: presses within kTwinMs are one; a twin's Start joins only as the PlayStation copy,
+/// and never when the other copy plays a player.
+void TheTwins()
+{
+    EXPECT(Twins(1000, 1000) && Twins(1000, 1000 + kTwinMs) && Twins(1000 + kTwinMs, 1000));
+    EXPECT(!Twins(1000, 1001 + kTwinMs));  // two people a poll's reach apart
+    EXPECT(!Twins(0, 0) && !Twins(1000, 0));  // a pad that never pressed it
+    EXPECT(TwinStartDropped(1, false));   // both copies spare: the XInput copy's Start is dropped...
+    EXPECT(!TwinStartDropped(4, false));  // ...and the PlayStation copy joins
+    EXPECT(TwinStartDropped(4, true) && TwinStartDropped(0, true));  // the other copy plays: the Start is its player's
+}
+
+/// The PlayStation buttons as the rules' XInput bits, and the rules' answer back as PlayStation buttons.
+void PlayStationButtons()
+{
+    EXPECT(FromPlayStation(0x8) == kStart);
+    EXPECT(FromPlayStation(0x100000) == kView);
+    EXPECT(FromPlayStation(0x4000 | 0x2000) == (kA | kB));
+    EXPECT(FromPlayStation(0x100 | 0x200 | 0x1 | 0x10000) == 0);  // L2, R2 digital; Create and PS
+    EXPECT(ToPlayStation(kStart | kY) == (0x8u | 0x1000u));
+    for (const ButtonPair& b : kPlayStationButtons)
+    {
+        EXPECT(FromPlayStation(b.playStation) == b.xinput && ToPlayStation(b.xinput) == b.playStation);
+    }
+    // Start held back (a spare pad), L2 kept as it is.
+    EXPECT(PlayStationShown(0x8 | 0x4000 | 0x100, kStart | kA, kA) == (0x4000u | 0x100u));
+    // View's tap at its let-go added, Cross kept.
+    EXPECT(PlayStationShown(0x4000, kA, kA | kView) == (0x4000u | 0x100000u));
 }
 
 /// B is a tap or a hold, never both: a let-go within a second is the tap (at the let-go); a second down is the hold,
@@ -128,6 +193,10 @@ void TheLetGo()
 int main()
 {
     TheTable();
+    WithPadOnSwaps();
+    TheMute();
+    PlayStationButtons();
+    TheTwins();
     TheOpener();
     TheLetGo();
     TheLeaveHold();
