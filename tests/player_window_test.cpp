@@ -177,6 +177,42 @@ void PadsAndSeats()
     EXPECT(SeatOf(joined, 0b11, 0b0001'0001, 4) == 1 && SeatOf(joined, 0b11, 0b0001'0001, 0) == 0);
 }
 
+/// A key on the title makes the keyboard player 1: every pad on player 1's slot plays no one (its Start joins); a
+/// joined pad plays its own player; the keyboard's player 1 trades with no one and is never gone; a pad's title press
+/// takes player 1 back.
+void KeyboardPlayerOne()
+{
+    const pad::PadTable kb = pad::WithKeyboardPlayerOne(pad::kIdentity);
+    EXPECT(pad::IsValid(kb) && pad::KeyboardPlaysOne(kb) && pad::PadOn(kb, 0) == pad::kNoPad);
+    EXPECT(SeatOf(kb, 0b1, 0b0001'0001, 0) == -1 && SeatOf(kb, 0b1, 0b0001'0001, 4) == -1);
+    EXPECT(SeatOf(kb, 0b1, 0b0000'0000, 0) == -1);  // absent: not muted, but no player's either
+    const pad::PadTable joined = WithPadOn(kb, 0, 1);  // pad 1's Start adds player 2
+    EXPECT(pad::KeyboardPlaysOne(joined) && SeatOf(joined, 0b11, 0b1, 0) == 1);
+    EXPECT(!CanTradePads(joined, 0, 1) && WithPadsTraded(joined, 0, 1) == joined);
+    EXPECT(SeatWithPadGone(joined, 0b11, 0xFF) == 1);  // only player 2's pad can be gone
+    EXPECT(!pad::KeyboardPlaysOne(WithPlayerOne(kb, 4)) && pad::PadOn(WithPlayerOne(kb, 4), 0) == 4);
+    pad::PadTable bad = pad::kIdentity;
+    bad.live[1]       = pad::kKeyboard;
+    EXPECT(!pad::IsValid(bad));  // the keyboard plays player 1 only
+    EXPECT(pad::PadName(pad::kNoPad) == L"the keyboard" && TitleClaimed(pad::kNoPad) == L"Keyboard is set as Player 1");
+
+    // The claim: the device turning to the keyboard on the title, or the title coming up with the keyboard last used.
+    EXPECT(KeyboardClaims(true, false, true, true));    // a key on the title
+    EXPECT(KeyboardClaims(true, true, true, false));    // the title came up after the keyboard skipped the logos
+    EXPECT(!KeyboardClaims(true, true, true, true));    // already the keyboard's: no second claim
+    EXPECT(!KeyboardClaims(true, false, false, false)); // a key in the field
+    EXPECT(!KeyboardClaims(false, true, true, true));   // a pad's press on the title (its own TitlePress)
+
+    // View held takes player 1 from the keyboard for a pad on player 1's slot or a free one; never for a twin copy
+    // nor a pad beside a joined player's, nor while a pad plays player 1.
+    EXPECT(TakesPlayerOneFromKeyboard(kb, 0b1, 0, false));     // the muted pad on player 1's slot
+    EXPECT(TakesPlayerOneFromKeyboard(kb, 0b1, 3, false));     // the spare slot's pad
+    EXPECT(!TakesPlayerOneFromKeyboard(kb, 0b1, 0, true));     // Steam Input's copy of a pad
+    const pad::PadTable two = WithPadOn(kb, 4, 1);             // player 2 on the first PlayStation pad
+    EXPECT(!TakesPlayerOneFromKeyboard(two, 0b11, 1, false));  // pad 2, beside player 2's pad
+    EXPECT(!TakesPlayerOneFromKeyboard(pad::kIdentity, 0b1, 3, false));
+}
+
 /// Player 2's open window: the number between left and right, the character, then move, done, leave; one key a line.
 void PlayerTwosWindow()
 {
@@ -262,6 +298,7 @@ int main()
     NumbersTrade();
     PadsGone();
     PadsAndSeats();
+    KeyboardPlayerOne();
     PlayerTwosWindow();
     PlayerOnesWindow();
     Notes();

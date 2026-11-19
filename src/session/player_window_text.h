@@ -103,9 +103,13 @@ inline std::wstring PlayerName(int seat)
 }
 
 /// The notice after a press on the title screen: which controller plays player 1 (`pad` the physical pad, as
-/// input/pad_rules numbers them: 0..3 XInput, 4..7 PlayStation).
+/// input/pad_rules numbers them: 0..3 XInput, 4..7 PlayStation; negative: the keyboard).
 inline std::wstring TitleClaimed(int pad)
 {
+    if (pad < 0)
+    {
+        return L"Keyboard is set as Player 1";
+    }
     const bool playStation = pad >= 4;
     return (playStation ? L"PlayStation Controller " : L"Controller ") + std::to_wstring(pad % 4 + 1) +
            L" is set as Player 1";

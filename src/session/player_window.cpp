@@ -13,6 +13,7 @@
 #include "platform/settings.h"
 #include "players/actor_fields.h"
 #include "players/describe.h"
+#include "players/game_globals.h"
 #include "players/generation.h"
 #include "players/seats.h"
 #include "session/player_window_rules.h"
@@ -98,7 +99,10 @@ int                           g_lastScreens    = 0;  // the views as last shown
 unsigned long long            g_gameClosedSeen = 0;  // view_window's count of windows the game closed
 std::uint32_t                 g_opens = 0, g_joinsAsked = 0, g_leavesAsked = 0, g_titlePresses = 0, g_trades = 0,
                               g_takenBack = 0;
-int                           g_titleClaimedUser = -1;  // the pad the title's notice last named (-1: none since the title)
+constexpr int                 kNoClaim           = -2;
+int                           g_titleClaimedUser = kNoClaim;  // the pad the title's notice last named (kNoPad: the keyboard)
+bool                          g_keyboardLast     = false;  // the game's last device was the keyboard, at the last good read
+bool                          g_titleLast        = false;  // the title screen showed, at that read
 std::array<const void*, kSeats> g_drawnCharacters{};  // by seat: the character its window names (another redraws it)
 
 std::int64_t NowMs() noexcept
@@ -137,10 +141,19 @@ bool Plays(int seat) noexcept
     return rules::Plays(g_playing, seat);
 }
 
-/// Another player is in: the d-pad's left/right trade numbers.
+/// Another player is in, and both play on a pad (the keyboard's player 1 trades with no one): the d-pad's left/right
+/// trade numbers.
 bool CanTrade(int seat) noexcept
 {
-    return rules::TradePartner(seat, -1, g_playing) >= 0 || rules::TradePartner(seat, +1, g_playing) >= 0;
+    const auto table = input::pad_table::Table();
+    for (const int dir : {-1, +1})
+    {
+        if (const int other = rules::TradePartner(seat, dir, g_playing); other >= 0 && rules::CanTradePads(table, seat, other))
+        {
+            return true;
+        }
+    }
+    return false;
 }
 
 /// A seat no player holds, waits for, rejoins or is joining now (the lowest), or -1.
@@ -260,9 +273,9 @@ void SetIdlePads()
     const auto    table = input::pad_table::Table();
     for (int seat = 0; seat < kSeats; ++seat)
     {
-        if (g_open[static_cast<std::size_t>(seat)])
+        if (const int on = pad::PadOn(table, seat); g_open[static_cast<std::size_t>(seat)] && on >= 0)
         {
-            pads |= 1u << pad::PadOn(table, seat);
+            pads |= 1u << on;
         }
     }
     if (pads != g_idlePads)
@@ -459,6 +472,44 @@ void TitlePress(int user, std::uint16_t pressed)
     }
 }
 
+/// On the title screen: a key (or a mouse button) pressed makes the keyboard player 1's, as a pad's press makes that
+/// pad's; every pad then plays no one until its Start adds a player. Said on the same notice.
+void KeyboardTitlePress()
+{
+    const auto table = input::pad_table::Table();
+    if (!pad::KeyboardPlaysOne(table))
+    {
+        ++g_titlePresses;
+        input::pad_table::Set(pad::WithKeyboardPlayerOne(table),
+                              L"a key pressed on the title screen: the keyboard plays player 1, a pad's Start adds a player");
+    }
+    if (g_titleClaimedUser != pad::kNoPad)
+    {
+        g_titleClaimedUser = pad::kNoPad;
+        hud::save_notice::Show(text::TitleClaimed(pad::kNoPad), kTitleClaimedSeconds);
+    }
+}
+
+/// The game's device class turning to the keyboard's on the title screen: the keyboard's press there (the game's own
+/// "keyboard or mouse button used" flag, folded into the class by its input tick; a mouse move does not count).
+void WatchKeyboardOnTitle()
+{
+    std::uint8_t deviceClass = 0;
+    if (!platform::Read(players::game_globals::Object(players::game_globals::Global::SquareInputOwner),
+                        facts::kInputDeviceClass, deviceClass))
+    {
+        return;  // unread: no edge from a failed read
+    }
+    const bool keyboard = deviceClass == facts::kDeviceClassKeyboard;
+    const bool title    = views::AtTitleNow();
+    if (rules::KeyboardClaims(keyboard, g_keyboardLast, title, g_titleLast))
+    {
+        KeyboardTitlePress();
+    }
+    g_keyboardLast = keyboard;
+    g_titleLast    = title;
+}
+
 /// Each screen's seat now (-1 for a copy's): the engine's list placed by the screen order, as the layout places it.
 std::array<int, kSeats> SeatOnScreens()
 {
@@ -523,8 +574,15 @@ void TradeNumber(int seat, int dir)
                       players::SeatName(seat), players::SeatName(other));
         return;
     }
-    const auto order = views::column_rules::OrderShowing(rules::Traded(SeatOnScreens(), seat, other));
     const auto table = input::pad_table::Table();
+    if (!rules::CanTradePads(table, seat, other))
+    {
+        platform::Log(L"player window: {} and {} cannot trade numbers: player 1 plays on the keyboard, which stays player "
+                      L"1's",
+                      players::SeatName(seat), players::SeatName(other));
+        return;
+    }
+    const auto order = views::column_rules::OrderShowing(rules::Traded(SeatOnScreens(), seat, other));
     if (!order || !input::pad_table::Set(rules::WithPadsTraded(table, seat, other), L"two players traded numbers"))
     {
         platform::Log(L"player window: {} and {} cannot trade numbers ({})", players::SeatName(seat),
@@ -617,7 +675,7 @@ bool Install() noexcept
     platform::Log(L"player window: Start on a pad that plays no one takes back a player whose pad is gone, else adds a "
                   L"player on it; View held a second opens that player's own window (d-pad left/right: trade player "
                   L"numbers, LB/RB: move the view, A: done, B held: leave); on the title screen the pad that presses "
-                  L"plays player 1");
+                  L"plays player 1, or the keyboard, when a key is pressed there (every pad then joins with Start)");
     return true;
 }
 
@@ -677,7 +735,9 @@ void Remove() noexcept
     g_startWhenField = -1;
     g_idlePads       = 0;
     g_queued         = 0;
-    g_titleClaimedUser = -1;
+    g_titleClaimedUser = kNoClaim;
+    g_keyboardLast   = false;
+    g_titleLast      = false;
     g_waiting        = {};
     g_joinPending    = {};
     g_waitSaid       = {};
@@ -708,12 +768,13 @@ try
         hud::save_notice::End();
     }
     hud::save_notice::Tick();
+    WatchKeyboardOnTitle();
     // The title is read only when a press is to be told apart (the press there takes player 1). A press anywhere else
     // ends the title's visit: the next one's first press is said again.
     const bool title = count > 0 && views::AtTitleNow();
     if (count > 0 && !title)
     {
-        g_titleClaimedUser = -1;
+        g_titleClaimedUser = kNoClaim;
     }
 
     // Players gone (a leave, Ctrl+F8, a field exit) take their windows; one view (a scene, a menu) closes them all.
@@ -785,6 +846,19 @@ try
         const int seat = SeatOfPad(e.user);
         if (e.open)
         {
+            if (seat < 0 && rules::TakesPlayerOneFromKeyboard(input::pad_table::Table(), g_playing, e.user,
+                                                              input::pad_table::TwinOf(e.user, pad::kView) >= 0))
+            {
+                // While the keyboard plays player 1 (a key on the title, or a stray click there), View held on a pad
+                // that plays no one takes player 1 back for that pad.
+                if (input::pad_table::Set(rules::WithPlayerOne(input::pad_table::Table(), e.user),
+                                          L"View held on a pad while the keyboard played player 1: the pad plays player 1"))
+                {
+                    platform::Log(L"player window: {} held View: it takes player 1 from the keyboard", pad::PadName(e.user));
+                    g_redraw = true;
+                }
+                continue;
+            }
             if (seat < 0)
             {
                 continue;  // a pad that plays no one: Start joins

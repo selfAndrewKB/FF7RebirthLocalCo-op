@@ -130,6 +130,14 @@ void TestHold()
     EXPECT(wideContext.Open() && wide[0] == 2 && wide[79] == 2);
     wide[70] = 9;
     EXPECT(wideContext.Close() == 1 && wide[0] == 1 && wide[70] == 1 && wide[79] == 1);
+
+    // A store's bytes are its ranges' total: two 16-byte ranges need a 32-byte store (a stick scope's merged sticks
+    // and the keyboard's digital stick); a 16-byte one refuses them.
+    std::array<float, 4> merged{}, digital{};
+    const ByteContext::Range two[] = {{At(merged.data()), 16, Kind::Set}, {At(digital.data()), 16, Kind::Set}};
+    ByteStore<2, 32>         fits;
+    ByteStore<2, 16>         tooSmall;
+    EXPECT(fits.Define(two) && !tooSmall.Define(two));
 }
 
 void TestRefusals()

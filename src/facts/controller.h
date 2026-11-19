@@ -119,6 +119,13 @@ inline constexpr FunctionFact kInputKeyCopy{L"InputKey24_CopyAddRef", 0x1408DAE0
 inline constexpr std::uintptr_t kSquareInputGlobal     = 0x149186160;
 inline constexpr std::uintptr_t kDirectInputOnlyFlag   = 0x148F32990;
 inline constexpr std::uint32_t  kInputMergedSticks     = 0x1210;  // float LX, LY, RX, RY
+/// The keyboard's digital stick, float LX, LY, RX, RY (±1/0): the input Tick writes it from the movement and camera
+/// keys' action bits; the stick getter prefers it to the merged sticks when it is not zero (RE-kbm-square-input.md).
+inline constexpr std::uint32_t  kInputDigitalSticks    = 0x1120;
+/// The last device class (1 keyboard and mouse: a key, a mouse button or the wheel; 2 XInput; 0 the PlayStation reader;
+/// 3 DirectInput), one byte the input Tick keeps from its frame's input flags.
+inline constexpr std::uint32_t  kInputDeviceClass      = 0x1274;
+inline constexpr std::uint8_t   kDeviceClassKeyboard   = 1;
 inline constexpr std::uint32_t  kInputDeviceBanks      = 0x11D0;  // {Record* data; int32 num; int32 max}
 inline constexpr std::uint32_t  kInputBankHeaderSize   = 16;
 inline constexpr std::uint32_t  kXInputBank            = 1;

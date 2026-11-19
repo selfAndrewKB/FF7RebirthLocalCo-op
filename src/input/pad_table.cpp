@@ -131,12 +131,15 @@ std::wstring TableText(const rules::PadTable& table)
     std::wstring                    text;
     for (int slot = 0; slot < kSlots; ++slot)
     {
-        const int live  = table.live[static_cast<std::size_t>(slot)];
-        const int other = table.lanes[static_cast<std::size_t>(rules::Lane(rules::kReaders - 1 - live, slot))];
+        const int live = table.live[static_cast<std::size_t>(slot)];
         text += std::format(L"{}{} {}", slot == 0 ? L"" : L", ", kNames[slot], rules::PadName(rules::PadOn(table, slot)));
-        if ((present >> other & 1u) != 0)
+        for (int reader = 0; reader < rules::kReaders; ++reader)
         {
-            text += std::format(L" (beside it {})", rules::PadName(other));
+            const int other = table.lanes[static_cast<std::size_t>(rules::Lane(reader, slot))];
+            if (reader != live && (present >> other & 1u) != 0)
+            {
+                text += std::format(L" (beside it {})", rules::PadName(other));
+            }
         }
     }
     return text;

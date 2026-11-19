@@ -83,6 +83,10 @@ bool PadTriggers(std::int32_t controllerId, float& left, float& right) noexcept;
 /// The controller id of the local player a controller belongs to, or -1.
 std::int32_t ControllerIdOf(const void* controller) noexcept;
 
+/// The controller id of the player the keyboard plays (player 1's): a StickScope for any other controller empties the
+/// keyboard's digital stick (its movement and camera keys) for the scope's length.
+std::int32_t KeyboardControllerId() noexcept;
+
 /// Replaces pad `controllerId`'s sticks with `sticks` in every StickScope for that pad, whatever the
 /// pad itself reports and whether or not the game window has focus; null puts the pad back. Used by
 /// control scripts (control/remote.h). Game thread only.
@@ -104,7 +108,9 @@ public:
     bool Held() const noexcept { return held_; }
 
 private:
-    platform::ByteStore<1, sizeof(Sticks)> context_;
+    // The merged sticks, and the keyboard's digital stick emptied off its player: two ranges of a Sticks each (the
+    // store's size is its ranges' total).
+    platform::ByteStore<2, 2 * sizeof(Sticks)> context_;
     bool                                   held_ = false;
 };
 

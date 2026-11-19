@@ -23,6 +23,8 @@ inline constexpr int kPads    = kSlots * kReaders;  // pad p: reader p / kSlots,
 
 inline constexpr int kXInput      = 0;  // pads 0..3: XInput users 0..3
 inline constexpr int kPlayStation = 1;  // pads 4..7: the PlayStation reader's pads by scePad user 1..4
+inline constexpr int kKeyboard    = 2;  // as player 1's live "reader": the keyboard plays player 1, no pad there does
+inline constexpr int kNoPad       = -1;  // PadOn of a slot the keyboard plays
 
 constexpr int ReaderOf(int pad) noexcept
 {
@@ -35,10 +37,14 @@ constexpr int Lane(int reader, int slot) noexcept
     return reader * kSlots + slot;
 }
 
-/// "pad 2" for XInput user 1, "PlayStation pad 1" for the PlayStation reader's first pad: the log's and the console's
-/// names.
+/// "pad 2" for XInput user 1, "PlayStation pad 1" for the PlayStation reader's first pad, "the keyboard" for kNoPad
+/// (a slot the keyboard plays): the log's and the console's names.
 inline std::wstring PadName(int pad)
 {
+    if (pad < 0)
+    {
+        return L"the keyboard";
+    }
     return (ReaderOf(pad) == kPlayStation ? L"PlayStation pad " : L"pad ") + std::to_wstring(pad % kSlots + 1);
 }
 
@@ -143,11 +149,12 @@ constexpr bool IsValid(const PadTable& table) noexcept
         }
         seen[static_cast<std::size_t>(pad)] = true;
     }
-    for (const std::uint8_t reader : table.live)
+    for (int slot = 0; slot < kSlots; ++slot)
     {
-        if (reader >= kReaders)
+        const int reader = table.live[static_cast<std::size_t>(slot)];
+        if (reader >= kReaders && !(slot == 0 && reader == kKeyboard))
         {
-            return false;
+            return false;  // the keyboard plays player 1 only
         }
     }
     return true;
@@ -166,10 +173,25 @@ constexpr int SlotOf(const PadTable& table, int pad) noexcept
     return -1;
 }
 
-/// The pad on `slot` that plays its player: the slot's live reader's.
+/// The pad on `slot` that plays its player: the slot's live reader's; kNoPad when the keyboard plays it.
 constexpr int PadOn(const PadTable& table, int slot) noexcept
 {
-    return table.lanes[static_cast<std::size_t>(Lane(table.live[static_cast<std::size_t>(slot)], slot))];
+    const int reader = table.live[static_cast<std::size_t>(slot)];
+    return reader >= kReaders ? kNoPad : table.lanes[static_cast<std::size_t>(Lane(reader, slot))];
+}
+
+/// The keyboard plays player 1.
+constexpr bool KeyboardPlaysOne(const PadTable& table) noexcept
+{
+    return table.live[0] == kKeyboard;
+}
+
+/// The table with the keyboard playing player 1: every pad on player 1's slot is muted while it does (a pad's press on
+/// the title takes player 1 back, WithPadOn).
+constexpr PadTable WithKeyboardPlayerOne(PadTable table) noexcept
+{
+    table.live[0] = static_cast<std::uint8_t>(kKeyboard);
+    return table;
 }
 
 /// The table with pad `which` on `slot` (swapped, in its own reader, with the pad there) and playing its player: the
@@ -292,8 +314,8 @@ constexpr std::uint16_t StartGate(std::uint16_t buttons, int slot, std::uint32_t
     return PlayerSlot(slot, playing) ? buttons : static_cast<std::uint16_t>(buttons & ~kStart);
 }
 
-/// `pad` is muted: it answers (`present`, bit p: pad p answers) on a player's slot (`playing`) whose live reader is the
-/// other one, while that reader's pad there answers too. It reads idle to the game and plays no one, so its Start
+/// `pad` is muted: it answers (`present`, bit p: pad p answers) on a player's slot (`playing`) whose live reader is
+/// another one, while that reader's pad there answers too, or the keyboard plays that slot. It reads idle to the game and plays no one, so its Start
 /// joins. A slot's other pad while the live one is absent plays on (one person, one pad, whichever kind it is).
 constexpr bool Muted(const PadTable& table, std::uint32_t playing, std::uint32_t present, int pad) noexcept
 {
@@ -303,7 +325,8 @@ constexpr bool Muted(const PadTable& table, std::uint32_t playing, std::uint32_t
     {
         return false;
     }
-    return (present >> PadOn(table, slot) & 1u) != 0;
+    const int live = PadOn(table, slot);
+    return live == kNoPad || (present >> live & 1u) != 0;  // the keyboard is always there
 }
 
 // One pad read by both readers: Steam Input shows a PlayStation pad as an XInput pad while the game also reads it

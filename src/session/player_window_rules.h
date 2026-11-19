@@ -85,10 +85,38 @@ constexpr pad::PadTable WithPlayerOne(const pad::PadTable& table, int which) noe
     return WithPadOn(table, which, 0);
 }
 
+/// The keyboard takes player 1 on the title screen: the game's last device used turned to the keyboard there (a key, a
+/// mouse button or the wheel), or the title came up with the keyboard the last device used (its keys skipped the
+/// logos). `keyboard`/`title` now and at the last good read.
+constexpr bool KeyboardClaims(bool keyboard, bool keyboardBefore, bool title, bool titleBefore) noexcept
+{
+    return title && keyboard && (!keyboardBefore || !titleBefore);
+}
+
+/// View held on pad `which` takes player 1 from the keyboard: the keyboard plays player 1, and the pad is on player 1's
+/// slot or on no player's, and is no copy of another pad (`twin`: Steam Input's second read of a pad whose own View
+/// hold is its player's window).
+constexpr bool TakesPlayerOneFromKeyboard(const pad::PadTable& table, std::uint32_t playing, int which, bool twin) noexcept
+{
+    const int slot = pad::SlotOf(table, which);
+    const bool someonesSlot = slot > 0 && slot < kSeats && pad::PlayerSlot(slot, playing);
+    return pad::KeyboardPlaysOne(table) && !twin && slot >= 0 && !someonesSlot;
+}
+
+/// Players on slots `a` and `b` can trade numbers: each plays on a pad (the keyboard's player 1 stays player 1).
+constexpr bool CanTradePads(const pad::PadTable& table, int a, int b) noexcept
+{
+    return pad::PadOn(table, a) != pad::kNoPad && pad::PadOn(table, b) != pad::kNoPad;
+}
+
 /// The pad table after the players on slots `a` and `b` trade numbers: each one's pad plays the other number, whatever
-/// reader either pad is on.
+/// reader either pad is on. Unchanged unless CanTradePads.
 constexpr pad::PadTable WithPadsTraded(const pad::PadTable& table, int a, int b) noexcept
 {
+    if (!CanTradePads(table, a, b))
+    {
+        return table;
+    }
     const int padA = pad::PadOn(table, a);
     const int padB = pad::PadOn(table, b);
     return WithPadOn(WithPadOn(table, padA, b), padB, a);
@@ -105,7 +133,7 @@ constexpr bool Plays(std::uint32_t playing, int seat) noexcept
 constexpr int SeatOf(const pad::PadTable& table, std::uint32_t playing, std::uint32_t present, int which) noexcept
 {
     const int slot = pad::SlotOf(table, which);
-    if (slot < 0 || pad::Muted(table, playing, present, which))
+    if (slot < 0 || pad::Muted(table, playing, present, which) || pad::PadOn(table, slot) == pad::kNoPad)
     {
         return -1;
     }
@@ -147,7 +175,8 @@ constexpr int SeatWithPadGone(const pad::PadTable& table, std::uint32_t playing,
 {
     for (int seat = 0; seat < kSeats; ++seat)
     {
-        if (Plays(playing, seat) && (gonePads & (1u << pad::PadOn(table, seat))) != 0)
+        const int on = pad::PadOn(table, seat);  // kNoPad: the keyboard's, never gone
+        if (Plays(playing, seat) && on >= 0 && (gonePads & (1u << on)) != 0)
         {
             return seat;
         }

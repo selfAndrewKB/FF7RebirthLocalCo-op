@@ -23,6 +23,7 @@
 #include <array>
 #include <atomic>
 #include <cstring>
+#include <utility>
 #include <optional>
 
 namespace lss::input::pad_sticks {
@@ -44,6 +45,7 @@ std::atomic<bool>     g_enabled{false};
 std::atomic<bool>     g_stoodDown{false};  // SetStoodDown
 std::atomic<unsigned> g_mask{kPartSeatInput | kPartPlayerOneMove | kPartMemberTick | kPartPlayerOneDetect};
 bool                  g_scopeOpen = false;  // game thread only
+bool                  g_defineFailSaid = false;  // a scope that could not be set up was said (game thread)
 
 // Per controller id, set by control scripts; game thread only.
 constexpr std::int32_t kOverridePads = 4;
@@ -227,6 +229,11 @@ std::int32_t ControllerIdOf(const void* controller) noexcept
     return id;
 }
 
+std::int32_t KeyboardControllerId() noexcept
+{
+    return 0;  // player 1's: the engine and Square's tables give the keyboard user 0
+}
+
 void SetStickOverride(std::int32_t controllerId, const Sticks* sticks) noexcept
 {
     if (controllerId < 0 || controllerId >= kOverridePads)
@@ -264,13 +271,27 @@ StickScope::StickScope(std::int32_t controllerId) noexcept
         const auto  banks = MergedBanks(input, count);
         own = SelectPadSticks(std::span<const StickBank>(banks.data(), count), controllerId, merged);
     }
-    const platform::ByteContext::Range range{reinterpret_cast<std::uintptr_t>(input + facts::kInputMergedSticks),
-                                             sizeof(Sticks), platform::ByteContext::Kind::Set};
-    if (!context_.Define(std::span<const platform::ByteContext::Range>(&range, 1)))
+    // The keyboard's movement and camera keys (the digital stick, which the game's stick getter prefers to the pads'
+    // when it is not zero) are its player's alone: emptied in every other player's scope.
+    const bool                         keyboard = controllerId == KeyboardControllerId();
+    const platform::ByteContext::Range ranges[2]{
+        {reinterpret_cast<std::uintptr_t>(input + facts::kInputMergedSticks), sizeof(Sticks), platform::ByteContext::Kind::Set},
+        {reinterpret_cast<std::uintptr_t>(input + facts::kInputDigitalSticks), sizeof(Sticks), platform::ByteContext::Kind::Set}};
+    if (!context_.Define(std::span<const platform::ByteContext::Range>(ranges, keyboard ? 1 : 2)))
     {
+        if (!std::exchange(g_defineFailSaid, true))
+        {
+            platform::LogWarning(L"per-pad sticks: a pad's scope could not be set up (controller id {}); that player reads "
+                                 L"the merged sticks",
+                                 controllerId);
+        }
         return;
     }
     std::memcpy(context_.Value(0).data(), own.data(), sizeof(own));
+    if (!keyboard)
+    {
+        std::memset(context_.Value(1).data(), 0, sizeof(Sticks));
+    }
     held_       = context_.Open();
     g_scopeOpen = held_;
 }
