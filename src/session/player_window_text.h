@@ -67,6 +67,8 @@ struct Window
     bool         canTrade   = false;  // another player is in: the d-pad's left/right trade player numbers
     bool         canMove    = false;  // more than one screen: LB/RB move the view
     bool         startJoins = false;  // a seat is free: Start on another pad adds a player (said on player 1's)
+    bool         keyboard   = false;  // the player plays on the keyboard: its keys' names, not the pad's icons
+    bool         keyboardJoins = false;  // Tab held adds a player on the keyboard too (it plays no one of its own)
     Note         note       = Note::None;
     int          about      = 0;      // the note's player
     std::wstring aboutName;           // the note's player's character in capitals, when the note names it
@@ -128,12 +130,35 @@ inline ScreenText TextFor(const Window& w)
 
     const bool        trade = w.canTrade && w.open;
     std::vector<Line> lines;
-    lines.push_back({(trade ? icon(L"left") + L" " + player + L" " + icon(L"right") : player) + L"    " + yellow(w.name),
+    lines.push_back({(trade && !w.keyboard ? icon(L"left") + L" " + player + L" " + icon(L"right") : trade ? L"<  " + player + L"  >" : player) +
+                         L"    " + yellow(w.name),
                      (trade ? L"<  " + player + L"  >" : player) + L"    " + w.name});
     if (w.note != Note::None)
     {
         const std::wstring note = NoteText(w.note, w.about, w.aboutName);
         lines.push_back({note, note});
+    }
+    else if (w.open && w.keyboard)
+    {
+        // The keyboard's keys by name, the same in both forms.
+        const auto both = [&lines](const std::wstring& text) { lines.push_back({text, text}); };
+        if (w.canTrade)
+        {
+            both(L"Left/Right: player number");
+        }
+        if (w.canMove)
+        {
+            both(L"Q/E: Change View");
+        }
+        both(L"Enter: done");
+        if (w.seat >= 1)
+        {
+            both(L"Hold Backspace to leave the game");
+        }
+        if (w.seat == 0 && w.startJoins)
+        {
+            both(L"Press Start on a controller to join");
+        }
     }
     else if (w.open)
     {
@@ -143,7 +168,7 @@ inline ScreenText TextFor(const Window& w)
         }
         if (w.canMove)
         {
-            lines.push_back({icon(L"L1") + L" " + icon(L"R1") + L" Move my view", L"LB/RB: move my view"});
+            lines.push_back({icon(L"L1") + L" " + icon(L"R1") + L" Change View", L"LB/RB: Change View"});
         }
         lines.push_back({icon(L"cross") + L" Done", L"A: done"});
         if (w.seat >= 1)
@@ -152,8 +177,10 @@ inline ScreenText TextFor(const Window& w)
         }
         if (w.seat == 0 && w.startJoins)
         {
-            lines.push_back({L"Press " + icon(L"options") + L" on another controller to join",
-                             L"Press Start on another controller to join"});
+            lines.push_back({L"Press " + icon(L"options") + L" on another controller" +
+                                 (w.keyboardJoins ? L" or hold Tab on the keyboard" : L"") + L" to join",
+                             std::wstring(L"Press Start on another controller") +
+                                 (w.keyboardJoins ? L" or hold Tab" : L"") + L" to join"});
         }
     }
 

@@ -5,6 +5,7 @@
 
 #include "input/button_view.h"
 #include "input/pad_sticks.h"
+#include "input/pad_table.h"
 #include "platform/build_value.h"
 #include "platform/call_redirect.h"
 #include "platform/frame_watch.h"
@@ -457,10 +458,10 @@ void WrittenBytes(const Table& table, std::vector<HeldBytes>& bytes) noexcept
     }
 }
 
-/// Once per frame after the game's Tick: advances each view (with the seats in `seats`) and writes the menu player's
+/// Once per frame after the game's Tick: advances each view (with the seats in `seats`, the keyboard's `keyboardSeat`) and writes the menu player's
 /// (player 1's, or a seat's while its player's shop is up), or the game's merged state where every pad is the game's
 /// pad (WrittenBytes).
-void SplitTable(const std::byte* owner, std::size_t which, unsigned seats)
+void SplitTable(const std::byte* owner, std::size_t which, unsigned seats, int keyboardSeat)
 {
     Table& table = g_tables[which];
     if (!Load(owner, table, kTables[which].offset))
@@ -479,7 +480,7 @@ void SplitTable(const std::byte* owner, std::size_t which, unsigned seats)
             table.names[i] = element.name;  // a new key in this slot: its views start afresh
             table.views[i] = {};
         }
-        table.views[i].Advance(element.held, element.sources, seats);
+        table.views[i].Advance(element.held, element.sources, seats, keyboardSeat);
         if (which == 0 && g_leftThumb != 0 && element.name == g_leftThumb)
         {
             for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
@@ -619,10 +620,11 @@ void Tick(void* self, float deltaTime, void* application, void* cursor)
         {
             return;
         }
-        const unsigned seats = SeatsIn();
+        const unsigned seats    = SeatsIn();
+        const int      keyboard = pad_table::KeyboardSeat();
         for (std::size_t which = 0; which < kTables.size(); ++which)
         {
-            SplitTable(owner, which, seats);
+            SplitTable(owner, which, seats, keyboard);
         }
         g_active = true;
         ++g_framesSplit;
@@ -647,7 +649,7 @@ char ActionDown(void* owner, void* unused, std::uint32_t sourceBit, void* event,
     {
         return g_actionDown(owner, unused, sourceBit, event, alreadyHandled);
     }
-    const int seat = button_view::SeatOfSource(sourceBit, SeatsIn());
+    const int seat = button_view::SeatOfSource(sourceBit, SeatsIn(), pad_table::KeyboardSeat());
     if (g_menuPlayer != 0)
     {
         // A seat's shop is up: its pad is the menu pad, as the one pad is in single player; pad 1's presses and any
@@ -717,7 +719,7 @@ char ExtraKeyDown(void* owner, void* unused, std::uint32_t sourceBit, void* even
         {
             built |= button_view::SeatBit(seat);
         }
-        const int seat = button_view::SeatOfSource(sourceBit, built);
+        const int seat = button_view::SeatOfSource(sourceBit, built, pad_table::KeyboardSeat());
         platform::LogTrace(L"buttons: extra key {} from {} (source bit {}, already handled {}) -> {}",
                       players::unreal::NameText(key),
                       seat != 0 ? std::format(L"pad {}", seat + 1) : std::wstring(L"pad 1 or another device"),

@@ -18,8 +18,13 @@ void TheTable()
     EXPECT(!IsValid(FromXInput({0, 0, 1, 3})));
     EXPECT(!IsValid(FromXInput({0, 1, 2, 4})));  // a PlayStation pad in an XInput lane
     PadTable live = kIdentity;
-    live.live[1]  = 2;
-    EXPECT(!IsValid(live));  // no third reader
+    live.live[3]  = kKeyboard;
+    EXPECT(!IsValid(live));  // the keyboard never on the spare slot
+    live.live[3]  = 3;
+    EXPECT(!IsValid(live));  // no such reader
+    live.live[3]  = kXInput;
+    live.live[1]  = kKeyboard;
+    EXPECT(IsValid(live) && KeyboardSlot(live) == 1 && PadOn(live, 1) == kNoPad);  // the keyboard plays player 2
     EXPECT(SlotOf(FromXInput({2, 0, 1, 3}), 0) == 1);
     EXPECT(SlotOf(FromXInput({2, 0, 1, 3}), 3) == 3);
     EXPECT(SlotOf(kIdentity, 5) == 1);  // the second PlayStation pad, on record 1
@@ -54,6 +59,19 @@ void TheMute()
     EXPECT(Muted(kIdentity, 0b11, 0b0010'0010, 5));
     EXPECT(MutedPads(kIdentity, kPlayer, kBoth) == 0b0001'0000);
     EXPECT(!Muted(kIdentity, kPlayer, 0b0000'0001, 4));  // a PlayStation pad that does not answer is not muted
+    // The keyboard on player 2's slot mutes both of its pads that answer (the keyboard is always there).
+    const PadTable kb = WithKeyboardOn(kIdentity, 1);
+    EXPECT(Muted(kb, 0b11, 0b0010'0010, 1) && Muted(kb, 0b11, 0b0010'0010, 5));
+    EXPECT(!Muted(kb, 0b01, 0b0010'0010, 1));  // player 2 not in: no one's slot
+    EXPECT(!Muted(kb, 0b11, 0b0000'0000, 1));  // absent: not muted
+    EXPECT(MutedPads(kb, 0b11, 0b0011'0011) == 0b0011'0010);  // and the PlayStation pad beside player 1's
+}
+
+/// A key event is the keyboard's when it has a key code; a pad button's event has none.
+void KeyboardKeys()
+{
+    EXPECT(IsKeyboardKey(kOpenKey) && IsKeyboardKey(kLeaveKey) && IsKeyboardKey(0x57));
+    EXPECT(!IsKeyboardKey(0) && !IsKeyboardKey(256));
 }
 
 /// One pad read by both readers: presses within kTwinMs are one; a twin's Start joins only as the PlayStation copy,
@@ -72,9 +90,10 @@ void TheTwins()
 void PlayStationButtons()
 {
     EXPECT(FromPlayStation(0x8) == kStart);
-    EXPECT(FromPlayStation(0x100000) == kView);
+    EXPECT(FromPlayStation(kCreate) == kView);    // the opener, left of the centre as View is
+    EXPECT(FromPlayStation(0x100000) == 0);       // the touchpad: the game's map button, not held back
     EXPECT(FromPlayStation(0x4000 | 0x2000) == (kA | kB));
-    EXPECT(FromPlayStation(0x100 | 0x200 | 0x1 | 0x10000) == 0);  // L2, R2 digital; Create and PS
+    EXPECT(FromPlayStation(0x100 | 0x200 | 0x10000 | 0x200000) == 0);  // L2, R2 digital; PS and Mute
     EXPECT(ToPlayStation(kStart | kY) == (0x8u | 0x1000u));
     for (const ButtonPair& b : kPlayStationButtons)
     {
@@ -82,8 +101,11 @@ void PlayStationButtons()
     }
     // Start held back (a spare pad), L2 kept as it is.
     EXPECT(PlayStationShown(0x8 | 0x4000 | 0x100, kStart | kA, kA) == (0x4000u | 0x100u));
-    // View's tap at its let-go added, Cross kept.
-    EXPECT(PlayStationShown(0x4000, kA, kA | kView) == (0x4000u | 0x100000u));
+    // The opener's tap at its let-go is Create, which the game never sees; Cross kept.
+    EXPECT(PlayStationShown(0x4000, kA, kA | kView) == 0x4000u);
+    // Create held back, the touchpad and the system buttons: the touchpad through, the rest never.
+    EXPECT(PlayStationShown(kCreate | 0x100000 | 0x10000 | 0x200000, kView, 0) == 0x100000u);
+    EXPECT(PlayStationShown(0x10000 | 0x4000, kA, kA) == 0x4000u);  // PS alone, no rule changed: still taken out
 }
 
 /// B is a tap or a hold, never both: a let-go within a second is the tap (at the let-go); a second down is the hold,
@@ -195,6 +217,7 @@ int main()
     TheTable();
     WithPadOnSwaps();
     TheMute();
+    KeyboardKeys();
     PlayStationButtons();
     TheTwins();
     TheOpener();

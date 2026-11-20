@@ -11,7 +11,8 @@
 //     a copy), so a person's own pad and their view end up in front of them;
 //   - A, Start or a B tap closes it; B held a second takes player 2 or 3 out of the game (player 1 is refused).
 // A pad on the title screen that presses a button becomes player 1's. A spare pad's Start takes back a player whose
-// pad is gone before it adds a new player.
+// pad is gone before it adds a new player. The keyboard and mouse are one more device: a key on the title makes them
+// player 1's alone, Tab held adds a player on them, and they trade numbers in the windows as a pad does.
 
 #include "input/pad_rules.h"
 
@@ -85,6 +86,24 @@ constexpr pad::PadTable WithPlayerOne(const pad::PadTable& table, int which) noe
     return WithPadOn(table, which, 0);
 }
 
+/// The slot `device` (a pad, or pad_rules::kKeyboardPad) plays as its slot's live device, or -1 (a muted pad, a spare
+/// one, the keyboard beside player 1).
+constexpr int DeviceSlot(const pad::PadTable& table, int device) noexcept
+{
+    if (device == pad::kKeyboardPad)
+    {
+        return pad::KeyboardSlot(table);
+    }
+    const int slot = pad::SlotOf(table, device);
+    return slot >= 0 && pad::PadOn(table, slot) == device ? slot : -1;
+}
+
+/// The pad table with `device` (a pad, or pad_rules::kKeyboardPad) playing `slot`'s player: a join, a take-back.
+constexpr pad::PadTable WithDeviceOn(const pad::PadTable& table, int device, int slot) noexcept
+{
+    return device == pad::kKeyboardPad ? pad::WithKeyboardOn(table, slot) : WithPadOn(table, device, slot);
+}
+
 /// The keyboard takes player 1 on the title screen: the game's last device used turned to the keyboard there (a key, a
 /// mouse button or the wheel), or the title came up with the keyboard the last device used (its keys skipped the
 /// logos). `keyboard`/`title` now and at the last good read.
@@ -93,24 +112,15 @@ constexpr bool KeyboardClaims(bool keyboard, bool keyboardBefore, bool title, bo
     return title && keyboard && (!keyboardBefore || !titleBefore);
 }
 
-/// View held on pad `which` takes player 1 from the keyboard: the keyboard plays player 1, and the pad is on player 1's
-/// slot or on no player's, and is no copy of another pad (`twin`: Steam Input's second read of a pad whose own View
-/// hold is its player's window).
-constexpr bool TakesPlayerOneFromKeyboard(const pad::PadTable& table, std::uint32_t playing, int which, bool twin) noexcept
-{
-    const int slot = pad::SlotOf(table, which);
-    const bool someonesSlot = slot > 0 && slot < kSeats && pad::PlayerSlot(slot, playing);
-    return pad::KeyboardPlaysOne(table) && !twin && slot >= 0 && !someonesSlot;
-}
-
-/// Players on slots `a` and `b` can trade numbers: each plays on a pad (the keyboard's player 1 stays player 1).
+/// Players on slots `a` and `b` can trade numbers: two players' slots (the keyboard plays one of them at most).
 constexpr bool CanTradePads(const pad::PadTable& table, int a, int b) noexcept
 {
-    return pad::PadOn(table, a) != pad::kNoPad && pad::PadOn(table, b) != pad::kNoPad;
+    return a != b && a >= 0 && a < kSeats && b >= 0 && b < kSeats &&
+           (pad::PadOn(table, a) != pad::kNoPad || pad::PadOn(table, b) != pad::kNoPad);
 }
 
-/// The pad table after the players on slots `a` and `b` trade numbers: each one's pad plays the other number, whatever
-/// reader either pad is on. Unchanged unless CanTradePads.
+/// The pad table after the players on slots `a` and `b` trade numbers: each one's device, a pad of either reader or the
+/// keyboard, plays the other number. Unchanged unless CanTradePads.
 constexpr pad::PadTable WithPadsTraded(const pad::PadTable& table, int a, int b) noexcept
 {
     if (!CanTradePads(table, a, b))
@@ -119,6 +129,14 @@ constexpr pad::PadTable WithPadsTraded(const pad::PadTable& table, int a, int b)
     }
     const int padA = pad::PadOn(table, a);
     const int padB = pad::PadOn(table, b);
+    if (padA == pad::kNoPad)
+    {
+        return pad::WithKeyboardOn(WithPadOn(table, padB, a), b);
+    }
+    if (padB == pad::kNoPad)
+    {
+        return pad::WithKeyboardOn(WithPadOn(table, padA, b), a);
+    }
     return WithPadOn(WithPadOn(table, padA, b), padB, a);
 }
 
@@ -129,9 +147,16 @@ constexpr bool Plays(std::uint32_t playing, int seat) noexcept
 }
 
 /// The seat pad `which` plays (its slot, while a player holds it; slot 0 always), or -1 for a pad that plays no one: a
-/// pad on no player's slot, or muted there (`present`, bit p: pad p answers; pad_rules::Muted).
+/// pad on no player's slot, or muted there (`present`, bit p: pad p answers; pad_rules::Muted). The keyboard
+/// (pad_rules::kKeyboardPad) plays the slot it plays alone, while a player holds it; beside player 1 it plays no one of
+/// its own.
 constexpr int SeatOf(const pad::PadTable& table, std::uint32_t playing, std::uint32_t present, int which) noexcept
 {
+    if (which == pad::kKeyboardPad)
+    {
+        const int slot = pad::KeyboardSlot(table);
+        return slot >= 0 && Plays(playing, slot) ? slot : -1;
+    }
     const int slot = pad::SlotOf(table, which);
     if (slot < 0 || pad::Muted(table, playing, present, which) || pad::PadOn(table, slot) == pad::kNoPad)
     {

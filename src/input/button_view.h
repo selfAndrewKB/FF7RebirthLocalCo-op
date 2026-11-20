@@ -5,8 +5,9 @@
 // Each action in Square's tables keeps the merged held byte and a mask of the sources holding it
 // (research/RE-p2-per-pad-buttons.md; confirmed live: pad 1 is bit 0, pad 2 bit 1). A player's view of
 // the action is "held, and held by one of that player's sources". A seat's sources are its own pad's
-// (players/seats.h: seat s plays pad s, XInput bit s, PlayStation bit 4+s, DirectInput bit 21+s); player 1 has every
-// other source: pad 1, the keyboard, the mouse, the game's own synthetic keys, and the pad of any seat
+// (players/seats.h: seat s plays pad s, XInput bit s, PlayStation bit 4+s, DirectInput bit 21+s), and the keyboard's
+// and the mouse's (bits 17-19) while the keyboard plays that seat; player 1 has every other source: pad 1, the
+// keyboard and mouse beside it, the game's own synthetic keys, and the pad of any seat
 // whose player is not in (as the game's one-pad merge has it). Requiring the merged held byte as well
 // keeps the game's releases that leave the mask set (a press the UI consumed, the Tick's auto-released
 // keys).
@@ -33,39 +34,49 @@ constexpr std::uint32_t PadBits(int id) noexcept
     return (1u << xinput) | (1u << playStation) | (1u << directInput);
 }
 
+/// The keyboard's sources: its two binding rows' bits and the mouse's (every mouse button, its repeat and the wheel).
+inline constexpr std::uint32_t kKeyboardBits = (1u << 17) | (1u << 18) | (1u << 19);
+
+/// The sources of `seat` (1.. a seat): its pad's, and the keyboard's while the keyboard plays it (`keyboardSeat`, the
+/// seat the keyboard plays alone; 0: beside player 1).
+constexpr std::uint32_t SeatSources(int seat, int keyboardSeat) noexcept
+{
+    return PadBits(seat) | (seat == keyboardSeat ? kKeyboardBits : 0u);
+}
+
 /// `seat` in a mask of seats (bit s for seat s).
 constexpr unsigned SeatBit(int seat) noexcept
 {
     return 1u << seat;
 }
 
-/// The pads of the seats in `seats` (a mask of SeatBit; player 1's bit is ignored).
-constexpr std::uint32_t SeatPads(unsigned seats) noexcept
+/// The sources of the seats in `seats` (a mask of SeatBit; player 1's bit is ignored).
+constexpr std::uint32_t SeatPads(unsigned seats, int keyboardSeat = 0) noexcept
 {
     std::uint32_t bits = 0;
     for (int seat = 1; seat < kPlayers; ++seat)
     {
         if ((seats & SeatBit(seat)) != 0)
         {
-            bits |= PadBits(seat);
+            bits |= SeatSources(seat, keyboardSeat);
         }
     }
     return bits;
 }
 
 /// The sources that belong to `player` (0 player 1, else a seat), with the seats in `seats` in: a seat's are its own
-/// pad's; player 1's are everything but the pads of the seats in.
-constexpr std::uint32_t PlayerSources(int player, unsigned seats) noexcept
+/// (SeatSources); player 1's are everything but the seats' in.
+constexpr std::uint32_t PlayerSources(int player, unsigned seats, int keyboardSeat = 0) noexcept
 {
-    return player == 0 ? ~SeatPads(seats) : PadBits(player);
+    return player == 0 ? ~SeatPads(seats, keyboardSeat) : SeatSources(player, keyboardSeat);
 }
 
-/// The seat in `seats` whose pad sent `sourceBit` (a source bit number, 0..31), or 0: player 1's source.
-constexpr int SeatOfSource(std::uint32_t sourceBit, unsigned seats) noexcept
+/// The seat in `seats` whose device sent `sourceBit` (a source bit number, 0..31), or 0: player 1's source.
+constexpr int SeatOfSource(std::uint32_t sourceBit, unsigned seats, int keyboardSeat = 0) noexcept
 {
     for (int seat = 1; seat < kPlayers; ++seat)
     {
-        if ((seats & SeatBit(seat)) != 0 && ((PadBits(seat) >> (sourceBit & 31)) & 1) != 0)
+        if ((seats & SeatBit(seat)) != 0 && ((SeatSources(seat, keyboardSeat) >> (sourceBit & 31)) & 1) != 0)
         {
             return seat;
         }
@@ -74,9 +85,9 @@ constexpr int SeatOfSource(std::uint32_t sourceBit, unsigned seats) noexcept
 }
 
 /// Whether `player` sees the action held, with the seats in `seats` in.
-constexpr bool Held(std::uint8_t mergedHeld, std::uint32_t sources, int player, unsigned seats) noexcept
+constexpr bool Held(std::uint8_t mergedHeld, std::uint32_t sources, int player, unsigned seats, int keyboardSeat = 0) noexcept
 {
-    return mergedHeld != 0 && (sources & PlayerSources(player, seats)) != 0;
+    return mergedHeld != 0 && (sources & PlayerSources(player, seats, keyboardSeat)) != 0;
 }
 
 /// One action's per-player held state, this frame and the one before, and the game's own merged
@@ -101,8 +112,9 @@ struct Views
     std::uint8_t left               = 0;  // the byte the mod left for the game (player 1's view unless Wrote says)
     bool         wrote              = false;
 
-    /// Once per frame, after the game's own advance. `byte` is the held byte as read now; `seats` the seats in.
-    void Advance(std::uint8_t byte, std::uint32_t sources, unsigned seats) noexcept
+    /// Once per frame, after the game's own advance. `byte` is the held byte as read now; `seats` the seats in;
+    /// `keyboardSeat` the seat the keyboard plays alone (0: beside player 1).
+    void Advance(std::uint8_t byte, std::uint32_t sources, unsigned seats, int keyboardSeat = 0) noexcept
     {
         gamePrevious = gameHeld;
         if (sources == 0)
@@ -116,7 +128,7 @@ struct Views
         for (int player = 0; player < kPlayers; ++player)
         {
             previous[player] = now[player];
-            now[player]      = Held(gameHeld, sources, player, seats);
+            now[player]      = Held(gameHeld, sources, player, seats, keyboardSeat);
         }
         left  = now[0] ? 1 : 0;
         wrote = true;

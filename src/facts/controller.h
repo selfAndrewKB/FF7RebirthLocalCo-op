@@ -131,4 +131,47 @@ inline constexpr std::uint32_t  kInputBankHeaderSize   = 16;
 inline constexpr std::uint32_t  kXInputBank            = 1;
 inline constexpr std::uint32_t  kDirectInputBank       = 2;
 
+// Square's input processor's key handlers
+/// SquareInput's key-down and key-up handlers, bool(owner, FSlateApplication&, const FKeyEvent&): Square's
+/// IInputProcessor slots 2 and 3 (RE-kbm-square-input.md, RE-p2-command-menu-input.md). Slate runs them before its
+/// focus path and the viewport, and a true answer ends the key there. A handler's first instruction (mov [rsp+8], rbx)
+/// is often patched by another hook (UE4SS's input handling puts a jump there, live), so each slot is checked to still
+/// name its handler and the bytes are checked after that instruction.
+inline constexpr std::uintptr_t kSquareKeyDownEntry = 0x145BA5CD8;
+inline constexpr std::uintptr_t kSquareKeyDown      = 0x141546D10;
+inline constexpr std::uint8_t   kSquareKeyDownRestBytes[] = {0x48, 0x89, 0x74, 0x24, 0x10, 0x48, 0x89, 0x7C, 0x24, 0x18,
+                                                             0x55, 0x48, 0x8B, 0xEC, 0xB8, 0x70, 0x00, 0x00, 0x00};
+inline constexpr FunctionFact   kSquareKeyDownAfterFirst{L"HandleKeyDownEvent after its first instruction", 0x141546D15,
+                                                         kSquareKeyDownRestBytes};
+inline constexpr std::uintptr_t kSquareKeyUpEntry = 0x145BA5CE0;
+inline constexpr std::uintptr_t kSquareKeyUp      = 0x141546794;
+inline constexpr std::uint8_t   kSquareKeyUpRestBytes[] = {0x48, 0x89, 0x6C, 0x24, 0x10, 0x56, 0x57, 0x41,
+                                                           0x56, 0xB8, 0x60, 0x00, 0x00, 0x00, 0xE8};
+inline constexpr FunctionFact   kSquareKeyUpAfterFirst{L"HandleKeyUpEvent after its first instruction", 0x141546799,
+                                                       kSquareKeyUpRestBytes};
+/// FKeyEvent (0x38 bytes): bIsRepeat (u8: the system's key repeat), UserIndex (i32: a pad's controller id; 0 for a
+/// key), the key's Windows virtual-key code (u32).
+inline constexpr std::size_t   kKeyEventBytes   = 0x38;
+inline constexpr std::uint32_t kKeyEventRepeat  = 0x0A;
+inline constexpr std::uint32_t kKeyEventUser    = 0x0C;
+inline constexpr std::uint32_t kKeyEventKeyCode = 0x34;
+/// FKeyEvent's copy (dst, src: the key's reference taken, not atomically: game thread) and its destructor (the key's
+/// reference let go).
+inline constexpr std::uint8_t kKeyEventCopyBytes[] = {0x48, 0x8D, 0x05, 0x25, 0x91, 0x83, 0x04, 0x48,
+                                                      0x89, 0x01, 0x0F, 0xB7, 0x42, 0x08};
+inline constexpr FunctionFact kKeyEventCopy{L"FKeyEvent copy", 0x140DD9B14, kKeyEventCopyBytes};
+inline constexpr std::uint8_t kKeyEventDestroyBytes[] = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0x00, 0x20, 0x39, 0x01,
+                                                         0x48, 0x2B, 0xE0, 0x48, 0x8B, 0xD9, 0x48, 0x83, 0xC1, 0x18, 0xE8};
+inline constexpr FunctionFact kKeyEventDestroy{L"FKeyEvent destructor", 0x140DD9B74, kKeyEventDestroyBytes};
+/// SquareInput's key-to-actions pass, bool(owner, FSlateApplication&, const FKeyEvent&): the key-down handler's work
+/// without noting the key held, as the game's own key repeat calls it; so its tick does not let the key go while the
+/// system reports it up, and the key stays down until a key-up handler call. Its input gate,
+/// bool(owner, FSlateApplication&), is what the key-down handler asks first (RE-kbm-square-input.md).
+inline constexpr std::uint8_t kSquareKeyToActionsBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x20, 0x55, 0x56, 0x57, 0x41, 0x54, 0x41, 0x55,
+                                                            0x41, 0x56, 0x41, 0x57, 0x48, 0x8D, 0xAC, 0x24, 0x90, 0xFC, 0xFF, 0xFF};
+inline constexpr FunctionFact kSquareKeyToActions{L"SquareInput's key-to-actions pass", 0x140E93770, kSquareKeyToActionsBytes};
+inline constexpr std::uint8_t kSquareInputGateBytes[] = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0x74, 0x02, 0x39, 0x01,
+                                                         0x48, 0x2B, 0xE0, 0x80, 0x79, 0x68, 0x00, 0x48, 0x8B, 0xD9, 0x0F, 0x84};
+inline constexpr FunctionFact kSquareInputGate{L"SquareInput's input gate", 0x140DDB900, kSquareInputGateBytes};
+
 }  // namespace lss::facts

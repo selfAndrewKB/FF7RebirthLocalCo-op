@@ -83,8 +83,9 @@ bool PadTriggers(std::int32_t controllerId, float& left, float& right) noexcept;
 /// The controller id of the local player a controller belongs to, or -1.
 std::int32_t ControllerIdOf(const void* controller) noexcept;
 
-/// The controller id of the player the keyboard plays (player 1's): a StickScope for any other controller empties the
-/// keyboard's digital stick (its movement and camera keys) for the scope's length.
+/// The controller id of the player the keyboard plays (player 1's, unless it plays player 2 or 3 alone: input/pad_table):
+/// a StickScope for any other controller empties the keyboard's digital stick (its movement and camera keys) for the
+/// scope's length. Game thread.
 std::int32_t KeyboardControllerId() noexcept;
 
 /// Replaces pad `controllerId`'s sticks with `sticks` in every StickScope for that pad, whatever the

@@ -3,6 +3,7 @@
 #include "facts/controller.h"
 #include "facts/engine.h"
 #include "input/pad_buttons.h"
+#include "input/pad_table.h"
 #include "input/stick_select.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
@@ -231,7 +232,15 @@ std::int32_t ControllerIdOf(const void* controller) noexcept
 
 std::int32_t KeyboardControllerId() noexcept
 {
-    return 0;  // player 1's: the engine and Square's tables give the keyboard user 0
+    // The player the keyboard plays alone (input/pad_table), while they are in; else player 1's, whose user the engine
+    // and Square's tables give the keyboard.
+    const int seat = pad_table::KeyboardSeat();
+    if (seat >= 1 && players::generation::Active(seat))
+    {
+        const std::int32_t id = ControllerIdOf(players::generation::ControllerOf(seat));
+        return id >= 0 ? id : 0;
+    }
+    return 0;
 }
 
 void SetStickOverride(std::int32_t controllerId, const Sticks* sticks) noexcept

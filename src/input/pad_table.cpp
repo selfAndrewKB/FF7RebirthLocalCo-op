@@ -19,6 +19,7 @@
 #include <bit>
 #include <cstdint>
 #include <format>
+#include <optional>
 #include <string>
 
 #ifndef WIN32_LEAN_AND_MEAN
@@ -76,6 +77,7 @@ std::uintptr_t         g_appGlobal    = 0;
 std::uintptr_t         g_sonyVTable   = 0;
 bool                   g_installed    = false;
 bool                   g_playStation  = false;  // the PlayStation reader's read and rumble go through the table
+std::uint8_t*          g_systemButtons = nullptr;  // the library's system-button switch, while the mod holds it on
 
 std::array<std::atomic<int>, kPads>           g_lanes{0, 1, 2, 3, 4, 5, 6, 7};
 std::array<std::atomic<std::uint8_t>, kSlots> g_live{};
@@ -98,11 +100,6 @@ std::uint32_t g_unseenRechecks = 0;      // the re-checks set for them
 bool          g_recheckFailing = false;  // the last re-check write failed (its warning said)
 bool          g_sonyLive       = false;  // the PlayStation reader's first read was seen (said once)
 std::wstring  g_last           = L"none yet";
-
-std::int64_t NowMs() noexcept
-{
-    return static_cast<std::int64_t>(GetTickCount64());
-}
 
 bool IsIdle(int pad) noexcept
 {
@@ -240,7 +237,7 @@ Shown Rule(int pad, int slot, std::uint16_t raw, std::uint8_t left, std::uint8_t
         ++g_opens;
         try
         {
-            platform::Log(L"pads: View held 1 s on {} (player {}'s slot)", rules::PadName(pad), slot + 1);
+            platform::Log(L"pads: {} held 1 s on {} (player {}'s slot)", rules::OpenerName(pad), rules::PadName(pad), slot + 1);
         }
         catch (...)
         {
@@ -457,6 +454,23 @@ void IdlePlayStation(std::uint8_t* data) noexcept
     platform::WriteGuarded(data + facts::kPadDataTouchCount, &touches, sizeof(touches));
 }
 
+/// After a PlayStation read: its buttons as read, system buttons included (empty if unreadable), and the game's data
+/// without them, as the library hands it to the game with its switch off.
+std::optional<std::uint32_t> TakeSystemButtons(std::uint8_t* data) noexcept
+{
+    std::uint32_t buttons = 0;
+    if (!platform::Read(data, facts::kPadDataButtons, buttons))
+    {
+        return std::nullopt;
+    }
+    if ((buttons & rules::kSystemButtons) != 0)
+    {
+        const std::uint32_t game = buttons & ~rules::kSystemButtons;
+        platform::WriteGuarded(data + facts::kPadDataButtons, &game, sizeof(game));
+    }
+    return buttons;
+}
+
 /// The PlayStation reader's read of one record: the record's lane's pad, read, then the same rules as XInput's.
 int ReadStateFor(std::int32_t handle, std::uint8_t* data) noexcept
 {
@@ -474,11 +488,14 @@ int ReadStateFor(std::int32_t handle, std::uint8_t* data) noexcept
                                  !game ? L"off the game thread" : !read ? L"its record's controller id was unreadable"
                                                                         : L"its record's controller id is no slot");
         }
-        return g_readState(handle, data);
+        const int result = g_readState(handle, data);
+        TakeSystemButtons(data);
+        return result;
     }
-    handle           = Place(record, slot, handle);
-    const int result = g_readState(handle, data);
-    const int pad    = PlayStationPad(handle);
+    handle            = Place(record, slot, handle);
+    const int  result = g_readState(handle, data);
+    const auto taken  = TakeSystemButtons(data);
+    const int  pad    = PlayStationPad(handle);
     if (!g_sonyLive)
     {
         g_sonyLive = true;
@@ -486,10 +503,9 @@ int ReadStateFor(std::int32_t handle, std::uint8_t* data) noexcept
                       L"through the pad table",
                       slot + 1, handle & 0xFF);
     }
-    std::uint8_t  connected = 0;
-    std::uint32_t buttons   = 0;
-    if (pad < 0 || result != 0 || !platform::Read(data, facts::kPadDataConnected, connected) || connected == 0 ||
-        !platform::Read(data, facts::kPadDataButtons, buttons))
+    std::uint8_t        connected = 0;
+    const std::uint32_t buttons   = taken.value_or(0);
+    if (pad < 0 || result != 0 || !platform::Read(data, facts::kPadDataConnected, connected) || connected == 0 || !taken)
     {
         if (pad >= 0)
         {
@@ -625,6 +641,16 @@ std::wstring Reading()
 #endif
 
 }  // namespace
+
+int KeyboardSeat() noexcept
+{
+    return rules::KeyboardSlot(Table());
+}
+
+std::int64_t NowMs() noexcept
+{
+    return static_cast<std::int64_t>(GetTickCount64());
+}
 
 rules::PadTable Table() noexcept
 {
@@ -851,12 +877,30 @@ bool Install(const platform::GameImage& image) noexcept
         }
     }
     g_playStation = read && rumble;
+    // Create, the PlayStation pads' window opener, comes through the library's read only with its system-button switch
+    // on; ReadStateFor takes the system buttons out again before the game sees the data.
+    const auto         systemButtons = g_playStation ? image.Rebase(facts::kSonySystemButtons, 1) : std::nullopt;
+    const std::uint8_t on            = 1;
+    g_systemButtons = systemButtons.has_value() &&
+                              platform::WriteGuarded(reinterpret_cast<void*>(*systemButtons), &on, sizeof(on))
+                          ? reinterpret_cast<std::uint8_t*>(*systemButtons)
+                          : nullptr;
     try
     {
         platform::Log(L"pads: the game's pad read and rumble go through the pad table ({}; read through {}, rumble through "
                       L"{}); the PlayStation reader's {}",
                       TableText(Table()), ModuleOf(get), ModuleOf(set),
                       g_playStation ? L"too" : L"could not be taken: its pads play as the game numbers them");
+        if (g_playStation && g_systemButtons != nullptr)
+        {
+            platform::Log(L"pads: a PlayStation pad's Create button reaches the mod (the library's system-button switch "
+                          L"on), never the game: Create held opens its player's window");
+        }
+        else if (g_playStation)
+        {
+            platform::LogWarning(L"pads: the library's system-button switch could not be set: a PlayStation pad's Create "
+                                 L"never arrives, and its player's window does not open from it");
+        }
     }
     catch (...)
     {
@@ -882,6 +926,13 @@ void Remove() noexcept
     }
     if (g_playStation)
     {
+        // The switch off before the read is the game's again: no system button ever reaches it.
+        if (g_systemButtons != nullptr)
+        {
+            const std::uint8_t off = 0;
+            platform::WriteGuarded(g_systemButtons, &off, sizeof(off));
+            g_systemButtons = nullptr;
+        }
         g_vibrationCall.Restore();
         g_readCall.Restore();
         g_playStation = false;

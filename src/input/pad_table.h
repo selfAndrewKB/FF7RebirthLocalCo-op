@@ -11,7 +11,8 @@
 // interface's own re-check byte is set (the field its WM_DEVICECHANGE handling writes), so a pad moved onto a slot the
 // engine counted empty is polled, and every slot's "last rumble sent" pair is cleared, since the game sends rumble
 // only when a slot's values change: its next send then reaches the pad that now has the slot. Identity until changed,
-// so normal play sees no change. The keyboard stays player 1's. The mirror views' controller ids come after XInput's
+// so normal play sees no change. The keyboard plays beside player 1's pad, or one player's alone as a slot's live
+// "reader" (pad_rules::KeyboardSlot; its routing: input/keyboard_route). The mirror views' controller ids come after XInput's
 // four users (players/seats.h), so no pad ever answers for one.
 //
 // Also here, on the same poll:
@@ -20,8 +21,8 @@
 //   - after its idle or a change, a pad stays idle to the game until it lets go of what it was holding then, so the
 //     press that ended it never reaches the game as an attack or a talk (pad_rules LetGo: a resting trigger or a stuck
 //     button never holds a pad for good);
-//   - the opener, View held for a second (pad_rules::Gate): a shorter View press reaches the game at its let-go, so a
-//     tap still opens the map (a tap's length late) and the hold never does;
+//   - the opener, View (Create on a PlayStation pad) held for a second (pad_rules::Gate): a shorter View press reaches
+//     the game at its let-go, so a tap still opens the map (a tap's length late) and the hold never does;
 //   - Start only on a slot a player holds (pad_rules::StartGate; slot 0 always): a pad that plays no one never pauses
 //     the game, and its Start, heard by the listener, joins (session/player_window); the rest of such a pad still
 //     reaches the game as before;
@@ -30,7 +31,9 @@
 //
 // PlayStation pads: the game reads them itself, through Sony's scePad library linked into the exe, one record per slot,
 // each record holding a pad's scePad handle (research/RE-playstation-pads.md). The mod takes that reader's one read
-// call: the same rules run on its pads (Options is Start, the touchpad click View, Circle B), and a slot's PlayStation
+// call: the same rules run on its pads (Options is Start, Create View, Circle B; the library's system-button switch,
+// held on while the mod runs, lets Create through, and the read takes Create, PS and Mute out of the game's data again,
+// so the game sees what it always did, the touchpad as its map button), and a slot's PlayStation
 // pad is moved by writing the handle the game's record holds, then clearing the record's connected byte so the game's
 // own connect path runs for the pad that now has the slot, and forgetting its last rumble. Its rumble call is taken
 // too, for an idle pad's. So each slot has two pads, one per reader; the one that plays the slot's player is the
@@ -63,6 +66,12 @@ bool Set(const pad_rules::PadTable& table, const wchar_t* why) noexcept;
 /// The physical pads the player windows hold idle to the game (bit p: pad p); a pad leaving the set waits for its
 /// let-go. The muted pads read idle too. Game thread.
 void SetIdlePads(std::uint32_t pads, const wchar_t* why) noexcept;
+
+/// The slot the keyboard plays alone (pad_rules::KeyboardSlot), or -1: beside player 1. Game thread.
+int KeyboardSeat() noexcept;
+
+/// The pads' clock (milliseconds, steady): the rules' holds and taps are timed on it, the keyboard's too.
+std::int64_t NowMs() noexcept;
 
 /// The pads that answered their last read (bit p: pad p). Game thread.
 std::uint32_t PresentPads() noexcept;

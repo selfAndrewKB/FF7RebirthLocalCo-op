@@ -203,6 +203,8 @@ add_library(LocalSplitScreen SHARED
     src/input/move_state.cpp
     src/input/pad_buttons.cpp
     src/input/pad_presence.cpp
+    src/input/keyboard_keys.cpp
+    src/input/keyboard_route.cpp
     src/input/pad_sticks.cpp
     src/input/pad_table.cpp
     src/session/outside_join.cpp
@@ -475,6 +477,7 @@ lss_test(traversal_rumble_rules)
 lss_test(ride_rules)
 lss_test(hud_rules)
 lss_test(pad_rules)
+lss_test(keyboard_route)
 lss_test(player_window)
 lss_test(world_rules)
 lss_test(party_warp_rules)

@@ -6,7 +6,8 @@
 //     asks for it) and the PlayStation reader (its record N); each answers it with one of its own physical pads, a
 //     permutation per reader; slot N is player N's (seat N), slot 3 the spare. Each slot's player plays on one of the
 //     two pads there, the slot's live reader's; the other reader's pad there is muted while the live one is present;
-//   - the window's opener, View held a second: a shorter View press still reaches the game, as a tap at its let-go;
+//   - the window's opener, View (Create on a PlayStation pad) held a second: a shorter press still reaches the game,
+//     as a tap at its let-go;
 //   - B as a tap (let go within a second) or a hold (a second down), never both;
 //   - Start only on a slot a player holds: a pad that plays no one never pauses the game (its Start joins instead);
 //   - the let-go: a pad that changed slots or left a window stays idle to the game until it lets go of what it held.
@@ -23,8 +24,9 @@ inline constexpr int kPads    = kSlots * kReaders;  // pad p: reader p / kSlots,
 
 inline constexpr int kXInput      = 0;  // pads 0..3: XInput users 0..3
 inline constexpr int kPlayStation = 1;  // pads 4..7: the PlayStation reader's pads by scePad user 1..4
-inline constexpr int kKeyboard    = 2;  // as player 1's live "reader": the keyboard plays player 1, no pad there does
+inline constexpr int kKeyboard    = 2;  // as a player slot's live "reader": the keyboard plays that player, no pad there does
 inline constexpr int kNoPad       = -1;  // PadOn of a slot the keyboard plays
+inline constexpr int kSpareSlot   = kSlots - 1;  // the slot no player holds: the keyboard never plays it
 
 constexpr int ReaderOf(int pad) noexcept
 {
@@ -37,15 +39,28 @@ constexpr int Lane(int reader, int slot) noexcept
     return reader * kSlots + slot;
 }
 
+/// The keyboard (and mouse) as a device among the pads, in the player windows' input (input/keyboard_keys): its number
+/// there, after the pads'.
+inline constexpr int kKeyboardPad = kPads;
+static_assert(kKeyboardPad / kSlots == kKeyboard, "the keyboard's number is its reader's");
+
 /// "pad 2" for XInput user 1, "PlayStation pad 1" for the PlayStation reader's first pad, "the keyboard" for kNoPad
-/// (a slot the keyboard plays): the log's and the console's names.
+/// (a slot the keyboard plays) and kKeyboardPad: the log's and the console's names.
 inline std::wstring PadName(int pad)
 {
-    if (pad < 0)
+    if (pad < 0 || pad == kKeyboardPad)
     {
         return L"the keyboard";
     }
     return (ReaderOf(pad) == kPlayStation ? L"PlayStation pad " : L"pad ") + std::to_wstring(pad % kSlots + 1);
+}
+
+/// The name of the button that opens `pad`'s window, as its own device labels it: the one left of the centre on both
+/// kinds of pad (View on an Xbox pad, Create on a PlayStation pad), Tab on the keyboard (the game's map key, as View is
+/// the pad's).
+constexpr const wchar_t* OpenerName(int pad) noexcept
+{
+    return ReaderOf(pad) == kKeyboard ? L"Tab" : ReaderOf(pad) == kPlayStation ? L"Create" : L"View";
 }
 
 // XInput's button bits (XINPUT_GAMEPAD_*), kept here so the rules build without Windows headers.
@@ -56,16 +71,21 @@ inline constexpr std::uint16_t kB         = 0x2000;
 inline constexpr std::uint16_t kX         = 0x4000;
 inline constexpr std::uint16_t kY         = 0x8000;
 
-// The PlayStation reader's button bits (ScePadData.buttons, as the library fills them for the game) and the XInput
-// bit each one is to the rules: Options is Start, the touchpad click is View, Cross is A, Circle is B (the keys the
-// game itself sends for them). L2 and R2 have no XInput button (their analog values are the triggers); Create and the
-// PS button never reach the game.
+// The PlayStation reader's button bits (ScePadData.buttons) and the XInput bit each one is to the rules: Options is
+// Start, Cross A, Circle B (the keys the game itself sends for them), and Create is View, the window's opener, as the
+// button in the same place on both kinds. The touchpad click, the game's map button on a PlayStation pad, has no XInput
+// bit here, so it reaches the game as it is; so do L2 and R2 (their analog values are the triggers). Create, PS and Mute
+// are the system buttons: the library hands them to the mod (input/pad_table) and never to the game.
+inline constexpr std::uint32_t kCreate        = 0x000001;
+inline constexpr std::uint32_t kSystemButtons = kCreate | 0x010000 | 0x200000;  // Create, PS, Mute
+
 struct ButtonPair
 {
     std::uint32_t playStation;
     std::uint16_t xinput;
 };
 inline constexpr std::array<ButtonPair, 14> kPlayStationButtons{{
+    {kCreate, kView},
     {0x000002, 0x0040},  // L3: LEFT_THUMB
     {0x000004, 0x0080},  // R3: RIGHT_THUMB
     {0x000008, kStart},  // Options
@@ -79,8 +99,36 @@ inline constexpr std::array<ButtonPair, 14> kPlayStationButtons{{
     {0x002000, kB},      // circle
     {0x004000, kA},      // cross
     {0x008000, kX},      // square
-    {0x100000, kView},   // touchpad click
 }};
+
+// The keyboard's keys in the rules, by Windows virtual-key code (FKeyEvent's key code): Tab, the opener, held a second
+// (pad_rules::kOpenHoldMs), and while its player's window is open the keys that stand for the pad's: the arrows the
+// d-pad's left and right, Q and E the shoulders, Enter A, Escape Start, Backspace B (its tap and its hold).
+inline constexpr std::uint32_t kOpenKey  = 0x09;  // VK_TAB
+inline constexpr std::uint32_t kLeaveKey = 0x08;  // VK_BACK
+
+/// A key event is the keyboard's: Slate gives a pad button's key event (which reaches the same handlers, with the pad's
+/// user) no key code.
+constexpr bool IsKeyboardKey(std::uint32_t keyCode) noexcept
+{
+    return keyCode != 0 && keyCode < 256;
+}
+
+/// A key as the rules' XInput bit while its player's window is open, or 0.
+constexpr std::uint16_t FromKey(std::uint32_t virtualKey) noexcept
+{
+    switch (virtualKey)
+    {
+        case 0x25: return 0x0004;  // left: DPAD_LEFT
+        case 0x27: return 0x0008;  // right: DPAD_RIGHT
+        case 0x51: return 0x0100;  // Q: LEFT_SHOULDER
+        case 0x45: return 0x0200;  // E: RIGHT_SHOULDER
+        case 0x0D: return kA;      // Enter
+        case 0x1B: return kStart;  // Escape
+        case kLeaveKey: return kB;
+        default: return 0;
+    }
+}
 
 /// A PlayStation pad's buttons as XInput bits.
 constexpr std::uint16_t FromPlayStation(std::uint32_t buttons) noexcept
@@ -105,12 +153,13 @@ constexpr std::uint32_t ToPlayStation(std::uint16_t buttons) noexcept
 }
 
 /// The PlayStation buttons the game sees after the rules: `raw` less the XInput bits the rules held back, plus the ones
-/// they added (View's tap at its let-go); L2, R2 and any bit without an XInput twin pass as they are.
+/// they added, less the system buttons (the opener's tap at its let-go is Create, which the game never sees); the
+/// touchpad, L2, R2 and any other bit without an XInput twin pass as they are.
 constexpr std::uint32_t PlayStationShown(std::uint32_t raw, std::uint16_t rawXInput, std::uint16_t shownXInput) noexcept
 {
     const auto removed = static_cast<std::uint16_t>(rawXInput & ~shownXInput);
     const auto added   = static_cast<std::uint16_t>(shownXInput & ~rawXInput);
-    return (raw & ~ToPlayStation(removed)) | ToPlayStation(added);
+    return ((raw & ~ToPlayStation(removed)) | ToPlayStation(added)) & ~kSystemButtons;
 }
 
 /// The pad table: per lane (Lane(reader, slot)) the reader's physical pad answering the slot, and per slot its live
@@ -136,7 +185,8 @@ constexpr PadTable FromXInput(const std::array<int, kSlots>& xinput) noexcept
     return table;
 }
 
-/// Each lane holds one of its own reader's pads, each pad once; each slot's live reader is a reader.
+/// Each lane holds one of its own reader's pads, each pad once; each slot's live reader is a reader, or the keyboard
+/// on one player slot at most.
 constexpr bool IsValid(const PadTable& table) noexcept
 {
     std::array<bool, kPads> seen{};
@@ -149,15 +199,20 @@ constexpr bool IsValid(const PadTable& table) noexcept
         }
         seen[static_cast<std::size_t>(pad)] = true;
     }
+    int keyboards = 0;
     for (int slot = 0; slot < kSlots; ++slot)
     {
         const int reader = table.live[static_cast<std::size_t>(slot)];
-        if (reader >= kReaders && !(slot == 0 && reader == kKeyboard))
+        if (reader == kKeyboard && slot != kSpareSlot)
         {
-            return false;  // the keyboard plays player 1 only
+            ++keyboards;
+        }
+        else if (reader >= kReaders)
+        {
+            return false;
         }
     }
-    return true;
+    return keyboards <= 1;
 }
 
 /// The slot `pad` answers, or -1 (never for a valid table).
@@ -180,17 +235,40 @@ constexpr int PadOn(const PadTable& table, int slot) noexcept
     return reader >= kReaders ? kNoPad : table.lanes[static_cast<std::size_t>(Lane(reader, slot))];
 }
 
-/// The keyboard plays player 1.
-constexpr bool KeyboardPlaysOne(const PadTable& table) noexcept
+/// The slot the keyboard plays (its player's alone), or -1: then it plays beside player 1's pad, as in single play.
+constexpr int KeyboardSlot(const PadTable& table) noexcept
 {
-    return table.live[0] == kKeyboard;
+    for (int slot = 0; slot < kSlots; ++slot)
+    {
+        if (table.live[static_cast<std::size_t>(slot)] == kKeyboard)
+        {
+            return slot;
+        }
+    }
+    return -1;
 }
 
-/// The table with the keyboard playing player 1: every pad on player 1's slot is muted while it does (a pad's press on
-/// the title takes player 1 back, WithPadOn).
-constexpr PadTable WithKeyboardPlayerOne(PadTable table) noexcept
+/// The table with the keyboard back beside player 1 (the slot it played back to its XInput pad).
+constexpr PadTable Unkeyboarded(PadTable table) noexcept
 {
-    table.live[0] = static_cast<std::uint8_t>(kKeyboard);
+    if (const int before = KeyboardSlot(table); before >= 0)
+    {
+        table.live[static_cast<std::size_t>(before)] = static_cast<std::uint8_t>(kXInput);
+    }
+    return table;
+}
+
+/// The table with the keyboard playing `slot`'s player alone (the slot it played before goes back to its XInput pad):
+/// every pad on that slot is muted while it does, so their Start adds a player. A pad taking the slot (WithPadOn) ends
+/// it; so does Unkeyboarded.
+constexpr PadTable WithKeyboardOn(PadTable table, int slot) noexcept
+{
+    if (slot < 0 || slot >= kSpareSlot)
+    {
+        return table;
+    }
+    table                                      = Unkeyboarded(table);
+    table.live[static_cast<std::size_t>(slot)] = static_cast<std::uint8_t>(kKeyboard);
     return table;
 }
 
@@ -215,7 +293,8 @@ constexpr PadTable WithPadOn(PadTable table, int which, int slot) noexcept
 // The opener: View held for kOpenHoldMs on one pad opens that player's window (View with Menu raised Steam's on-screen
 // keyboard over the game). View alone opens the map at its press, so a View press is held back from the game: let go
 // before kOpenHoldMs, the game gets it then as a one-poll tap (the map opens at the let-go, a tap's length late); held
-// kOpenHoldMs, the opener fires once and the game never sees that press.
+// kOpenHoldMs, the opener fires once and the game never sees that press. A PlayStation pad's opener is Create, which
+// the game never sees either way; its map button, the touchpad, is not held back.
 
 inline constexpr std::uint16_t kOpenButton = kView;
 inline constexpr std::int64_t  kOpenHoldMs = 1000;

@@ -178,23 +178,44 @@ void PadsAndSeats()
 }
 
 /// A key on the title makes the keyboard player 1: every pad on player 1's slot plays no one (its Start joins); a
-/// joined pad plays its own player; the keyboard's player 1 trades with no one and is never gone; a pad's title press
-/// takes player 1 back.
+/// joined pad plays its own player; the keyboard is never gone; a pad's title press takes player 1 back. In a window
+/// the keyboard trades numbers as a pad does: the pad takes the keyboard's number and the keyboard the pad's.
 void KeyboardPlayerOne()
 {
-    const pad::PadTable kb = pad::WithKeyboardPlayerOne(pad::kIdentity);
-    EXPECT(pad::IsValid(kb) && pad::KeyboardPlaysOne(kb) && pad::PadOn(kb, 0) == pad::kNoPad);
+    const pad::PadTable kb = pad::WithKeyboardOn(pad::kIdentity, 0);
+    EXPECT(pad::IsValid(kb) && pad::KeyboardSlot(kb) == 0 && pad::PadOn(kb, 0) == pad::kNoPad);
     EXPECT(SeatOf(kb, 0b1, 0b0001'0001, 0) == -1 && SeatOf(kb, 0b1, 0b0001'0001, 4) == -1);
     EXPECT(SeatOf(kb, 0b1, 0b0000'0000, 0) == -1);  // absent: not muted, but no player's either
     const pad::PadTable joined = WithPadOn(kb, 0, 1);  // pad 1's Start adds player 2
-    EXPECT(pad::KeyboardPlaysOne(joined) && SeatOf(joined, 0b11, 0b1, 0) == 1);
-    EXPECT(!CanTradePads(joined, 0, 1) && WithPadsTraded(joined, 0, 1) == joined);
+    EXPECT(pad::KeyboardSlot(joined) == 0 && SeatOf(joined, 0b11, 0b1, 0) == 1);
     EXPECT(SeatWithPadGone(joined, 0b11, 0xFF) == 1);  // only player 2's pad can be gone
-    EXPECT(!pad::KeyboardPlaysOne(WithPlayerOne(kb, 4)) && pad::PadOn(WithPlayerOne(kb, 4), 0) == 4);
-    pad::PadTable bad = pad::kIdentity;
-    bad.live[1]       = pad::kKeyboard;
-    EXPECT(!pad::IsValid(bad));  // the keyboard plays player 1 only
+    EXPECT(pad::KeyboardSlot(WithPlayerOne(kb, 4)) == -1 && pad::PadOn(WithPlayerOne(kb, 4), 0) == 4);
     EXPECT(pad::PadName(pad::kNoPad) == L"the keyboard" && TitleClaimed(pad::kNoPad) == L"Keyboard is set as Player 1");
+
+    // Player 2's pad trades with the keyboard's player 1: pad 1 plays player 1, the keyboard player 2; and back.
+    EXPECT(CanTradePads(joined, 1, 0) && CanTradePads(joined, 0, 1));
+    const pad::PadTable traded = WithPadsTraded(joined, 1, 0);
+    EXPECT(pad::IsValid(traded) && pad::PadOn(traded, 0) == 0 && pad::KeyboardSlot(traded) == 1);
+    EXPECT(SeatOf(traded, 0b11, 0b1, 0) == 0 && pad::PadOn(traded, 1) == pad::kNoPad);
+    EXPECT(WithPadsTraded(traded, 0, 1) == joined);
+    // A PlayStation pad on player 3 trades with the keyboard on player 2.
+    const pad::PadTable three = WithPadOn(traded, 6, 2);
+    const pad::PadTable psTraded = WithPadsTraded(three, 2, 1);
+    EXPECT(pad::IsValid(psTraded) && pad::PadOn(psTraded, 1) == 6 && pad::KeyboardSlot(psTraded) == 2);
+    EXPECT(!CanTradePads(joined, 1, 1) && !CanTradePads(joined, 0, 3));
+
+    // The keyboard plays one player slot at most, never the spare.
+    pad::PadTable two = pad::kIdentity;
+    two.live[0]       = pad::kKeyboard;
+    two.live[1]       = pad::kKeyboard;
+    EXPECT(!pad::IsValid(two));
+    pad::PadTable spare = pad::kIdentity;
+    spare.live[3]       = pad::kKeyboard;
+    EXPECT(!pad::IsValid(spare) && pad::WithKeyboardOn(pad::kIdentity, 3) == pad::kIdentity);
+    // Moving the keyboard frees the slot it played; Unkeyboarded puts it back beside player 1.
+    const pad::PadTable moved = pad::WithKeyboardOn(kb, 2);
+    EXPECT(pad::IsValid(moved) && pad::KeyboardSlot(moved) == 2 && pad::PadOn(moved, 0) == 0);
+    EXPECT(pad::KeyboardSlot(pad::Unkeyboarded(moved)) == -1 && pad::Unkeyboarded(moved) == pad::kIdentity);
 
     // The claim: the device turning to the keyboard on the title, or the title coming up with the keyboard last used.
     EXPECT(KeyboardClaims(true, false, true, true));    // a key on the title
@@ -202,15 +223,6 @@ void KeyboardPlayerOne()
     EXPECT(!KeyboardClaims(true, true, true, true));    // already the keyboard's: no second claim
     EXPECT(!KeyboardClaims(true, false, false, false)); // a key in the field
     EXPECT(!KeyboardClaims(false, true, true, true));   // a pad's press on the title (its own TitlePress)
-
-    // View held takes player 1 from the keyboard for a pad on player 1's slot or a free one; never for a twin copy
-    // nor a pad beside a joined player's, nor while a pad plays player 1.
-    EXPECT(TakesPlayerOneFromKeyboard(kb, 0b1, 0, false));     // the muted pad on player 1's slot
-    EXPECT(TakesPlayerOneFromKeyboard(kb, 0b1, 3, false));     // the spare slot's pad
-    EXPECT(!TakesPlayerOneFromKeyboard(kb, 0b1, 0, true));     // Steam Input's copy of a pad
-    const pad::PadTable two = WithPadOn(kb, 4, 1);             // player 2 on the first PlayStation pad
-    EXPECT(!TakesPlayerOneFromKeyboard(two, 0b11, 1, false));  // pad 2, beside player 2's pad
-    EXPECT(!TakesPlayerOneFromKeyboard(pad::kIdentity, 0b1, 3, false));
 }
 
 /// Player 2's open window: the number between left and right, the character, then move, done, leave; one key a line.
@@ -220,14 +232,14 @@ void PlayerTwosWindow()
     const ScreenText t = TextFor(w);
     const std::vector<std::wstring> lines{
         L"<button=left,pad> PLAYER 2 <button=right,pad>    <color=yellow>BARRET</color>",
-        L"<button=L1,pad> <button=R1,pad> Move my view",
+        L"<button=L1,pad> <button=R1,pad> Change View",
         L"<button=cross,pad> Done",
         L"Hold <button=circle,pad> to leave the game",
     };
     EXPECT(LinesOf(t.markup) == lines);
     EXPECT(t.plain[0] == L"<  PLAYER 2  >    BARRET");
     EXPECT(t.plain[1] == L"Left/Right: player number");
-    EXPECT(t.plain[2] == L"LB/RB: move my view");
+    EXPECT(t.plain[2] == L"LB/RB: Change View");
     EXPECT(t.plain[3] == L"A: done");
     EXPECT(t.plain[4] == L"Hold B to leave the game");
     EXPECT(t.plain.size() == 5);  // the longest window fills the fallback's lines exactly
@@ -277,6 +289,38 @@ void Notes()
            L"Player 3 has joined and is waiting for AERITH to be released from AI control");
 }
 
+/// The keyboard as a window device: its seat is the slot it plays alone while that player is in; Tab held joins it
+/// (WithDeviceOn), its keys stand for the pad's, its window names its keys.
+void KeyboardWindow()
+{
+    EXPECT(SeatOf(pad::kIdentity, 0b11, 0b1, pad::kKeyboardPad) == -1);  // beside player 1: no player of its own
+    const pad::PadTable two = WithDeviceOn(pad::kIdentity, pad::kKeyboardPad, 1);
+    EXPECT(pad::KeyboardSlot(two) == 1 && SeatOf(two, 0b11, 0b11, pad::kKeyboardPad) == 1);
+    EXPECT(SeatOf(two, 0b01, 0b11, pad::kKeyboardPad) == -1);  // player 2 not in yet
+    EXPECT(SeatOf(two, 0b11, 0b11, 1) == -1);                   // pad 2 is muted beside the keyboard
+    EXPECT(WithDeviceOn(pad::kIdentity, 4, 1) == WithPadOn(pad::kIdentity, 4, 1));
+    EXPECT(pad::PadName(pad::kKeyboardPad) == L"the keyboard" && std::wstring(pad::OpenerName(pad::kKeyboardPad)) == L"Tab");
+    EXPECT(std::wstring(pad::OpenerName(4)) == L"Create" && std::wstring(pad::OpenerName(0)) == L"View");
+    EXPECT(pad::FromKey(0x25) == kDpadLeft && pad::FromKey(0x27) == kDpadRight && pad::FromKey(0x51) == kLB &&
+           pad::FromKey(0x45) == kRB && pad::FromKey(0x0D) == pad::kA && pad::FromKey(pad::kLeaveKey) == pad::kB);
+    EXPECT(pad::FromKey(0x57) == 0 && pad::FromKey(pad::kOpenKey) == 0);  // W, and Tab: the opener, never a window key
+    EXPECT(OnPress(pad::FromKey(0x1B)).act == Act::Close);                // Escape closes as Start does
+
+    Window w{.seat = 1, .name = L"TIFA", .open = true, .canTrade = true, .canMove = true, .keyboard = true};
+    const std::vector<std::wstring> lines{
+        L"<  PLAYER 2  >    <color=yellow>TIFA</color>",
+        L"Left/Right: player number",
+        L"Q/E: Change View",
+        L"Enter: done",
+        L"Hold Backspace to leave the game",
+    };
+    EXPECT(LinesOf(TextFor(w).markup) == lines);
+    EXPECT(!Has(TextFor(w).markup, L"<button="));
+    // Player 1's window says Tab joins while the keyboard plays no one of its own.
+    Window one{.seat = 0, .name = L"CLOUD", .open = true, .startJoins = true, .keyboardJoins = true};
+    EXPECT(LinesOf(TextFor(one).markup).back() == L"Press <button=options,pad> on another controller or hold Tab on the keyboard to join");
+    EXPECT(TextFor(one).plain[2] == L"Press Start on another controller or hold Tab to join");
+}
 /// The character's name from a party character's object or class name; any other name gives none.
 void CharacterNames()
 {
@@ -301,6 +345,7 @@ int main()
     KeyboardPlayerOne();
     PlayerTwosWindow();
     PlayerOnesWindow();
+    KeyboardWindow();
     Notes();
     CharacterNames();
     return lss::test::Report();

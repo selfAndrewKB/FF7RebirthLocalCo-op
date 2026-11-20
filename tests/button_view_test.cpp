@@ -11,10 +11,12 @@
 namespace {
 
 using lss::input::button_view::Held;
+using lss::input::button_view::kKeyboardBits;
 using lss::input::button_view::PlayerSources;
 using lss::input::button_view::SeatBit;
 using lss::input::button_view::SeatOfSource;
 using lss::input::button_view::SeatPads;
+using lss::input::button_view::SeatSources;
 using lss::input::button_view::PadBits;
 using lss::input::button_view::Views;
 
@@ -127,6 +129,21 @@ void TestTwoPlayerSourcesUnchanged()
     EXPECT(SeatOfSource(0, kTwoIn) == 0 && SeatOfSource(17, kTwoIn) == 0);  // pad 1, the keyboard
 }
 
+void TestKeyboardPlaysASeat()
+{
+    std::puts("buttons: while the keyboard plays player 3, its keys and the mouse are player 3's alone; once player 3 is "
+              "out they are player 1's again");
+    constexpr std::uint32_t kMouse = 1u << 19;
+    EXPECT(SeatSources(2, 2) == (PadBits(2) | kKeyboardBits) && SeatSources(1, 2) == PadBits(1));
+    EXPECT(Held(1, kKeyboard, 2, kBothIn, 2) && !Held(1, kKeyboard, 0, kBothIn, 2) && !Held(1, kKeyboard, 1, kBothIn, 2));
+    EXPECT(Held(1, kMouse, 2, kBothIn, 2) && !Held(1, kMouse, 0, kBothIn, 2));
+    EXPECT(SeatOfSource(17, kBothIn, 2) == 2 && SeatOfSource(18, kBothIn, 2) == 2 && SeatOfSource(19, kBothIn, 2) == 2);
+    EXPECT(SeatOfSource(17, kTwoIn, 2) == 0 && Held(1, kKeyboard, 0, kTwoIn, 2));  // player 3 out: player 1's
+    EXPECT(Held(1, kKeyboard, 0, kBothIn, 0) && Held(1, kKeyboard, 0, kBothIn, -1));  // beside player 1
+    Views views;
+    views.Advance(1, kKeyboard, kBothIn, 2);
+    EXPECT(views.now[2] && !views.now[0] && !views.now[1]);
+}
 void TestThreePlayers()
 {
     std::puts("buttons: with players 2 and 3 in, each seat sees its own pad and player 1 neither");
@@ -224,6 +241,7 @@ int main()
     TestPadOneReleaseWhilePadTwoHolds();
     TestGameReleaseWithMaskSet();
     TestTwoPlayerSourcesUnchanged();
+    TestKeyboardPlaysASeat();
     TestThreePlayers();
     TestThreePadsPressApart();
     TestMergedViewWritten();

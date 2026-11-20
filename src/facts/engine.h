@@ -298,6 +298,35 @@ inline constexpr std::uint32_t kLocalPlayerControllerId   = 0xB8;
 // UGameViewportClient: the four input-mode bytes (+0x361..+0x364) the controller's BeginPlay sets
 // through SetInputMode on the one viewport all local players share.
 inline constexpr std::uint32_t kViewportInputModeBytes = 0x361;
+/// The game viewport client's input entries, its FViewportClient vtable's slots 9 and 10 (stock UE 4.26; the scene
+/// viewport hands every key, mouse button, wheel and mouse move to them with the Slate user as the controller id, the
+/// mouse axes with 0): InputKey(this, const FInputKeyEventArgs&) and InputAxis(this, viewport, controller id, FKey
+/// by value (a pointer to the caller's copy, which the callee destroys), delta, delta time, samples, gamepad). Each
+/// finds the local player by its controller id and hands the input to that player's controller
+/// (RE-kbm-engine-routing.md). The bytes are checked after each first instruction, as another hook may patch it.
+inline constexpr std::uintptr_t kViewportInputKeyEntry  = 0x145E45710;
+inline constexpr std::uintptr_t kViewportInputKey       = 0x140E947B0;
+inline constexpr std::uint8_t   kViewportInputKeyRestBytes[] = {0x55, 0x56, 0x57, 0x41, 0x54, 0x41, 0x55, 0x41,
+                                                                0x56, 0x41, 0x57, 0xB8, 0x60, 0x00, 0x00, 0x00, 0xE8};
+inline constexpr FunctionFact   kViewportInputKeyAfterFirst{L"UGameViewportClient::InputKey after its first instruction",
+                                                            0x140E947B5, kViewportInputKeyRestBytes};
+inline constexpr std::uintptr_t kViewportInputAxisEntry = 0x145E45718;
+inline constexpr std::uintptr_t kViewportInputAxis      = 0x1409F2FA8;
+inline constexpr std::uint8_t   kViewportInputAxisRestBytes[] = {0x4C, 0x89, 0x48, 0x20, 0x44, 0x89, 0x40, 0x18, 0x48,
+                                                                 0x89, 0x50, 0x10, 0x48, 0x89, 0x48, 0x08, 0x55, 0x53};
+inline constexpr FunctionFact   kViewportInputAxisAfterFirst{L"UGameViewportClient::InputAxis after its first instruction",
+                                                             0x1409F2FAB, kViewportInputAxisRestBytes};
+/// FInputKeyEventArgs (0x30 bytes): the controller id (i32), the key (FKey, 24 bytes: its name first) and the event
+/// (u8 EInputEvent: 0 pressed, 1 released, 2 repeat, 3 double click).
+inline constexpr std::size_t   kInputKeyArgsBytes        = 0x30;
+inline constexpr std::uint32_t kInputKeyArgsControllerId = 0x08;
+inline constexpr std::uint32_t kInputKeyArgsKey          = 0x10;
+inline constexpr std::uint32_t kInputKeyArgsEvent        = 0x28;
+inline constexpr std::uint8_t  kInputEventPressed        = 0;
+inline constexpr std::uint8_t  kInputEventReleased       = 1;
+/// FKey::IsGamepadKey(const FKey*) -> bool.
+inline constexpr std::uint8_t kIsGamepadKeyBytes[] = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8};
+inline constexpr FunctionFact kIsGamepadKey{L"FKey::IsGamepadKey", 0x140E91CD8, kIsGamepadKeyBytes};
 
 // FWeakObjectPtr
 /// FWeakObjectPtr::Get and assignment from an object.
@@ -418,6 +447,9 @@ inline constexpr std::uintptr_t kSonyReadState     = 0x141B63C20;
 /// the target: the record's rumble, sent when its values change.
 inline constexpr std::uintptr_t kSonySetVibrationCall = 0x1411B5044;
 inline constexpr std::uintptr_t kSonySetVibration     = 0x141B641F0;
+/// The scePad library's system-button switch (u8, zero at start, no writer in the game): while it is zero, the read
+/// clears Create, PS and Mute from every pad's buttons (scePad_FillPadData, RE-playstation-pads.md).
+inline constexpr std::uintptr_t kSonySystemButtons = 0x146F6B2A1;
 
 /// A PlayStation reader record (stride 0x278; record N reads slot N): the pad data scePadReadState fills (0x78
 /// bytes), the record's controller id (i32), its scePad handle (i32; handle & 0xFF = the scePad user 1..4, the pad's

@@ -10,15 +10,16 @@
 #include "facts/menu.h"
 #include "facts/party.h"
 #include "input/button_view.h"
+#include "input/keyboard_keys.h"
 #include "input/pad_buttons.h"
 #include "input/pad_sticks.h"
+#include "input/pad_table.h"
 #include "platform/call_redirect.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/tset_find.h"
 #include "platform/verified_code.h"
-#include "platform/vtable_entry.h"
 #include "players/generation.h"
 #include "players/object_fields.h"
 #include "players/seats.h"
@@ -44,19 +45,8 @@ namespace {
 // (research/RE-p2-targeting-scoped-tick.md).
 constexpr std::uintptr_t kCommandMenuKey = 0x14901C5D0;
 constexpr std::uint32_t  kEventKey       = 0x18;
-// The input processor's key-up handler (IInputProcessor slot 3; FKeyEvent in r8, its UserIndex, the
-// pad's controller id, at +0x0C) and the up route's call in ActionUp_UpdateTables (bool(owner, event)):
-// research/RE-p2-command-menu-input.md.
-// The handler's first instruction (mov [rsp+8], rbx) is often patched by another hook (UE4SS's input
-// handling puts a jump there, live), so the slot is checked to still name the handler and the bytes
-// are checked after that instruction.
-constexpr std::uintptr_t kKeyUpEntry     = 0x145BA5CE0;  // the vtable entry
-constexpr std::uintptr_t kKeyUp          = 0x141546794;  // SquareInput__HandleKeyUpEvent
-constexpr std::uint8_t   kKeyUpRestBytes[] = {0x48, 0x89, 0x6C, 0x24, 0x10, 0x56, 0x57, 0x41,
-                                              0x56, 0xB8, 0x60, 0x00, 0x00, 0x00, 0xE8};
-constexpr platform::FunctionFact kKeyUpAfterFirst{L"HandleKeyUpEvent after its first instruction", 0x141546799,
-                                                  kKeyUpRestBytes};
-constexpr std::uint32_t kKeyEventUser = 0x0C;
+// The up route's call in ActionUp_UpdateTables (bool(owner, event)): research/RE-p2-command-menu-input.md. Each release's
+// pad comes from the input processor's key-up handler, which input/keyboard_keys holds.
 constexpr std::uint8_t  kUpRouteBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x18, 0x55, 0x56, 0x57, 0x41, 0x54, 0x41, 0x55,
                                            0x41, 0x56, 0x41, 0x57, 0x48, 0x8D, 0xAC, 0x24, 0x50, 0xFE, 0xFF, 0xFF};
 constexpr platform::FunctionFact kUpRoute{L"SquareInput__RouteActionUpToUIHandlerStack", 0x1409F84C0, kUpRouteBytes};
@@ -87,12 +77,10 @@ using command_menu_tick::kReqGuardDodge;
 using command_menu_tick::kReqGuard;
 using command_menu_tick::RequestOf;
 
-using KeyUpFn         = std::uint8_t (*)(void* self, void* application, const void* keyEvent);
 using UpRouteFn       = std::uint8_t (*)(void* owner, void* event);
 
 // Set once at install.
 platform::CallRedirect               g_upRouteCall;
-platform::VTableEntry                g_keyUpSlot;
 std::array<std::uintptr_t, kActions> g_keys{};
 std::uintptr_t                       g_commandMenuKey = 0;
 
@@ -103,17 +91,17 @@ bool         g_routeFailed = false;
 unsigned     g_upRouted    = 0;   // the seats' releases routed to their menus
 unsigned     g_upLost      = 0;   // releases whose press went to a seat's UI but could not follow it
 const wchar_t* g_uiRefusal = L"";  // why InSeatUi last ran nothing (for the log)
-std::int32_t g_upPad       = -1;  // the pad of the release being handled (key-up handler), or -1
 // Each seat's keys whose press went to its UI (by seat; index 0 unused): two seats holding the same action keep apart.
 std::array<menu_rules::TakenKeys, players::kMaxPlayers> g_taken{};
 
-/// The seat whose pad the source bit belongs to (the seat's pad is its number: input::button_view::PadBits(seat), the same
-/// sources input/pad_buttons routes for the seat), or 0.
+/// The seat whose device the source bit belongs to (the seat's pad is its number, and the keyboard is the seat's while
+/// it plays it: input::button_view::SeatSources, the same sources input/pad_buttons routes for the seat), or 0.
 int SeatOfSource(std::uint32_t sourceBit) noexcept
 {
+    const int keyboard = input::pad_table::KeyboardSeat();
     for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
     {
-        if (((input::button_view::PadBits(seat) >> (sourceBit & 31)) & 1) != 0)
+        if (((input::button_view::SeatSources(seat, keyboard) >> (sourceBit & 31)) & 1) != 0)
         {
             return seat;
         }
@@ -324,26 +312,18 @@ bool RouteSeatPad(input::pad_buttons::ActionDownFn dispatch, void* owner, void* 
     return true;
 }
 
-/// Replaces the input processor's key-up handler: notes which pad the release came from.
-std::uint8_t KeyUp(void* self, void* application, const void* keyEvent) noexcept
-{
-    const std::int32_t previous = g_upPad;
-    g_upPad = ReadAt<std::int32_t>(reinterpret_cast<std::uintptr_t>(keyEvent) + kKeyEventUser);
-    const auto answer = reinterpret_cast<KeyUpFn>(g_keyUpSlot.Original())(self, application, keyEvent);
-    g_upPad = previous;
-    return answer;
-}
-
 /// Replaces the up route's call: the release of a seat's press that went to its UI walks the seat's focus context,
 /// whatever is open now (a pause menu, a popup, the battle's end), so the seat's capture map hands it to the widget
 /// that took the press and its menu clears its own held requests, as the game's up handler does. Other releases keep
-/// the game's route, where their press went. The seat comes from the release's pad.
+/// the game's route, where their press went. The seat comes from the release's pad; a key's release, or one with no
+/// sender (a mouse button's), is the keyboard's seat's while the keyboard plays one.
 std::uint8_t UpRoute(void* owner, void* event) noexcept
 {
-    const auto original = reinterpret_cast<UpRouteFn>(g_upRouteCall.Original());
-    const int  seat     = SeatOfPad(g_upPad);
+    const auto         original = reinterpret_cast<UpRouteFn>(g_upRouteCall.Original());
+    const std::int32_t user     = input::keyboard_keys::ReleaseUser();
+    const int          seat     = user >= 0 ? SeatOfPad(user) : input::pad_table::KeyboardSeat();
     const auto key      = ReadAt<std::uint64_t>(reinterpret_cast<std::uintptr_t>(event) + kEventKey);
-    if (seat == 0 || !TakeTaken(seat, key))
+    if (seat <= 0 || !TakeTaken(seat, key))
     {
         return original(owner, event);
     }
@@ -390,18 +370,11 @@ bool Find(const platform::GameImage& image) noexcept
 void Install(const platform::GameImage& image) noexcept
 {
     input::pad_buttons::SetSeatRoute(&RouteSeatPad);  // a seat's presses to its menu in battle
-    // A seat's releases: the key-up slot wrapped (the pad of each release noted) and the up route's call redirected.
+    // A seat's releases: the up route's call redirected, each release's pad from the key-up handler keyboard_keys holds.
     const auto upRoute = platform::FindFunction(image, kUpRoute);
-    const auto entry   = image.Rebase(kKeyUpEntry, sizeof(void*));
-    const auto keyUp   = image.Rebase(kKeyUp);
     const auto site    = image.Rebase(kUpRouteCall, 5);
-    const bool ok      = upRoute && entry && keyUp && site && platform::FindFunction(image, kKeyUpAfterFirst) &&
-                    g_keyUpSlot.Replace(*entry, *keyUp, reinterpret_cast<std::uintptr_t>(&KeyUp)) &&
+    const bool ok      = upRoute && site && input::keyboard_keys::Installed() &&
                     g_upRouteCall.Install(*site, *upRoute, reinterpret_cast<std::uintptr_t>(&UpRoute));
-    if (!ok && g_keyUpSlot.Original() != 0)
-    {
-        g_keyUpSlot.Restore();
-    }
     platform::Log(L"command menu tick: players 2 and 3's pads' releases {}",
                   ok ? L"reach their menus in battle" : L"UNAVAILABLE (a check failed): they keep player 1's up route");
 }
@@ -409,10 +382,6 @@ void Install(const platform::GameImage& image) noexcept
 void Remove() noexcept
 {
     input::pad_buttons::SetSeatRoute(nullptr);
-    if (g_keyUpSlot.Original() != 0 && !g_keyUpSlot.Restore())
-    {
-        platform::Log(L"command menu tick: the key-up slot was changed after us; left in place (it passes through)");
-    }
     if (g_upRouteCall.IsInstalled() && !g_upRouteCall.Restore())
     {
         platform::Log(L"command menu tick: a call was changed after us; left in place (it passes through)");

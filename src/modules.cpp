@@ -55,6 +55,8 @@
 #include "hud/user_widgets.h"
 #include "input/approach_own_camera.h"
 #include "input/climb_context.h"
+#include "input/keyboard_keys.h"
+#include "input/keyboard_route.h"
 #include "input/pad_presence.h"
 #include "input/pad_table.h"
 #include "hud/save_notice.h"
@@ -175,6 +177,10 @@ constexpr std::array kModules{
     Module{Call<&scopes::leader_scope::Install>, nullptr},
     // which physical pad answers each player's slot (identity until changed); a pad no player holds never pauses
     Module{Call<&input::pad_table::Install>, &input::pad_table::Remove},
+    // the keyboard as one more device: Tab held opens its player's window or adds a player on it; its window's keys
+    Module{Call<&input::keyboard_keys::Install>, &input::keyboard_keys::Remove},
+    // the keyboard and mouse (the mouse look too) reach the player the keyboard plays
+    Module{Call<&input::keyboard_route::Install>, &input::keyboard_route::Remove},
 
     // The seats' stages that are not the session's own, next to their siblings.
     // each seat's Battle operator follows player 1's
@@ -445,8 +451,12 @@ static_assert(Ordered<&views::InstallPlayerViewPoint, &views::InstallStreamViews
 static_assert(Ordered<&hud::InstallOverlayLayout, &hud::InstallLayoutScale>(),
               "the overlay layout before the layout scale: the contain rule needs the layout");
 static_assert(Ordered<&input::pad_table::Install, &session::player_window::Install>() &&
+                  Ordered<&input::keyboard_keys::Install, &session::player_window::Install>() &&
+                  Ordered<&input::keyboard_keys::Install, &battle::command_menu_tick::Install>() &&
                   Ordered<&hud::view_prompt::Install, &session::player_window::Install>(),
-              "the pad table and the prompt before the player windows: the windows listen to the one, draw through the other");
+              "the pad table, the keyboard and the prompt before the player windows (they listen to the first two, draw "
+              "through the third); the keyboard before the battle menu's release route, which reads each release's user "
+              "from the keyboard's key-up");
 static_assert(Ordered<&players::widget_opacity::Install, &hud::prompt_rows::Install>() &&
                   Ordered<&players::widget_opacity::Install, &hud::field_markers::Install>() &&
                   Ordered<&players::widget_opacity::Install, &hud::search_pins::Install>() &&
@@ -907,6 +917,8 @@ void RegisterCommands(session::Session& session, views::column_source::Override&
         views::column_source::RegisterCommands(choice);
         session::RegisterCommands(session);
         input::pad_table::RegisterCommands();
+        input::keyboard_keys::RegisterCommands();
+        input::keyboard_route::RegisterCommands();
         input::pad_presence::RegisterCommands();
         session::player_window::RegisterCommands();
         hud::view_prompt::RegisterCommands();
