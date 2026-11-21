@@ -11,6 +11,7 @@
 #include <Unreal/CoreUObject/UObject/UnrealType.hpp>
 #include <Unreal/UObject.hpp>
 
+#include "input/keyboard_keys.h"
 #include "input/pad_buttons.h"
 #include "platform/build_value.h"
 #include "platform/call_redirect.h"
@@ -576,10 +577,10 @@ bool RequestWarp(Subject& subject, bool splitShown) noexcept
                              ReadPointer(players::unreal::RootOf(subject.pawn), kSceneComponentAttachParent) != nullptr, splitShown);
 }
 
-/// The seat's player asked to be brought back (`how`: L3 twice, the console): the follow warp of the chocobo they ride,
-/// else of their member, unless it already stands beside player 1's character (player 1's pawn: their character, or
-/// the mount they ride, at the same spot). While another seat's warp is being driven the ask waits and is asked again,
-/// "beside" included, once that warp is over. party_warp logs the rest of the answer.
+/// The seat's player asked to be brought back (`how`: L3 twice, the period key, the console): the follow warp of the
+/// chocobo they ride, else of their member, unless it already stands beside player 1's character (player 1's pawn:
+/// their character, or the mount they ride, at the same spot). While another seat's warp is being driven the ask waits
+/// and is asked again, "beside" included, once that warp is over. party_warp logs the rest of the answer.
 void Ask(int seat, const wchar_t* how, bool splitShown) noexcept
 {
     g_askWaiting[seat] = nullptr;
@@ -767,7 +768,8 @@ void Tick(bool splitShown) noexcept
     // then the one warp driven (party_warp's seat).
     party_warp::SeatPawns members{}, ridden{};
     float                 seconds[players::kMaxPlayers] = {};
-    const auto            now = std::chrono::steady_clock::now();
+    const auto            now   = std::chrono::steady_clock::now();
+    const int             keyed = input::keyboard_keys::TakeWarpPress();  // taken every tick: none carried over
     for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
     {
         Subject&   memberSubject = g_members[seat];
@@ -796,10 +798,11 @@ void Tick(bool splitShown) noexcept
         const bool clicked = member != nullptr && pressed &&
                              g_clicks[seat].Press(static_cast<std::uint64_t>(
                                  std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count()));
+        const bool key   = member != nullptr && keyed == seat;
         const bool asked = std::exchange(g_consoleAsk[seat], false);
-        if (clicked || asked)
+        if (clicked || key || asked)
         {
-            Ask(seat, clicked ? L"L3 twice" : L"the console", splitShown);
+            Ask(seat, clicked ? L"L3 twice" : key ? L"the period key" : L"the console", splitShown);
         }
         else if (g_askWaiting[seat] != nullptr && party_warp::BusySeat() < 0)
         {

@@ -73,8 +73,9 @@ bool             g_leaveDown   = false;
 bool             g_leaveSeen   = false;  // Backspace went down since the last poll (a tap between two polls counts)
 std::uint16_t    g_pressed     = 0;      // the window's keys pressed since the last poll, as the rules' bits
 rules::Held      g_leave{};
+bool             g_warpPressed = false;  // the period went down since the last take (TakeWarpPress)
 std::int32_t     g_releaseUser = -1;
-std::uint32_t    g_opens = 0, g_taps = 0, g_windowKeys = 0, g_flagsKept = 0;
+std::uint32_t    g_opens = 0, g_taps = 0, g_windowKeys = 0, g_flagsKept = 0, g_warps = 0;
 
 KeyFn OriginalDown() noexcept
 {
@@ -180,15 +181,18 @@ void Tell(std::uint16_t pressed, bool open, bool bTap, bool bHeld) noexcept
     }
 }
 
-/// A key down the mod takes from the game: Tab (the opener, its system repeats too), and every key while the window is
-/// open but a repeat of one held from before it opened (its down reached the game, so its up must too).
+/// A key down the mod takes from the game: Tab (the opener, its system repeats too), the period while the keyboard plays
+/// player 2 or 3 (their way back to player 1), and every key while the window is open but a repeat of one held from
+/// before it opened (its down reached the game, so its up must too).
 bool TakesDown(std::uint32_t keyCode, bool repeat) noexcept
 {
-    return keyCode == rules::kOpenKey || (g_idle && !(repeat && !g_heldBack.test(keyCode)));
+    return keyCode == rules::kOpenKey || (keyCode == rules::kWarpKey && pad_table::KeyboardSeat() > 0) ||
+           (g_idle && !(repeat && !g_heldBack.test(keyCode)));
 }
 
-/// Square's key-down handler, the mod's first: Tab held back (the opener), and every key while the window is open. A
-/// pad button's event, and every event once the mod has ended (a slot it could not put back), pass as they came.
+/// Square's key-down handler, the mod's first: Tab held back (the opener), the period (the keyboard player's way back),
+/// and every key while the window is open. A pad button's event, and every event once the mod has ended (a slot it
+/// could not put back), pass as they came.
 std::uint8_t KeyDown(void* self, void* application, const void* keyEvent) noexcept
 {
     std::uint32_t keyCode = 0;
@@ -206,6 +210,14 @@ std::uint8_t KeyDown(void* self, void* application, const void* keyEvent) noexce
             g_tabFired    = false;
             g_tabInWindow = g_idle;
             g_tabSince    = pad_table::NowMs();
+        }
+    }
+    else if (keyCode == rules::kWarpKey && !g_idle)
+    {
+        if (!repeat)
+        {
+            g_warpPressed = true;
+            ++g_warps;
         }
     }
     else if (!repeat)
@@ -260,10 +272,10 @@ std::uint8_t PointerEvent(void* self, void* application, const void* pointerEven
 #if LSS_DEV
 std::wstring Reading()
 {
-    return std::format(L"{}; window {}, Tab {}; opener held {} time(s), map taps given {}, window keys {}; the keyboard "
-                       L"flag put back after {} event(s) of player 2's or 3's keyboard",
+    return std::format(L"{}; window {}, Tab {}; opener held {} time(s), map taps given {}, window keys {}, period presses "
+                       L"{}; the keyboard flag put back after {} event(s) of player 2's or 3's keyboard",
                        g_installed ? L"on" : L"not installed", g_idle ? L"open" : L"closed",
-                       g_tabDown ? L"down" : L"up", g_opens, g_taps, g_windowKeys, g_flagsKept);
+                       g_tabDown ? L"down" : L"up", g_opens, g_taps, g_windowKeys, g_warps, g_flagsKept);
 }
 #endif
 
@@ -413,6 +425,12 @@ void SetIdle(bool idle) noexcept
     }
     platform::LogDebug(L"keyboard: {}", idle ? L"its player's window is open: every key is the window's"
                                              : L"its player's window closed: the keys reach the game again");
+}
+
+int TakeWarpPress() noexcept
+{
+    const int seat = pad_table::KeyboardSeat();
+    return std::exchange(g_warpPressed, false) && seat > 0 ? seat : -1;
 }
 
 std::int32_t ReleaseUser() noexcept

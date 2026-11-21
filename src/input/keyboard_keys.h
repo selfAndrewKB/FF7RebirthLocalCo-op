@@ -10,6 +10,8 @@
 //     the press then (through the game's own key-to-actions pass, as its key repeat presses a key) and its release a
 //     frame later, so a tap still opens the map, a tap's length late (a press and release in one frame read as
 //     neither);
+//   - the period, while the keyboard plays player 2 or 3: held back from the game, it asks to bring that player back to
+//     player 1, as a pad's L3 twice (world/nav_strand, TakeWarpPress);
 //   - while the keyboard's player's window is open (SetIdle), every key goes to the window and none to the game, as a
 //     pad reads idle then: the keys that stand for the pad's (pad_rules::FromKey) are told to the listener as that
 //     pad's presses, Backspace as B's tap or hold. A key held from before the window opened is let go to the game as
@@ -46,6 +48,10 @@ void Poll() noexcept;
 
 /// The keyboard's player's window is open: every key is the window's. Game thread.
 void SetIdle(bool idle) noexcept;
+
+/// The seat the keyboard plays (1 or 2: player 2 or 3) if the period was pressed since the last take, else -1; taken
+/// once a tick, so a press made while the keyboard plays player 1 is dropped. Game thread.
+int TakeWarpPress() noexcept;
 
 /// ReleaseUser's answer for a keyboard key's release (player 1's pad shares the keyboard's Slate user, 0).
 inline constexpr std::int32_t kKeyboardRelease = -2;
