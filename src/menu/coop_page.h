@@ -12,8 +12,15 @@
 // read and commit are redirected for the mod's rows only (their category bytes from 0x80, which the game never makes):
 // a read answers the option's current word's place (its default's while the game's Reset All runs on the page: 1.005,
 // whose Reset All entry can be followed), a commit while the page is open is queued and the next tick runs
-// the option's console command and saves it to the settings file, so it applies at once and at the next start. Each
-// made page and each change logged at Info, each commit at Debug, each value read at Trace. Game thread.
+// the option's console command and saves it to the settings file, so it applies at once and at the next start.
+//
+// The options marked for the game's own screen (settings::OnGameScreen: players 2 and 3's Responsiveness) are rows of
+// every other Options screen instead (the title's, the main menu's): the screen's construct is followed by their
+// insertion in Camera & Controls right after the game's Responsiveness (through the game's own find, which never adds,
+// and its own row insert), Range rows from 1 as that one, read and committed through the same redirects from any
+// screen; a Reset All of Camera & Controls has them read the game's default Responsiveness, which the reset then
+// commits. Each made page, each insertion and each change logged at Info, each commit at Debug, each value read at
+// Trace. Game thread.
 //
 // How the game's helpers are used: a category's rows are emptied by the game's move-assign from an empty array (the
 // game has no ranged remove); the overlay add writes the page's order itself; 1.005's value read is entered through
@@ -36,7 +43,8 @@ namespace lss::menu::coop_page {
 
 /// Finds the page's functions and builds its categories. False if a check failed or the table has no options.
 bool Install(const platform::GameImage& image) noexcept;
-/// The value read and commit redirected (first tick, game thread). False if either could not be placed.
+/// The value read and commit redirected, then Reset All and the construct followed (first tick, game thread). False if
+/// the value read or commit could not be placed; the others are optional (logged).
 bool Place(const platform::GameImage& image) noexcept;
 void Unplace() noexcept;
 
@@ -52,7 +60,8 @@ void UseSliders(bool sliders) noexcept;
 std::optional<int> TakeAnswered(std::int32_t value) noexcept;
 
 /// A Range row's Accept (the page's key handler, before the game's: its own setter does not reach the commit for the
-/// mod's rows): the row's pending value queued for its option, as a list's commit is.
+/// mod's rows), on the mod's page or a game screen: the row's pending value queued for its option, as a list's commit
+/// is; a game row's Accept does nothing here.
 void CommitEdit(void* page) noexcept;
 
 /// The mod's page, made if needed (from `host`'s world, with the game's `inGame`: 1 from the main menu, 0 from the

@@ -45,11 +45,12 @@ struct Option
     const wchar_t*                  menuHelp = L"";
     // Set by the setup app, no row on the Co-op page: `words` is empty and the option takes any word, an empty one its default.
     bool                            appOnly = false;
-    // Of the game's own Options screen, not the Co-op page: no row on the page; the console and the file set it.
+    // A row in the game's own Options screen instead of the Co-op page (Camera & Controls, after the game's
+    // Responsiveness): a Range row over `words`, its values counted from 1 (menu/coop_menu_rules.h RowMin).
     bool                            gameScreen = false;
 };
 
-/// The option is the game's own Options screen's, not the Co-op page's.
+/// The option has a row in the game's own Options screen, not on the Co-op page.
 constexpr bool OnGameScreen(const Option& option) noexcept
 {
     return option.gameScreen;

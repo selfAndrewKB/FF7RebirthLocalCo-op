@@ -313,21 +313,22 @@ bool PageClosing(const void* page) noexcept
            (state == facts::kOptionsStateClosing || state == 0);
 }
 
-/// Accept (not a repeat) on the mod's page while one of its Range rows is open.
+/// Accept (not a repeat) on an Options screen while a Range row is open (the mod's page while open, or a game screen,
+/// whose rows of the mod's coop_page::CommitEdit finds by their byte).
 bool RangeAccept(void* page, const void* event) noexcept
 {
     std::uint8_t  state = 0, repeat = 1;
     std::uint64_t key = 0, accept = 0;
-    return g_acceptKey != 0 && event != nullptr && coop_page::IsOpen() && coop_page::IsPage(page) &&
+    return g_acceptKey != 0 && event != nullptr && (!coop_page::IsPage(page) || coop_page::IsOpen()) &&
            platform::Read(At(page, facts::kOptionsState), state) && state == facts::kOptionsStateRangeEdit &&
            platform::Read(static_cast<const std::uint8_t*>(event) + facts::kActionEventRepeat, repeat) && repeat == 0 &&
            platform::Read(static_cast<const std::uint8_t*>(event) + facts::kActionEventKey, key) &&
            platform::Read(g_acceptKey, accept) && accept != 0 && key == accept;
 }
 
-/// The page's key handler (vtable slot): a Range row's Accept queued first (the game's handler sets the value inline,
-/// never through the commit the mod redirects; the row's refresh inside it then reads the new value), then the game's,
-/// then the first page back if Back closed the mod's page.
+/// The Options screens' key handler (vtable slot): a Range row's Accept queued first, on the mod's page or a game screen
+/// (the game's handler sets the value inline, never through the commit the mod redirects; the row's refresh inside it
+/// then reads the new value), then the game's, then the first page back if Back closed the mod's page.
 std::uintptr_t KeyDown(void* page, void* a, void* b, void* event)
 {
     if (RangeAccept(page, event))

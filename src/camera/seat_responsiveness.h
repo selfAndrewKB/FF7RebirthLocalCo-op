@@ -7,7 +7,8 @@
 // update (camera/field_camera) each run inside Scope(seat), which holds the seat's own level in that byte for the call
 // and puts player 1's back after (platform/byte_scope.h, Hold: a game write inside is undone and counted). Player 1's
 // option, its row and every other reader stay the game's. The levels are the settings file's responsiveness options
-// (platform/settings.h), also set by the console; a change applies from the seat's next frame. Logged at Info when a level is set, a warning once if the game wrote the byte
+// (platform/settings.h), set by their rows in the game's Options screen (menu/coop_page) and the console; a change
+// applies from the seat's next frame. Logged at Info when a level is set, a warning once if the game wrote the byte
 // inside a seat's scope. Game thread.
 
 #include <string>

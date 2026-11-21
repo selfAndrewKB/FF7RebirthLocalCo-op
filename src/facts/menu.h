@@ -233,6 +233,20 @@ inline constexpr FunctionFact kOptionsResetConfirm{L"OptionsMenu_ResetCategoryTo
                                                    kOptionsResetConfirmBytes};
 inline constexpr std::size_t  kOptionsResetConfirmFirst = 5;
 
+/// The page's construct (void(page)), a slot of MainMenu_OptionsTop2_C's vtable (+0x328; research/
+/// RE-camera-responsiveness-per-player.md): it fills _OptionItems from the Blueprint's defaults; in Camera & Controls
+/// it inserts the game's Post-Action Refocus and its own "Responsiveness (Mouse)" right under Responsiveness and
+/// removes two rows; then it re-commits every row's value. The title's screen, the pause menu's and the mod's own page
+/// share it. Camera & Controls is key 1; Responsiveness (EOptionCategory CameraSensitivity) is a Range row 1 to 5
+/// (facts/engine.h kOptionResponsiveness).
+inline constexpr std::uint8_t kOptionsConstructBytes[] = {0x48, 0x8B, 0xC4, 0x48, 0x89, 0x58, 0x10, 0x48,
+                                                          0x89, 0x70, 0x18, 0x48, 0x89, 0x78, 0x20, 0x55};
+inline constexpr SlotFact kOptionsConstruct{L"the Options page's construct", 0x14574EF00,
+                                            {L"UEndMainOptionsMenu_NativeConstruct_BuildOptionItems", 0x14159D394,
+                                             kOptionsConstructBytes}};
+inline constexpr std::uint8_t kOptionsCameraKey             = 1;
+inline constexpr std::uint8_t kOptionCategoryResponsiveness = 15;
+
 /// The page's key handler (Back, Accept, the options button), a slot of MainMenu_OptionsTop2_C's vtable
 /// (+0x3B0; 1.004 +0x3A8).
 inline constexpr std::uint8_t kOptionsKeyDownBytes[] = {0x40, 0x55, 0x53, 0x56, 0x57, 0x41, 0x54, 0x41,
@@ -306,6 +320,16 @@ inline constexpr FunctionFact kFStringAssign{L"FString_AssignCopy", 0x140E8CAA0,
 inline constexpr std::uint8_t kOptionItemsFindOrAddBytes[] = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8,
                                                               0xE8, 0x13, 0xBD, 0x00, 0x48, 0x2B, 0xE0, 0x48};
 inline constexpr FunctionFact kOptionItemsFindOrAdd{L"OptionItemsMap_FindOrAdd", 0x14159A78C, kOptionItemsFindOrAddBytes};
+/// OptionItemsMap_FindId(map, i32* outId, u8 key) -> outId: the same map's find, which never adds (-1 when the key is
+/// absent). FindOrAdd above is the map's add: on a key already there it destroys that category's rows, so the game's own
+/// screens are read with this. An element (0x30 bytes: the key at +0) at the map's data + id * 0x30, its FOptionInfos at
+/// +0x08; the map's +0x08 counts the elements (ids below it).
+inline constexpr std::uint8_t kOptionItemsFindIdBytes[] = {0x8B, 0x41, 0x08, 0x4C, 0x8B, 0xD2, 0x4C, 0x8B,
+                                                           0xD9, 0x3B, 0x41, 0x34, 0x74, 0x40, 0x4C, 0x8B};
+inline constexpr FunctionFact  kOptionItemsFindId{L"OptionItemsMap_FindId", 0x14159BE54, kOptionItemsFindIdBytes};
+inline constexpr std::size_t   kOptionItemsElementSize  = 0x30;
+inline constexpr std::uint32_t kOptionItemsElementValue = 0x08;
+inline constexpr std::uint32_t kOptionItemsElementCount = 0x08;
 inline constexpr std::uint8_t kOptionInfoCtorBytes[] = {0x33, 0xC0, 0x48, 0x89, 0x41, 0x08, 0x48, 0x89,
                                                         0x41, 0x10, 0x48, 0x89, 0x41, 0x18, 0x48, 0x89};
 inline constexpr FunctionFact kOptionInfoCtor{L"FOptionInfo_DefaultCtor", 0x14159D308, kOptionInfoCtorBytes};
@@ -319,6 +343,9 @@ inline constexpr std::uint8_t kGrowBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48
                                               0x24, 0x10, 0x57, 0xB8, 0x20, 0x00, 0x00, 0x00};
 inline constexpr FunctionFact kOptionInfosGrow{L"TArrayFOptionInfo_ResizeGrow", 0x14140C64C, kGrowBytes};
 inline constexpr FunctionFact kStringArrayGrow{L"TArray16_ResizeGrow_FString", 0x1407B3514, kGrowBytes};
+/// TArrayFOptionInfo_InsertOneAt(rows, i32 index): one raw slot at `index`, the tail moved up (grown if needed), as the
+/// construct inserts its camera rows; the slot is then built with the move constructor.
+inline constexpr FunctionFact kOptionInfosInsertAt{L"TArrayFOptionInfo_InsertOneAt", 0x14189E3E4, kGrowBytes};
 /// TArrayFOptionInfo_MoveAssign(dst, src): with an empty source, every row destroyed and the buffer freed.
 inline constexpr std::uint8_t kOptionInfosMoveAssignBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x6C,
                                                                0x24, 0x10, 0x48, 0x89, 0x74, 0x24, 0x18, 0x57};
