@@ -23,6 +23,13 @@ constexpr bool PressAllowed(bool seatTicks, std::uint8_t menuLayerSeat, std::uin
     return seatTicks && menuLayerSeat != 0 && menuLayerOne != 0 && playerOneTopIsCommandMenu;
 }
 
+/// A seat's press runs with the seat's target fields in battle: the menu's target-switch handler writes them, so the
+/// seat's are in or the press does not run. A release writes none, and outside battle the game holds none to switch.
+constexpr bool PressNeedsTargets(bool press, bool inBattle) noexcept
+{
+    return press && inBattle;
+}
+
 /// A seat's pad's keys whose press went to the seat's UI, so their release goes there too (one set per seat: two seats
 /// holding the same action keep their own). A pad has fewer inputs (buttons, triggers, stick clicks and stick
 /// directions) than the capacity, so every held key fits.

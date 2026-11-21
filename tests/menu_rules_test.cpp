@@ -26,6 +26,15 @@ void TestPressGate()
     EXPECT(PressAllowed(true, 7, 3, true));
 }
 
+void TestPressTargets()
+{
+    std::puts("press targets: required for a press in battle only");
+    EXPECT(PressNeedsTargets(true, true));
+    EXPECT(!PressNeedsTargets(true, false));
+    EXPECT(!PressNeedsTargets(false, true));
+    EXPECT(!PressNeedsTargets(false, false));
+}
+
 void TestTakenKeys()
 {
     std::puts("taken keys: noted once; full at 32; a key of 0 is never taken; a key is forgotten once taken");
@@ -221,6 +230,7 @@ void TestCanFollow()
 int main()
 {
     TestPressGate();
+    TestPressTargets();
     TestTakenKeys();
     TestSharedState();
     TestMenusAsBefore();

@@ -7,6 +7,7 @@
 #include "facts/command_controller.h"
 #include "facts/controller.h"
 #include "facts/hud.h"
+#include "facts/in_battle.h"
 #include "facts/menu.h"
 #include "facts/party.h"
 #include "input/button_view.h"
@@ -209,11 +210,11 @@ bool InSeatUi(int seat, Route route, const wchar_t* what, Call&& call) noexcept
         return refuse(L"the player's member could not be read");
     }
     args.leaderType = ReadAt<std::uint8_t>(manager + kPartyManagerLeaderType);
-    // The menu's target-switch handler (a press) writes the target fields: the seat's, or no press. A
-    // release needs none, and after a battle there are none to hold (the part is optional then).
+    // The target fields are optional where menu_rules says a press does not need them.
+    const bool needsTargets = menu_rules::PressNeedsTargets(route == Route::kPress, facts::InBattle());
     seat_ladder::SeatScopes scopes(seat_ladder::Focus | seat_ladder::Primary | seat_ladder::Targets |
                                        seat_ladder::Leader | seat_ladder::LeaderType | seat_ladder::Rules,
-                                   route == Route::kPress ? 0u : seat_ladder::Targets, args);
+                                   needsTargets ? 0u : seat_ladder::Targets, args);
     if (!scopes.Held())
     {
         return refuse(scopes.Refusal());
