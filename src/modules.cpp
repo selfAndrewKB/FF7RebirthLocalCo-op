@@ -10,6 +10,7 @@
 #include "battle/command_rules.h"
 #include "battle/enemy_leader.h"
 #include "battle/equal_targeting.h"
+#include "battle/keyboard_menu_keys.h"
 #include "battle/leader_reads.h"
 #include "battle/lock_group_coin.h"
 #include "battle/lock_on.h"
@@ -213,6 +214,8 @@ constexpr std::array kModules{
     Module{Call<&battle::action_locks::Install>, &battle::action_locks::Remove},
     // ticked in battle; each seat's attack, guard and dodge
     Module{Call<&battle::command_menu_tick::Install>, &battle::command_menu_tick::Remove},
+    // the keyboard's movement keys work the cursor of its own player's command menu, not player 1's
+    Module{Call<&battle::keyboard_menu_keys::Install>, &battle::keyboard_menu_keys::Remove},
     // the low-health red edge in each player's own view, on that player's own danger (after the controllers' tick)
     Module{Call<&hud::low_health::Install>, &hud::low_health::Remove},
     // party-list cells and key guide tick in their owner's view
