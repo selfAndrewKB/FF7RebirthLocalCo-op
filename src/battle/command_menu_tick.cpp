@@ -226,6 +226,7 @@ static_assert(players::kMaxPlayers == 3, "g_seatSlots' initialiser names every p
 // field's first pass and the leader-type answer are logged once per stretch outside battle, then counted.
 bool                                            g_fieldMenus = false;
 std::array<bool, players::kMaxPlayers>          g_fieldTicked{};
+std::array<bool, players::kMaxPlayers>          g_fieldMenuOpen{};  // its menu open at its last pass outside battle
 std::array<bool, players::kMaxPlayers>          g_fieldLeaderSaid{};
 std::array<std::uint64_t, players::kMaxPlayers> g_fieldLeaderAnswers{};
 int                                             g_menuAllowedSaid = -1;  // the game's last logged value; -1 none
@@ -770,6 +771,15 @@ void NoteFieldPass(int seat, std::uintptr_t ctrl, std::uint8_t typeBefore, std::
                          type == memberType ? L"" : L"WARNING: ", players::SeatName(seat), typeBefore, type,
                          memberType));
     }
+    // Its member list's focus layer is pushed while the menu is open (the open's last step).
+    const bool open = ReadAt<std::uint8_t>(ctrl + kCmdSwitchingLayer) != 0;
+    if (open != g_fieldMenuOpen[slot])
+    {
+        g_fieldMenuOpen[slot] = open;
+        Line(std::format(L"{}'s command menu {} outside battle (menu member {} type {}; open request {}, open pending {})",
+                         players::SeatName(seat), open ? L"opened" : L"closed", ReadAt<std::int32_t>(ctrl + kCmdMembers),
+                         type, RequestOf(ctrl, kReqOpenMenu), ReadAt<std::int32_t>(ctrl + kCmdOpenPending)));
+    }
     if (!g_fieldTicked[slot])
     {
         g_fieldTicked[slot] = true;
@@ -792,6 +802,7 @@ void SeatPass(int seat, float deltaTime) noexcept
     {
         g_fieldTicked[slot]     = false;  // the next stretch outside battle logs its first pass again
         g_fieldLeaderSaid[slot] = false;
+        g_fieldMenuOpen[slot]   = false;
     }
     if (ctrl == 0 || ctrl1 == 0 || ctrl1 == ctrl || member == nullptr || !SeatTicks(seat))
     {
@@ -1213,6 +1224,7 @@ void Remove() noexcept
     g_menuAllowedRefused = {-1, -1, -1};
     g_menuAllowedSaid    = -1;
     g_fieldTicked        = {};
+    g_fieldMenuOpen      = {};
     g_fieldLeaderSaid    = {};
     g_fieldLeaderAnswers = {};
     for (auto* call : {&g_tickCall, &g_fieldLeaderCall, &g_guideMode8Call, &g_guideShowCall, &g_snapshotCall, &g_slotCall})

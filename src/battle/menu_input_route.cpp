@@ -75,6 +75,7 @@ using command_menu_tick::kReqUnique;
 using command_menu_tick::kReqGuardDodge;
 using command_menu_tick::kReqGuard;
 using command_menu_tick::RequestOf;
+using command_menu_tick::kReqOpenMenu;
 
 using UpRouteFn       = std::uint8_t (*)(void* owner, void* event);
 
@@ -237,12 +238,28 @@ std::wstring RouteState(std::uintptr_t own)
     const auto captures = input + facts::kInputCaptureMap;
     return std::format(L"25C {} req 6:{} 7:{} 12:{} 13:{} 26:{} 32:{} 37:{} | members {} {} {} | captures {}",
                        ReadAt<std::uint8_t>(own + kCmdBattleInput), RequestOf(own, 6), RequestOf(own, 7),
-                       RequestOf(own, kReqAttack), RequestOf(own, kReqUnique), RequestOf(own, 26),
+                       RequestOf(own, kReqAttack), RequestOf(own, kReqUnique), RequestOf(own, kReqOpenMenu),
                        RequestOf(own, kReqGuardDodge), RequestOf(own, kReqGuard),
                        ReadAt<std::int32_t>(own + kCmdMembers), ReadAt<std::int32_t>(own + kCmdMembers + 4),
                        ReadAt<std::int32_t>(own + kCmdMembers + 8),
                        ReadAt<std::int32_t>(captures + platform::kSetCount) -
                            ReadAt<std::int32_t>(captures + platform::kSetFreeCount));
+}
+
+/// For a CommandMenu press's log line: the route's gates and the game's field press and open gates on the seat's
+/// controller (research/RE-p2-field-command-menu.md). Outside the seat's UI (player 1's top layer is read as is).
+std::wstring CommandMenuGates(int seat, std::uintptr_t own)
+{
+    const auto one = ReadAt<std::uintptr_t>(command_menu_tick::UiSystem() + kUICommandController);
+    return std::format(L"menu ticks {}, menu layer {} (player 1's {}), player 1's top layer the command menu's {}, field "
+                       L"menu {}, menu allowed {}, set up {}, battle HUD {}, open request {}, open pending {}",
+                       command_menu_tick::SeatTicks(seat) ? 1 : 0, ReadAt<std::uint8_t>(own + kCmdMenuLayer),
+                       one != 0 ? ReadAt<std::uint8_t>(one + kCmdMenuLayer) : 0xFF,
+                       focus_scope::PlayerOneTopIsCommandMenu() ? 1 : 0,
+                       ReadAt<std::uint8_t>(own + facts::kCmdFieldMenuAllowed),
+                       ReadAt<std::uint8_t>(own + facts::kCmdMenuAllowed), ReadAt<std::uint8_t>(own + facts::kCmdSetupDone),
+                       ReadAt<std::uint8_t>(own + facts::kCmdHudMode), RequestOf(own, kReqOpenMenu),
+                       ReadAt<std::int32_t>(own + facts::kCmdOpenPending));
 }
 
 /// Notes that `seat`'s pad's press of `key` went to the seat's UI: its release goes there too.
@@ -294,6 +311,19 @@ bool RouteSeatPad(input::pad_buttons::ActionDownFn dispatch, void* owner, void* 
         }
         return ran;
     });
+    if (action == 0 && own != 0 && platform::Enabled(platform::Level::Debug))
+    {
+        try
+        {
+            Line(std::format(L"pad {}'s CommandMenu press {} ({}): {}", seat + 1,
+                             routed ? L"went to their menu" : L"was refused",
+                             routed ? (taken != 0 ? L"taken" : L"not taken") : g_uiRefusal, CommandMenuGates(seat, own)),
+                 platform::Level::Debug);
+        }
+        catch (...)
+        {
+        }
+    }
     if (!routed)
     {
         return false;

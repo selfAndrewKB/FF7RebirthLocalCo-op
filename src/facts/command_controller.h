@@ -31,6 +31,8 @@ inline constexpr std::uint32_t kCmdGuardLatch       = 0x760;  // i32: the guard 
 inline constexpr std::uint32_t kCmdSetupPending     = 0x775;  // u8: the tick re-runs Setup
 inline constexpr std::uint32_t kCmdSetupDone        = 0x777;  // u8: Setup sets it, only ResetAll clears it; while 0
                                                                   // no menu state can be pushed (research/RE-p2-command-menu-lifecycle.md)
+inline constexpr std::uint32_t kCmdFieldMenuAllowed = 0x780;  // u8: the on/off table's "field command menu" byte; the
+                                                                  // field press needs it (RE-p2-field-command-menu.md)
 inline constexpr std::uint32_t kCmdReadyB           = 0x782;  // u8
 inline constexpr std::uint32_t kCmdMenuLayer        = 0x783;  // u8: the menu's bottom focus layer (priority -1000)
 
