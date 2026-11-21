@@ -48,6 +48,9 @@ inline constexpr std::uint32_t kUIFilterManager      = 0x148;  // EndUISystem[41
                                                                  // tactical tint's latch and count; menu_tint)
 inline constexpr std::uint32_t kUIKeyGuide           = 0x1A8;  // EndUISystem[53]: the key guide
 inline constexpr std::uint32_t kUIActionRows         = 0x208;  // -> the field-action icon list (TArray<FWeakObjectPtr>)
+inline constexpr std::uint32_t kUIMenuLocks          = 0x2D8;  // u64: the command menu's lock bits (bit 0: the on/off
+                                                                 // table's action lock; any other keeps it shut too)
+inline constexpr std::uint64_t kUIMenuActionLock     = 0x01;
 /// The save-data notice, the game's top-right box ("Checking saved data..."; EndUISystem[35], RE-title-notice.md):
 /// the manager holds the widget's weak at +0 and a shown byte; the widget (SaveIcon_C) has one text block. The
 /// game's show takes a world and a kind (0: the check's look, no later text swap), its hide the next kind (0: none;

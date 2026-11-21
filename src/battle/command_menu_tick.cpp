@@ -32,6 +32,8 @@
 #include "scopes/seat_ladder.h"
 #include "session/party_member.h"
 
+#include <intrin.h>
+
 #include <algorithm>
 #include <array>
 #include <atomic>
@@ -127,6 +129,8 @@ using facts::kCmdFieldMenu;
 // also writes need nothing here: EndUISystem[50]+0x20/+0x2C have no reader in the game, and the input
 // object's +0x64 is per-player state kept in the seat's focus scope (research/RE-p2-command-menu-levers.md).
 using facts::kUICommandController;
+using facts::kUIMenuActionLock;  // the UI system's menu lock bits (facts/hud.h)
+using facts::kUIMenuLocks;
 // The party manager's leader type (u8; PM+0x148 is the leader's weak pointer, scopes/leader_scope).
 using facts::kPartyManagerLeaderType;
 using facts::kPartyManagerPrimaryController;
@@ -231,6 +235,9 @@ std::array<bool, players::kMaxPlayers>          g_fieldMenuOpen{};  // its menu 
 std::array<bool, players::kMaxPlayers>          g_fieldLeaderSaid{};
 std::array<std::uint64_t, players::kMaxPlayers> g_fieldLeaderAnswers{};
 int                                             g_menuAllowedSaid = -1;  // the game's last logged value; -1 none
+// The value of the game's last call on its controller other than the action lock's shut: the menu as the game's own
+// systems (minigames, summons, events, the battle start) leave it. Game thread.
+std::uint8_t                                    g_systemsAllowed  = 1;
 
 void WatchLine(const std::wstring& text) noexcept
 {
@@ -492,8 +499,21 @@ void SetMenuAllowed(void* controller, std::uint8_t on, std::uint8_t keepPending)
     {
         return;
     }
-    if (reinterpret_cast<std::uintptr_t>(controller) == ReadAt<std::uintptr_t>(g_endUISystem + kUICommandController) &&
-        g_menuAllowedSaid != on)
+    const bool onGames = reinterpret_cast<std::uintptr_t>(controller) ==
+                         ReadAt<std::uintptr_t>(g_endUISystem + kUICommandController);
+    const bool shut    = action_locks::FromShut(_ReturnAddress());
+    if (onGames && !shut)
+    {
+        g_systemsAllowed = on;
+    }
+    // The action lock's shut held by player 1's own actions alone is player 1's: their menu, as the game's own.
+    if (shut && on == 0 && action_locks::OnlyPlayerOneHolds())
+    {
+        Line(L"player 1's own action shuts their command menu; players 2 and 3's stay as they are",
+             platform::Level::Debug);
+        return;
+    }
+    if (onGames && g_menuAllowedSaid != on)
     {
         g_menuAllowedSaid = on;
         Line(std::format(L"menu allowed {} on the game's controller; players 2 and 3's controllers follow", on));
@@ -753,7 +773,15 @@ void Refused(int seat, const wchar_t* why) noexcept
 void CatchUpMenuAllowed(int seat, std::uintptr_t ctrl, std::uintptr_t ctrl1) noexcept
 {
     const bool ownLock = action_locks::Held(seat) > 0;
-    const auto want    = ownLock ? std::uint8_t{0} : ReadAt<std::uint8_t>(ctrl1 + kCmdMenuAllowed);
+    auto       want    = ownLock ? std::uint8_t{0} : ReadAt<std::uint8_t>(ctrl1 + kCmdMenuAllowed);
+    // Player 1's menu shut only by player 1's own action (the action lock its sole shut, held by player 1 alone, and the
+    // game's own systems allowing it) is not the seat's to follow.
+    if (!ownLock && want == 0 && g_systemsAllowed != 0 &&
+        (ReadAt<std::uint64_t>(g_endUISystem + kUIMenuLocks) & ~kUIMenuActionLock) == 0 &&
+        action_locks::OnlyPlayerOneHolds())
+    {
+        want = 1;
+    }
     if (g_menuAllowed == nullptr || ReadAt<std::uint8_t>(ctrl + kCmdMenuAllowed) == want)
     {
         return;
@@ -1231,6 +1259,7 @@ void Remove() noexcept
     g_menuAllowedFaulted = {};  // a later install starts every seat's follow and its lines afresh
     g_menuAllowedRefused = {-1, -1, -1};
     g_menuAllowedSaid    = -1;
+    g_systemsAllowed     = 1;
     g_fieldTicked        = {};
     g_fieldMenuOpen      = {};
     g_fieldLeaderSaid    = {};

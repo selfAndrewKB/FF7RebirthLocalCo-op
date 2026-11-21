@@ -14,6 +14,7 @@
 
 #include <intrin.h>
 
+#include <algorithm>
 #include <array>
 #include <atomic>
 #include <chrono>
@@ -21,6 +22,7 @@
 #include <format>
 #include <span>
 #include <string>
+#include <string_view>
 
 namespace lss::battle::action_locks {
 
@@ -38,6 +40,22 @@ constexpr std::uint8_t kReleaseBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x
 constexpr platform::FunctionFact kRelease{L"EndStateMgr_OnOff_DecAndQueueEdge", 0x1410D1498, kReleaseBytes};
 constexpr std::size_t            kFirstInstruction = 5;
 constexpr std::uint8_t           kMenuLock         = 11;  // the on/off entry the characters' actions lock the menu with
+// The applier's shut on the lock's first count: it sets the UI system's lock bit and tail-calls the menu-allowed setter
+// on the UI system's controller, so the setter returns to the instruction after this call.
+constexpr std::uint8_t kShutBytes[] = {0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8, 0xD2, 0x19, 0x93, 0x01, 0x48, 0x2B,
+                                       0xE0, 0xE8, 0xD6, 0xB9, 0x06, 0x00, 0x45, 0x33, 0xC0, 0x33, 0xD2, 0x80};
+constexpr platform::FunctionFact kShut{L"EndUI_MenuLockBit0_Set_DisallowMenu5E1", 0x14083A1A4, kShutBytes};
+constexpr std::uintptr_t         kShutCall = 0x1410D1B2A;  // in the on/off table's applier, an E8 to kShut
+// The reasons a character's own action locks with (its class's name, the research file's table of lock sites, each
+// gated there on the player's character): any other reason is one of the game's own uses.
+constexpr std::wstring_view kCharacterReasons[] = {L"FEndBehavior",
+                                                   L"FEndCharacterControllerState",
+                                                   L"FEndFieldActionExecuter",
+                                                   L"FieldActionExecuter",
+                                                   L"FEndHubTreasure",
+                                                   L"UEndPlayerChocoboCoordinator",
+                                                   L"UEndPlayerBuggyCoordinator",
+                                                   L"FEndPartyChocoboManager"};
 // A player's own lock held this long without its release is logged (no action of theirs keeps the menu shut that
 // long; a release attributed elsewhere would).
 constexpr std::chrono::seconds kLongHeld{10};
@@ -51,10 +69,18 @@ platform::EntryRedirect g_lock, g_release;
 // a call left in place passes straight to the game's.
 std::atomic<bool> g_active{false};
 
+// The return address of the applier's shut (0: its call did not check, and no shut is told apart). Set once at install.
+std::uintptr_t g_shutReturn = 0;
+
 // Any thread, by seat (index 0 unused): the locks each seat's own actions hold, and since when (steady clock, in
 // milliseconds) the first of them.
 std::array<std::atomic<int>, players::kMaxPlayers>          g_held{};
 std::array<std::atomic<std::int64_t>, players::kMaxPlayers> g_heldSince{};
+
+// Any thread: the share of the game's count player 1's own actions hold (never above the game's count), and the game
+// state the counts were last seen on (the table's owner).
+std::atomic<int>         g_playerOne{0};
+std::atomic<const void*> g_state{nullptr};
 
 // Game thread, by seat: a long hold was logged (until the seat's locks are all released).
 std::array<bool, players::kMaxPlayers> g_longSaid{};
@@ -98,15 +124,44 @@ int OnlyHolder(bool& both) noexcept
     return found;
 }
 
-/// Takes one of `seat`'s locks; false if it holds none.
-bool TakeOne(int seat) noexcept
+/// Takes one from `count`; false if it held none.
+bool TakeOne(std::atomic<int>& count) noexcept
 {
-    auto& held = g_held[static_cast<std::size_t>(seat)];
-    int   now  = held.load(std::memory_order_relaxed);
-    while (now > 0 && !held.compare_exchange_weak(now, now - 1, std::memory_order_relaxed))
+    int now = count.load(std::memory_order_relaxed);
+    while (now > 0 && !count.compare_exchange_weak(now, now - 1, std::memory_order_relaxed))
     {
     }
     return now > 0;
+}
+
+/// A lock outside every seat's context is player 1's own when its reason is a character action's (the game's own uses
+/// pass their system's name, or none).
+bool PlayerOneOwn(std::uint64_t reason) noexcept
+{
+    if (reason == 0)
+    {
+        return false;
+    }
+    const std::wstring text = players::unreal::NameText(reason);
+    for (const std::wstring_view prefix : kCharacterReasons)
+    {
+        if (text.starts_with(prefix))
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+/// Player 1's share brought down to the game's count: a release given to the game that was player 1's after all
+/// leaves the share no higher than what the game holds, and it is empty whenever the game's count is.
+void FitPlayerOne(const void* state) noexcept
+{
+    const int game = std::max(GameCount(state), 0);
+    int       now  = g_playerOne.load(std::memory_order_relaxed);
+    while (now > game && !g_playerOne.compare_exchange_weak(now, game, std::memory_order_relaxed))
+    {
+    }
 }
 
 /// A Debug line about one count change: `what` (whose and what), the reason's name, the caller, the thread and every
@@ -119,7 +174,7 @@ void Note(const std::wstring& what, std::uint64_t reason, const void* from, cons
     }
     try
     {
-        std::wstring held;
+        std::wstring held = std::format(L", player 1's share {}", g_playerOne.load(std::memory_order_relaxed));
         for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
         {
             held += std::format(L", {}'s {}", players::SeatName(seat),
@@ -150,17 +205,27 @@ std::wstring Whose(int seat, const wchar_t* rest) noexcept
     }
 }
 
-/// Replaces the lock: a seat's own lock is counted for the seat, every other one is the game's.
+/// Replaces the lock: a seat's own lock is counted for the seat; every other one is the game's, player 1's own counted
+/// as their share of it.
 void Lock(void* state, std::uint8_t entry, std::uint64_t reason, std::uint8_t second) noexcept
 {
     const auto original = reinterpret_cast<CountFn>(g_lock.Original());
-    const int  seat     = entry == kMenuLock && g_active.load(std::memory_order_acquire) ? SeatActingHere() : 0;
+    const bool ours     = entry == kMenuLock && g_active.load(std::memory_order_acquire);
+    const int  seat     = ours ? SeatActingHere() : 0;
     if (seat == 0)
     {
         original(state, entry, reason, second);
-        if (entry == kMenuLock)
+        if (ours)
         {
-            Note(L"the game's command menu lock", reason, _ReturnAddress(), state);
+            g_state.store(state, std::memory_order_relaxed);
+            const bool own = PlayerOneOwn(reason);
+            if (own)
+            {
+                g_playerOne.fetch_add(1, std::memory_order_relaxed);
+            }
+            FitPlayerOne(state);
+            Note(own ? L"player 1's own action locks their command menu" : L"the game's command menu lock", reason,
+                 _ReturnAddress(), state);
         }
         return;
     }
@@ -175,15 +240,18 @@ void Lock(void* state, std::uint8_t entry, std::uint64_t reason, std::uint8_t se
 /// Replaces the release. A seat's own release takes the seat's lock; one outside every seat's context, with the game's
 /// count empty, takes the lock of the one seat holding any (its action ended where no context names it); the game gets
 /// the rest, but never a release its count does not hold (that would leave its count below zero, and its next lock
-/// would never shut a menu). The game's count is read outside its lock: a lock it takes meanwhile can be missed.
-void Release(void* state, std::uint8_t entry, std::uint64_t reason, std::uint8_t second) noexcept
+/// would never shut a menu). A release the game gets is player 1's own when only player 1's share holds the game's
+/// count, or when it ends in player 1's climb context. A release names no reason (its argument is not one). The game's
+/// count is read outside its lock: a lock it takes meanwhile can be missed.
+void Release(void* state, std::uint8_t entry, std::uint64_t, std::uint8_t second) noexcept
 {
     const auto original = reinterpret_cast<CountFn>(g_release.Original());
     if (entry != kMenuLock || !g_active.load(std::memory_order_acquire))
     {
-        return original(state, entry, reason, second);
+        return original(state, entry, 0, second);
     }
-    const bool gameHolds = GameCount(state) > 0;
+    const int  game      = GameCount(state);
+    const bool gameHolds = game > 0;
     int        seat      = SeatActingHere();
     bool       both      = false;
     if (seat == 0 && !gameHolds)
@@ -195,9 +263,9 @@ void Release(void* state, std::uint8_t entry, std::uint64_t reason, std::uint8_t
                           L"hold their own: taken as player 2's");
         }
     }
-    if (seat != 0 && TakeOne(seat))
+    if (seat != 0 && TakeOne(g_held[static_cast<std::size_t>(seat)]))
     {
-        Note(Whose(seat, L"own action releases their command menu"), reason, _ReturnAddress(), state);
+        Note(Whose(seat, L"own action releases their command menu"), 0, _ReturnAddress(), state);
         return;
     }
     if (!gameHolds)
@@ -206,8 +274,14 @@ void Release(void* state, std::uint8_t entry, std::uint64_t reason, std::uint8_t
                       seat != 0 ? players::SeatName(seat) : L"no player's context");
         return;
     }
-    original(state, entry, reason, second);
-    Note(L"the game's command menu release", reason, _ReturnAddress(), state);
+    // Decided before the game's release, taken after it: the game's count never stands above the share meanwhile.
+    const bool mine = game <= g_playerOne.load(std::memory_order_relaxed) || input::climb_context::PlayerHere() == 1;
+    original(state, entry, 0, second);
+    const bool own = mine && TakeOne(g_playerOne);
+    g_state.store(state, std::memory_order_relaxed);
+    FitPlayerOne(state);
+    Note(own ? L"player 1's own action releases their command menu" : L"the game's command menu release", 0,
+         _ReturnAddress(), state);
 }
 
 }  // namespace
@@ -226,9 +300,20 @@ bool Install(const platform::GameImage& image) noexcept
     {
         platform::Log(L"action locks: the lock was changed after us; left in place (it passes through)");
     }
+    // The applier's shut: its call must be the E8 to the shut the research read, so the setter's return address names it.
+    const auto shut = platform::FindFunction(image, kShut);
+    const auto call = image.Rebase(kShutCall, 5);
+    if (ok && shut && call && ReadAt<std::uint8_t>(*call) == 0xE8 &&
+        *call + 5 + static_cast<std::intptr_t>(ReadAt<std::int32_t>(*call + 1)) == *shut)
+    {
+        g_shutReturn = *call + 5;
+    }
     g_active.store(ok, std::memory_order_release);
-    platform::Log(L"action locks: {}", ok ? L"players 2 and 3's own actions lock their own command menu"
-                                          : L"UNAVAILABLE (a check failed): every action locks every player's menu");
+    platform::Log(L"action locks: {}; player 1's own {}",
+                  ok ? L"players 2 and 3's own actions lock their own command menu"
+                     : L"UNAVAILABLE (a check failed): every action locks every player's menu",
+                  g_shutReturn != 0 ? L"lock their own menu only"
+                                    : L"still lock every player's (the applier's shut did not check)");
     return ok;
 }
 
@@ -246,7 +331,26 @@ void Remove() noexcept
     {
         held.store(0, std::memory_order_relaxed);
     }
-    g_longSaid = {};
+    g_playerOne.store(0, std::memory_order_relaxed);
+    g_state.store(nullptr, std::memory_order_relaxed);
+    g_shutReturn = 0;
+    g_longSaid   = {};
+}
+
+bool FromShut(const void* returnAddress) noexcept
+{
+    return g_shutReturn != 0 && reinterpret_cast<std::uintptr_t>(returnAddress) == g_shutReturn;
+}
+
+bool OnlyPlayerOneHolds() noexcept
+{
+    const void* state = g_state.load(std::memory_order_relaxed);
+    if (state == nullptr || g_shutReturn == 0 || !g_active.load(std::memory_order_acquire))
+    {
+        return false;
+    }
+    const int game = GameCount(state);
+    return game > 0 && game <= g_playerOne.load(std::memory_order_relaxed);
 }
 
 int Held(int seat) noexcept

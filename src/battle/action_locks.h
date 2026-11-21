@@ -15,7 +15,10 @@
 // thread, where the game asked whether the character is the player's) is counted for that player instead of on the
 // game's count; their command menu's pass then shuts their menu with the game's setter while they hold one, as the
 // applier does to player 1's (battle/command_menu_tick). Every other lock, player 1's own and the game's (fast travel,
-// minigames, events), stays on the game's count as before. A release made outside any player's context while the game's
+// minigames, events), stays on the game's count as before. Player 1's own (a character action's reason) are counted as
+// their share of it, and a release the game gets is theirs when only that share holds the count or when it ends in
+// player 1's climb context; a shut of player 1's menu that only their share holds is not given to players 2 and 3
+// (battle/command_menu_tick's repeat and catch-up ask OnlyPlayerOneHolds). A release made outside any player's context while the game's
 // count is empty belongs to the one player who still holds a lock (logged when two do); one made while the game's count
 // holds goes to the game's; one no one holds is dropped, never given to the game's empty count. While either call is not
 // ours (before both are placed, from removal on), both pass to the game's.
@@ -40,5 +43,13 @@ int Held(int seat) noexcept;
 
 /// `seat`'s player is out: the locks counted for them are forgotten (the game never held them). Game thread.
 void SeatOut(int seat) noexcept;
+
+/// A menu-allowed setter call returning to `returnAddress` is the on/off table's applier shutting the menu on the lock's
+/// first count (false when that call did not check at install).
+bool FromShut(const void* returnAddress) noexcept;
+
+/// The game's own count of the lock is held by player 1's own actions alone (none of the game's own uses): its shut of
+/// player 1's menu is player 1's alone. Any thread.
+bool OnlyPlayerOneHolds() noexcept;
 
 }  // namespace lss::battle::action_locks
