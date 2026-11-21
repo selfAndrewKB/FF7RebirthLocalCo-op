@@ -50,6 +50,14 @@ constexpr unsigned SeatBit(int seat) noexcept
     return 1u << seat;
 }
 
+/// Player 1's own devices: pad 1, and the keyboard and mouse unless they play a seat in `seats` (`keyboardSeat` 0 or
+/// below: player 1's alone or beside player 1's pad; a seat that is out leaves them player 1's, as SeatOfSource does).
+constexpr std::uint32_t PlayerOneDevices(unsigned seats, int keyboardSeat) noexcept
+{
+    const bool seatKeyboard = keyboardSeat >= 1 && keyboardSeat < kPlayers && (seats & SeatBit(keyboardSeat)) != 0;
+    return PadBits(0) | (seatKeyboard ? 0u : kKeyboardBits);
+}
+
 /// The sources of the seats in `seats` (a mask of SeatBit; player 1's bit is ignored).
 constexpr std::uint32_t SeatPads(unsigned seats, int keyboardSeat = 0) noexcept
 {

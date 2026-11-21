@@ -50,15 +50,20 @@ using TickFn = void (*)(void* self, float deltaTime, void* application, void* cu
 
 // The action-down dispatcher: updates the tables and, unless its alreadyHandled byte is set,
 // hands the action to the UI handler stack and the menu core's delegate (menus, field prompts,
-// battle commands). Its callers that can carry a seat's pad's presses and whose call fits one aligned
-// block: the XInput main loop (every bound action) and two DirectInput loops.
+// battle commands). Its callers that can carry a seat's presses: the XInput main loop (every bound action), two
+// DirectInput loops, and the keyboard's and mouse's four (research/RE-kbm-square-input.md: the keyboard's binding loop,
+// bits 17 and 18; its extra-key list, 17; the mouse buttons and the Tick's mouse-button repeat, 19), which are a seat's
+// while the keyboard plays it.
 constexpr std::uint8_t   kActionDownBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x55, 0x56, 0x57, 0x41, 0x54, 0x41, 0x55,
                                                0x41, 0x56, 0x41, 0x57, 0xB8, 0x00, 0x01, 0x00, 0x00, 0xE8, 0xA6, 0x39};
 constexpr platform::FunctionFact kActionDown{L"SquareInput's action-down dispatcher", 0x140DD81C0, kActionDownBytes};
-constexpr std::array<std::uintptr_t, 3> kActionDownCalls{0x140E93EC3, 0x140E93A69, 0x140E93C3D};
-// 1.005 (research/RE-1005-field-2.md): the DirectInput key list's call sits at %16 = 13, so it crosses a 16-byte
-// block. It is in KeyDown_MapKeyToActions too, so on 1.005 a dispatch call that crosses a block is changed with the
-// extra-key calls, from the game thread in the input Tick after the game's (outside that function).
+constexpr std::array<std::uintptr_t, 7> kActionDownCalls{0x140E93EC3, 0x140E93A69, 0x140E93C3D, 0x140E943BF,
+                                                         0x140E94565, 0x140BAF865, 0x1409F6746};
+// The DirectInput key list's call sits at %16 = 13 and the keyboard loop's at 15 (research/RE-1005-field-2.md), so they
+// cross a 16-byte block. Both are in KeyDown_MapKeyToActions, so a dispatch call that crosses a block is changed with the
+// extra-key calls: from the game thread, in the input Tick once the game's Tick has returned, when no frame of that
+// function is running.
+constexpr std::size_t kFirstKeyboardCall = 3;  // kActionDownCalls from here on: the keyboard's and mouse's
 
 // The XInput loop's two extra-key calls: the per-button extra keys and the extra-key list
 // (SquareInput_CollectShortcutSecondKeys: the Shortcut1..5_Second keys a face button sends while the shortcut
@@ -637,7 +642,8 @@ void Tick(void* self, float deltaTime, void* application, void* cursor)
 
 /// A seated pad's presses update the tables (its player's polling reads them) but are passed as already
 /// handled: the game's own flag for "an earlier binding consumed this", so they never run a field prompt,
-/// which belongs to player 1's context. The seat comes from the press's source bit. Two presses are the
+/// which belongs to player 1's context. The seat comes from the press's source bit (the keyboard's and mouse's are the
+/// seat's while the keyboard plays it). Two presses are the
 /// game's own, passed as they came: a menu opener's (so the pause poll's UI-table variant and the menus'
 /// close handlers see the pad's Start as pad 1's), and every press while a menu owns the game's input
 /// (the menus are driven through this route; the seat's own route stays out, as its menu stops natively).
@@ -649,12 +655,15 @@ char ActionDown(void* owner, void* unused, std::uint32_t sourceBit, void* event,
     {
         return g_actionDown(owner, unused, sourceBit, event, alreadyHandled);
     }
-    const int seat = button_view::SeatOfSource(sourceBit, SeatsIn(), pad_table::KeyboardSeat());
+    const int      keyboard = pad_table::KeyboardSeat();
+    const unsigned seats    = SeatsIn();
+    const int      seat     = button_view::SeatOfSource(sourceBit, seats, keyboard);
     if (g_menuPlayer != 0)
     {
-        // A seat's shop is up: its pad is the menu pad, as the one pad is in single player; pad 1's presses and any
-        // other seat's update the tables but are passed as handled.
-        if (((button_view::PadBits(0) >> (sourceBit & 31)) & 1) != 0)
+        // A seat's shop is up: its pad is the menu pad, as the one pad is in single player; player 1's presses (pad 1,
+        // and the keyboard and mouse while they are player 1's) and any other seat's update the tables but are passed
+        // as handled.
+        if (((button_view::PlayerOneDevices(seats, keyboard) >> (sourceBit & 31)) & 1) != 0)
         {
             ++g_padOneDowns;
             alreadyHandled = 1;
@@ -762,8 +771,8 @@ void InstallExtraKeyCalls() noexcept
     }
     if (late != 0)
     {
-        platform::Log(L"buttons: pads 2 and 3's presses kept from menus and prompts at {} of {} more dispatch call(s) (crossing a "
-                      L"block; changed from the game thread)",
+        platform::Log(L"buttons: players 2 and 3's presses kept from player 1's menus, prompts and battle commands at {} of {} "
+                      L"more dispatch call(s) (crossing a block; changed from the game thread)",
                       lateCalls, late);
     }
     unsigned calls   = 0;
@@ -797,7 +806,8 @@ void SetMenuPlayer(int seat) noexcept
     }
     else
     {
-        platform::Log(L"buttons: pad 1 drives the menus again ({} of pad 1's presses were kept from the UI meanwhile)",
+        platform::Log(L"buttons: player 1's devices drive the menus again ({} of their presses were kept from the UI "
+                      L"meanwhile)",
                       g_padOneDowns);
     }
     g_padOneDowns = 0;
@@ -839,12 +849,14 @@ bool Install(const platform::GameImage& image) noexcept
     }
     const auto target = platform::FindFunction(image, kActionDown);
     unsigned   calls  = 0;
+    unsigned   keyboardSites = 0;  // the keyboard's and mouse's calls found (installed now or at the first Tick)
     if (target)
     {
         g_actionDown = reinterpret_cast<ActionDownFn>(*target);
         for (std::size_t i = 0; i < kActionDownCalls.size(); ++i)
         {
             const auto site = image.Rebase(kActionDownCalls[i], 5);
+            keyboardSites += site && i >= kFirstKeyboardCall ? 1 : 0;
             if (site && platform::RunningBuild() != platform::BuildIndex::V1004 && !players::call_site::FitsOneBlock(*site))
             {
                 g_lateActionDownSites[i] = *site;  // changed by the first Tick (InstallExtraKeyCalls)
@@ -878,9 +890,17 @@ bool Install(const platform::GameImage& image) noexcept
     }
     const auto late = std::count_if(g_lateActionDownSites.begin(), g_lateActionDownSites.end(),
                                     [](std::uintptr_t site) { return site != 0; });
-    platform::Log(L"buttons: pads 2 and 3's presses kept from menus and prompts at {} of {} dispatch calls{}", calls,
+    platform::Log(L"buttons: players 2 and 3's presses (their pads, and the keyboard and mouse while they play one) kept "
+                  L"from player 1's menus, prompts and battle commands at {} of {} dispatch calls{}",
+                  calls,
                   kActionDownCalls.size(),
                   late != 0 ? std::format(L" ({} more from the first input tick: crossing a block)", late) : std::wstring());
+    if (keyboardSites != kActionDownCalls.size() - kFirstKeyboardCall)
+    {
+        platform::LogWarning(L"buttons: {} of the keyboard's and mouse's {} dispatch calls found: while the keyboard plays "
+                             L"player 2 or 3, its presses there still reach player 1's menus, prompts and battle commands",
+                             keyboardSites, kActionDownCalls.size() - kFirstKeyboardCall);
+    }
     return true;
 }
 
