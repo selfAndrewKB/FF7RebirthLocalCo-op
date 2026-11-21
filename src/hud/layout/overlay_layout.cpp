@@ -86,9 +86,12 @@ void RecordColumn(const LayoutSize& layout, const OverlayBand& band) noexcept
         return;
     }
     // Column 0's pass is the frame's last, so the overlay holds its layout at the widget tick that places the UI
-    // particles: each column recorded this frame gets its box for them against it (hud/passes/ui_effect_pass.h); a
-    // column whose band did not apply gets none; one not recorded keeps its last.
+    // particles: each column recorded this frame gets its box for them against it, or against the 1920x1080 frame
+    // while the pass answers the conversion with it, which it does only while this pass's band applies
+    // (hud/passes/ui_effect_pass.h); a column whose band did not apply gets none; one not recorded keeps its last.
+    const LayoutSize  tick   = ui_effect_pass::ConvertsAgainstFrame() && band.imageHeight > 0 ? kSoloLayout : layout;
     const LayoutPoint anchor = GlowAnchor();
+    const LayoutPoint centre = GlowScaleCentre();
     const float       size   = GlowSize();  // the gauge drawn at the HUD size: its glow's box with it
     for (int i = 0; i < overlay_pass::kMaxColumns; ++i)
     {
@@ -97,8 +100,8 @@ void RecordColumn(const LayoutSize& layout, const OverlayBand& band) noexcept
             continue;
         }
         const ColumnOverlay& seen = g_columnOverlay[i];
-        const auto           box  = seen.band.imageHeight > 0 ? EffectViewport(layout, seen.layout, seen.band.band, seen.band.imageWidth,
-                                                                              seen.band.imageHeight, anchor, size)
+        const auto           box  = seen.band.imageHeight > 0 ? EffectViewport(tick, seen.layout, seen.band.band, seen.band.imageWidth,
+                                                                              seen.band.imageHeight, anchor, size, centre)
                                                                : std::nullopt;
         ui_effect_pass::PublishColumnViewport(i, box.value_or(EffectBox{}), box.has_value());
         g_columnSeen[i] = false;
@@ -446,6 +449,11 @@ void RemoveOverlayLayout() noexcept
 LayoutSize LastLayoutSize() noexcept
 {
     return g_lastLayout;
+}
+
+bool BandApplies() noexcept
+{
+    return g_bandApplies != 0;
 }
 
 bool OverlayLayoutInstalled() noexcept

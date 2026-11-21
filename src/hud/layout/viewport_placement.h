@@ -78,18 +78,20 @@ struct EffectBox
 
 /// Where the UI particle pass's viewport goes in one column's image so that column's UI particles land where its HUD
 /// is (hud/passes/ui_effect_pass.h). The game converts each effect's layout point once a frame, centred in `tickLayout`
-/// (the layout the overlay holds at the widget tick: player 1's column's) and in its half-heights, and every column's
-/// pass draws that one result over its whole image. The box makes `tickLayout`'s half-height the band's drawing of
-/// this column's `layout` units (its height = the band's times tickLayout's height over the layout's) and puts the
-/// centre where `tickLayout`'s centre falls in this column's band, moved by the distance the widget the points belong
-/// to (anchored at `anchor` of the 1920x1080 frame) stands from its design place in `layout`; with that widget drawn at
-/// `size` about its anchored corner (hud/layout/hud_placement.h, the HUD size), the box is `size` times as tall and its
-/// centre moves with the widget's points. The image's centre and height for a 16:9 column while `tickLayout` is 16:9 too
-/// at size 1; past an edge of the image for a wide or tall column, for a 16:9 one beside a wide `tickLayout`, or above
-/// size 1 at a bottom or right corner. Nullopt for an unknown layout, band, image or size.
+/// and in its half-heights (the 1920x1080 frame while the mod answers the conversion's size, else the layout the
+/// overlay holds at the widget tick: player 1's column's), and every column's pass draws that one result over its
+/// whole image; the sprites' sizes are in half-heights of the box. The box makes `tickLayout`'s half-height the band's
+/// drawing of this column's `layout` units (its height = the band's times tickLayout's height over the layout's) and
+/// puts the centre where `tickLayout`'s centre falls in this column's band, moved by the distance the widget the points
+/// belong to (its area anchored at `anchor` of the 1920x1080 frame) stands from its design place in `layout`; with that
+/// widget drawn at `size` about `scaleCentre` (a fraction of its 1920x1080 area; its anchored corner when empty;
+/// hud/layout/hud_placement.h, the HUD size), the box is `size` times as tall and its centre moves with the widget's
+/// points. The image's centre and height for a 16:9 column while `tickLayout` is 16:9 too at size 1; past an edge of the
+/// image for a wide or tall column, for a 16:9 one beside a wide `tickLayout`, or above size 1 at a bottom or right
+/// corner. Nullopt for an unknown layout, band, image, size or centre.
 std::optional<EffectBox> EffectViewport(const LayoutSize& tickLayout, const LayoutSize& layout, const IntRect& band,
                                         std::int32_t imageWidth, std::int32_t imageHeight, const LayoutPoint& anchor,
-                                        float size = 1.0f) noexcept;
+                                        float size = 1.0f, std::optional<LayoutPoint> scaleCentre = std::nullopt) noexcept;
 
 /// Whether a widget placed at `position` (its top-left, in layout units) starts outside a layout of
 /// `width` x `height` units, where it is not painted (and so not ticked). False for an unknown

@@ -1,5 +1,6 @@
 #include "hud/passes/ui_effect_pass.h"
 
+#include "hud/layout/overlay_layout.h"
 #include "hud/passes/overlay_pass.h"
 #include "platform/call_redirect.h"
 #include "platform/guarded.h"
@@ -23,6 +24,7 @@
 #include <cmath>
 #include <cstdint>
 #include <thread>
+#include <utility>
 
 namespace lss::hud::ui_effect_pass {
 
@@ -52,9 +54,26 @@ struct Viewport
 
 using SetupFn = void* (*)(void* commandList, void* scene, void* view, const std::int32_t* extent, void* out);
 
+// The UI effects' layout-point conversion (UIEffect_LayoutPointToEffectSpace, research/RE-summon-gauge.md): the
+// overlay's UI size over its UI scale centres the point and gives the half-height it is divided by, while the sprites
+// are sized in half-heights of the drawing itself. Its one read of the size, EndUI__GetRootOverlayUISize(FVector2D*
+// out) returning out, fits a block; answered with the 1920x1080 frame at the overlay's UI scale while the band applies,
+// so every effect's point is in the frame's half-heights, the unit its sprites are drawn in.
+constexpr std::uint8_t kUiSizePrologue[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x57, 0xB8, 0x30,
+                                            0x00, 0x00, 0x00, 0xE8, 0x68, 0x3D, 0x79, 0x01};
+constexpr platform::FunctionFact kUiSize{L"EndUI__GetRootOverlayUISize", 0x1409D7E08, kUiSizePrologue};
+constexpr std::uint8_t           kUiScalePrologue[] = {0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8, 0x06, 0x42,
+                                                       0x5A, 0x01, 0x48, 0x2B, 0xE0, 0x48, 0x8D, 0x4C};
+constexpr platform::FunctionFact kUiScale{L"EndUI__GetRootOverlayUIScale", 0x140BC7970, kUiScalePrologue};
+constexpr std::uintptr_t         kConversionSizeCall = 0x140ECB798;  // in UIEffect_LayoutPointToEffectSpace
+
+using UiSizeFn  = float* (*)(float* out);
+using UiScaleFn = float (*)();
+
 constexpr int kMaxColumns = overlay_pass::kMaxColumns;
-/// The tallest box a column's published viewport may have, in images: two (a 16:9 column under a tall tick layout)
-/// at the largest HUD size, with room for the float arithmetic's rounding.
+/// The tallest box a column's published viewport may have, in images: two (a 16:9 column under a tall tick layout,
+/// where the conversion is not answered with the frame; about one when it is) at the largest HUD size, with room for
+/// the float arithmetic's rounding.
 constexpr float kTallestBox = 2.0f * platform::settings::HudScaleOf(platform::settings::kHudScaleSteps - 1) * 1.001f;
 
 enum Outcome : int
@@ -88,6 +107,12 @@ std::atomic<unsigned>  g_applied{0};
 std::atomic<int>       g_lastColumn{-1};    // what the last call saw: its column and outcome
 std::atomic<int>       g_lastOutcome{kNoneYet};
 std::array<Viewport, kMaxColumns> g_logged{};  // render thread: each column's last logged box (a line per change)
+
+platform::CallRedirect g_sizeCall;               // the conversion's size read
+UiScaleFn              g_uiScale = nullptr;
+std::atomic<bool>      g_sizeInstalled{false};
+std::atomic<unsigned>  g_frameAnswers{0};        // game thread writes: conversions answered with the frame
+bool                   g_frameSaid = false;      // game thread: the first answer logged
 
 /// The command the setup appended, read as a viewport over the whole extent and set to the column's box. False when it
 /// is not that (another command, a stale link) or a copy faults: nothing is written then.
@@ -186,7 +211,63 @@ bool CrossesBlock(std::uintptr_t site) noexcept
     return (site & 15u) > 11u;  // five bytes from an offset above 11 run into the next aligned 16-byte block
 }
 
+/// The replacement for the conversion's size read, game thread: the overlay's own size, or while the band applies the
+/// 1920x1080 frame at the overlay's own UI scale (the conversion divides the size by that scale).
+float* ConversionUiSize(float* out) noexcept
+{
+    float* const result = reinterpret_cast<UiSizeFn>(g_sizeCall.Original())(out);
+    if (out == nullptr || !ConvertsAgainstFrame() || !BandApplies())
+    {
+        return result;
+    }
+    const float scale = g_uiScale();
+    if (!std::isfinite(scale) || !(scale > 0.0f))
+    {
+        return result;
+    }
+    out[0] = kSoloLayout.width * scale;
+    out[1] = kSoloLayout.height * scale;
+    g_frameAnswers.fetch_add(1, std::memory_order_relaxed);
+    if (!std::exchange(g_frameSaid, true))
+    {
+        platform::Log(L"UI effect pass: the UI effects' points converted against the 1920x1080 frame while split (the "
+                      L"overlay's UI scale {:.3f}), the unit their sprites are drawn in",
+                      scale);
+    }
+    return result;
+}
+
+/// The conversion's size read redirected (the call fits a block). Logged either way.
+void InstallFrameConversion(const platform::GameImage& image) noexcept
+{
+    const auto size  = platform::FindFunction(image, kUiSize);
+    const auto scale = platform::FindFunction(image, kUiScale);
+    const auto site  = image.Rebase(kConversionSizeCall, 5);
+    const auto reach = image.RipTarget(kConversionSizeCall, std::array<std::uint8_t, 1>{0xE8});
+    const bool ok    = size && scale && site && reach && *reach == *size && !CrossesBlock(*site) &&
+                    (g_uiScale = reinterpret_cast<UiScaleFn>(*scale),
+                     g_sizeCall.Install(*site, *size, reinterpret_cast<std::uintptr_t>(&ConversionUiSize)));
+    g_sizeInstalled.store(ok, std::memory_order_release);
+    if (ok)
+    {
+        platform::Log(L"UI effect pass: the UI effects' points are converted against the 1920x1080 frame while split, so "
+                      L"the glow's sprites keep their size beside a tall player 1's view");
+    }
+    else
+    {
+        platform::LogWarning(L"UI effect pass: the UI effects' size read is not what the research read; their points stay "
+                             L"converted against player 1's layout (the glow drawn too large beside a tall player 1's "
+                             L"view)");
+    }
+}
+
 }  // namespace
+
+bool ConvertsAgainstFrame() noexcept
+{
+    return g_sizeInstalled.load(std::memory_order_acquire) && g_installed.load(std::memory_order_acquire) &&
+           g_on.load(std::memory_order_relaxed) && !g_removed.load(std::memory_order_relaxed);
+}
 
 bool Install(const platform::GameImage& image) noexcept
 {
@@ -194,6 +275,7 @@ bool Install(const platform::GameImage& image) noexcept
     g_restoreAsked.store(false, std::memory_order_relaxed);
     g_armed.store(false, std::memory_order_relaxed);
     g_applied.store(0, std::memory_order_relaxed);
+    g_frameSaid       = false;
     const auto target = platform::FindFunction(image, kSetup);
     const auto site   = image.Rebase(kSetupCall, 5);
     const auto reach  = image.RipTarget(kSetupCall, std::array<std::uint8_t, 1>{0xE8});
@@ -211,6 +293,7 @@ bool Install(const platform::GameImage& image) noexcept
         g_armed.store(true, std::memory_order_release);  // installed by the render thread, from the composite redirect
         platform::Log(L"UI effect pass: the UI particles follow each column's band; the call crosses a block, so the render "
                       L"thread installs it at the first frame");
+        InstallFrameConversion(image);
         return true;
     }
     if (!g_call.Install(g_site, g_target, reinterpret_cast<std::uintptr_t>(&SetupForColumn)))
@@ -220,6 +303,7 @@ bool Install(const platform::GameImage& image) noexcept
     }
     g_installed.store(true, std::memory_order_release);
     platform::Log(L"UI effect pass: the UI particles (the summon glow) are drawn into each column's band");
+    InstallFrameConversion(image);
     return true;
 }
 
@@ -227,6 +311,11 @@ void Remove() noexcept
 {
     g_removed.store(true, std::memory_order_relaxed);
     g_armed.store(false, std::memory_order_relaxed);
+    if (g_sizeInstalled.exchange(false, std::memory_order_acq_rel) && !g_sizeCall.Restore())
+    {
+        platform::Log(L"UI effect pass: the UI effects' size read was changed after us; left in place (it passes the "
+                      L"game's size through)");
+    }
     if (!g_installed.load(std::memory_order_acquire))
     {
         return;
@@ -256,7 +345,8 @@ void PublishColumnViewport(int column, const EffectBox& box, bool applies) noexc
     {
         return;
     }
-    // The box within reason: a height of up to two images (a 16:9 column under a tall layout's tick) times the largest
+    // The box within reason: a height of up to two images (a 16:9 column under a tall layout's tick, when the conversion
+    // is not answered with the frame) times the largest
     // HUD size, a centre at most an image away (a column of another layout than the tick's moves the box past an edge,
     // never further).
     const bool usable = applies && std::isfinite(box.centreX) && std::isfinite(box.centreY) && std::isfinite(box.height) &&
@@ -327,11 +417,13 @@ void RegisterCommands()
                                                                           L"set"};
                            const int outcome = std::clamp(g_lastOutcome.load(), 0, static_cast<int>(kSet));
                            const int column  = g_lastColumn.load();
-                           return Value{std::format(L"installed {}; armed {}; calls {}; set {}; last column {}, {}",
+                           return Value{std::format(L"installed {}; armed {}; calls {}; set {}; last column {}, {}; "
+                                                    L"points converted against the 1920x1080 frame {} ({})",
                                                     g_installed.load() ? L"yes" : L"no", g_armed.load() ? L"yes" : L"no",
                                                     g_calls.load(), g_applied.load(),
                                                     column < 0 ? std::wstring(L"none") : std::to_wstring(column + 1),
-                                                    kOutcomes[outcome])};
+                                                    kOutcomes[outcome], g_frameAnswers.load(),
+                                                    ConvertsAgainstFrame() ? L"on" : L"off")};
                        }});
 }
 

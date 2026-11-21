@@ -34,6 +34,9 @@ namespace lss::hud {
 /// band applies, 1920x1080 otherwise.
 LayoutSize LastLayoutSize() noexcept;
 
+/// Game thread: whether the overlay's last render (the one in progress, from its rect call on) was laid out in a band.
+bool BandApplies() noexcept;
+
 /// A render of the overlay as the band laid it out: the band of the UI image the layout is drawn into and the image's
 /// size. Empty (zero) while the band does not apply.
 struct OverlayBand

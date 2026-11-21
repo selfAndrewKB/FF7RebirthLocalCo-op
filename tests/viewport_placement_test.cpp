@@ -186,7 +186,39 @@ void TestEffectViewport()
     EXPECT(near(EffectViewport(LayoutSize{1920.0f, 2160.0f}, LayoutSize{1920.0f, 1080.0f}, IntRect{0, 0, 3840, 2160}, 3840,
                                2160, corner, 1.25f),
                 1440.0f / 3840.0f, 1.0f, 2.5f));
+    // A scale centre at the corner is the corner's box.
+    EXPECT(EffectViewport(LayoutSize{1920.0f, 2160.0f}, LayoutSize{1920.0f, 1080.0f}, IntRect{0, 0, 3840, 2160}, 3840, 2160,
+                          corner, 1.25f, corner) ==
+           EffectViewport(LayoutSize{1920.0f, 2160.0f}, LayoutSize{1920.0f, 1080.0f}, IntRect{0, 0, 3840, 2160}, 3840, 2160,
+                          corner, 1.25f));
+    // Converted against the 1920x1080 frame (the mod's answer to the conversion), a gauge point d lands where the column's
+    // HUD draws it, and one half-height of the box is one half-height of the frame at the band's scale: the sprites at
+    // the HUD's size. The game's point is (d - (960, 540)) / 540; the box draws it at centre + point * height / 2.
+    const LayoutSize  frame{1920.0f, 1080.0f};
+    const LayoutPoint gauge{1508.0f, 620.0f};
+    const auto        drawnAt = [&](const std::optional<EffectBox>& b, std::int32_t imageW, std::int32_t imageH) {
+        const float half = b->height * static_cast<float>(imageH) / 2.0f;
+        return LayoutPoint{b->centreX * static_cast<float>(imageW) + (gauge.x - 960.0f) / 540.0f * half,
+                           b->centreY * static_cast<float>(imageH) + (gauge.y - 540.0f) / 540.0f * half};
+    };
+    const auto at = [](const LayoutPoint& a, float x, float y) { return std::fabs(a.x - x) < 0.05f && std::fabs(a.y - y) < 0.05f; };
+    // A tall column (the right half, one px per unit) at size 1: the gauge 1080 units below its design place, so at
+    // (1920 + 1508, 620 + 1080); the box half the image tall (540 px a half-height, not the tall layout's 1080).
+    const auto tall = EffectViewport(frame, LayoutSize{1920.0f, 2160.0f}, IntRect{1920, 0, 3840, 2160}, 3840, 2160, corner);
+    EXPECT(near(tall, 0.75f, 0.75f, 0.5f) && at(drawnAt(tall, 3840, 2160), 3428.0f, 1700.0f));
+    // The summon gauges' scale height (795 of 1080) at x1.50 in a 16:9 column (two px per unit): the point drawn at
+    // C + 1.5 (d - C) with C = (1920, 795), so at (1302, 532.5) units, (2604, 1065) px; the box 1.5 images tall.
+    const LayoutPoint summon{1.0f, 795.0f / 1080.0f};
+    const auto        sized = EffectViewport(frame, frame, IntRect{0, 0, 3840, 2160}, 3840, 2160, corner, 1.5f, summon);
+    EXPECT(near(sized, 0.25f, 825.0f / 2160.0f, 1.5f) && at(drawnAt(sized, 3840, 2160), 2604.0f, 1065.0f));
+    // The same in the side-by-side right half (one px per unit, the area's corner at the image's bottom right): the scale
+    // height 285 units above the bottom, the point at (1920 + 1302, 1080 + 532.5).
+    const auto sizedTall = EffectViewport(frame, LayoutSize{1920.0f, 2160.0f}, IntRect{1920, 0, 3840, 2160}, 3840, 2160,
+                                          corner, 1.5f, summon);
+    EXPECT(sizedTall && at(drawnAt(sizedTall, 3840, 2160), 3222.0f, 1612.5f));
     // Unknowns.
+    EXPECT(!EffectViewport(frame, frame, IntRect{0, 0, 3840, 2160}, 3840, 2160, corner, 1.0f,
+                           LayoutPoint{1.0f, std::numeric_limits<float>::quiet_NaN()}));
     EXPECT(!EffectViewport(LayoutSize{1920.0f, 1080.0f}, LayoutSize{1920.0f, 1080.0f}, IntRect{0, 0, 3840, 2160}, 3840, 2160,
                            corner, 0.0f));
     EXPECT(!EffectViewport(LayoutSize{1920.0f, 1080.0f}, LayoutSize{1920.0f, 1080.0f}, IntRect{0, 0, 3840, 2160}, 3840, 2160,
@@ -230,6 +262,15 @@ void TestCornerPivot()
             EXPECT(pivot && close(drawn(*pivot, scale, translation, p), wanted));
             EXPECT(!close(drawn({1.0f, 1.0f}, scale, translation, p), wanted));
         }
+    }
+    // About any point of the area, not only a corner: the summon gauges' scale height (795 of 1080 at the right edge).
+    const LayoutPoint centre{1920.0f, 795.0f};
+    const auto        midPivot = CornerPivot({1.0f, 795.0f / 1080.0f}, translation, 1920.0f, 1080.0f);
+    for (const LayoutPoint p : {LayoutPoint{0.0f, 0.0f}, LayoutPoint{332.0f, 70.0f}})
+    {
+        const LayoutPoint placed{p.x + translation.x, p.y + translation.y};
+        const LayoutPoint wanted{centre.x + 1.5f * (placed.x - centre.x), centre.y + 1.5f * (placed.y - centre.y)};
+        EXPECT(midPivot && close(drawn(*midPivot, 1.5f, translation, p), wanted));
     }
     // An empty area or an unreadable translation: none.
     EXPECT(!CornerPivot({1.0f, 1.0f}, translation, 0.0f, 1080.0f));

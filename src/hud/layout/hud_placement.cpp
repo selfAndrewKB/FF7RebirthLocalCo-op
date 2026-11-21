@@ -45,13 +45,23 @@ using RC::Unreal::UFunction;
 using RC::Unreal::UObject;
 namespace UObjectGlobals = RC::Unreal::UObjectGlobals;
 
+/// The height of its area a root scales about when that is not its corner: kAtCorner keeps the corner.
+constexpr float kAtCorner = -1.0f;
+/// The summon gauges' scale height: they stand between the minimap (down to about y 314 of the frame with its ring and
+/// distance labels) and the Members panel (from about y 800 with its header), their bars at y 620-690
+/// (research/RE-summon-gauge.md), so 306 units of room above and 110 below. About the height that divides the frame in
+/// that ratio, 1080 * 306 / 416, the gaps above and below keep that ratio at every size while the minimap grows from
+/// the top and the Members panel from the bottom: at x1.50 in a view as short as the frame the gauges still fit between
+/// them, where scaled about the bottom corner they ran into the minimap.
+constexpr float kSummonScaleHeight = 795.0f / 1080.0f;
+
 struct Placement
 {
     const wchar_t* className;
     float          anchorX;  // the corner or edge of the half its 1920x1080 area goes to
     float          anchorY;
-    bool           glow  = false;  // the summon time gauge, whose tick places the glow: the UI particles' boxes follow its corner
-    bool           sized = true;   // drawn at the HUD size (the button prompts keep the game's size)
+    bool           glow  = false;  // the summon time gauge, whose tick places the glow: the UI particles' boxes follow it
+    float          scaleY = kAtCorner;  // the height of its area it is drawn at the HUD size about (its corner's x)
 };
 // The field-action icons ("Call Chocobo") are not here: the game places them at points it computes
 // from each icon's own base, so they keep their corner through that base (hud/field/action_icon_base.h).
@@ -60,13 +70,22 @@ constexpr Placement kPlacements[] = {
     {L"EventProgress_00_C", 0.0f, 0.0f},  // top left: the World Intel panel (its objective list and prompt)
     {L"NaviMap_End2_C", 1.0f, 0.0f},      // top right: the minimap
     {L"Command_C", 0.0f, 1.0f},           // bottom left: command menu and its prompt
-    {L"BasicGuide_C", 0.0f, 1.0f, false, false},  // bottom left: button prompts (the game's size)
+    // Bottom left, just above the command menu: the button prompts, sized about the same corner so the command menu
+    // grows under them, never over them.
+    {L"BasicGuide_C", 0.0f, 1.0f},
     {L"Status_C", 1.0f, 1.0f},            // bottom right: the Members panel
     // Bottom right, above the Members panel: the summon gauges (their own offset puts them at 1508,620 of the area;
     // research/RE-summon-gauge.md).
-    {L"SummonChantGauge_C", 1.0f, 1.0f},  // the "SUMMON" bar that fills during a fight
-    {L"SummonTimeGauge_C", 1.0f, 1.0f, true},  // the summon's name and its time left; its tick places the glow
+    {L"SummonChantGauge_C", 1.0f, 1.0f, false, kSummonScaleHeight},  // the "SUMMON" bar that fills during a fight
+    // The summon's name and its time left; its tick places the glow.
+    {L"SummonTimeGauge_C", 1.0f, 1.0f, true, kSummonScaleHeight},
 };
+
+/// The point of its 1920x1080 area a root is drawn at the HUD size about, as fractions of the area.
+LayoutPoint ScaleCentreOf(const Placement& placement) noexcept
+{
+    return {placement.anchorX, placement.scaleY >= 0.0f ? placement.scaleY : placement.anchorY};
+}
 constexpr std::uint32_t kScanTicks = 30;
 
 /// A root's render transform as far as the HUD size touches it: its scale and pivot, and the translation the pivot
@@ -273,12 +292,12 @@ bool ApplyScale(UObject* widget, const RenderScale& scale) noexcept
     return Call(widget, g_sizeSetters->pivot, scale.pivot, 2) && Call(widget, g_sizeSetters->scale, scale.scale, 2);
 }
 
-/// The root at `size` about its placement's corner, its translation `now` scaled with it (CornerPivot); none for an
-/// area without a size.
+/// The root at `size` about its placement's scale centre (ScaleCentreOf), its translation `now` scaled with it
+/// (CornerPivot); none for an area without a size.
 std::optional<RenderScale> ScaleAt(const Placed& placed, const RenderScale& now, float size) noexcept
 {
-    const auto pivot = CornerPivot({placed.placement->anchorX, placed.placement->anchorY},
-                                   {now.translation[0], now.translation[1]}, placed.applied.offsets[2],
+    const auto pivot = CornerPivot(ScaleCentreOf(*placed.placement), {now.translation[0], now.translation[1]},
+                                   placed.applied.offsets[2],
                                    placed.applied.offsets[3]);
     if (!pivot)
     {
@@ -305,13 +324,13 @@ void HandBack(Placed& placed, const RenderScale& now) noexcept
                   put ? L"" : L" (a setter raised an exception)");
 }
 
-/// Sets a placed root to the HUD size: scaled about its corner with its translation, or at 1 its game's transform
+/// Sets a placed root to the HUD size: scaled about its scale centre with its translation, or at 1 its game's transform
 /// back. A root the game scales itself (its render scale not 1 when it would be sized) is left at the game's transform
 /// and looked at again each tick; one whose scale or pivot the game set since it was sized is handed back (HandBack);
 /// one whose translation the game moved since gets its pivot again.
 void SizeRoot(Placed& placed, float size)
 {
-    if (!g_sizeSetters || placed.placement == nullptr || !placed.placement->sized || placed.sizeLeft ||
+    if (!g_sizeSetters || placed.placement == nullptr || placed.sizeLeft ||
         (size == 1.0f && placed.size == 1.0f) || !Alive(placed))
     {
         return;
@@ -600,6 +619,18 @@ LayoutPoint GlowAnchor() noexcept
         }
     }
     return {1.0f, 1.0f};
+}
+
+LayoutPoint GlowScaleCentre() noexcept
+{
+    for (const Placement& placement : kPlacements)
+    {
+        if (placement.glow)
+        {
+            return ScaleCentreOf(placement);
+        }
+    }
+    return GlowAnchor();
 }
 
 float GlowSize() noexcept

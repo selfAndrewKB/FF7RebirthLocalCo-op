@@ -196,9 +196,10 @@ inline constexpr std::array<const wchar_t*, kHudScaleSteps> kHudScaleLabels = Ma
 inline constexpr Option kHudScale{  // hud/layout/hud_placement
     L"Views", L"hud-scale", kHudScaleWords, L"1.00",
     L"the size of the HUD pinned to each view's edges in a split window (the minimap and compass, the World Intel panel, "
-    L"the command menu, the Members panel, the summon gauges), times this, each about its own corner: 0.75 to 1.50 in "
-    L"steps of 0.05 (1.00 is the game's); the button prompts and what hangs over characters and enemies keep the game's "
-    L"size, as do the single view, the menus and scenes and a row of monitors; from the next frame",
+    L"the command menu and the button prompts above it, the Members panel, the summon gauges), times this, each about its "
+    L"own corner (the summon gauges about their place between the minimap and the Members panel): 0.75 to 1.50 in steps "
+    L"of 0.05 (1.00 is the game's); what hangs over characters and enemies keeps the game's size, as do the single view, "
+    L"the menus and scenes and a row of monitors; from the next frame",
     false, L"Split-Screen HUD Size", kHudScaleLabels,
     L"Controls the size of the HUD in each player's view during split-screen in one window: the minimap, command menu, "
     L"party list and summon gauges. Markers over characters and enemies keep their size. Does not affect multi-monitor "

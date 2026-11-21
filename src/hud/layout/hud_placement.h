@@ -26,9 +26,10 @@
 // ("Call Chocobo"), which the game places itself at points of the frame, keep their corner through
 // their own base instead (hud/field/action_icon_base.h).
 //
-// The HUD size (the settings file's [Views] hud-scale) scales these roots alone, the button prompts
-// excepted, each about the corner it is anchored to (SetRenderTransformPivot at that corner, allowing
-// for a root's own render translation, and SetRenderScale), so each stays in its corner of the view:
+// The HUD size (the settings file's [Views] hud-scale) scales these roots alone, each about the corner it
+// is anchored to (SetRenderTransformPivot at that corner, allowing for a root's own render translation,
+// and SetRenderScale), so each stays in its corner of the view; the summon gauges, which stand between
+// the minimap and the Members panel, scale about a height between the two so they keep their share of it:
 // in a split window, never on a row of monitors. Everything else on the overlay (enemy names, damage
 // numbers, lock-on marks, prompts over objects) keeps the game's size. The game's own scale and pivot
 // are read first and set back at size 1 and when the split ends; a root is left at the game's
@@ -51,6 +52,9 @@ void FollowHudPlacementBeforeRender() noexcept;
 /// The corner of the frame the summon gauge (the widget whose tick places the glow) is anchored to in a split half: the
 /// UI particles' boxes follow it (hud/layout/viewport_placement.h EffectViewport).
 LayoutPoint GlowAnchor() noexcept;
+
+/// The point of that widget's 1920x1080 area (fractions of it) the HUD size scales it about: its glow's box with it.
+LayoutPoint GlowScaleCentre() noexcept;
 
 /// The HUD size that widget is drawn at now (1 while it is not placed or not sized): the particles' boxes scale with it.
 float GlowSize() noexcept;

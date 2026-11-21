@@ -6,7 +6,9 @@
 // puts the particles in orthographic screen space (research/RE-ui-particle-pass.md). One view family per column
 // under the mod, so once per column. The particle itself is one per effect (one position, one size for every
 // column: the game converts its layout point once a frame, centred in the layout the overlay holds then and in its
-// half-heights), but the pass sets a viewport over the whole target just before its draw, and a viewport is the one
+// half-heights; while split the mod answers that conversion with the 1920x1080 frame, since the sprites are sized in
+// half-heights of the drawing and a tall layout's half-height would draw them twice their size), but the pass sets a
+// viewport over the whole target just before its draw, and a viewport is the one
 // map every vertex goes through: set to a box of that layout's height at the column's band's scale and the target's
 // shape, centred where that layout's centre and the widget's own move land in the column, it moves and scales every
 // UI particle to the column's HUD at the band's scale, positions and sprite sizes together, whatever the shader did
@@ -16,8 +18,8 @@
 // appends the viewport command: the mod's replacement runs the engine's own, then sets the command it appended to the
 // box, after checking it holds the whole extent. The column is the family's, as the composite redirect
 // (hud/passes/column_hud_images.cpp) decides it earlier on the same thread; the boxes come from the overlay's rect
-// call of the frame's last pass (game thread, through a seqlock). On 1.004 the call crosses a 16-byte
-// block, so the render thread installs it from the composite redirect at the first frame.
+// call of the frame's last pass (game thread, through a seqlock). Where the call crosses a 16-byte
+// block, the render thread installs it from the composite redirect at the first frame.
 
 #include "hud/layout/viewport_placement.h"
 #include "platform/dev_switch.h"
@@ -50,6 +52,10 @@ void NoteFamilyColumn(int column) noexcept;
 /// The `hud-fx-pass` switch: the bands on (the default) or off (the engine's whole-target viewport, for comparison).
 void SetEnabled(bool on) noexcept;
 bool Enabled() noexcept;
+
+/// Whether the UI effects' points are converted against the 1920x1080 frame while the band applies (the conversion's
+/// size read answered, the pass's boxes on): the boxes are then made against that frame instead of player 1's layout.
+bool ConvertsAgainstFrame() noexcept;
 
 #if LSS_DEV
 /// The `hud-fx-pass` command and reading, and the `hud-fx-pass.state` reading. May throw (out of memory).
