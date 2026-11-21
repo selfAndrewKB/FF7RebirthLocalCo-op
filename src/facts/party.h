@@ -195,6 +195,9 @@ inline constexpr std::uint32_t kAiPauseAnimationBudget = 0x2000;
 // ForceTeleport, cleared by the commit).
 inline constexpr std::uint32_t kFollowStateTeleportRange = 0x344;  // float
 inline constexpr std::uint32_t kFollowStateForced        = 0x39D;  // u8
+// Its "must not teleport now" flag (u8; the lifts' hold, read by its CanTeleportNow), written only by the game's setter
+// Pawn_SetFollowStateNoTeleport6CC_IfFollow and the state's constructor (RE-chocobo-summon-gather.md).
+inline constexpr std::uint32_t kFollowStateNoTeleport    = 0x6CC;
 inline constexpr std::uint8_t kAiControllerComponentBytes[] = {
     0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8, 0x1A, 0x92, 0x7B, 0x01, 0x48, 0x2B,
     0xE0, 0x48, 0x8B, 0x89, 0x38, 0x06, 0x00, 0x00, 0x48, 0x85, 0xC9, 0x74};

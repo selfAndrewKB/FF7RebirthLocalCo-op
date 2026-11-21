@@ -33,6 +33,7 @@
 #include "scopes/leader_scope.h"
 #include "session/party_member.h"
 #include "world/charapop_facts.h"
+#include "world/party_warp.h"
 
 #include <chrono>
 #include <cstddef>
@@ -87,6 +88,7 @@ using facts::kRideManagerGetOff;
 using facts::kRideManagerEntries;
 using facts::kRideManagerEntrySize;
 using facts::kRideManagerPlayerTypes;
+constexpr std::uint8_t   kEntryLoaded       = 3;       // the member entry's state byte with her chocobo loaded, not yet placed
 constexpr std::uint8_t   kEntryRiding       = 4;       // the member entry's state byte while she rides
 constexpr std::uint8_t   kChocoboType       = 1;       // the vehicle type of a chocobo coordinator
 using facts::kControllerActiveVehicle;
@@ -157,6 +159,11 @@ struct SeatRide
     const void*     heldBack = nullptr;  // a chocobo not to board again until its ridden flag clears
     bool            stopped  = false;    // a ride failed: the seat's player stays a passenger this session
     platform::Every summary{kSummaryEvery};
+    // The chocobo the game seats the member on, held off its follow AI's warp (null: none), and its weak pointer; the
+    // one the hold has not taken on yet (logged once, tried again each tick).
+    const void*     warpHeld     = nullptr;
+    std::uint64_t   warpHeldWeak = 0;
+    const void*     warpTried    = nullptr;
 };
 SeatRide       g_seats[players::kMaxPlayers];  // by seat (players/seats.h); index 0, player 1's, unused
 CharacterArray g_released{};  // reused for every EndRide, every seat's in turn: the game keeps one allocation in it
@@ -380,6 +387,110 @@ void End(SeatRide& s, const wchar_t* why, bool force) noexcept
                      : L"the game's end FAULTED");
 }
 
+/// Metres from `actor` to player 1's pawn (their ride body while they ride), or -1.
+float MetresFromPlayerOne(const void* actor) noexcept
+{
+    float at[3]{}, oneAt[3]{};
+    const void* oneBody = players::actor_fields::Pawn(players::generation::PlayerOneController());
+    return players::unreal::ActorLocation(actor, at) && players::unreal::ActorLocation(oneBody, oneAt)
+               ? world::charapop::Distance(oneAt, at) / 100.0f
+               : -1.0f;
+}
+
+/// Lifts the no-teleport hold from the chocobo it was put on (when it still exists): the chocobo's follow AI warps as
+/// the game's again.
+void LiftWarpHold(SeatRide& s, int seat, const wchar_t* why) noexcept
+{
+    if (s.warpHeld == nullptr)
+    {
+        return;
+    }
+    if (scopes::leader_scope::StillNames(s.warpHeldWeak, s.warpHeld))
+    {
+        const auto held = world::party_warp::HoldOffWarp(const_cast<void*>(s.warpHeld),
+                                                         world::party_warp::Subject::Chocobo, false);
+        platform::Log(L"chocobo ride: {}'s chocobo no longer held off its follow warp ({}): {}, {:.0f} m from player 1's "
+                      L"ride body",
+                      players::SeatName(seat), why,
+                      held == false ? L"lifted" : held == true ? L"could NOT be lifted" : L"not in FOLLOW (nothing to lift)",
+                      MetresFromPlayerOne(s.warpHeld));
+    }
+    s.warpHeld     = nullptr;
+    s.warpHeldWeak = 0;
+}
+
+/// The chocobo the ride manager holds for `member` (her entry's), or null.
+void* EntryChocobo(const std::byte* manager, const void* member) noexcept
+{
+    void* chocobo = nullptr;
+    return manager != nullptr && platform::CallGuarded(g_fn.chocoboFor, chocobo, static_cast<const void*>(manager), member)
+               ? chocobo
+               : nullptr;
+}
+
+/// While the game seats the seat's member on her own chocobo (its entry loaded or riding) and that chocobo's own AI
+/// drives it, the game's no-teleport hold keeps its follow warp from taking it to player 1 during her mount animation,
+/// and her with it when the mount attaches her (research/RE-chocobo-summon-gather.md). Kept for a passenger's whole
+/// ride, and set again on a chocobo the mod gave back to its AI while the entry still rides (players 2 and 3 are never
+/// warped by the game's AI); lifted before the boarding and when the game lets the chocobo go. A held chocobo whose hold
+/// reads clear again (its follow state rebuilt) is held again.
+void HoldOffFollowWarp(SeatRide& s, int seat, void* controller, void* member) noexcept
+{
+    if (!world::party_warp::CanHoldOffWarp())
+    {
+        return;
+    }
+    const std::byte* manager = RideManager();
+    const int        entry   = EntryState(manager, member);
+    void* chocobo = entry == kEntryLoaded || entry == kEntryRiding ? EntryChocobo(manager, member) : nullptr;
+    const bool same = s.warpHeld != nullptr && chocobo == s.warpHeld &&
+                      scopes::leader_scope::StillNames(s.warpHeldWeak, chocobo);
+    if (s.warpHeld != nullptr && !same)
+    {
+        LiftWarpHold(s, seat, L"the game let it go");  // a chocobo gone since is only forgotten (the weak check)
+    }
+    if (chocobo == nullptr || players::actor_fields::Controller(chocobo) == controller ||
+        (same && world::party_warp::WarpHeldOff(chocobo, world::party_warp::Subject::Chocobo) != false))
+    {
+        return;
+    }
+    const auto held = world::party_warp::HoldOffWarp(chocobo, world::party_warp::Subject::Chocobo, true);
+    if (held == true)
+    {
+        s.warpTried = nullptr;
+        if (same)
+        {
+            platform::LogDebug(L"chocobo ride: {}'s chocobo's no-teleport hold read clear again (its follow state "
+                               L"rebuilt?); set again",
+                               players::SeatName(seat));
+            return;
+        }
+        s.warpHeld     = chocobo;
+        s.warpHeldWeak = scopes::leader_scope::WeakOf(chocobo);
+        platform::Log(L"chocobo ride: {}'s chocobo held off its follow warp (the game's no-teleport hold, as its lifts "
+                      L"set it; entry state {}), {:.0f} m from player 1's ride body",
+                      players::SeatName(seat), entry, MetresFromPlayerOne(chocobo));
+        return;
+    }
+    if (s.warpTried != chocobo)
+    {
+        // The setter acts on its controller's current AI state, the read-back on its retained AI's brain state: both
+        // named here, should the hold never read set.
+        s.warpTried = chocobo;
+        try
+        {
+            platform::LogDebug(L"chocobo ride: {}'s chocobo not held off its follow warp yet (entry state {}, read back "
+                               L"{}; its controller {}, its {}); tried again each tick",
+                               players::SeatName(seat), entry, !held ? L"no follow state" : L"clear",
+                               players::actor_fields::Controller(chocobo),
+                               world::party_warp::AiText(chocobo, world::party_warp::Subject::Chocobo));
+        }
+        catch (...)
+        {
+        }
+    }
+}
+
 /// The game has seated the seat's member on her own chocobo (her chocobo appears by her and she is seated where
 /// she stands; taken at once, before the chocobo's follow AI can pull it toward player 1). Null when not.
 void* SeatedChocobo(SeatRide& s, void* controller, void* member) noexcept
@@ -389,11 +500,13 @@ void* SeatedChocobo(SeatRide& s, void* controller, void* member) noexcept
         return nullptr;
     }
     const std::byte* manager = RideManager();
-    void*            chocobo = nullptr;
     if (manager == nullptr || ReadField<std::uint8_t>(manager, kRideManagerGetOff) != 0 ||
-        EntryState(manager, member) != kEntryRiding ||
-        !platform::CallGuarded(g_fn.chocoboFor, chocobo, static_cast<const void*>(manager), static_cast<const void*>(member)) ||
-        chocobo == nullptr)
+        EntryState(manager, member) != kEntryRiding)
+    {
+        return nullptr;
+    }
+    void* const chocobo = EntryChocobo(manager, member);
+    if (chocobo == nullptr)
     {
         return nullptr;
     }
@@ -421,6 +534,12 @@ void Begin(SeatRide& s, int seat, void* controller, void* member, void* chocobo)
     {
         s.heldBack = chocobo;  // the seat's player stays a passenger for this ride
         return;
+    }
+    // While its AI still holds the chocobo (the setter needs it): the mod's own strand warp of the ridden chocobo, and its
+    // AI after the getoff, work as the game's.
+    if (s.warpHeld == chocobo)
+    {
+        LiftWarpHold(s, seat, L"before the boarding");
     }
     const void* oldObject = ReadPointer(chocobo, kChocoboRideObject);
     BeginCall   call{controller, chocobo, member};
@@ -538,16 +657,12 @@ void LogSummary(SeatRide& s) noexcept
         return;
     }
     const Ride& ride = s.ride;
-    float seatAt[3]{}, oneAt[3]{};
-    const void* oneBody = players::actor_fields::Pawn(players::generation::PlayerOneController());
-    const bool  read    = players::unreal::ActorLocation(ride.vehicle, seatAt) &&
-                          players::unreal::ActorLocation(oneBody, oneAt);
     try
     {
         platform::LogDebug(L"chocobo ride: driving, {} ticks ({} refused); its own slot 1 in {}'s scope {} times ({} refused); "
                       L"{:.0f} m from player 1's ride body; {}",
                       ride.ticks, ride.refused, players::SeatName(ride.seat), ride.handles, ride.handlesRefused,
-                      read ? world::charapop::Distance(oneAt, seatAt) / 100.0f : -1.0f, LeaseText(ride));
+                      MetresFromPlayerOne(ride.vehicle), LeaseText(ride));
     }
     catch (...)
     {
@@ -603,6 +718,7 @@ bool Tick(void* controller, void* member, const input::move_state::EngineTicks& 
     SeatRide& s = *ride;
     if (s.phase == Phase::Idle)
     {
+        HoldOffFollowWarp(s, seat, controller, member);  // a passenger's too
         void* chocobo = s.stopped ? nullptr : SeatedChocobo(s, controller, member);
         if (chocobo == nullptr)
         {
@@ -829,7 +945,14 @@ bool TickHandles(void* state, float deltaTime, std::uintptr_t (*engine)(void* st
 void Release(int seat, const wchar_t* why) noexcept
 {
     SeatRide* s = RideOf(seat);
-    if (s != nullptr && s->phase != Phase::Idle && players::generation::OnGameThread())
+    if (s == nullptr || !players::generation::OnGameThread())
+    {
+        return;
+    }
+    // The seat's player out: the chocobo the game seated their member on is the game's AI member's again, warps
+    // included.
+    LiftWarpHold(*s, seat, why);
+    if (s->phase != Phase::Idle)
     {
         End(*s, why, true);
     }
@@ -843,6 +966,10 @@ void* Forget(int seat) noexcept
         return nullptr;
     }
     SeatRide& s       = *ride;
+    if (players::generation::OnGameThread())
+    {
+        LiftWarpHold(s, seat, L"the member was destroyed");  // the chocobo may outlive her (the weak check)
+    }
     void*     chocobo = s.phase != Phase::Idle ? s.ride.vehicle : nullptr;
     if (chocobo != nullptr)
     {
@@ -850,9 +977,12 @@ void* Forget(int seat) noexcept
                       players::SeatName(seat));
         s.stopped = true;  // the seat's coordinator is left as the game left it: no ride is begun again this session
     }
-    s.phase    = Phase::Idle;
-    s.ride     = {};
-    s.heldBack = nullptr;
+    s.phase        = Phase::Idle;
+    s.ride         = {};
+    s.heldBack     = nullptr;
+    s.warpHeld     = nullptr;
+    s.warpHeldWeak = 0;
+    s.warpTried    = nullptr;
     return chocobo;
 }
 

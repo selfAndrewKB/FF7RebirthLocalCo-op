@@ -59,6 +59,14 @@ constexpr std::uint8_t kPartyIdleBytes[] = {0x48, 0x8B, 0x05, 0x81, 0xBD, 0x12, 
                                             0x80, 0x38, 0x00, 0x0F, 0x94, 0xC0, 0xC3, 0xB0, 0x01, 0xC3, 0xCC, 0xCC};
 constexpr platform::FunctionFact kPartyIdle{L"PartyManager_IsIdle", 0x1410AC788, kPartyIdleBytes};
 
+// The game's "this follower must not teleport now" setter, its lifts' (research/RE-chocobo-summon-gather.md): it writes
+// the pawn's current AI state's no-teleport flag only while the pawn's controller is its AI in FOLLOW.
+constexpr std::uint8_t kNoTeleportBytes[] = {0x48, 0x85, 0xC9, 0x0F, 0x84, 0xE3, 0x00, 0x00, 0x00, 0x48, 0x89, 0x5C,
+                                             0x24, 0x08, 0x48, 0x89, 0x7C, 0x24, 0x10, 0x41, 0x56, 0xB8, 0x80, 0x00};
+constexpr platform::FunctionFact kNoTeleport{L"Pawn_SetFollowStateNoTeleport6CC_IfFollow", 0x1414B9ED4,
+                                             kNoTeleportBytes};
+using facts::kFollowStateNoTeleport;
+
 // The follow update's own gates a forced request skips (research/RE-warp-gates.md):
 //   G1: the character's field controller state, its virtual check (ladder, squeeze, crawl, climbing wall, grappling
 //       hook, jump spot and the rest): the game asks it of the leader and the follow target; the mod of both player 1's
@@ -110,6 +118,7 @@ using ForceFn  = void (*)(void* state, const FollowTeleportParams* params);
 using UpdateFn = void (*)(void* state, float seconds);  // also the query slot's type
 using FinishFn = void (*)(void* state);
 using TestFn   = bool (*)();
+using NoTeleportFn = void (*)(void* pawn, bool on);
 
 struct Variant
 {
@@ -125,6 +134,7 @@ struct Variant
 Variant        g_variants[kVariantCount];
 TestFn         g_partyIdle = nullptr;
 TestFn         g_inBattle  = nullptr;
+NoTeleportFn   g_noTeleport = nullptr;  // optional: without it no follower is held off the game's warp
 std::uintptr_t g_fieldStateCheck = 0;  // G1's two live functions (0: not checked, the gate refuses every warp)
 std::uintptr_t g_fieldState      = 0;
 std::uintptr_t g_gameRoot        = 0;  // the address holding the game root
@@ -323,6 +333,13 @@ bool Install(const platform::GameImage& image) noexcept
     }
     g_partyIdle = reinterpret_cast<TestFn>(*partyIdle);
     g_inBattle  = reinterpret_cast<TestFn>(*inBattle);
+    const auto noTeleport = platform::FindFunction(image, kNoTeleport);
+    g_noTeleport          = noTeleport ? reinterpret_cast<NoTeleportFn>(*noTeleport) : nullptr;
+    if (g_noTeleport == nullptr)
+    {
+        platform::LogWarning(L"party warp: the game's no-teleport setter was not found; the follow AI of a chocobo the "
+                             L"game seats player 2 or 3 on may still warp it to player 1 before they take it");
+    }
     // G1: the base character vtable's slot holds the checked function; the function it calls is the other answer.
     const auto characterVTable = image.Rebase(kEndPlayerCharacterVTable, sizeof(void*));
     const auto fieldState      = platform::FindFunction(image, kFieldState);
@@ -394,6 +411,32 @@ std::wstring AiText(const void* pawn, Subject subject) noexcept
     }
 }
 
+bool CanHoldOffWarp() noexcept
+{
+    return g_noTeleport != nullptr;
+}
+
+std::optional<bool> WarpHeldOff(const void* pawn, Subject subject) noexcept
+{
+    const void* state = FollowOf(pawn, subject);
+    if (state == nullptr)
+    {
+        return std::nullopt;
+    }
+    const std::uint8_t held = ByteAt(state, kFollowStateNoTeleport);
+    return held <= 1 ? std::optional<bool>(held != 0) : std::nullopt;
+}
+
+std::optional<bool> HoldOffWarp(void* pawn, Subject subject, bool on) noexcept
+{
+    if (g_noTeleport == nullptr || pawn == nullptr || !players::generation::OnGameThread() ||
+        !platform::CallGuarded(g_noTeleport, pawn, on))
+    {
+        return std::nullopt;
+    }
+    return WarpHeldOff(pawn, subject);
+}
+
 bool Start(int seat, void* pawn, Subject subject, bool attached, bool splitShown) noexcept
 {
     if (!g_installed || pawn == nullptr || !players::SeatBuilt(seat) || !players::generation::OnGameThread())
@@ -441,6 +484,16 @@ bool Start(int seat, void* pawn, Subject subject, bool attached, bool splitShown
     {
         platform::Log(L"party warp: {} not started ({}); its {}", Who(seat, subject), refused, AiText(pawn, subject));
         return false;
+    }
+    if (subject == Subject::Chocobo && ByteAt(state, kFollowStateNoTeleport) == 1)
+    {
+        // The no-teleport hold cancels even a forced request at each update: on a chocobo it is the mod's own (the
+        // game's lifts hold characters), so the mod's own warp lifts it.
+        const auto held = HoldOffWarp(pawn, subject, false);
+        platform::Log(L"party warp: {}'s no-teleport hold lifted for this warp ({})", Who(seat, subject),
+                      held == false  ? L"cleared"
+                      : held == true ? L"could NOT be cleared; the request may be cancelled"
+                                     : L"not in FOLLOW or no setter; the request may be cancelled");
     }
     const FollowTeleportParams params{};
     if (!platform::CallGuarded(variant->force, state, &params))

@@ -23,6 +23,7 @@
 #include "players/seats.h"
 
 #include <array>
+#include <optional>
 #include <string>
 
 namespace lss::platform {
@@ -71,5 +72,19 @@ bool InFieldAction(const void* pawn) noexcept;
 /// The pawn's retained AI for a log line: the controller and its pause mask, its state object and type, and whether
 /// that state is a checked follow variant (then its teleport range and whether a forced warp is pending).
 std::wstring AiText(const void* pawn, Subject subject) noexcept;
+
+/// The game's "this follower must not teleport now" hold (its lifts', research/RE-chocobo-summon-gather.md) set or
+/// lifted on `pawn` through the game's own setter, which acts only while the pawn's controller is its AI in FOLLOW: the
+/// follower still walks, only the game's warp is refused. A forced request is refused too, so Start lifts the hold from
+/// a chocobo; on a character it is the game's own lift hold and is left. Returns the hold as read back from the pawn's
+/// checked follow state afterwards; nullopt without one (not in FOLLOW yet), without the setter, or when it faulted.
+/// Game thread.
+std::optional<bool> HoldOffWarp(void* pawn, Subject subject, bool on) noexcept;
+
+/// The game's setter was found at install (without it HoldOffWarp does nothing).
+bool CanHoldOffWarp() noexcept;
+
+/// The hold as it stands on `pawn`'s checked follow state; nullopt without one.
+std::optional<bool> WarpHeldOff(const void* pawn, Subject subject) noexcept;
 
 }  // namespace lss::world::party_warp
