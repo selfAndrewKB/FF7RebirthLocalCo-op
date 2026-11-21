@@ -9,8 +9,10 @@
 //  - the party-list cells (UEndMenuStatusPaneCell's NativeTick, a vtable entry). A cell names its owner
 //    natively (+0x7B0 its party list, whose +0x20 is the controller). While a cell of a seat's
 //    controller ticks, EndUISystem[23] answers that controller (its rows stack under its own rows and its
-//    refresh requests reach it) and, in battle, the leader type answers the controller's own record of
-//    its leader (+0x30), so the seat's member is the highlighted row;
+//    refresh requests reach it), and the leader type its highlight compares with answers the controller's own
+//    record of its leader (+0x30), so the seat's member is the highlighted row: in battle the party leader's type
+//    does, outside battle the cell's call of the party data's default battle leader (one value for the whole game,
+//    so answered at that call alone, a call redirect);
 //  - the key guide (MasterHUD_Tick's call of the key-guide tick, a call redirect). The game ticks only
 //    EndUISystem[53]; the same tick then runs for each seat's key guide in that seat's view, so its widget
 //    hides, shows and animates from its own state;

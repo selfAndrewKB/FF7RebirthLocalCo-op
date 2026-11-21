@@ -3,6 +3,7 @@
 #include "battle/command_menu.h"
 #include "facts/command_controller.h"
 #include "facts/hud.h"
+#include "facts/party.h"
 #include "platform/byte_scope.h"
 #include "platform/call_redirect.h"
 #include "platform/guarded.h"
@@ -24,6 +25,7 @@
 #include <format>
 #include <optional>
 #include <string>
+#include <utility>
 
 namespace lss::battle::widget_owner {
 
@@ -60,6 +62,9 @@ constexpr std::uint32_t kCellLook       = 0x9EC;  // u8
 constexpr std::uint32_t kCellLeader     = 0x9F8;  // u8
 constexpr std::uint32_t kCellType       = 0x7B8;  // u8
 constexpr std::uint32_t kCellPosition   = 0xA24;  // float x, y
+// The cell tick's call of the field's leader-type read (the default battle leader in the party data, one value for the
+// whole game), made instead of the party leader's read while the cell's own list is not in battle.
+constexpr std::uintptr_t kCellFieldLeaderCall = 0x140806A77;
 // The controller's leader type and battle HUD mode (facts/command_controller.h).
 using facts::kCmdStoredLeaderType;
 using facts::kCmdHudMode;
@@ -72,19 +77,22 @@ constexpr std::uint32_t kGuideMode   = 0x14;
 constexpr std::uint32_t kVisibility  = 0xC3;
 constexpr std::size_t   kLoggedCells = 4;
 
-using CellTickFn  = void (*)(void* cell, const void* geometry, float deltaTime);
-using GuideTickFn = void (*)(void* keyGuide);
+using CellTickFn   = void (*)(void* cell, const void* geometry, float deltaTime);
+using GuideTickFn  = void (*)(void* keyGuide);
+using LeaderTypeFn = std::uint8_t (*)();
 
 // Set once at install.
 platform::VTableEntry  g_cellSlot;
 platform::VTableEntry  g_paneSlot;
 platform::CallRedirect g_guideCall;
+platform::CallRedirect g_fieldLeaderCall;
 std::uintptr_t         g_endUISystem = 0;
 
 // Game thread.
-bool          g_cellsOn  = false;
-bool          g_guidesOn = false;
-bool          g_panesOn  = false;
+bool           g_cellsOn      = false;
+bool           g_guidesOn     = false;
+bool           g_panesOn      = false;
+std::uintptr_t g_tickingOwner = 0;  // the seat's controller whose party-list cell ticks now, or 0
 std::uint64_t g_cellTicks = 0, g_guideTicks = 0, g_paneTicks = 0, g_refusals = 0;
 
 /// A line of `level`.
@@ -264,6 +272,30 @@ bool TickInOwnerView(int seat, CellTickFn original, void* widget, const void* ge
     return ran;
 }
 
+/// Names the seat's controller whose cell ticks, for the length of its tick (the one named before it after).
+class TickingOwner
+{
+public:
+    explicit TickingOwner(std::uintptr_t owner) noexcept : before_(std::exchange(g_tickingOwner, owner)) {}
+    ~TickingOwner() { g_tickingOwner = before_; }
+    TickingOwner(const TickingOwner&)            = delete;
+    TickingOwner& operator=(const TickingOwner&) = delete;
+
+private:
+    std::uintptr_t before_;
+};
+
+/// Replaces the cell tick's field leader-type read: a seat's cell compares its character with its controller's own
+/// record of its leader, the seat's member, as the battle read answers it in battle; every other call is the game's.
+/// The answer needs only the cell's owner, so it holds when the owner's view could not be entered too.
+std::uint8_t CellFieldLeaderType() noexcept
+{
+    const auto original = reinterpret_cast<LeaderTypeFn>(g_fieldLeaderCall.Original());
+    return g_tickingOwner != 0 && players::generation::OnGameThread()
+               ? ReadAt<std::uint8_t>(g_tickingOwner + kCmdStoredLeaderType)
+               : original();
+}
+
 /// Replaces the party-list cell's NativeTick: a cell of a seat's controller ticks in that controller's view.
 void CellTick(void* cell, const void* geometry, float deltaTime) noexcept
 {
@@ -275,11 +307,14 @@ void CellTick(void* cell, const void* geometry, float deltaTime) noexcept
     {
         return original(cell, geometry, deltaTime);
     }
-    if (!TickInOwnerView(seat, original, cell, geometry, deltaTime, owner,
-                         players::BySeat(seat, L"a cell of player 2's party list", L"a cell of player 3's party list"),
-                         g_cellsOn))
     {
-        return;
+        const TickingOwner ticking(owner);
+        if (!TickInOwnerView(seat, original, cell, geometry, deltaTime, owner,
+                             players::BySeat(seat, L"a cell of player 2's party list", L"a cell of player 3's party list"),
+                             g_cellsOn))
+        {
+            return;
+        }
     }
     if (PowerOfTen(++g_cellTicks) && DebugOn())
     {
@@ -424,8 +459,16 @@ bool Install(const platform::GameImage& image) noexcept
     g_cellsOn     = platform::ReplaceSlot(image, kCellTick, reinterpret_cast<std::uintptr_t>(&CellTick), g_cellSlot);
     g_guidesOn    = guide && site && g_guideCall.Install(*site, *guide, reinterpret_cast<std::uintptr_t>(&GuideTick));
     g_panesOn     = platform::ReplaceSlot(image, kPaneTick, reinterpret_cast<std::uintptr_t>(&PaneTick), g_paneSlot);
+    const auto fieldLeader = platform::FindFunction(image, facts::kDefaultBattleLeaderType);
+    const auto fieldSite   = image.Rebase(kCellFieldLeaderCall, 5);
+    const bool fieldOn     = g_cellsOn && fieldLeader && fieldSite &&
+                         g_fieldLeaderCall.Install(*fieldSite, *fieldLeader,
+                                                   reinterpret_cast<std::uintptr_t>(&CellFieldLeaderType));
     platform::Log(L"widget owner: players 2 and 3's party-list cells {}; their key guides {}; their synergy panes {}",
-                  g_cellsOn ? L"tick in their own views" : L"UNAVAILABLE (a check failed; they tick in the shared view)",
+                  !g_cellsOn ? L"UNAVAILABLE (a check failed; they tick in the shared view)"
+                  : fieldOn  ? L"tick in their own views and highlight their own character in and out of battle"
+                             : L"tick in their own views and highlight their own character in battle only (a check "
+                               L"failed: player 1's outside battle)",
                   g_guidesOn ? L"are ticked in their own views" : L"UNAVAILABLE (a check failed; they are not ticked)",
                   g_panesOn ? L"tick in their own views" : L"UNAVAILABLE (a check failed; they tick in the shared view)");
     return g_cellsOn || g_guidesOn || g_panesOn;
@@ -447,6 +490,11 @@ void Remove() noexcept
     if (g_guideCall.IsInstalled() && !g_guideCall.Restore())
     {
         platform::Log(L"widget owner: the key-guide call was changed after us; left in place (it passes through)");
+    }
+    if (g_fieldLeaderCall.IsInstalled() && !g_fieldLeaderCall.Restore())
+    {
+        platform::Log(L"widget owner: the cell's field leader call was changed after us; left in place (it passes "
+                      L"through)");
     }
 }
 
