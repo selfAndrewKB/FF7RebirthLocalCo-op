@@ -2,6 +2,7 @@
 
 #include "battle/battle_camera.h"
 #include "battle/battle_input.h"
+#include "battle/command_menu.h"
 #include "battle/lock_on.h"
 #include "camera/camera_override.h"
 #include "facts/controller.h"
@@ -62,6 +63,17 @@ std::uintptr_t        g_moveStateVTable  = 0;
 std::array<bool, players::kMaxPlayers> g_stopped{};
 
 std::array<players::StageCounters, players::kMaxPlayers> g_counters{};  // by seat; index 0 unused
+
+// Whether a seat's last move-state tick, its member's or its ride's, ran in its UI context.
+enum class TickUiState : std::uint8_t
+{
+    Unknown,  // no tick yet
+    With,
+    Without,
+};
+
+// Game thread only, by seat (index 0 unused).
+std::array<TickUiState, players::kMaxPlayers> g_tickUi{};
 
 int MemberType(const void* member) noexcept
 {
@@ -142,23 +154,81 @@ void ClearFieldActionRows(int seat, void* state) noexcept
     }
 }
 
+/// The ladder's arguments for a move-state tick of `seat`'s, whose player controller is `controller`: the seat's pad,
+/// and its command controller for its UI context.
+seat_ladder::Args TickArgs(int seat, void* controller) noexcept
+{
+    seat_ladder::Args args;
+    args.seat       = seat;
+    args.padId      = pad_sticks::ControllerIdOf(controller);
+    args.controller = battle::command_menu::Controller(seat);
+    return args;
+}
+
+/// The UI context part of a move-state tick's ladder, optional. A state's tick reads the command menu through the UI
+/// system's controller slot: its key records drop Dodge, Attack and Accel while a menu is open, and its sprint,
+/// field-action and ride rows wait for the menu (research/RE-p2-field-menu-dodge.md). In the seat's context the slot
+/// names the seat's controller, so the seat's own menu holds the seat's character as player 1's holds player 1's. A seat
+/// without a controller has no context to open.
+unsigned TickUi(const seat_ladder::Args& args) noexcept
+{
+    return args.controller != nullptr ? seat_ladder::Focus : 0u;
+}
+
+/// Logs `seat`'s first move-state tick and each change between running in its UI context and without it (the slot then
+/// names player 1's controller, whose menu holds the seat's actions instead of the seat's own).
+void NoteTickUi(int seat, const seat_ladder::SeatScopes& scopes) noexcept
+{
+    const bool        without = !scopes.Holds<seat_ladder::FocusPart>();
+    const TickUiState now     = without ? TickUiState::Without : TickUiState::With;
+    TickUiState&      was     = g_tickUi[static_cast<std::size_t>(seat)];
+    if (now == was)
+    {
+        return;
+    }
+    const bool first = was == TickUiState::Unknown;
+    was              = now;
+    if (without)
+    {
+        platform::Log(L"member movement: {}'s character ticks without their UI context ({}): player 1's command menu "
+                      L"holds their actions meanwhile, not their own",
+                      players::SeatName(seat), scopes.Noted() != nullptr ? scopes.Noted() : L"no command controller");
+    }
+    else
+    {
+        platform::Log(L"member movement: {}'s character ticks in their UI context{}: their own command menu holds "
+                      L"their actions",
+                      players::SeatName(seat), first ? L"" : L" again");
+    }
+}
+
+/// After the engine raised an exception inside a tick in the seat's UI context: what the context holds may be
+/// mid-change, so it is not kept (leaked, never put back), as at every other site that runs a game call in it.
+void AbandonUi(seat_ladder::SeatScopes& scopes) noexcept
+{
+    if (auto* focus = scopes.Get<seat_ladder::FocusPart>())
+    {
+        focus->scope.Abandon();
+    }
+}
+
 /// Ticks the seat's member's state inside every scope, or not at all.
 void TickInScopes(int seat, void* controller, void* member, void* state, int type, float deltaTime) noexcept
 {
-    // The seat's sticks and its player as the primary controller, or no tick; its own buttons (sprint, dodge, field
-    // actions) and, in battle, the target system's fields as the seat's.
-    seat_ladder::Args args;
-    args.seat  = seat;
-    args.padId = pad_sticks::ControllerIdOf(controller);
-    const seat_ladder::SeatScopes scopes(
-        seat_ladder::Sticks | seat_ladder::Primary | seat_ladder::Buttons | seat_ladder::Targets,
-        seat_ladder::Buttons | seat_ladder::Targets, args);
+    // The seat's sticks and its player as the primary controller, or no tick; its UI context, its own buttons (sprint,
+    // dodge, field actions) and, in battle, the target system's fields as the seat's.
+    const seat_ladder::Args args = TickArgs(seat, controller);
+    const unsigned          ui   = TickUi(args);
+    seat_ladder::SeatScopes scopes(
+        ui | seat_ladder::Sticks | seat_ladder::Primary | seat_ladder::Buttons | seat_ladder::Targets,
+        ui | seat_ladder::Buttons | seat_ladder::Targets, args);
     players::StageCounters& counters = g_counters[static_cast<std::size_t>(seat)];
     if (!scopes.Held())
     {
         counters.Refuse();
         return;
     }
+    NoteTickUi(seat, scopes);
     const scopes::leader_answer::Scope       leader(type);
     const move_state::OwnTick        own;
     const scopes::scope_leaks::MemberTickScope leaks(state, controller, deltaTime);
@@ -178,6 +248,7 @@ void TickInScopes(int seat, void* controller, void* member, void* state, int typ
     world::shooting_targets::RefreshForPlayerOne();
     if (!ticked)
     {
+        AbandonUi(scopes);
         g_stopped[static_cast<std::size_t>(seat)] = true;
         return;
     }
@@ -378,22 +449,27 @@ RideTick TickRide(int seat, void* controller, void* member, void* state, const v
         return RideTick::Refused;
     }
     players::StageCounters& counters = g_counters[static_cast<std::size_t>(seat)];
-    seat_ladder::Args args;
-    args.seat       = seat;
-    args.padId      = pad_sticks::ControllerIdOf(controller);
-    args.withoutKey = withoutKey;
-    const seat_ladder::SeatScopes scopes(seat_ladder::Sticks | seat_ladder::Primary | seat_ladder::Buttons,
-                                         seat_ladder::Buttons, args);
+    seat_ladder::Args args = TickArgs(seat, controller);
+    args.withoutKey        = withoutKey;
+    const unsigned ui      = TickUi(args);
+    seat_ladder::SeatScopes scopes(ui | seat_ladder::Sticks | seat_ladder::Primary | seat_ladder::Buttons,
+                                   ui | seat_ladder::Buttons, args);
     if (!scopes.Held())
     {
         counters.Refuse();
         return RideTick::Refused;
     }
+    NoteTickUi(seat, scopes);
     const scopes::leader_answer::Scope         leader(type, component);
     const move_state::OwnTick          own;
     const scopes::scope_leaks::MemberTickScope leaks(state, controller, deltaTime);
     counters.Act();
-    return GuardedTick(state, deltaTime) ? RideTick::Ticked : RideTick::Faulted;
+    if (!GuardedTick(state, deltaTime))
+    {
+        AbandonUi(scopes);
+        return RideTick::Faulted;
+    }
+    return RideTick::Ticked;
 }
 
 HandlesTick TickRideHandles(int seat, const void* member, void* state, const void* chocobo, const void* component,

@@ -1,5 +1,6 @@
 #include "battle/battle_input.h"
 
+#include "battle/command_menu.h"
 #include "battle/lock_on.h"
 #include "facts/command_controller.h"
 #include "facts/controller.h"
@@ -70,7 +71,6 @@ using GlobalTestFn   = std::uint8_t (*)();
 
 // Set once at install.
 bool           g_installed = false;
-std::uintptr_t g_endUISystem   = 0;
 std::uintptr_t g_battlePlayerVTable = 0;
 std::uintptr_t g_battleSystem  = 0;  // the address holding the battle system
 std::uintptr_t g_partyManager  = 0;  // the address holding the party manager
@@ -208,13 +208,10 @@ bool Install(const platform::GameImage& image) noexcept
     };
     const auto battleSystem = image.Rebase(kBattleStateGlobal, sizeof(void*));
     const auto partyManager = players::game_globals::Address(players::game_globals::Global::PartyManager);
-    const auto system = players::game_globals::Address(players::game_globals::Global::UiSystem);
     const auto vtable = image.Rebase(kBattlePlayerComponentVTable, sizeof(void*));
-    g_installed = scopes::leader_scope::Installed() && facts::InBattleKnown() && battleSystem && partyManager && system &&
-                  vtable;
+    g_installed = scopes::leader_scope::Installed() && facts::InBattleKnown() && battleSystem && partyManager && vtable;
     g_battleSystem       = battleSystem ? *battleSystem : 0;
     g_partyManager       = partyManager;
-    g_endUISystem        = system;
     g_battlePlayerVTable = vtable ? *vtable : 0;
     platform::Log(L"battle input: {}", g_installed ? L"ready (logs player 2's and 3's battle states)" : L"UNAVAILABLE (a check failed)");
     return g_installed;
@@ -229,8 +226,8 @@ void Watch(int seat, void* member, void* state) noexcept
     SeatLog& log = g_log[seat];
     try
     {
-        std::uintptr_t controller = 0;
-        Read(g_endUISystem + facts::kUICommandController, controller);
+        // Player 1's: the UI system's slot names the seat's inside the seat's UI context, around its character's tick.
+        const auto controller = reinterpret_cast<std::uintptr_t>(command_menu::PlayerOneCommandController());
         const bool battleHud  = controller != 0 && ReadAt<std::uint8_t>(controller + kCmdHudMode) != 0;
         const bool blocked    = controller != 0 && ReadAt<std::uint8_t>(controller + kCmdBlocked) != 0;
         const bool ready      = controller != 0 && (ReadAt<std::uint8_t>(controller + kCmdMenuAllowed) != 0 ||

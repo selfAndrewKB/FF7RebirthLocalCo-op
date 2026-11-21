@@ -4,10 +4,13 @@
 //
 // The game's field tick runs one move state a frame, the party leader's, so the member a seat's player
 // possesses never reads a stick. Once per frame for each seat, after the game's ticker has run, this
-// ticks the member's move state with the game's own per-character tick, inside three scopes:
+// ticks the member's move state with the game's own per-character tick, inside these scopes:
 //   - the seat's pad as the merged stick (input/pad_sticks.h);
 //   - the seat's player as the primary player, so the tick takes its direction from that player's camera
 //     (scopes/primary_controller.h);
+//   - the seat's UI context when its command controller exists (battle/focus_scope.h): the tick reads the command
+//     menu through the UI system's slot, so the seat's own open menu holds the seat's dodge, sprint and field actions,
+//     as player 1's holds player 1's (research/RE-p2-field-menu-dodge.md); logged when it cannot open;
 //   - a yes from the movement gate's party-leader test for the member's player type only
 //     (scopes/leader_answer.h: its slot answers on the game thread, inside this tick, and nowhere else).
 // It runs only while per-pad sticks are on. Afterwards the member's field-action rows (the party's
@@ -79,9 +82,9 @@ bool InPrimaryScopeWithButtons(int seat, const void* member, void (*call)(void* 
 void ClearRideRows(void* chocoboState) noexcept;
 
 /// Ticks a seat's ridden chocobo's move state with the game's per-character tick, inside every scope of the
-/// member's tick (the seat's pad, primary, buttons, the mod's own tick, the scope-leak put-backs), the leader answer
-/// also saying yes for `component` (the chocobo's input component), and the seat's buttons without `withoutKey` (an
-/// FName; 0 for none). Game thread.
+/// member's tick (the seat's pad, primary, UI context, buttons, the mod's own tick, the scope-leak put-backs), the
+/// leader answer also saying yes for `component` (the chocobo's input component), and the seat's buttons without
+/// `withoutKey` (an FName; 0 for none). Game thread.
 enum class RideTick
 {
     Ticked,

@@ -120,9 +120,11 @@ std::uintptr_t FollowingController(int seat, const wchar_t* what) noexcept
     const int  slotSeat = one != 0 ? command_menu::SeatOfController(reinterpret_cast<const void*>(one)) : 0;
     if (one == 0 || slotSeat >= 1)
     {
+        // Inside a seat's UI context (its menu's calls, its character's tick) the call is that seat's own: expected.
         Line(std::format(L"{} made while the UI system's slot names {}: NOT followed", what,
                          one == 0 ? std::wstring(L"no controller")
-                                  : std::format(L"{}'s controller (inside their scope)", players::SeatName(slotSeat))));
+                                  : std::format(L"{}'s controller (inside their scope)", players::SeatName(slotSeat))),
+             one == 0 ? platform::Level::Info : platform::Level::Debug);
         return 0;
     }
     return own;

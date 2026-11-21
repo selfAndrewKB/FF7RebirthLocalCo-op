@@ -360,13 +360,14 @@ void CatchUpHudMode(int seat, std::uintptr_t ctrl, std::uintptr_t ctrl1, std::ui
     CopyBattleInput(seat, ctrl, ctrl1);
 }
 
-/// A setter's call on `controller` may be the game's own on its controller: installed, on the game thread, and not
-/// inside a seat's pass or press or the command menu's own call on a seat's controller (there the UI system's
-/// controller slot names the seat's controller).
+/// A setter's call on `controller` may be the game's own on its controller: installed, on the game thread, not inside
+/// a seat's pass or press or the command menu's own call on a seat's controller, and not on a seat's controller at all
+/// (inside a seat's UI context, as around its character's tick, the UI system's controller slot names the seat's, and
+/// a call the game makes there is the seat's own).
 bool GameCallHere(const void* controller) noexcept
 {
     return g_installed && g_pass < 2 && g_ownMember == 0 && controller != nullptr &&
-           players::generation::OnGameThread();
+           players::generation::OnGameThread() && command_menu::SeatOfController(controller) < 1;
 }
 
 /// After a setter's call on the game's controller: `repeat(seat, ctrl, memberType)` on each seat's whose player plays
