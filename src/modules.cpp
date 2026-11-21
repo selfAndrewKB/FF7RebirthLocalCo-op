@@ -27,6 +27,7 @@
 #include "camera/main_camera_shape.h"
 #include "camera/near_fade.h"
 #include "camera/seat_camera_effects.h"
+#include "camera/seat_responsiveness.h"
 #include "camera/shoulder_scale.h"
 #include "camera/vault_camera.h"
 #include "feedback/combat_rumble.h"
@@ -190,6 +191,8 @@ constexpr std::array kModules{
     Module{Call<&camera::camera_override::Install>, nullptr},
     // the Options camera distance reaches every seat's camera
     Module{Call<&camera::camera_distance::Install>, &camera::camera_distance::Remove},
+    // players 2 and 3 each turn their camera at their own Responsiveness
+    Module{Call<&camera::seat_responsiveness::Install>, nullptr},
     // each seat's targeting: the game's tick run again for the seat
     Module{Call<&battle::lock_on::Install>, &battle::lock_on::Remove},
     // every player's switch takes only a free AI member; a downed player's own switch runs

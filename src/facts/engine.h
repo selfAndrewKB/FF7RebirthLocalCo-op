@@ -492,6 +492,13 @@ inline constexpr FunctionFact kSystemOptionData{L"GetSystemOptionData", 0x140C21
 inline constexpr std::uint32_t kOptionFieldCameraDistance  = 0x36;   // Camera Distance: Out of Battle
 inline constexpr std::uint32_t kOptionBattleCameraDistance = 0x37;   // Camera Distance: In Battle
 inline constexpr std::uint32_t kOptionButtonDisplay        = 0x1CC;  // 0 auto, 1 Xbox, 2 PlayStation, 3 a fourth set
+/// Responsiveness (research/RE-camera-responsiveness-per-player.md): the camera's level, 1 to 5 (0 before the options
+/// load), read every frame by each controller's input step (the right stick turns by it times the controller's rate) and
+/// by the camera modules' stick smoothing in each camera manager's update.
+inline constexpr std::uint32_t kOptionResponsiveness = 0x35;
+inline constexpr std::uint8_t  kResponsivenessMin    = 1;
+inline constexpr std::uint8_t  kResponsivenessMax    = 5;
+
 // ---------------------------------------------------------------------------------------------
 // The startup check list
 // ---------------------------------------------------------------------------------------------

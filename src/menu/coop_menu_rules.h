@@ -5,8 +5,8 @@
 // the settings table's options (platform/settings.h), one category per section in the table's order, one List row per
 // option with its words' names as the values. A row is told apart from the game's own by its category byte: the game's
 // real settings live at 0..0x54, the mod's rows take 0x80 + the option's place in the table, which the game never
-// makes, so its own value code reads 0 for them and writes nothing. Pure: tested on the host
-// (tests/coop_menu_rules_test.cpp).
+// makes, so its own value code reads 0 for them and writes nothing. The options marked for the game's own Options
+// screen (settings::OnGameScreen) are not on the page. Pure: tested on the host (tests/coop_menu_rules_test.cpp).
 //
 // The pause menu's row takes the trial's "Buy Now" kind 13; the game's own settings end at 0x54; the category keys and
 // the longest stock list are read from this game (below).
@@ -81,7 +81,7 @@ inline std::vector<Category> BuildPage()
     std::vector<Category> page;
     for (std::size_t i = 0; i < settings::kOptions.size(); ++i)
     {
-        if (settings::kOptions[i]->appOnly)
+        if (settings::kOptions[i]->appOnly || settings::OnGameScreen(*settings::kOptions[i]))
         {
             continue;
         }

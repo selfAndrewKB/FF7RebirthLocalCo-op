@@ -1,5 +1,6 @@
 #include "input/pad_sticks.h"
 
+#include "camera/seat_responsiveness.h"
 #include "facts/controller.h"
 #include "facts/engine.h"
 #include "input/pad_buttons.h"
@@ -83,7 +84,11 @@ void ProcessPlayerInput(void* controller, float deltaTime, bool gamePaused)
     const bool isOne  = seat == 0;
     const bool isSeat = players::SeatBuilt(seat) && players::generation::Active(seat);
     const scopes::scope_leaks::InputScope leaks(isSeat);  // a seat's input writes the leader transform; put back after
-    const std::int32_t                    padId = ControllerIdOf(controller);
+    // The step turns the right stick by the game's Responsiveness level into this controller's own stick fields, which a
+    // camera update reading this controller divides it back out of (camera/field_camera): the seat's own level, whatever
+    // else opens below (player 1's: none held).
+    const camera::seat_responsiveness::Scope responsiveness(isSeat ? seat : 0);
+    const std::int32_t                       padId = ControllerIdOf(controller);
     // In a minigame player 1's input reads every pad's stick, its camera stick too (PlayerOnePadShared).
     if (!Enabled() || (!isOne && !isSeat) || (isSeat && !PartActs(kPartSeatInput)) ||
         !players::generation::OnGameThread() || PlayerOnePadShared(padId))

@@ -45,7 +45,15 @@ struct Option
     const wchar_t*                  menuHelp = L"";
     // Set by the setup app, no row on the Co-op page: `words` is empty and the option takes any word, an empty one its default.
     bool                            appOnly = false;
+    // Of the game's own Options screen, not the Co-op page: no row on the page; the console and the file set it.
+    bool                            gameScreen = false;
 };
+
+/// The option is the game's own Options screen's, not the Co-op page's.
+constexpr bool OnGameScreen(const Option& option) noexcept
+{
+    return option.gameScreen;
+}
 
 // The table. An option's owner (the module named beside it) applies the reading at its install.
 inline constexpr std::array<const wchar_t*, 6> kColumnOrderWords{L"123", L"132", L"213", L"231", L"312", L"321"};
@@ -241,13 +249,30 @@ inline constexpr Option kLeadHolder{  // session/lead_gate
     L"Determines whether additional players get to control their selected characters during certain scripted segments.\r\n"
     L"AI-controlled: The game takes over and automatically drives the party members as required.\r\nPlayer-controlled: the "
     L"player directs the party member to marked locations."};
+// Players 2 and 3's camera responsiveness (camera/seat_responsiveness): the game's own Responsiveness levels, 1 to 5,
+// player 1's being the game's option.
+inline constexpr std::array<const wchar_t*, 5> kResponsivenessWords{L"1", L"2", L"3", L"4", L"5"};
+inline constexpr Option kResponsivenessTwo{  // camera/seat_responsiveness
+    L"Camera", L"responsiveness.player-2", kResponsivenessWords, L"3",
+    L"player 2's camera responsiveness, as the game's own Responsiveness option sets player 1's: 1 (the slowest turn) to 5 "
+    L"(the fastest); from player 2's next frame",
+    false, L"Responsiveness (Player 2)", kResponsivenessWords,
+    L"Set camera responsiveness for Player 2. The higher the number, the more responsive the camera will be.",
+    false, true};
+inline constexpr Option kResponsivenessThree{  // camera/seat_responsiveness
+    L"Camera", L"responsiveness.player-3", kResponsivenessWords, L"3",
+    L"player 3's camera responsiveness, as the game's own Responsiveness option sets player 1's: 1 (the slowest turn) to 5 "
+    L"(the fastest); from player 3's next frame",
+    false, L"Responsiveness (Player 3)", kResponsivenessWords,
+    L"Set camera responsiveness for Player 3. The higher the number, the more responsive the camera will be.",
+    false, true};
 /// Every option, in the order the settings file lists them.
 inline constexpr std::array kOptions{&kMultiMonitor,     &kMonitors,      &kColumnOrder,
                                      &kTwoPlayerSplit,  &kThreePlayerSplit, &kHorizontalFov,
                                      &kVerticalFov,     &kMenuSlow,         &kBattleWarps,
                                      &kEnemyDamage,     &kEnemyHp,          &kBossHp,
                                      &kEnemyStagger,    &kExpGain,          &kApGain,
-                                     &kLeadHolder};
+                                     &kLeadHolder,      &kResponsivenessTwo, &kResponsivenessThree};
 
 /// The option is a row of the table (Of and Why answer by the row).
 consteval bool Listed(const Option& option)
@@ -262,7 +287,7 @@ static_assert(Listed(kMultiMonitor) && Listed(kMonitors) && Listed(kColumnOrder)
                   Listed(kThreePlayerSplit) && Listed(kHorizontalFov) && Listed(kVerticalFov) && Listed(kMenuSlow) &&
                   Listed(kBattleWarps) &&
                   Listed(kEnemyDamage) && Listed(kEnemyHp) && Listed(kBossHp) && Listed(kEnemyStagger) && Listed(kExpGain) &&
-                  Listed(kApGain) && Listed(kLeadHolder),
+                  Listed(kApGain) && Listed(kLeadHolder) && Listed(kResponsivenessTwo) && Listed(kResponsivenessThree),
               "every option is a row of kOptions");
 
 /// Where an option's word came from.

@@ -6,6 +6,7 @@
 #include "battle/lock_on.h"
 #include "camera/attack_cameras.h"
 #include "camera/camera_access.h"
+#include "camera/seat_responsiveness.h"
 #include "facts/cameras.h"
 #include "facts/command_controller.h"
 #include "facts/controller.h"
@@ -330,6 +331,9 @@ void RunAsPrimary(int seat, void* cameraManager, float deltaTime)
         g_updateCounters[Index(seat)].Refuse();
     }
     const attack_cameras::SeatUpdate attack(seat);  // the seat's own sequence state (inside the scopes)
+    // The camera modules' stick smoothing divides the stick by the Responsiveness level the input step turned it with:
+    // the seat's own while the update reads the seat's controller, player 1's when it runs as player 1's.
+    const seat_responsiveness::Scope responsiveness(scopes.Holds<seat_ladder::PrimaryPart>() ? seat : 0);
     g_engineUpdate(cameraManager, deltaTime);
 }
 

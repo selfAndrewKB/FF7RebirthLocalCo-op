@@ -170,6 +170,7 @@ add_library(LocalSplitScreen SHARED
     src/camera/seat_camera_effects.cpp
     src/camera/camera_access.cpp
     src/camera/camera_distance.cpp
+    src/camera/seat_responsiveness.cpp
     src/camera/main_camera_shape.cpp
     src/battle/command_locks.cpp
     src/battle/battle_rates.cpp
