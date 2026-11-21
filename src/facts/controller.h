@@ -126,10 +126,33 @@ inline constexpr std::uint32_t  kInputDigitalSticks    = 0x1120;
 /// 3 DirectInput), one byte the input Tick keeps from its frame's input flags.
 inline constexpr std::uint32_t  kInputDeviceClass      = 0x1274;
 inline constexpr std::uint8_t   kDeviceClassKeyboard   = 1;
+/// "A key, a mouse button or the wheel was used this frame": the keyboard and mouse handlers set it, and the input Tick
+/// turns it into the keyboard class for every player's button art and player 1's rumble device.
+inline constexpr std::uint32_t  kInputKeyboardUsed     = 0x5B;
+/// The game's per-slot pad types (RE-per-player-icons.md): a pointer to an object whose TArray<u8> {data +0x158, num
+/// +0x160} holds Steam's type for each XInput slot (hud/button_art_rules: 4 DualShock 4, 5 DualSense, else Xbox-like).
+inline constexpr std::uint32_t  kInputPadTypes         = 0x6BC0;
+inline constexpr std::uint32_t  kPadTypesData          = 0x158;
+inline constexpr std::uint32_t  kPadTypesNum           = 0x160;
 inline constexpr std::uint32_t  kInputDeviceBanks      = 0x11D0;  // {Record* data; int32 num; int32 max}
 inline constexpr std::uint32_t  kInputBankHeaderSize   = 16;
 inline constexpr std::uint32_t  kXInputBank            = 1;
 inline constexpr std::uint32_t  kDirectInputBank       = 2;
+
+// Square's input processor's mouse handlers: the button down (slot 6) and the wheel (slot 13, a Square-added virtual),
+// bool(owner, FSlateApplication&, const FPointerEvent&); each sets kInputKeyboardUsed. Their first instruction is a
+// home-area store, as the key handlers'.
+inline constexpr std::uintptr_t kSquareMouseDownEntry = 0x145BA5CF8;
+inline constexpr std::uintptr_t kSquareMouseDown      = 0x140BAF448;
+inline constexpr std::uint8_t   kSquareMouseDownRestBytes[] = {0x55, 0x56, 0x57, 0x41, 0x54, 0x41, 0x55, 0x41, 0x56, 0x41,
+                                                               0x57, 0x48, 0x8D, 0xAC, 0x24, 0x30, 0xFF, 0xFF, 0xFF};
+inline constexpr FunctionFact   kSquareMouseDownAfterFirst{L"HandleMouseButtonDownEvent after its first instruction",
+                                                           0x140BAF44D, kSquareMouseDownRestBytes};
+inline constexpr std::uintptr_t kSquareWheelEntry = 0x145BA5D30;
+inline constexpr std::uintptr_t kSquareWheel      = 0x143759710;
+inline constexpr std::uint8_t   kSquareWheelRestBytes[] = {0x57, 0xB8, 0xF0, 0x00, 0x00, 0x00, 0xE8};
+inline constexpr FunctionFact   kSquareWheelAfterFirst{L"OnMouseWheel after its first instruction", 0x143759715,
+                                                       kSquareWheelRestBytes};
 
 // Square's input processor's key handlers
 /// SquareInput's key-down and key-up handlers, bool(owner, FSlateApplication&, const FKeyEvent&): Square's

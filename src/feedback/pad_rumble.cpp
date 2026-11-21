@@ -21,6 +21,7 @@
 #include "players/seats.h"
 #include "players/unreal_access.h"
 #include "scopes/leader_scope.h"
+#include "views/player_view_point.h"
 
 #include <chrono>
 #include <cstddef>
@@ -83,11 +84,13 @@ const void* Pointee(std::uintptr_t global) noexcept
     return reinterpret_cast<const void*>(ReadField<std::uintptr_t>(reinterpret_cast<const void*>(global), 0));
 }
 
-/// The game's last-device note; an event from any seat's pad leaves player 1's last device as it is.
+/// The game's last-device note; while views are split, an event from any seat's pad leaves player 1's last device as it
+/// is (with one view on screen every pad notes itself, as in single player: the game's art follows whoever plays it).
 void Note(void* owner, std::int32_t userIndex) noexcept
 {
     const bool gameThread = players::generation::OnGameThread();
-    for (int seat = 1; gameThread && userIndex >= 0 && seat <= players::kSeatsBuilt; ++seat)
+    const bool split      = gameThread && views::SplitShown();
+    for (int seat = 1; split && userIndex >= 0 && seat <= players::kSeatsBuilt; ++seat)
     {
         if (userIndex == g_seats[seat].pad)
         {

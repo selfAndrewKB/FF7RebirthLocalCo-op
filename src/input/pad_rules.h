@@ -63,6 +63,12 @@ constexpr const wchar_t* OpenerName(int pad) noexcept
     return ReaderOf(pad) == kKeyboard ? L"Tab" : ReaderOf(pad) == kPlayStation ? L"Create" : L"View";
 }
 
+/// The name of the button `pad` holds in its window to leave, for the log.
+constexpr const wchar_t* LeaveName(int pad) noexcept
+{
+    return ReaderOf(pad) == kKeyboard ? L"Backspace" : ReaderOf(pad) == kPlayStation ? L"Circle" : L"B";
+}
+
 // XInput's button bits (XINPUT_GAMEPAD_*), kept here so the rules build without Windows headers.
 inline constexpr std::uint16_t kStart     = 0x0010;  // START (Menu)
 inline constexpr std::uint16_t kView      = 0x0020;  // BACK

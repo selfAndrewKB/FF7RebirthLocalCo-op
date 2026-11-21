@@ -14,6 +14,7 @@
 #include "platform/build_value.h"
 #include "platform/verified_code.h"
 
+#include <array>
 #include <cstdint>
 
 namespace lss::facts {
@@ -33,6 +34,15 @@ inline constexpr std::uint32_t kUIFieldMarkers       = 0x98;   // -> a TSparseAr
 inline constexpr std::uint32_t kFieldMarkerEntry           = 140;    // its element size (the widgets are per module)
 inline constexpr std::uint32_t kUICommandController  = 0xB8;   // EndUISystem[23]: the field command controller
 inline constexpr std::uint32_t kUIEnemyStatus = 0xF8;   // the enemy-status manager (gauges, lock-on bars)
+/// The UI fonts (RE-per-player-icons.md): EndUISystem+0x28 points at the font holder, whose first array {weak UEndFont*
+/// data, int32 num} lists the four system fonts (0 Normal, 1 Small, 2 Large, 3 XLarge; num 0 before they load). The
+/// game's device change writes the button bytes of Small, Normal and Large only; a text's button tags read its own
+/// font's two bytes.
+inline constexpr std::uint32_t kUIFontHolder   = 0x28;
+inline constexpr std::uint32_t kFontHolderNum  = 0x08;
+inline constexpr std::array<std::uint32_t, 3> kButtonFonts{1, 0, 2};
+inline constexpr std::uint32_t kFontPadFamily  = 0x558;  // u8: which pad's art
+inline constexpr std::uint32_t kFontKeyboard   = 0x559;  // u8: keycaps where a tag allows them
 inline constexpr std::uint32_t kUIAreaMap     = 0x108;  // the area-map manager (the compass, the navimap)
 inline constexpr std::uint32_t kUIFilterManager      = 0x148;  // EndUISystem[41]: the UI filter manager (the
                                                                  // tactical tint's latch and count; menu_tint)

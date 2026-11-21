@@ -1,4 +1,4 @@
-#include "hud/minimap/label_states.h"
+#include "hud/label_states.h"
 
 #include <cstring>
 
@@ -59,7 +59,7 @@ void LabelBook::Drop(std::size_t index) noexcept
     --count_;
 }
 
-bool LabelBook::BeforeSetText(void* widget, void* controller) noexcept
+bool LabelBook::SwapIn(void* widget, void* controller) noexcept
 {
     if (!access_.usable(widget))
     {
@@ -69,7 +69,7 @@ bool LabelBook::BeforeSetText(void* widget, void* controller) noexcept
     Record* record = Find(controller);
     if (record != nullptr && record->inside)
     {
-        return true;  // a second SetText on it in the same run: the seat's state is already in
+        return true;  // a second call in the same run: the seat's state is already in
     }
     const std::uint64_t stamp = access_.stamp(widget);
     if (record == nullptr)
@@ -89,14 +89,15 @@ bool LabelBook::BeforeSetText(void* widget, void* controller) noexcept
         record->controller = controller;
         record->stamp      = stamp;
         record->inside     = false;
-        record->parked     = EmptyState();  // the first SetText lays the seat's state out from the empty one
+        record->parked     = fresh_;  // the seat's state is laid out from it (the game's SetText, or its Tick)
         ++counts_.created;
     }
     else if (stamp != record->stamp)
     {
-        // A language or font change relaid player 1's state out; the seat's aside still has the old one.
+        // What the seat's state was laid out from changed (a language or font change; for a button prompt also its text
+        // or the seat's art): it is laid out again from the fresh state.
         access_.freeParked(record->parked);
-        record->parked = EmptyState();
+        record->parked = fresh_;
         record->stamp  = stamp;
         ++counts_.fontResets;
     }
@@ -123,6 +124,9 @@ void LabelBook::SwapBack() noexcept
         record.inside = false;
         if (access_.alive(record.controller))
         {
+            // Stamped as it goes out, while the seat's state is in: a stamp that reads the block's text then describes
+            // the text the seat's state was laid out for (the seat's own run may have set another text).
+            record.stamp = access_.stamp(record.widget);
             if (access_.swap(record.widget, record.parked))
             {
                 ++counts_.swapsOut;

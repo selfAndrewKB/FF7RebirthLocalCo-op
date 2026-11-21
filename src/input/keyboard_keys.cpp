@@ -2,12 +2,15 @@
 
 #include "facts/controller.h"
 #include "input/pad_rules.h"
+#include "platform/byte_scope.h"
 #include "platform/guarded_read.h"
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/verified_code.h"
 #include "platform/vtable_entry.h"
+#include "players/game_globals.h"
 #include "players/generation.h"
+#include "views/player_view_point.h"
 
 #if LSS_DEV
 #include "platform/command_registry.h"
@@ -30,6 +33,7 @@ namespace {
 namespace rules = pad_rules;
 
 using KeyFn       = std::uint8_t (*)(void* self, void* application, const void* keyEvent);
+using PointerFn   = std::uint8_t (*)(void* self, void* application, const void* pointerEvent);
 using GateFn      = std::uint8_t (*)(void* self, void* application);
 using CopyEventFn = void* (*)(void* to, const void* from);
 using FreeEventFn = void* (*)(void* event);
@@ -37,6 +41,8 @@ using FreeEventFn = void* (*)(void* event);
 // Set once at install.
 platform::VTableEntry g_downSlot;
 platform::VTableEntry g_upSlot;
+platform::VTableEntry g_mouseDownSlot;
+platform::VTableEntry g_wheelSlot;
 KeyFn                 g_keyToActions = nullptr;
 GateFn                g_inputGate    = nullptr;
 CopyEventFn           g_copyEvent    = nullptr;
@@ -68,7 +74,7 @@ bool             g_leaveSeen   = false;  // Backspace went down since the last p
 std::uint16_t    g_pressed     = 0;      // the window's keys pressed since the last poll, as the rules' bits
 rules::Held      g_leave{};
 std::int32_t     g_releaseUser = -1;
-std::uint32_t    g_opens = 0, g_taps = 0, g_windowKeys = 0;
+std::uint32_t    g_opens = 0, g_taps = 0, g_windowKeys = 0, g_flagsKept = 0;
 
 KeyFn OriginalDown() noexcept
 {
@@ -93,6 +99,28 @@ bool ReadKey(const void* keyEvent, std::uint32_t& keyCode, bool& repeat) noexcep
     }
     repeat = repeatByte != 0;
     return rules::IsKeyboardKey(keyCode);
+}
+
+/// Runs `call` (a key, mouse button or wheel event in the game's handler) with the game's "keyboard used" flag put back
+/// as it was, while the keyboard plays player 2 or 3 and views are split: the flag makes the keyboard the last device
+/// for everyone (every view's button art, player 1's rumble), which belongs to player 1's device there (hud/button_art
+/// gives the keyboard player's view its keycaps). With one view on screen, the keyboard moves the game's art as any
+/// device does.
+template <class Call>
+std::uint8_t KeepingKeyboardFlag(Call&& call) noexcept
+{
+    platform::ByteStore<1, 1> store;
+    const auto owner = reinterpret_cast<std::uintptr_t>(
+        players::game_globals::Object(players::game_globals::Global::SquareInputOwner));
+    if (owner != 0 && pad_table::KeyboardSeat() > 0 && views::SplitShown())
+    {
+        const platform::ByteContext::Range flag{owner + facts::kInputKeyboardUsed, 1, platform::ByteContext::Kind::Keep};
+        store.Define({&flag, 1});
+    }
+    platform::ByteScope scope(store);
+    const std::uint8_t  answer = call();
+    g_flagsKept += scope.Release() != 0 ? 1u : 0u;
+    return answer;
 }
 
 /// A key-up handed to the game's own handler, with its sender noted for the battle menu's release route: a pad's
@@ -129,7 +157,7 @@ void TapToGame(void* self, void* application, const void* keyEvent) noexcept
     g_tapRelease.application = application;
     g_tapRelease.due         = 2;
     ++g_taps;
-    g_keyToActions(self, application, g_tapRelease.event.data());
+    KeepingKeyboardFlag([&] { return g_keyToActions(self, application, g_tapRelease.event.data()); });
 }
 
 /// The kept release, once its frame has passed; or at once (`now`), at the mod's end.
@@ -167,7 +195,7 @@ std::uint8_t KeyDown(void* self, void* application, const void* keyEvent) noexce
     bool          repeat  = false;
     if (!g_installed || !ReadKey(keyEvent, keyCode, repeat) || !TakesDown(keyCode, repeat))
     {
-        return OriginalDown()(self, application, keyEvent);
+        return KeepingKeyboardFlag([&] { return OriginalDown()(self, application, keyEvent); });
     }
     g_heldBack.set(keyCode);
     if (keyCode == rules::kOpenKey)
@@ -220,12 +248,22 @@ std::uint8_t KeyUp(void* self, void* application, const void* keyEvent) noexcept
     }
     return ReleaseToGame(self, application, keyEvent);
 }
+/// Square's mouse-button-down or wheel handler (the one `Slot` held): passed to the game's, with the keyboard flag kept
+/// as above.
+template <platform::VTableEntry& Slot>
+std::uint8_t PointerEvent(void* self, void* application, const void* pointerEvent) noexcept
+{
+    const auto original = reinterpret_cast<PointerFn>(Slot.Original());
+    return KeepingKeyboardFlag([&] { return original(self, application, pointerEvent); });
+}
+
 #if LSS_DEV
 std::wstring Reading()
 {
-    return std::format(L"{}; window {}, Tab {}; opener held {} time(s), map taps given {}, window keys {}",
+    return std::format(L"{}; window {}, Tab {}; opener held {} time(s), map taps given {}, window keys {}; the keyboard "
+                       L"flag put back after {} event(s) of player 2's or 3's keyboard",
                        g_installed ? L"on" : L"not installed", g_idle ? L"open" : L"closed",
-                       g_tabDown ? L"down" : L"up", g_opens, g_taps, g_windowKeys);
+                       g_tabDown ? L"down" : L"up", g_opens, g_taps, g_windowKeys, g_flagsKept);
 }
 #endif
 
@@ -258,6 +296,25 @@ bool Install(const platform::GameImage& image) noexcept
     {
         g_downSlot.Restore();
     }
+    // The mouse's two handlers only keep the keyboard flag: the keyboard plays on without them.
+    const auto mouseEntry = image.Rebase(facts::kSquareMouseDownEntry, sizeof(void*));
+    const auto mouse      = image.Rebase(facts::kSquareMouseDown);
+    const auto wheelEntry = image.Rebase(facts::kSquareWheelEntry, sizeof(void*));
+    const auto wheel      = image.Rebase(facts::kSquareWheel);
+    const bool mouseTaken = g_installed && mouseEntry && mouse && wheelEntry && wheel &&
+                            platform::FindFunction(image, facts::kSquareMouseDownAfterFirst) &&
+                            platform::FindFunction(image, facts::kSquareWheelAfterFirst) &&
+                            g_mouseDownSlot.Replace(*mouseEntry, *mouse, reinterpret_cast<std::uintptr_t>(&PointerEvent<g_mouseDownSlot>)) &&
+                            g_wheelSlot.Replace(*wheelEntry, *wheel, reinterpret_cast<std::uintptr_t>(&PointerEvent<g_wheelSlot>));
+    if (!mouseTaken && g_mouseDownSlot.Original() != 0)
+    {
+        g_mouseDownSlot.Restore();
+    }
+    if (g_installed && !mouseTaken)
+    {
+        platform::LogWarning(L"keyboard: the game's mouse handlers could not be taken (a check failed): with the keyboard "
+                             L"on player 2 or 3, a mouse click still turns every view's button art to keycaps");
+    }
     if (g_installed)
     {
         platform::Log(L"keyboard: Tab held a second opens the keyboard's player's window, or adds a player on the keyboard "
@@ -288,6 +345,14 @@ void Remove() noexcept
     g_tabFired  = false;
     g_leaveDown = false;
     g_leaveSeen = false;
+    if (g_wheelSlot.Original() != 0 && !g_wheelSlot.Restore())
+    {
+        platform::Log(L"keyboard: the wheel slot was changed after us; left in place (it passes through)");
+    }
+    if (g_mouseDownSlot.Original() != 0 && !g_mouseDownSlot.Restore())
+    {
+        platform::Log(L"keyboard: the mouse-button slot was changed after us; left in place (it passes through)");
+    }
     if (g_upSlot.Original() != 0 && !g_upSlot.Restore())
     {
         platform::Log(L"keyboard: the key-up slot was changed after us; left in place (it passes through)");

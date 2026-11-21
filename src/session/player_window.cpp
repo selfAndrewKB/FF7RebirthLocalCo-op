@@ -456,13 +456,13 @@ void PendingJoin(int seat, const Frame& frame)
     }
 }
 
-/// B held on `seat`'s pad with its window open: player 2 or 3 leaves; player 1 is refused.
+/// B held on `seat`'s pad (Backspace on the keyboard) with its window open: player 2 or 3 leaves; player 1 is refused.
 void HoldLeave(int seat, int user)
 {
     if (seat == 0)
     {
         SetNote(0, text::Note::PlayerOneStays, 0);
-        platform::Log(L"player window: {} held B, but player 1 stays in", pad::PadName(user));
+        platform::Log(L"player window: {} held {}, but player 1 stays in", pad::PadName(user), pad::LeaveName(user));
         return;
     }
     if (std::find(g_leaves.begin(), g_leaves.end(), seat) == g_leaves.end())
@@ -476,7 +476,7 @@ void HoldLeave(int seat, int user)
             }
         }
         ++g_leavesAsked;
-        platform::Log(L"player window: {} held B: {} leaves", pad::PadName(user), players::SeatName(seat));
+        platform::Log(L"player window: {} held {}: {} leaves", pad::PadName(user), pad::LeaveName(user), players::SeatName(seat));
     }
 }
 

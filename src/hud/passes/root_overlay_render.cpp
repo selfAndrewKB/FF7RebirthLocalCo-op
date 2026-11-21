@@ -3,6 +3,7 @@
 #include "hud/battle/enemy_gauges.h"
 #include "hud/battle/popups.h"
 #include "hud/battle/target_views.h"
+#include "hud/button_art.h"
 #include "hud/field/action_icon_base.h"
 #include "hud/field/marker_timers.h"
 #include "hud/field/prompt_rows.h"
@@ -183,6 +184,7 @@ void ColumnPass(int column, int seat, bool another, SeatPassKind kind) noexcept
     // (hud/passes/pass_opacity.h)
     pass_opacity::ShowOnly(shown, copy);
     target_views::BeforePass(shown);  // the other players' cursors and gauges collapsed before the column's updates
+    button_art::EnterPass(shown);     // the shown player's button art, before the column's updates set texts
     const bool content = EnterSeat(column, seat, copy);  // the column's levers and updates (seat_hud_content.h)
     if (content)
     {
@@ -201,6 +203,7 @@ void ColumnPass(int column, int seat, bool another, SeatPassKind kind) noexcept
     RenderColumnImage();  // on a fault the minimap's target field and held slot are still put back below
     EndMinimapSeatPass();
     minimap::EndPaint();
+    button_art::LeavePass();  // the game's art and player 1's states back before player 1's updates
     g_seatSeconds += Now() - start;
     enemy_gauges::EndSeatPass();  // each gauge's size back to player 1's before player 1's updates
     target_views::BeforePass(0);  // the seat's, collapsed before player 1's updates (put back after the render)

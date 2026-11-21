@@ -16,6 +16,11 @@
 //     it came.
 // The keyboard is pad_rules::kKeyboardPad in the listener's events. Key releases also note their Slate user for the
 // battle menu's release route (ReleaseUser).
+// The game's key, mouse-button and wheel handlers also mark the keyboard as the last device used, which turns every
+// view's button art to keycaps and player 1's rumble to the keyboard. While the keyboard plays player 2 or 3 and views
+// are split, that mark is put back after each of its events (the mouse's two handlers are taken for it alone):
+// player 1's device keeps the game's art, and the keyboard player's view gets its keycaps from hud/button_art. With one
+// view on screen the keyboard marks itself as any device does.
 
 #include "input/pad_table.h"
 

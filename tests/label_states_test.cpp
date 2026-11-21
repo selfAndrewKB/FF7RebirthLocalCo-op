@@ -5,7 +5,7 @@
 // second SetText in one run swaps nothing; a font reload resets the seat's state; a widget dying inside the seat's pass
 // or aside; releasing everything; refusals, a full table and faults; the weak references balance.
 
-#include "hud/minimap/label_states.h"
+#include "hud/label_states.h"
 
 #include "expect.h"
 
@@ -89,7 +89,7 @@ LabelBook Fresh()
 // the swap-back. Player 1's state is in the widget before and after.
 void PlayerTwoRun(LabelBook& book, FakeWidget& w, int p2)
 {
-    EXPECT(book.BeforeSetText(&w, &w));
+    EXPECT(book.SwapIn(&w, &w));
     if (w.state != p2)
     {
         w.state = p2;  // the game's relayout, into whichever state is in the widget
@@ -116,7 +116,7 @@ void TestBootstrapThenOwnStates()
     auto       book = Fresh();
     FakeWidget w;
     w.state = 1;  // player 1's
-    EXPECT(book.BeforeSetText(&w, &w));
+    EXPECT(book.SwapIn(&w, &w));
     EXPECT(w.state == 0);  // the empty state: the game's compare fails and its relayout builds player 2's
     EXPECT(book.AnyInside());
     w.state = 2;  // the relayout
@@ -139,9 +139,9 @@ void TestSecondSetTextInOneRun()
     auto       book = Fresh();
     FakeWidget w;
     w.state = 1;
-    EXPECT(book.BeforeSetText(&w, &w));
+    EXPECT(book.SwapIn(&w, &w));
     w.state = 2;
-    EXPECT(book.BeforeSetText(&w, &w));
+    EXPECT(book.SwapIn(&w, &w));
     EXPECT(w.state == 2 && book.Counts().swapsIn == 1);
     book.SwapBack();
     EXPECT(w.state == 1);
@@ -156,7 +156,7 @@ void TestFontReloadResets()
     PlayerTwoRun(book, w, 2);
     book.SwapBack();
     w.stamp = 8;  // a font reload relaid player 1's state out
-    EXPECT(book.BeforeSetText(&w, &w));
+    EXPECT(book.SwapIn(&w, &w));
     EXPECT(w.state == 0);
     EXPECT(g_freed.size() == 1 && g_freed[0] == 2);
     EXPECT(book.Counts().fontResets == 1);
@@ -166,6 +166,45 @@ void TestFontReloadResets()
     PlayerTwoRun(book, w, 3);
     EXPECT(w.state == 3 && book.Counts().fontResets == 1);  // the new stamp is kept
     book.SwapBack();
+}
+
+void TestFreshState()
+{
+    std::puts("labels: a book's fresh state starts each new record and each reset (a button prompt's: a relayout pending)");
+    g_freed.clear();
+    Parked fresh = EmptyState();
+    SetState(fresh, 9);
+    LabelBook book(LabelAccess{&Usable, &Alive, &Swap, &Invalidate, &Stamp, &HoldWeak, &ReleaseWeak, &FreeParked}, fresh);
+    FakeWidget w;
+    w.state = 1;
+    EXPECT(book.SwapIn(&w, &w));
+    EXPECT(w.state == 9);  // the fresh state, laid out by the game's Tick in the seat's pass
+    w.state = 3;
+    book.SwapBack();
+    EXPECT(w.state == 1);
+    w.stamp = 8;  // the text, the art or a font changed
+    EXPECT(book.SwapIn(&w, &w));
+    EXPECT(w.state == 9 && g_freed.size() == 1 && g_freed[0] == 3);
+    book.SwapBack();
+    book.ReleaseAll();
+}
+
+void TestStampedAsItGoesOut()
+{
+    std::puts("labels: a record is stamped at its swap-back, so a seat's run that changed the text and back is caught");
+    auto       book = Fresh();
+    FakeWidget w;
+    w.state = 1;
+    w.stamp = 1;  // player 1's text T1
+    EXPECT(book.SwapIn(&w, &w));
+    w.state = 2;
+    w.stamp = 2;  // the seat's run sets T2, laid out into the seat's state
+    book.SwapBack();
+    w.stamp = 1;  // player 1's run sets T1 again
+    EXPECT(book.SwapIn(&w, &w));
+    EXPECT(w.state == 0 && book.Counts().fontResets == 1);  // laid out afresh: the seat's T2 layout is not shown for T1
+    book.SwapBack();
+    book.ReleaseAll();
 }
 
 void TestDiesInsidePlayerTwosPass()
@@ -251,14 +290,14 @@ void TestRefusalsAndFull()
     FakeWidget odd;
     odd.state  = 5;
     odd.usable = false;
-    EXPECT(book.BeforeSetText(&odd, &odd));
+    EXPECT(book.SwapIn(&odd, &odd));
     EXPECT(odd.state == 5 && odd.weak == 1 && book.Count() == 0 && book.Counts().refused == 1);
 
     std::vector<FakeWidget> many(LabelBook::kMaxLabels + 1);
     for (FakeWidget& w : many)
     {
         w.state = 1;
-        EXPECT(book.BeforeSetText(&w, &w));
+        EXPECT(book.SwapIn(&w, &w));
     }
     EXPECT(book.Count() == LabelBook::kMaxLabels && book.Counts().full == 1);
     EXPECT(many.back().state == 1 && many.back().weak == 1);
@@ -276,7 +315,7 @@ void TestFaults()
     FakeWidget w;
     w.state      = 1;
     w.swapFaults = true;
-    EXPECT(!book.BeforeSetText(&w, &w));
+    EXPECT(!book.SwapIn(&w, &w));
     EXPECT(w.state == 1 && !book.AnyInside() && book.Counts().faults == 1);
     book.ReleaseAll();
     EXPECT(w.weak == 1);
@@ -300,6 +339,8 @@ int main()
     TestBootstrapThenOwnStates();
     TestSecondSetTextInOneRun();
     TestFontReloadResets();
+    TestFreshState();
+    TestStampedAsItGoesOut();
     TestDiesInsidePlayerTwosPass();
     TestDiesAside();
     TestMiddleRecordDropped();

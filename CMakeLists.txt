@@ -156,7 +156,9 @@ add_library(LocalSplitScreen SHARED
     src/hud/minimap/minimap.cpp
     src/hud/minimap/minimap_labels.cpp
     src/hud/minimap/minimap_icons.cpp
-    src/hud/minimap/label_states.cpp
+    src/hud/label_states.cpp
+    src/hud/text_blocks.cpp
+    src/hud/button_art.cpp
     src/world/party_warp.cpp
     src/world/strand_watch.cpp
     src/battle/battle_camera.cpp
@@ -441,7 +443,7 @@ lss_test(button_view)
 lss_test(settled_log)
 lss_test(ucpc_choice)
 lss_test(charapop_rule)
-lss_test(label_states src/hud/minimap/label_states.cpp)
+lss_test(label_states src/hud/label_states.cpp)
 lss_test(build_translation src/platform/build_translation.cpp)
 lss_test(vtable_entry src/platform/vtable_entry.cpp src/platform/module_pin.cpp src/platform/image.cpp
          src/platform/build_translation.cpp tests/log_console.cpp)
@@ -478,6 +480,7 @@ lss_test(ride_rules)
 lss_test(hud_rules)
 lss_test(pad_rules)
 lss_test(keyboard_route)
+lss_test(button_art)
 lss_test(player_window)
 lss_test(world_rules)
 lss_test(party_warp_rules)

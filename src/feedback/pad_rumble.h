@@ -10,9 +10,11 @@
 // Both levers are the game's own:
 //   - A (stock UE4): once per pair of controllers, before the world tick, the seat's PC calls
 //     AddTickPrerequisiteActor(PC1) through ProcessEvent: its actor tick, and so its send, comes after PC1's;
-//   - D (Square's input layer): while a seat is in, an input event from the seat's pad does not call
-//     SquareInput__NoteLastActiveDevice, so player 1's last device (rumble, button glyphs, disconnect check) stays
-//     player 1's.
+//   - D (Square's input layer): while a seat is in and views are split, an input event from the seat's pad does not
+//     call SquareInput__NoteLastActiveDevice, so player 1's last device (rumble, button glyphs, disconnect check) stays
+//     player 1's (each seat's view gets its own button art from hud/button_art). With one view on screen (menus,
+//     minigames, scenes) every pad notes itself, as in single player, so the game's art follows whoever plays; player
+//     1's rumble then follows that pad until player 1's next input.
 // Logged: the ordering call and the controller's prerequisite count, the device code on change, skips per minute.
 // Game thread.
 //

@@ -3,6 +3,7 @@
 #include "camera/camera_access.h"
 #include "facts/cameras.h"
 #include "facts/controller.h"
+#include "facts/engine.h"
 #include "platform/build_value.h"
 #include "platform/call_redirect.h"
 #include "platform/entry_redirect.h"
@@ -58,12 +59,6 @@ constexpr std::uintptr_t kConfirmCall = 0x140FE6BF9;  // in the confirm-key hand
 constexpr std::size_t kPrimaryApplyFirstInstruction = 5;
 
 // Split framing (research/RE-p2-framing.md, RE-p2-battle-camera.md).
-// GetSystemOptionData(): the global option struct (pure read: [[[g]+0x100]+0x28]+0x10).
-constexpr std::uint8_t kOptionDataBytes[] = {0x48, 0x8B, 0x05, 0x4D, 0x6F, 0x5B, 0x08, 0x48, 0x85, 0xC0, 0x74, 0x10,
-                                             0x48, 0x8B, 0x80, 0x00, 0x01, 0x00, 0x00};
-constexpr platform::FunctionFact kOptionData{L"GetSystemOptionData", 0x140C2162C, kOptionDataBytes};
-constexpr std::uint32_t kOptionFieldLevel  = 0x36;  // Camera Distance: Out of Battle
-constexpr std::uint32_t kOptionBattleLevel = 0x37;  // Camera Distance: In Battle
 constexpr std::uint32_t kOpInitialized     = 0xD2;  // the operator's lazy init ran (it seeds the level from the option)
 constexpr std::uint32_t kOpLevel           = 0x738;
 constexpr std::int32_t  kMinOffset = -2, kMaxOffset = 5;
@@ -193,8 +188,8 @@ bool OptionLevels(std::uint8_t& field, std::uint8_t& battle) noexcept
 {
     const std::uint8_t* options = nullptr;
     return g_optionData != nullptr && platform::CallGuarded(g_optionData, options) && options != nullptr &&
-           platform::CopyGuarded(&field, options + kOptionFieldLevel, 1) &&
-           platform::CopyGuarded(&battle, options + kOptionBattleLevel, 1);
+           platform::CopyGuarded(&field, options + facts::kOptionFieldCameraDistance, 1) &&
+           platform::CopyGuarded(&battle, options + facts::kOptionBattleCameraDistance, 1);
 }
 
 /// Drives one camera manager's field operator to level through the game's per-camera-manager setter,
@@ -292,7 +287,7 @@ bool Install(const platform::GameImage& image) noexcept
         return false;
     }
     g_managerApply        = reinterpret_cast<ManagerApplyFn>(*manager);
-    const auto options    = platform::FindFunction(image, kOptionData);
+    const auto options    = platform::FindFunction(image, facts::kSystemOptionData);
     g_optionData          = options ? reinterpret_cast<OptionDataFn>(*options) : nullptr;
     const bool setter  = InstallSetter(image, *primary);
     const bool confirm = g_confirmCall.Install(image, kConfirmCall, *manager,

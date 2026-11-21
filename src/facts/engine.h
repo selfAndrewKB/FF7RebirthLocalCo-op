@@ -481,6 +481,18 @@ inline constexpr std::uint32_t kGeometryScale       = 0x08;
 inline constexpr std::uint32_t kGeometryTranslation = 0x2C;
 
 // ---------------------------------------------------------------------------------------------
+// The system options
+// ---------------------------------------------------------------------------------------------
+
+/// GetSystemOptionData(): the global option struct (a pure read: [[[g]+0x100]+0x28]+0x10, or a static block before
+/// the options load); one byte per option.
+inline constexpr std::uint8_t kSystemOptionDataBytes[] = {0x48, 0x8B, 0x05, 0x4D, 0x6F, 0x5B, 0x08, 0x48, 0x85, 0xC0,
+                                                          0x74, 0x10, 0x48, 0x8B, 0x80, 0x00, 0x01, 0x00, 0x00};
+inline constexpr FunctionFact kSystemOptionData{L"GetSystemOptionData", 0x140C2162C, kSystemOptionDataBytes};
+inline constexpr std::uint32_t kOptionFieldCameraDistance  = 0x36;   // Camera Distance: Out of Battle
+inline constexpr std::uint32_t kOptionBattleCameraDistance = 0x37;   // Camera Distance: In Battle
+inline constexpr std::uint32_t kOptionButtonDisplay        = 0x1CC;  // 0 auto, 1 Xbox, 2 PlayStation, 3 a fourth set
+// ---------------------------------------------------------------------------------------------
 // The startup check list
 // ---------------------------------------------------------------------------------------------
 

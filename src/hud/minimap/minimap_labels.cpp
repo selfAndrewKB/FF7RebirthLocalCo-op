@@ -1,8 +1,8 @@
 #include "hud/minimap/minimap_labels.h"
 
-#include "facts/engine.h"
+#include "hud/label_states.h"
 #include "hud/minimap/label_relayouts.h"
-#include "hud/minimap/label_states.h"
+#include "hud/text_blocks.h"
 #include "platform/build_value.h"
 #include "platform/call_redirect.h"
 #include "platform/deferred_sites.h"
@@ -15,10 +15,8 @@
 
 #include <array>
 #include <atomic>
-#include <bit>
 #include <cstddef>
 #include <cstdint>
-#include <cstring>
 
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
@@ -33,7 +31,6 @@ namespace generation = players::generation;
 using label_states::LabelAccess;
 using label_states::LabelBook;
 using label_states::LabelCounts;
-using label_states::Parked;
 
 // research/RE-p2-minimap-cost.md (this build). SEndMapIcon::SetLabelText's one call into the text block's SetText:
 // `mov rdx,rbp` (the FString*), `mov rcx,rdi` (the SEndTextBlock, never null here), the call, then only rsi/rbp/rdi and
@@ -52,58 +49,11 @@ constexpr std::uint8_t   kSetTextBytes[]      = {0x48, 0x8B, 0xC4, 0x48, 0x89, 0
                                                  0x48, 0x89, 0x78, 0x18, 0x4C, 0x89, 0x70, 0x20, 0x55, 0x48, 0x8B,
                                                  0xEC, 0xB8, 0x50, 0x00, 0x00, 0x00, 0xE8, 0xAF, 0x3C, 0xFC};
 constexpr platform::FunctionFact kSetText{L"SEndTextBlock_SetText_RelayoutIfChanged", 0x1411A7EB0, kSetTextBytes};
-constexpr std::uint8_t   kRelayoutBytes[]     = {0x40, 0x55, 0x53, 0x56, 0x57, 0x41, 0x54, 0x41, 0x55, 0x41, 0x56,
-                                                 0x41, 0x57, 0x48, 0x8D, 0xAC, 0x24, 0xD8, 0xFE, 0xFF, 0xFF, 0xB8,
-                                                 0x28, 0x02, 0x00, 0x00, 0xE8, 0xB1, 0x9D, 0x04, 0x01, 0x48};
-// checked only: the state it writes is what is swapped
-constexpr platform::FunctionFact kRelayout{L"the text block's relayout", 0x141121DB0, kRelayoutBytes};
-// The text block's destructor frees the ranges with these (its offsets are checked below).
-constexpr std::uint8_t   kArrayDtorBytes[]    = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x74,
-                                                 0x24, 0x10, 0x57, 0xB8, 0x20, 0x00, 0x00, 0x00};
-// TArray<TArray<Run52>>
-constexpr platform::FunctionFact kRunsDtor{L"the runs array's destructor", 0x14088675C, kArrayDtorBytes};
-// TArray<TArray<Quad80>>
-constexpr platform::FunctionFact kQuadsDtor{L"the quads array's destructor", 0x140886704, kArrayDtorBytes};
-constexpr std::uint8_t   kDtorQuadsLeaBytes[] = {0x48, 0x8D, 0x8B, 0xA0, 0x05, 0x00, 0x00};
-// lea rcx,[rbx+5A0h]
-constexpr platform::FunctionFact kDtorQuadsLea{L"the destructor's quads lea", 0x1408865C9, kDtorQuadsLeaBytes};
-constexpr std::uint8_t   kDtorRunsLeaBytes[]  = {0x48, 0x8D, 0x8B, 0x30, 0x05, 0x00, 0x00};
-// lea rcx,[rbx+530h]
-constexpr platform::FunctionFact kDtorRunsLea{L"the destructor's runs lea", 0x140886605, kDtorRunsLeaBytes};
-constexpr std::uint8_t   kReleaseWeakBytes[]  = {0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8, 0xE2, 0x61,
-                                                 0x39, 0x01, 0x48, 0x2B, 0xE0, 0x83, 0x69, 0x0C};
-constexpr platform::FunctionFact kReleaseWeak{L"RefController_ReleaseWeakReference", 0x140DD5994, kReleaseWeakBytes};
-constexpr std::uint8_t   kInvalidateBytes[]   = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x74, 0x24, 0x10, 0x48, 0x89,
-                                                 0x7C, 0x24, 0x18, 0x55, 0x41, 0x56, 0x41, 0x57, 0x48, 0x8B, 0xEC, 0xB8};
-constexpr platform::FunctionFact kInvalidate{L"SWidget::Invalidate", 0x140B12B74, kInvalidateBytes};
-constexpr std::uint32_t  kInvalidateLayout    = 5;  // what the game's SetText passes after a relayout
-
-// The text block and its MakeShared block: the reference controller sits 0x10 before the widget (shared count +8, weak
-// count +0xC, not thread-safe), and TSharedFromThis keeps {widget, controller} at +0x8/+0x10.
-constexpr std::uintptr_t kTextBlockVTable  = 0x1455EA0C8;
-constexpr std::uintptr_t kPaintVTable      = 0x1455E9E08;  // at +0x2B0
-constexpr std::uintptr_t kGcObjectVTable   = 0x1455E9E10;  // at +0x2B8
-constexpr std::uintptr_t kControllerVTable = 0x1455E9DF8;
-constexpr std::uint32_t  kControllerBefore = 0x10;
-constexpr std::uint32_t  kWeakThisObject   = 0x08;
-constexpr std::uint32_t  kWeakThisCounter  = 0x10;
-constexpr std::uint32_t  kSharedCount      = 0x08;
-constexpr std::uint32_t  kWeakCount        = 0x0C;
-constexpr std::uint32_t  kPaintInterface   = 0x2B0;
-constexpr std::uint32_t  kGcObject         = 0x2B8;
-constexpr std::uint32_t  kGetterBound      = 0x2E8;  // the text attribute's getter (0: unbound)
-constexpr std::uint32_t  kRelayoutLock     = 0x564;
-constexpr std::uint32_t  kLanguageStamp    = 0x568;  // FName copied from a global (the language)
-constexpr std::uint32_t  kFont             = 0x2F0;  // the main and button font UObjects
-constexpr std::uint32_t  kButtonFont       = 0x2F8;
 constexpr std::uint32_t  kFastPathProxy    = 0x18;   // logged once (an invalidation root above the label)
 
 constexpr ULONGLONG kCountsPeriodMs = 120'000;
 
-using SetTextFn    = std::uint64_t (*)(void* textBlock, const void* text);
-using ArrayDtorFn  = void (*)(void* array);
-using ReleaseFn    = void (*)(void* controller);
-using InvalidateFn = void (*)(void* widget, std::uint32_t reason);
+using SetTextFn = std::uint64_t (*)(void* textBlock, const void* text);
 
 platform::CallRedirect g_call;
 // Game version 1.005 (research/RE-1005-hud-2.md): the call crosses a 16-byte block, so it is placed from
@@ -115,58 +65,29 @@ std::uintptr_t         g_callTarget     = 0;
 bool                   g_installed      = false;
 bool                   g_refused        = false;  // a swap faulted: no swaps until restart
 int                    g_runSeat        = 0;      // the seat whose holder run is inside (0: none)
-std::uintptr_t         g_textBlockVTable  = 0;
-std::uintptr_t         g_paintVTable      = 0;
-std::uintptr_t         g_gcObjectVTable   = 0;
-std::uintptr_t         g_controllerVTable = 0;
-ArrayDtorFn            g_quadsDtor      = nullptr;
-ArrayDtorFn            g_runsDtor       = nullptr;
-ArrayDtorFn            g_freeString     = nullptr;
-ReleaseFn              g_releaseWeak    = nullptr;
-InvalidateFn           g_invalidate     = nullptr;
 const wchar_t*         g_lastRefusal    = nullptr;
 bool                   g_loggedRefusal  = false;
 bool                   g_loggedFirst    = false;
-bool                   g_loggedInvalidateFault = false;
 std::array<LabelCounts, players::kMaxPlayers> g_loggedCounts{};  // by seat ([0] unused)
 ULONGLONG              g_countsAt       = 0;
 
-using platform::Read;  // the guarded reads: platform/guarded.h
-
-std::byte* ControllerOf(void* widget) noexcept
+void* ControllerOf(void* widget) noexcept
 {
-    return static_cast<std::byte*>(widget) - kControllerBefore;
+    return text_blocks::ControllerOf(widget);
 }
 
-// --- The engine side of the book (game thread) ---
-
+/// A label carries a seat's text and layout when it can carry a state at all, its text is its own (no bound getter)
+/// and its relayout is not locked (the game's SetText lays the seat's state out at once).
 bool Usable(void* widget) noexcept
 {
-    const std::byte* controller = ControllerOf(widget);
-    std::uintptr_t   vtable = 0, paint = 0, gc = 0, weakObject = 0, weakCounter = 0, controllerVTable = 0;
-    std::int32_t     shared = 0, getter = 0;
-    std::uint8_t     lock   = 0;
-    const wchar_t*   why    = nullptr;
-    if (!Read(widget, 0, vtable) || vtable != g_textBlockVTable || !Read(widget, kPaintInterface, paint) ||
-        paint != g_paintVTable || !Read(widget, kGcObject, gc) || gc != g_gcObjectVTable)
-    {
-        why = L"not an SEndTextBlock";
-    }
-    else if (!Read(widget, kWeakThisObject, weakObject) || weakObject != reinterpret_cast<std::uintptr_t>(widget) ||
-             !Read(widget, kWeakThisCounter, weakCounter) || weakCounter != reinterpret_cast<std::uintptr_t>(controller) ||
-             !Read(controller, 0, controllerVTable) || controllerVTable != g_controllerVTable)
-    {
-        why = L"not in its own MakeShared block";
-    }
-    else if (!Read(controller, kSharedCount, shared) || shared <= 0)
-    {
-        why = L"no shared reference";
-    }
-    else if (!Read(widget, kGetterBound, getter) || getter != 0)
+    std::int32_t   getter = 0;
+    std::uint8_t   lock   = 0;
+    const wchar_t* why    = text_blocks::Unswappable(widget);
+    if (why == nullptr && (!platform::Read(widget, text_blocks::kGetterBound, getter) || getter != 0))
     {
         why = L"its text has a bound getter";
     }
-    else if (!Read(widget, kRelayoutLock, lock) || lock != 0)
+    else if (why == nullptr && (!platform::Read(widget, text_blocks::kRelayoutLock, lock) || lock != 0))
     {
         why = L"its relayout is locked";
     }
@@ -174,95 +95,14 @@ bool Usable(void* widget) noexcept
     return why == nullptr;
 }
 
-bool Alive(void* controller) noexcept
-{
-    std::int32_t shared = 0;
-    return Read(controller, kSharedCount, shared) && shared > 0;
-}
-
-/// The four ranges exchanged with `parked`. Every read comes before any write, so a fault while reading changes
-/// nothing; the writes go to the addresses just read, so they are not expected to fault.
-bool Swap(void* widget, Parked& parked) noexcept
-{
-    auto* const w = static_cast<std::byte*>(widget);
-    __try
-    {
-        Parked held;
-        std::memcpy(held.text, w + label_states::kTextOffset, label_states::kTextSize);
-        std::memcpy(held.runs, w + label_states::kRunsOffset, label_states::kRunsSize);
-        std::memcpy(held.flags, w + label_states::kFlagsOffset, label_states::kFlagsSize);
-        std::memcpy(held.quads, w + label_states::kQuadsOffset, label_states::kQuadsSize);
-        std::memcpy(w + label_states::kTextOffset, parked.text, label_states::kTextSize);
-        std::memcpy(w + label_states::kRunsOffset, parked.runs, label_states::kRunsSize);
-        std::memcpy(w + label_states::kFlagsOffset, parked.flags, label_states::kFlagsSize);
-        std::memcpy(w + label_states::kQuadsOffset, parked.quads, label_states::kQuadsSize);
-        parked = held;
-        return true;
-    }
-    __except (platform::GuardFilterRecording(GetExceptionInformation()))
-    {
-        return false;
-    }
-}
-
-void Invalidate(void* widget) noexcept
-{
-    if (!platform::CallGuarded(g_invalidate, widget, kInvalidateLayout) && !g_loggedInvalidateFault)
-    {
-        g_loggedInvalidateFault = true;
-        platform::Log(L"minimap labels: SWidget::Invalidate raised an exception ({})",
-                      platform::DescribeFault(platform::LastFault()).text);
-    }
-}
-
-/// What a set-aside layout depends on outside the swapped ranges: the language stamp and both fonts.
-std::uint64_t Stamp(void* widget) noexcept
-{
-    std::uint64_t language = 0, font = 0, buttonFont = 0;
-    Read(widget, kLanguageStamp, language);
-    Read(widget, kFont, font);
-    Read(widget, kButtonFont, buttonFont);
-    return language ^ std::rotl(font, 21) ^ std::rotl(buttonFont, 42);
-}
-
-bool HoldWeak(void* controller) noexcept
-{
-    std::int32_t weak = 0;
-    if (!Read(controller, kWeakCount, weak) || weak <= 0)
-    {
-        return false;  // the widget's own WeakThis holds one: zero would be a block already going away
-    }
-    ++weak;
-    return platform::WriteGuarded(static_cast<std::byte*>(controller) + kWeakCount, &weak, sizeof(weak));
-}
-
-void ReleaseWeak(void* controller) noexcept
-{
-    platform::CallGuarded(g_releaseWeak, controller);
-}
-
-/// The destructor's own helpers, in its order, on a set-aside state; then it is the empty state again.
-void FreeParked(Parked& parked) noexcept
-{
-    bool freed = true;
-    for (std::size_t at : {0x30u, 0x20u, 0x10u, 0x00u})  // +0x5A0, +0x590, +0x580, +0x570
-    {
-        freed = platform::CallGuarded(g_quadsDtor, static_cast<void*>(parked.quads + at)) && freed;
-    }
-    for (std::size_t at : {0x10u, 0x00u})  // +0x540, +0x530
-    {
-        freed = platform::CallGuarded(g_runsDtor, static_cast<void*>(parked.runs + at)) && freed;
-    }
-    freed = platform::CallGuarded(g_freeString, static_cast<void*>(parked.text)) && freed;
-    if (!freed)
-    {
-        platform::Log(L"minimap labels: freeing a set-aside label state raised an exception ({})",
-                      platform::DescribeFault(platform::LastFault()).text);
-    }
-    parked = label_states::EmptyState();
-}
-
-constexpr LabelAccess kAccess{&Usable, &Alive, &Swap, &Invalidate, &Stamp, &HoldWeak, &ReleaseWeak, &FreeParked};
+constexpr LabelAccess kAccess{&Usable,
+                              &text_blocks::Alive,
+                              &text_blocks::SwapState,
+                              &text_blocks::Invalidate,
+                              &text_blocks::Stamp,
+                              &text_blocks::HoldWeak,
+                              &text_blocks::ReleaseWeak,
+                              &text_blocks::FreeParked};
 // Each seat's label states, by seat ([0] unused): the seat's own text and layout per label.
 static_assert(players::kMaxPlayers == 3, "one label book per player, listed below");
 std::array<LabelBook, players::kMaxPlayers> g_books{LabelBook(kAccess), LabelBook(kAccess), LabelBook(kAccess)};
@@ -276,7 +116,7 @@ void LogFirst(int seat, void* widget) noexcept
 {
     g_loggedFirst = true;
     std::uintptr_t proxy = 0;
-    Read(widget, kFastPathProxy, proxy);
+    platform::Read(widget, kFastPathProxy, proxy);
     platform::Log(L"minimap labels: {}'s first label state swapped in ({} labels; fast-path proxy {:#x})",
                   players::SeatName(seat), BookOf(seat).Count(), proxy);
 }
@@ -317,7 +157,7 @@ std::uint64_t SetText(void* textBlock, const void* text) noexcept
     {
         LabelBook&          book          = BookOf(seat);
         const std::uint64_t refusedBefore = book.Counts().refused;
-        if (!book.BeforeSetText(textBlock, ControllerOf(textBlock)))
+        if (!book.SwapIn(textBlock, ControllerOf(textBlock)))
         {
             g_refused = true;
             platform::Log(L"minimap labels: a label state swap raised an exception ({}); the labels are laid out per "
@@ -359,37 +199,16 @@ bool PlaceCall(const platform::GameImage&) noexcept
 
 bool Install(const platform::GameImage& image) noexcept
 {
-    const bool checked    = platform::FindFunction(image, kSetLabelText) && platform::FindFunction(image, kRelayout) &&
-                            platform::FindFunction(image, kSetTextArgs) &&
-                            platform::FindFunction(image, kSetTextAfter) &&
-                            platform::FindFunction(image, kDtorQuadsLea) && platform::FindFunction(image, kDtorRunsLea);
-    const auto callAt     = image.Rebase(kSetTextCall, 5);
-    const auto setText    = platform::FindFunction(image, kSetText);
-    const auto quads      = platform::FindFunction(image, kQuadsDtor);
-    const auto runs       = platform::FindFunction(image, kRunsDtor);
-    const auto freeString = platform::FindFunction(image, facts::kFreeArrayData);
-    const auto release    = platform::FindFunction(image, kReleaseWeak);
-    const auto invalidate = platform::FindFunction(image, kInvalidate);
-    const auto textBlock  = image.Rebase(kTextBlockVTable, sizeof(void*));
-    const auto paint      = image.Rebase(kPaintVTable, sizeof(void*));
-    const auto gcObject   = image.Rebase(kGcObjectVTable, sizeof(void*));
-    const auto controller = image.Rebase(kControllerVTable, sizeof(void*));
-    if (!checked || !callAt || !setText || !quads || !runs || !freeString || !release || !invalidate || !textBlock ||
-        !paint || !gcObject || !controller)
+    const bool checked = platform::FindFunction(image, kSetLabelText) && platform::FindFunction(image, kSetTextArgs) &&
+                         platform::FindFunction(image, kSetTextAfter);
+    const auto callAt  = image.Rebase(kSetTextCall, 5);
+    const auto setText = platform::FindFunction(image, kSetText);
+    if (!checked || !callAt || !setText || !text_blocks::Install(image))
     {
         platform::Log(L"minimap labels: the label code is not what the research read; each pass lays the labels out as "
                       L"before");
         return false;
     }
-    g_textBlockVTable  = *textBlock;
-    g_paintVTable      = *paint;
-    g_gcObjectVTable   = *gcObject;
-    g_controllerVTable = *controller;
-    g_quadsDtor        = reinterpret_cast<ArrayDtorFn>(*quads);
-    g_runsDtor         = reinterpret_cast<ArrayDtorFn>(*runs);
-    g_freeString       = reinterpret_cast<ArrayDtorFn>(*freeString);
-    g_releaseWeak      = reinterpret_cast<ReleaseFn>(*release);
-    g_invalidate       = reinterpret_cast<InvalidateFn>(*invalidate);
     g_callSite   = *callAt;
     g_callTarget = *setText;
     const bool crosses = platform::DeferredSites::Deferred() && (*callAt & 0xF) + 5 > 16;

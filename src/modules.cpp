@@ -35,6 +35,7 @@
 #include "feedback/sound_listeners.h"
 #include "feedback/traversal_rumble.h"
 #include "hud/battle/target_views.h"
+#include "hud/button_art.h"
 #include "hud/field/action_icon_base.h"
 #include "hud/field/field_markers.h"
 #include "hud/field/jet_gauges.h"
@@ -304,6 +305,8 @@ constexpr std::array kModules{
     Module{Call<&hud::InstallMinimapOnce>, &hud::RemoveMinimapOnce},
     // each seat's minimap in the seat's view
     Module{Call<&hud::minimap::Install>, &hud::minimap::Remove},
+    // each seat's view in its own device's button art
+    Module{Call<&hud::button_art::Install>, &hud::button_art::Remove},
     // each camera's location rows from its own player
     Module{Call<&camera::location_rows::Install>, &camera::location_rows::Remove},
     // each half's shoulder offset scaled to its width
@@ -580,6 +583,7 @@ void TickAfterSession(const Frame& frame) noexcept
     world::charapop_centre::Tick(frame.splitShown, plays);
     world::world_actor_reach::Tick(plays);
     hud::minimap::Tick(frame.splitShown);  // outside the overlay render, before it
+    hud::button_art::Tick();               // outside the overlay render: dead blocks' states dropped, a left seat's freed
     views::UpdateStreamViews(frame.splitShown);  // nothing until whole_screen's game-state check passed
     // Filled views: each main camera's own 16:9 constraint, cleared once by the game's setter, while several views
     // show (a seat's own, or the columns the mirror views fill: a mirror's column on a wider monitor would otherwise
@@ -931,6 +935,7 @@ void RegisterCommands(session::Session& session, views::column_source::Override&
         battle::lock_on::RegisterCommands();
         battle::menu_tint::RegisterCommands();
         hud::low_health::RegisterCommands();
+        hud::button_art::RegisterCommands();
         battle::enemy_leader::RegisterCommands();
         camera::shoulder_scale::RegisterCommands();
         camera::camera_distance::RegisterCommands();
