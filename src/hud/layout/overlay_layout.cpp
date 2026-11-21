@@ -89,6 +89,7 @@ void RecordColumn(const LayoutSize& layout, const OverlayBand& band) noexcept
     // particles: each column recorded this frame gets its box for them against it (hud/passes/ui_effect_pass.h); a
     // column whose band did not apply gets none; one not recorded keeps its last.
     const LayoutPoint anchor = GlowAnchor();
+    const float       size   = GlowSize();  // the gauge drawn at the HUD size: its glow's box with it
     for (int i = 0; i < overlay_pass::kMaxColumns; ++i)
     {
         if (!g_columnSeen[i])
@@ -97,7 +98,7 @@ void RecordColumn(const LayoutSize& layout, const OverlayBand& band) noexcept
         }
         const ColumnOverlay& seen = g_columnOverlay[i];
         const auto           box  = seen.band.imageHeight > 0 ? EffectViewport(layout, seen.layout, seen.band.band, seen.band.imageWidth,
-                                                                              seen.band.imageHeight, anchor)
+                                                                              seen.band.imageHeight, anchor, size)
                                                                : std::nullopt;
         ui_effect_pass::PublishColumnViewport(i, box.value_or(EffectBox{}), box.has_value());
         g_columnSeen[i] = false;

@@ -47,6 +47,14 @@ struct LayoutPoint
     bool operator==(const LayoutPoint&) const = default;
 };
 
+/// The render-transform pivot (a fraction of the widget's own size) that scales a widget about the `anchor` corner of its
+/// `width` x `height` area with its render translation scaled too. Slate draws a point p of the widget at
+/// pivot + scale * (p - pivot) + translation, the translation after the scale; with the pivot at corner - translation
+/// that is corner + scale * (p + translation - corner): the widget as the game places it, scaled about the corner. A
+/// widget without a translation gets the corner itself. Nullopt for an empty area.
+std::optional<LayoutPoint> CornerPivot(const LayoutPoint& anchor, const LayoutPoint& translation, float width,
+                                       float height) noexcept;
+
 /// The corner or edge of the 1920x1080 frame a point belongs to, by thirds on each axis (the
 /// field-action icons' slot-0 base (70, 957) belongs to the bottom left: (0, 1)).
 LayoutPoint AnchorOf(const LayoutPoint& point) noexcept;
@@ -74,11 +82,14 @@ struct EffectBox
 /// pass draws that one result over its whole image. The box makes `tickLayout`'s half-height the band's drawing of
 /// this column's `layout` units (its height = the band's times tickLayout's height over the layout's) and puts the
 /// centre where `tickLayout`'s centre falls in this column's band, moved by the distance the widget the points belong
-/// to (anchored at `anchor` of the 1920x1080 frame) stands from its design place in `layout`. The image's centre and
-/// height for a 16:9 column while `tickLayout` is 16:9 too; past an edge of the image for a wide or tall column, or
-/// for a 16:9 one beside a wide `tickLayout`. Nullopt for an unknown layout, band or image.
+/// to (anchored at `anchor` of the 1920x1080 frame) stands from its design place in `layout`; with that widget drawn at
+/// `size` about its anchored corner (hud/layout/hud_placement.h, the HUD size), the box is `size` times as tall and its
+/// centre moves with the widget's points. The image's centre and height for a 16:9 column while `tickLayout` is 16:9 too
+/// at size 1; past an edge of the image for a wide or tall column, for a 16:9 one beside a wide `tickLayout`, or above
+/// size 1 at a bottom or right corner. Nullopt for an unknown layout, band, image or size.
 std::optional<EffectBox> EffectViewport(const LayoutSize& tickLayout, const LayoutSize& layout, const IntRect& band,
-                                        std::int32_t imageWidth, std::int32_t imageHeight, const LayoutPoint& anchor) noexcept;
+                                        std::int32_t imageWidth, std::int32_t imageHeight, const LayoutPoint& anchor,
+                                        float size = 1.0f) noexcept;
 
 /// Whether a widget placed at `position` (its top-left, in layout units) starts outside a layout of
 /// `width` x `height` units, where it is not painted (and so not ticked). False for an unknown

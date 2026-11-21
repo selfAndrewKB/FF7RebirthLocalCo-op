@@ -13,13 +13,17 @@
 #include "hud/hud_rules.h"
 #include "hud/layout/viewport_placement.h"
 #include "hud/user_widgets.h"
+#include "platform/command_registry.h"
 #include "platform/frame_watch.h"
 #include "platform/guarded.h"
+#include "platform/settings.h"
 #include "players/object_slot.h"
 #include "platform/log.h"
 #include "players/unreal_access.h"
+#include "views/window_span.h"
 
 #include <algorithm>
+#include <atomic>
 #include <cstdint>
 #include <cstring>
 #include <format>
@@ -46,7 +50,8 @@ struct Placement
     const wchar_t* className;
     float          anchorX;  // the corner or edge of the half its 1920x1080 area goes to
     float          anchorY;
-    bool           glow = false;  // the summon time gauge, whose tick places the glow: the UI particles' boxes follow its corner
+    bool           glow  = false;  // the summon time gauge, whose tick places the glow: the UI particles' boxes follow its corner
+    bool           sized = true;   // drawn at the HUD size (the button prompts keep the game's size)
 };
 // The field-action icons ("Call Chocobo") are not here: the game places them at points it computes
 // from each icon's own base, so they keep their corner through that base (hud/field/action_icon_base.h).
@@ -55,7 +60,7 @@ constexpr Placement kPlacements[] = {
     {L"EventProgress_00_C", 0.0f, 0.0f},  // top left: the World Intel panel (its objective list and prompt)
     {L"NaviMap_End2_C", 1.0f, 0.0f},      // top right: the minimap
     {L"Command_C", 0.0f, 1.0f},           // bottom left: command menu and its prompt
-    {L"BasicGuide_C", 0.0f, 1.0f},        // bottom left: button prompts
+    {L"BasicGuide_C", 0.0f, 1.0f, false, false},  // bottom left: button prompts (the game's size)
     {L"Status_C", 1.0f, 1.0f},            // bottom right: the Members panel
     // Bottom right, above the Members panel: the summon gauges (their own offset puts them at 1508,620 of the area;
     // research/RE-summon-gauge.md).
@@ -63,6 +68,25 @@ constexpr Placement kPlacements[] = {
     {L"SummonTimeGauge_C", 1.0f, 1.0f, true},  // the summon's name and its time left; its tick places the glow
 };
 constexpr std::uint32_t kScanTicks = 30;
+
+/// A root's render transform as far as the HUD size touches it: its scale and pivot, and the translation the pivot
+/// accounts for (the summon gauges' own setup moves them into place with it), read only.
+struct RenderScale
+{
+    float scale[2]       = {1.0f, 1.0f};
+    float pivot[2]       = {0.5f, 0.5f};
+    float translation[2] = {};
+
+    bool SameScaleAndPivot(const RenderScale& other) const noexcept
+    {
+        return scale[0] == other.scale[0] && scale[1] == other.scale[1] && pivot[0] == other.pivot[0] &&
+               pivot[1] == other.pivot[1];
+    }
+    bool SameTranslation(const RenderScale& other) const noexcept
+    {
+        return translation[0] == other.translation[0] && translation[1] == other.translation[1];
+    }
+};
 
 struct Placed
 {
@@ -76,6 +100,12 @@ struct Placed
     std::uint32_t     lastPlacedTick = 0;
     std::uint32_t     streak         = 0;  // re-placements on (nearly) consecutive ticks
     std::uint32_t     followed       = 0;  // game re-sets placed again (reported when the split ends)
+    RenderScale       gameScale;              // the game's own scale and pivot, set back at size 1 and when the split ends
+    RenderScale       sized;                  // what the size set, with the translation it was set for
+    float             size            = 1.0f;   // the HUD size set on the root (1: the game's transform untouched)
+    bool              sizeLeft        = false;  // a setter failed on this root: the HUD size leaves it alone
+    bool              toldOwnScale    = false;  // the game's own scale on this root has been logged
+    bool              toldTranslation = false;  // the root's own translation has been logged
 };
 
 // A root whose layout the game sets again on this many ticks in a row is left to the game: the two
@@ -179,6 +209,198 @@ bool Alive(const Placed& placed) noexcept
 {
     return players::LiveInSlot(placed.index, placed.widget) && placed.widget->GetClassPrivate() == placed.cls;
 }
+
+// --- The HUD size ----------------------------------------------------------------------------------------------------
+
+// The HUD size (the settings file's [Views] hud-scale; research/RE-hud-size-option.md): one factor for every view's
+// pinned roots in a split window, each scaled about the corner it is anchored to, so it stays in that corner of its view.
+// World markers are other roots, not listed here, and keep the game's size. Set by the console's command and the Co-op
+// page's commit, read by the placement and the glow's box, all on the game thread; atomic for the console's reading.
+std::atomic<float> g_hudScale{1.0f};
+float              g_sizeLogged = -1.0f;  // the size the last line reported in effect
+
+/// UWidget's render transform setters, which hand the transform to the root's Slate widget.
+struct SizeSetters
+{
+    Setter scale;  // SetRenderScale
+    Setter pivot;  // SetRenderTransformPivot
+};
+std::optional<SizeSetters> g_sizeSetters;  // found once the viewport setters are; game thread only
+bool                       g_sizeSettersMissingLogged = false;
+
+std::optional<SizeSetters> FindSizeSetters()
+{
+    const auto scale = FindSetter(STR("/Script/UMG.Widget:SetRenderScale"), STR("Scale"), 8);
+    const auto pivot = FindSetter(STR("/Script/UMG.Widget:SetRenderTransformPivot"), STR("Pivot"), 8);
+    return scale && pivot ? std::optional<SizeSetters>(SizeSetters{*scale, *pivot}) : std::nullopt;
+}
+
+/// The HUD size's words, "0.75" to "1.50", as factors.
+std::optional<float> FactorOf(const std::wstring& word) noexcept
+{
+    const auto step = platform::settings::WordIndex(platform::settings::kHudScale, word);
+    return step ? std::optional<float>(platform::settings::HudScaleOf(*step)) : std::nullopt;
+}
+
+std::wstring WordOfFactor(float factor)
+{
+    for (std::size_t i = 0; i < platform::settings::kHudScaleWords.size(); ++i)
+    {
+        if (platform::settings::HudScaleOf(i) == factor)
+        {
+            return platform::settings::kHudScaleWords[i];
+        }
+    }
+    return std::format(L"{:.2f}", factor);
+}
+
+std::optional<RenderScale> ReadScale(const UObject* widget) noexcept
+{
+    const auto* base = reinterpret_cast<const std::uint8_t*>(widget);
+    RenderScale scale;
+    if (!CopyGuarded(scale.scale, base + facts::kWidgetRenderScale, sizeof(scale.scale)) ||
+        !CopyGuarded(scale.pivot, base + facts::kWidgetRenderPivot, sizeof(scale.pivot)) ||
+        !CopyGuarded(scale.translation, base + facts::kWidgetRenderTranslation, sizeof(scale.translation)))
+    {
+        return std::nullopt;
+    }
+    return scale;
+}
+
+/// The scale and pivot through the game's setters (the translation stays the game's).
+bool ApplyScale(UObject* widget, const RenderScale& scale) noexcept
+{
+    return Call(widget, g_sizeSetters->pivot, scale.pivot, 2) && Call(widget, g_sizeSetters->scale, scale.scale, 2);
+}
+
+/// The root at `size` about its placement's corner, its translation `now` scaled with it (CornerPivot); none for an
+/// area without a size.
+std::optional<RenderScale> ScaleAt(const Placed& placed, const RenderScale& now, float size) noexcept
+{
+    const auto pivot = CornerPivot({placed.placement->anchorX, placed.placement->anchorY},
+                                   {now.translation[0], now.translation[1]}, placed.applied.offsets[2],
+                                   placed.applied.offsets[3]);
+    if (!pivot)
+    {
+        return std::nullopt;
+    }
+    return RenderScale{{size, size}, {pivot->x, pivot->y}, {now.translation[0], now.translation[1]}};
+}
+
+/// A sized root whose scale or pivot the game has set since: each of the two the mod set and the game has not touched
+/// goes back to the game's own (the mod's scale off a root the game gave a pivot, the game's pivot back on a root it
+/// rescaled), and the root is the game's for the rest of the split.
+void HandBack(Placed& placed, const RenderScale& now) noexcept
+{
+    const bool ownScale = now.scale[0] == placed.sized.scale[0] && now.scale[1] == placed.sized.scale[1];
+    const bool ownPivot = now.pivot[0] == placed.sized.pivot[0] && now.pivot[1] == placed.sized.pivot[1];
+    const bool put      = (!ownPivot || Call(placed.widget, g_sizeSetters->pivot, placed.gameScale.pivot, 2)) &&
+                     (!ownScale || Call(placed.widget, g_sizeSetters->scale, placed.gameScale.scale, 2));
+    placed.size     = 1.0f;
+    placed.sizeLeft = true;
+    platform::Log(L"HUD size: the game set {}'s render {} since it was sized; the game's own {} put back{}, the root left to "
+                  L"the game for the rest of the split",
+                  placed.placement->className, ownScale ? L"pivot" : ownPivot ? L"scale" : L"scale and pivot",
+                  ownScale ? L"scale" : ownPivot ? L"pivot" : L"transform kept",
+                  put ? L"" : L" (a setter raised an exception)");
+}
+
+/// Sets a placed root to the HUD size: scaled about its corner with its translation, or at 1 its game's transform
+/// back. A root the game scales itself (its render scale not 1 when it would be sized) is left at the game's transform
+/// and looked at again each tick; one whose scale or pivot the game set since it was sized is handed back (HandBack);
+/// one whose translation the game moved since gets its pivot again.
+void SizeRoot(Placed& placed, float size)
+{
+    if (!g_sizeSetters || placed.placement == nullptr || !placed.placement->sized || placed.sizeLeft ||
+        (size == 1.0f && placed.size == 1.0f) || !Alive(placed))
+    {
+        return;
+    }
+    const auto now = ReadScale(placed.widget);
+    if (!now)
+    {
+        return;
+    }
+    bool moved = false;
+    if (placed.size != 1.0f && !now->SameScaleAndPivot(placed.sized))
+    {
+        HandBack(placed, *now);
+        return;
+    }
+    if (placed.size != 1.0f && !now->SameTranslation(placed.sized))
+    {
+        moved = true;
+        platform::LogTrace(L"HUD size: {} was moved by the game ({:.0f},{:.0f}); its pivot follows", placed.placement->className,
+                           now->translation[0], now->translation[1]);
+    }
+    if (size == placed.size && !moved)
+    {
+        return;
+    }
+    if (placed.size == 1.0f)
+    {
+        if (now->scale[0] != 1.0f || now->scale[1] != 1.0f)
+        {
+            if (!placed.toldOwnScale)
+            {
+                placed.toldOwnScale = true;
+                platform::Log(L"HUD size: {} has a render scale of its own ({:.2f}x{:.2f}); left at the game's while it "
+                              L"does (logged once per root)",
+                              placed.placement->className, now->scale[0], now->scale[1]);
+            }
+            return;
+        }
+        placed.gameScale = *now;
+    }
+    const auto wanted = size == 1.0f ? std::optional(placed.gameScale) : ScaleAt(placed, *now, size);
+    if (!wanted)
+    {
+        return;
+    }
+    if (ApplyScale(placed.widget, *wanted))
+    {
+        if (size != 1.0f && (now->translation[0] != 0.0f || now->translation[1] != 0.0f) && !placed.toldTranslation)
+        {
+            placed.toldTranslation = true;
+            platform::Log(L"HUD size: {} carries a translation of its own ({:.0f},{:.0f}); its pivot ({:.3f},{:.3f}) scales it "
+                          L"about the corner with the root",
+                          placed.placement->className, now->translation[0], now->translation[1], wanted->pivot[0],
+                          wanted->pivot[1]);
+        }
+        placed.size  = size;
+        placed.sized = *wanted;
+        return;
+    }
+    ApplyScale(placed.widget, placed.gameScale);
+    placed.size     = 1.0f;
+    placed.sizeLeft = true;
+    platform::Log(L"HUD size: a setter raised an exception for {}; its own transform set back", placed.placement->className);
+}
+
+/// The size in effect: the setting in a split window; a row of monitors keeps the game's size (each of its views is
+/// already as big as single player's).
+float SizeNow(bool splitLayout) noexcept
+{
+    return splitLayout && !views::window_span::In() ? g_hudScale.load(std::memory_order_relaxed) : 1.0f;
+}
+
+#if LSS_DEV
+/// For the console: the setting, the size in effect, and each placed root's size and live transform.
+std::wstring SizeReading()
+{
+    std::wstring text = std::format(L"setting x{:.2f}, in effect x{:.2f}; {} root(s)", g_hudScale.load(std::memory_order_relaxed),
+                                    g_sizeLogged, g_placed.size());
+    for (const Placed& placed : g_placed)
+    {
+        text += std::format(L"; {}: size {:.2f}{}", placed.placement->className, placed.size, placed.sizeLeft ? L" (left)" : L"");
+        const auto now = Alive(placed) ? ReadScale(placed.widget) : std::nullopt;
+        text += now ? std::format(L", scale {:.3f}x{:.3f} pivot ({:.3f},{:.3f}) translation ({:.1f},{:.1f})", now->scale[0],
+                                  now->scale[1], now->pivot[0], now->pivot[1], now->translation[0], now->translation[1])
+                    : std::wstring(L", not readable");
+    }
+    return text;
+}
+#endif
 
 /// Each widget class's placement (or none), found once per class: comparing class names for every
 /// widget at every scan costs far more than the scan itself.
@@ -333,6 +555,7 @@ void RestoreAll(const Setters& set)
     int restored = 0;
     for (auto& placed : g_placed)
     {
+        SizeRoot(placed, 1.0f);  // the game's own scale and pivot back
         if (placed.followed > 0)
         {
             platform::Log(L"HUD placement: {} was set by the game {} time(s) during the split; each placed again",
@@ -360,8 +583,9 @@ void RestoreAll(const Setters& set)
             platform::Log(L"HUD placement: a setter raised an exception setting {} back", placed.placement->className);
         }
     }
-    platform::Log(L"HUD placement: {} widget(s) set back to the game's own viewport layout", restored);
+    platform::Log(L"HUD placement: {} widget(s) set back to the game's own viewport layout and size", restored);
     g_placed.clear();
+    g_sizeLogged = -1.0f;  // the next split says its size again
 }
 
 }  // namespace
@@ -376,6 +600,60 @@ LayoutPoint GlowAnchor() noexcept
         }
     }
     return {1.0f, 1.0f};
+}
+
+float GlowSize() noexcept
+{
+    for (const Placed& placed : g_placed)
+    {
+        if (placed.placement != nullptr && placed.placement->glow && placed.managed && !placed.sizeLeft && Alive(placed))
+        {
+            return placed.size;
+        }
+    }
+    return 1.0f;
+}
+
+void InstallHudSize() noexcept
+try
+{
+    namespace settings = platform::settings;
+    g_hudScale.store(FactorOf(settings::Of(settings::kHudScale).word).value_or(1.0f), std::memory_order_relaxed);
+    platform::Log(L"HUD size: x{:.2f} in a split window ({})", g_hudScale.load(std::memory_order_relaxed),
+                  settings::Why(settings::kHudScale));
+    control::RegisterOption(
+        settings::kHudScale,
+        [](const std::wstring& word) {
+            const auto factor = FactorOf(word);
+            if (!factor)
+            {
+                return control::Outcome{false, L"not a size from 0.75 to 1.50 in steps of 0.05"};
+            }
+            g_hudScale.store(*factor, std::memory_order_relaxed);
+            platform::Log(L"HUD size: x{:.2f} in a split window (set)", *factor);
+            return control::Outcome{};
+        },
+        [] { return WordOfFactor(g_hudScale.load(std::memory_order_relaxed)); });
+#if LSS_DEV
+    control::Register({.name  = L"hud.size-roots",
+                       .shape = control::Shape::Text,
+                       .help  = L"(read only) each placed HUD root: the size set on it, and its live render scale, pivot and "
+                                L"translation",
+                       .get   = [] {
+                           try
+                           {
+                               return control::Value{SizeReading()};
+                           }
+                           catch (...)
+                           {
+                               return control::Value{std::wstring(L"unreadable (an exception)")};
+                           }
+                       }});
+#endif
+}
+catch (...)
+{
+    platform::Log(L"HUD size: the setting could not be registered (an exception); the HUD keeps the game's size");
 }
 
 void UpdateHudPlacement(bool splitLayout) noexcept
@@ -415,6 +693,28 @@ void UpdateHudPlacement(bool splitLayout) noexcept
         if (!g_renderFollows)
         {
             FollowGameChanges(*g_setters);  // no render hook: a moved widget is placed a frame late
+        }
+        if (!g_sizeSetters && g_ticks % kScanTicks == 0)
+        {
+            g_sizeSetters = FindSizeSetters();  // retried with the scans
+            if (!g_sizeSetters && !g_sizeSettersMissingLogged)
+            {
+                g_sizeSettersMissingLogged = true;
+                platform::LogWarning(L"HUD size: UWidget's render transform setters not found; retrying, the HUD keeps the "
+                                     L"game's size meanwhile");
+            }
+        }
+        const float size = SizeNow(splitLayout);
+        if (size != g_sizeLogged && g_sizeSetters)
+        {
+            g_sizeLogged = size;
+            platform::Log(L"HUD size: x{:.2f} on the minimap, compass, World Intel panel, command menu, Members panel and "
+                          L"summon gauges{}",
+                          size, size == 1.0f && views::window_span::In() ? L" (a row of monitors keeps the game's size)" : L"");
+        }
+        for (Placed& placed : g_placed)
+        {
+            SizeRoot(placed, placed.managed ? size : 1.0f);  // a root left to the game gets the game's transform back
         }
     }
     catch (...)

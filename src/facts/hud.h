@@ -204,6 +204,13 @@ inline constexpr std::uint32_t kUserWidgetViewportOffsets   = 0x220;  // FMargin
 inline constexpr std::uint32_t kUserWidgetViewportAlignment = 0x230;  // FVector2D, 8 bytes
 inline constexpr std::uint32_t kUserWidgetViewportLayoutEnd = 0x238;
 
+// Its render transform as UWidget keeps it (stock 4.26 FWidgetTransform and RenderTransformPivot, RE-hud-size-option.md):
+// the translation and the scale (x, y floats each) and the pivot (a fraction of the widget's own size), which the root's
+// SEndCanvas arranges it with. Read only: changes go through the reflected SetRenderScale and SetRenderTransformPivot.
+inline constexpr std::uint32_t kWidgetRenderTranslation = 0x90;
+inline constexpr std::uint32_t kWidgetRenderScale       = 0x98;
+inline constexpr std::uint32_t kWidgetRenderPivot       = 0xAC;
+
 /// UUserWidget::SetPositionInViewport(widget, FVector2D, bRemoveDPIScale): the stock setter the game's Blueprints
 /// place widgets with (hud/position_probe) and the enemy gauges' placement calls.
 inline constexpr std::uint8_t kSetPositionInViewportPrologue[] = {0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00};

@@ -6,6 +6,7 @@
 #include "platform/image.h"
 #include "platform/log.h"
 #include "platform/seqlock.h"
+#include "platform/settings.h"
 #include "platform/verified_code.h"
 
 #if LSS_DEV
@@ -52,6 +53,9 @@ struct Viewport
 using SetupFn = void* (*)(void* commandList, void* scene, void* view, const std::int32_t* extent, void* out);
 
 constexpr int kMaxColumns = overlay_pass::kMaxColumns;
+/// The tallest box a column's published viewport may have, in images: two (a 16:9 column under a tall tick layout)
+/// at the largest HUD size, with room for the float arithmetic's rounding.
+constexpr float kTallestBox = 2.0f * platform::settings::HudScaleOf(platform::settings::kHudScaleSteps - 1) * 1.001f;
 
 enum Outcome : int
 {
@@ -252,10 +256,11 @@ void PublishColumnViewport(int column, const EffectBox& box, bool applies) noexc
     {
         return;
     }
-    // The box within reason: a height of up to two images (a tall layout's), a centre at most an image away (a column
-    // of another layout than the tick's moves the box past an edge, never further).
+    // The box within reason: a height of up to two images (a 16:9 column under a tall layout's tick) times the largest
+    // HUD size, a centre at most an image away (a column of another layout than the tick's moves the box past an edge,
+    // never further).
     const bool usable = applies && std::isfinite(box.centreX) && std::isfinite(box.centreY) && std::isfinite(box.height) &&
-                        box.height > 0.0f && box.height <= 2.0f && box.centreX > -1.0f && box.centreX < 2.0f &&
+                        box.height > 0.0f && box.height <= kTallestBox && box.centreX > -1.0f && box.centreX < 2.0f &&
                         box.centreY > -1.0f && box.centreY < 2.0f;
     g_boxes[static_cast<std::size_t>(column)].Publish(usable ? std::array<float, 4>{box.centreX, box.centreY, box.height, 1.0f}
                                                              : std::array<float, 4>{0.5f, 0.5f, 1.0f, 0.0f});

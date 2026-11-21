@@ -298,6 +298,8 @@ constexpr std::array kModules{
     Module{Call<&hud::InstallLayoutScale>, &hud::RemoveLayoutScale},
     // HUD widgets as the engine constructs them
     Module{Call<&hud::user_widgets::Install>, &hud::user_widgets::Remove},
+    // the HUD pinned to each view's corners drawn at the HUD size in a split window (the placement sets it back)
+    Module{Call<&hud::InstallHudSize>, nullptr},
     // each seat's HUD image, on (the hud-image command switches it)
     Module{Call<&hud::InstallColumnHudImages>, &hud::RemoveColumnHudImages},
     // The UI particles (the summon gauge's glow) drawn through each column's band map (hud/passes/ui_effect_pass.h):

@@ -70,26 +70,39 @@ LayoutPoint KeepDistanceFromAnchor(const LayoutPoint& original, const LayoutPoin
     return {original.x + anchor.x * (width - kHudFrameWidth), original.y + anchor.y * (height - kHudFrameHeight)};
 }
 
+std::optional<LayoutPoint> CornerPivot(const LayoutPoint& anchor, const LayoutPoint& translation, float width,
+                                       float height) noexcept
+{
+    if (!(width > 0.0f) || !(height > 0.0f) || !std::isfinite(translation.x) || !std::isfinite(translation.y))
+    {
+        return std::nullopt;
+    }
+    return LayoutPoint{anchor.x - translation.x / width, anchor.y - translation.y / height};
+}
+
 std::optional<EffectBox> EffectViewport(const LayoutSize& tickLayout, const LayoutSize& layout, const IntRect& band,
-                                        std::int32_t imageWidth, std::int32_t imageHeight, const LayoutPoint& anchor) noexcept
+                                        std::int32_t imageWidth, std::int32_t imageHeight, const LayoutPoint& anchor,
+                                        float size) noexcept
 {
     if (!(tickLayout.width > 0.0f) || !(tickLayout.height > 0.0f) || !(layout.width > 0.0f) || !(layout.height > 0.0f) ||
         band.Width() <= 0 || band.Height() <= 0 || imageWidth <= 0 || imageHeight <= 0 || !std::isfinite(anchor.x) ||
-        !std::isfinite(anchor.y))
+        !std::isfinite(anchor.y) || !std::isfinite(size) || !(size > 0.0f))
     {
         return std::nullopt;
     }
     // The band's drawing: layout units onto the band's pixels. The game's result is in half-heights of `tickLayout`,
     // and the draw puts one half-height at half the box, so the box is tickLayout's height in the band's pixels per
     // unit. The game converts the design point against `tickLayout`'s centre, so a point at that centre lands at the
-    // box's centre; in this column the widget the points belong to stands anchor * (layout - frame) from its design
-    // place, so the centre goes there too.
+    // box's centre. In this column the widget the points belong to has its anchored corner at anchor * layout, and a
+    // design point d stands `size` times its distance from that corner (anchor * frame in the design):
+    // anchor * layout + size * (d - anchor * frame). The centre goes where d = tickLayout / 2 lands, and the box is
+    // `size` times as tall. At size 1 that is tickLayout / 2 + anchor * (layout - frame).
     const float scale   = static_cast<float>(band.Height()) / layout.height;
     const float centreX = static_cast<float>(band.minX) +
-                          (tickLayout.width / 2.0f + anchor.x * (layout.width - kHudFrameWidth)) * scale;
+                          (anchor.x * layout.width + size * (tickLayout.width / 2.0f - anchor.x * kHudFrameWidth)) * scale;
     const float centreY = static_cast<float>(band.minY) +
-                          (tickLayout.height / 2.0f + anchor.y * (layout.height - kHudFrameHeight)) * scale;
-    const float height = tickLayout.height * scale;
+                          (anchor.y * layout.height + size * (tickLayout.height / 2.0f - anchor.y * kHudFrameHeight)) * scale;
+    const float height = size * tickLayout.height * scale;
     return EffectBox{centreX / static_cast<float>(imageWidth), centreY / static_cast<float>(imageHeight),
                      height / static_cast<float>(imageHeight)};
 }
