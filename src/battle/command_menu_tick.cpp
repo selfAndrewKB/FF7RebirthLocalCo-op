@@ -1,5 +1,6 @@
 #include "battle/command_menu_tick.h"
 
+#include "battle/action_locks.h"
 #include "battle/command_menu.h"
 #include "battle/command_menu_tick_shared.h"
 #include "battle/command_rules.h"
@@ -497,11 +498,15 @@ void SetMenuAllowed(void* controller, std::uint8_t on, std::uint8_t keepPending)
         g_menuAllowedSaid = on;
         Line(std::format(L"menu allowed {} on the game's controller; players 2 and 3's controllers follow", on));
     }
-    // An allow on a seat's controller that already allows its menu changes nothing (an off still closes what is open).
+    // An allow on a seat's controller that already allows its menu changes nothing (an off still closes what is open),
+    // nor one while the seat's own action holds its menu (its pass allows it once that action ends).
     RepeatOnSeats(controller, L"menu allowed", on,
                   [on](std::uintptr_t ctrl) { return on == 0 || ReadAt<std::uint8_t>(ctrl + kCmdMenuAllowed) != on; },
                   [on, keepPending](int seat, std::uintptr_t ctrl, std::uint8_t) {
-                      SetSeatMenuAllowed(seat, ctrl, on, keepPending, L"the game's call");
+                      if (on == 0 || action_locks::Held(seat) == 0)
+                      {
+                          SetSeatMenuAllowed(seat, ctrl, on, keepPending, L"the game's call");
+                      }
                   });
 }
 
@@ -742,11 +747,13 @@ void Refused(int seat, const wchar_t* why) noexcept
 
 /// The menu-allowed value the game stored on its controller without its setter (the on/off table's lock cleared) or set
 /// while the seat's controller could not take it, made on the seat's through the setter in the seat's pass (a value it
-/// did not take is tried again every kMenuAllowedRetryGap ticks). An off clears the seat's records and pending open
-/// (keepPending 0): a catch-up leaves nothing open that the game has forbidden.
+/// did not take is tried again every kMenuAllowedRetryGap ticks), shut while the seat's own actions hold a lock on its
+/// menu (battle/action_locks), as the table's applier shuts player 1's. An off clears the seat's records and pending
+/// open (keepPending 0): a catch-up leaves nothing open that the game has forbidden.
 void CatchUpMenuAllowed(int seat, std::uintptr_t ctrl, std::uintptr_t ctrl1) noexcept
 {
-    const auto want = ReadAt<std::uint8_t>(ctrl1 + kCmdMenuAllowed);
+    const bool ownLock = action_locks::Held(seat) > 0;
+    const auto want    = ownLock ? std::uint8_t{0} : ReadAt<std::uint8_t>(ctrl1 + kCmdMenuAllowed);
     if (g_menuAllowed == nullptr || ReadAt<std::uint8_t>(ctrl + kCmdMenuAllowed) == want)
     {
         return;
@@ -755,7 +762,7 @@ void CatchUpMenuAllowed(int seat, std::uintptr_t ctrl, std::uintptr_t ctrl1) noe
     {
         return;
     }
-    SetSeatMenuAllowed(seat, ctrl, want, 0, L"caught up");
+    SetSeatMenuAllowed(seat, ctrl, want, 0, ownLock ? L"their own action" : L"caught up");
 }
 
 /// After a seat's pass outside battle: its first is logged once per stretch outside battle, with the menu member it

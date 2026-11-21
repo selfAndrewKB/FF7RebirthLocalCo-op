@@ -1,5 +1,6 @@
 #include "session/seat_out.h"
 
+#include "battle/action_locks.h"
 #include "battle/lock_on.h"
 #include "camera/camera_override.h"
 #include "feedback/seat_ffb_managers.h"
@@ -16,6 +17,7 @@ void LetGo(int seat) noexcept
     }
     camera::camera_override::SeatOut(seat);  // the member's camera delegates back to the engine's, while it is still held
     battle::lock_on::SeatOut(seat);
+    battle::action_locks::SeatOut(seat);  // the locks counted for the seat's own actions (the game never held them)
     // Stops the seat's channels while it can still be the primary player.
     feedback::traversal_rumble::SeatOut(seat);
     feedback::seat_ffb_managers::SeatOut(seat);  // the seat's component back on the game's force-feedback manager

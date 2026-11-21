@@ -173,6 +173,7 @@ add_library(LocalSplitScreen SHARED
     src/camera/seat_responsiveness.cpp
     src/camera/main_camera_shape.cpp
     src/battle/command_locks.cpp
+    src/battle/action_locks.cpp
     src/battle/battle_rates.cpp
     src/battle/battle_warps.cpp
     src/battle/equal_targeting.cpp

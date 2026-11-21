@@ -1,5 +1,6 @@
 #include "modules.h"
 
+#include "battle/action_locks.h"
 #include "battle/battle_camera.h"
 #include "battle/battle_rates.h"
 #include "battle/battle_warps.h"
@@ -208,6 +209,8 @@ constexpr std::array kModules{
     Module{Call<&battle::summon_seats::Install>, &battle::summon_seats::Remove},
     // the battle's command locks reach it by the game's setters
     Module{Call<&battle::command_locks::Install>, &battle::command_locks::Remove},
+    // each player's own actions lock their own command menu, not everyone's
+    Module{Call<&battle::action_locks::Install>, &battle::action_locks::Remove},
     // ticked in battle; each seat's attack, guard and dodge
     Module{Call<&battle::command_menu_tick::Install>, &battle::command_menu_tick::Remove},
     // the low-health red edge in each player's own view, on that player's own danger (after the controllers' tick)

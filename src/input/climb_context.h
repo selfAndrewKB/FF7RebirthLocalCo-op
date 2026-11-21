@@ -81,6 +81,9 @@ int PlayerHere() noexcept;
 /// thread.
 int SeatHere() noexcept;
 
+/// The seat whose member's player type is `type`, from the types noted at each engine tick (Tick), or 0. Any thread.
+int SeatOfType(int type) noexcept;
+
 /// Whose character a traversal move moves, by player number (1 player 1's pawn, 2 and 3 a seat's member, as
 /// PlayerHere), or 0: an AI member's, or none. By the move's character weak against the players' weaks; any thread.
 int PlayerOfMove(const void* move) noexcept;

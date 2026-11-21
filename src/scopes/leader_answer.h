@@ -91,6 +91,11 @@ private:
 /// The type source 4 answers for now (kNoType outside a Scope). Game thread.
 int GameType() noexcept;
 
+/// The player type this thread acts for now outside a climb (input/climb_context names a climb's player): source 3's
+/// on this thread, else source 4's on the game thread; kNoType when none, or while source 1 alone decides (an enemy's
+/// choice, no player's act). Any thread.
+int ActingType() noexcept;
+
 /// Answers yes to the leader test on this thread only, for components of player type `type` (kNoType: none), while it
 /// lives: source 3. Nesting keeps the outer answer. Any thread.
 class ThreadScope

@@ -1048,6 +1048,18 @@ int SeatHere() noexcept
     return t_climb.player >= 2 ? t_climb.player - 1 : 0;
 }
 
+int SeatOfType(int type) noexcept
+{
+    for (int seat = 1; type >= 0 && seat <= players::kSeatsBuilt; ++seat)
+    {
+        if (g_memberType[static_cast<std::size_t>(seat)].load(std::memory_order_relaxed) == type)
+        {
+            return seat;
+        }
+    }
+    return 0;
+}
+
 int PlayerOfMove(const void* move) noexcept
 {
     return move != nullptr ? PlayerOf(move) : 0;

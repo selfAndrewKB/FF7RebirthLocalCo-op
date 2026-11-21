@@ -116,6 +116,19 @@ int GameType() noexcept
     return g_gameType.load(std::memory_order_relaxed);
 }
 
+int ActingType() noexcept
+{
+    if (t_onlyType != kNoType)
+    {
+        return kNoType;
+    }
+    if (t_threadType != kNoType)
+    {
+        return t_threadType;
+    }
+    return players::generation::OnGameThread() ? g_gameType.load(std::memory_order_relaxed) : kNoType;
+}
+
 ThreadScope::ThreadScope(int type) noexcept : saved_(t_threadType)
 {
     t_threadType = type;
