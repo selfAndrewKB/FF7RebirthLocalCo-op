@@ -256,7 +256,8 @@ enum class SetupResult
 
 /// Runs `call` (a guarded game call on `seat`'s controller, true when it did not fault) in the seat's focus
 /// context (the UI system's controller and key guide slots name the seat's) and, when the seat's member is
-/// known, with the party leader answering that member (Setup stores the leader's type in the controller).
+/// known, with the party leader answering that member (Setup stores the leader's type in the controller; outside battle
+/// the controller's leader-type read answers it too, battle/command_menu_tick's OwnMemberScope).
 template <class Call>
 SetupResult InSeatScopes(int seat, const wchar_t*& refusal, Call&& call) noexcept
 {
@@ -274,6 +275,7 @@ SetupResult InSeatScopes(int seat, const wchar_t*& refusal, Call&& call) noexcep
         refusal = scopes.Refusal();
         return SetupResult::Refused;
     }
+    const command_menu_tick::OwnMemberScope own;
     if (!call())
     {
         scopes.Get<seat_ladder::FocusPart>()->scope.Abandon();
@@ -356,7 +358,7 @@ bool CanFollow(int seat, void* gameController, bool needsPlayer) noexcept
                                      ReadAt<std::uintptr_t>(g_endUISystem + kUICommandController));
 }
 
-bool Ready(int seat) noexcept
+bool Working(int seat) noexcept
 {
     return g_installed && players::SeatIndex(seat) && !SeatOf(seat).failed;
 }
@@ -736,6 +738,12 @@ void Remove() noexcept
 void* Controller(int seat) noexcept
 {
     return players::SeatIndex(seat) ? SeatOf(seat).controller : nullptr;
+}
+
+bool Ready(int seat) noexcept
+{
+    const auto own = reinterpret_cast<std::uintptr_t>(Controller(seat));
+    return own != 0 && ReadAt<std::uint8_t>(own + kCmdSetupDone) != 0;
 }
 
 void* KeyGuide(int seat) noexcept

@@ -2,6 +2,7 @@
 
 #include "battle/command_menu.h"
 #include "battle/command_menu_shared.h"
+#include "battle/command_menu_tick.h"
 #include "facts/command_controller.h"
 #include "facts/hud.h"
 #include "platform/log.h"
@@ -22,7 +23,6 @@ namespace lss::battle::command_menu_view {
 namespace {
 
 using facts::kCmdFieldMenu;
-using facts::kCmdHudMode;
 using facts::kCmdMenuWidget;
 using facts::kUICommandController;
 using facts::kUIKeyGuide;
@@ -120,7 +120,7 @@ void ShowOnly(int seat) noexcept
         return;
     }
     const auto one = ReadAt<std::uintptr_t>(command_menu::UiSystem() + kUICommandController);
-    if (mine == 0 || ReadAt<std::uint8_t>(mine + kCmdHudMode) == 0 || one == 0)
+    if (mine == 0 || !command_menu_tick::SeatTicks(seat) || one == 0)
     {
         return Restore();
     }

@@ -47,6 +47,9 @@ void* KeyGuide(int seat) noexcept;
 /// `seat`'s controller, or null before it is built.
 void* Controller(int seat) noexcept;
 
+/// `seat`'s controller is built and its Setup ran: it ticks and takes its pad's presses, in battle and out of it.
+bool Ready(int seat) noexcept;
+
 /// The seat whose controller `controller` is, or -1 (player 1's, the game's, is no seat's): "ours" is any seat's.
 int SeatOfController(const void* controller) noexcept;
 

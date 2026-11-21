@@ -24,7 +24,8 @@ inline constexpr std::uint32_t kCmdBlocked          = 0x541;  // u8
 inline constexpr std::uint32_t kCmdRequests         = 0x570;  // TArray<int32> {data, num}: the request array
 inline constexpr std::uint32_t kCmdOpenPending      = 0x5D0;  // i32: a menu open requested (>= 0), pushed 0.125 s
                                                                   // later; the field poll needs it < 0
-inline constexpr std::uint32_t kCmdReady            = 0x5E1;  // u8
+inline constexpr std::uint32_t kCmdMenuAllowed      = 0x5E1;  // u8: 0 while the game forbids its menu (minigames,
+                                                                  // summons, events; research/RE-p2-field-command-menu.md)
 inline constexpr std::uint32_t kCmdWaitFilter       = 0x644;  // i32: the wait mode (the tactical tint's owner)
 inline constexpr std::uint32_t kCmdGuardLatch       = 0x760;  // i32: the guard mode, latched
 inline constexpr std::uint32_t kCmdSetupPending     = 0x775;  // u8: the tick re-runs Setup
@@ -34,9 +35,9 @@ inline constexpr std::uint32_t kCmdReadyB           = 0x782;  // u8
 inline constexpr std::uint32_t kCmdMenuLayer        = 0x783;  // u8: the menu's bottom focus layer (priority -1000)
 
 /// The focus bytes the log reads of a controller (RE-p2-command-menu-input.md): battle input, switching layer,
-/// setup done, menu layer, ready, HUD mode.
+/// setup done, menu layer, menu allowed, HUD mode.
 inline constexpr std::array<std::uint32_t, 6> kCmdLogBytes{kCmdBattleInput, kCmdSwitchingLayer,
-                                                               kCmdSetupDone, kCmdMenuLayer, kCmdReady,
+                                                               kCmdSetupDone, kCmdMenuLayer, kCmdMenuAllowed,
                                                                kCmdHudMode};
 
 }  // namespace lss::facts

@@ -169,7 +169,7 @@ void FollowFrom(std::uintptr_t ran, const wchar_t* gameWhy, const wchar_t* seatW
         }
         return;
     }
-    if (!command_menu::Ready(owner) || !players::generation::OnGameThread())
+    if (!command_menu::Working(owner) || !players::generation::OnGameThread())
     {
         return;
     }
@@ -185,7 +185,7 @@ void FollowFrom(std::uintptr_t ran, const wchar_t* gameWhy, const wchar_t* seatW
     FollowShortcuts(ran, GameController(), why, caller);
     for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
     {
-        if (seat != owner && command_menu::Ready(seat))
+        if (seat != owner && command_menu::Working(seat))
         {
             FollowShortcuts(ran, reinterpret_cast<std::uintptr_t>(command_menu::Controller(seat)), why, caller);
         }

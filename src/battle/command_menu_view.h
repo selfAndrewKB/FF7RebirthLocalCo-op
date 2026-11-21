@@ -12,9 +12,10 @@ namespace lss::battle::command_menu_view {
 /// battle something outside the controller shows every command widget; research/RE-p2-command-menu-input.md).
 void KeepHidden() noexcept;
 
-/// Before a pass of the overlay render (`seat` 0 player 1's): in battle, a seat's pass shows the seat's command menu
-/// (at player 1's menu's render opacity) instead of player 1's and every other seat's; player 1's pass shows player
-/// 1's only. Out of battle the seats' stay hidden. Render thread = game thread.
+/// Before a pass of the overlay render (`seat` 0 player 1's): while the seat's controller ticks (in battle, and outside
+/// it where its menu opens), a seat's pass shows the seat's command and field menus (at player 1's menus' render
+/// opacity) instead of player 1's and every other seat's; player 1's pass shows player 1's only. Otherwise the seats'
+/// stay hidden. Render thread = game thread.
 void ShowOnly(int seat) noexcept;
 
 /// After the frame's passes: player 1's menu back to its own opacity, every seat's hidden.

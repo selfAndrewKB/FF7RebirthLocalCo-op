@@ -13,12 +13,14 @@ namespace lss::battle::menu_rules {
 
 // ---- a seat's pad's route into the seat's menu (command_menu_tick) ----
 
-/// A seat's press runs in the seat's UI only in battle, with the seat's menu layer in place and player 1's top layer
-/// the command menu's own (a pause menu or popup keeps the seat's pad out of every menu).
-constexpr bool PressAllowed(std::uint8_t hudModeSeat, std::uint8_t menuLayerSeat, std::uint8_t battleInputOne,
-                            std::uint8_t menuLayerOne, bool playerOneTopIsCommandMenu) noexcept
+/// A seat's press runs in the seat's UI while the seat's controller ticks (in battle, and outside it where the seat's
+/// menu opens outside battle), with the seat's menu layer in place and player 1's top layer the command menu's own (a
+/// pause menu or popup keeps the seat's pad out of every menu). The game's own gates on the seat's controller decide the
+/// rest: its battle input in battle, its field menu and menu-allowed bytes outside it.
+constexpr bool PressAllowed(bool seatTicks, std::uint8_t menuLayerSeat, std::uint8_t menuLayerOne,
+                            bool playerOneTopIsCommandMenu) noexcept
 {
-    return hudModeSeat != 0 && menuLayerSeat != 0 && battleInputOne != 0 && menuLayerOne != 0 && playerOneTopIsCommandMenu;
+    return seatTicks && menuLayerSeat != 0 && menuLayerOne != 0 && playerOneTopIsCommandMenu;
 }
 
 /// A seat's pad's keys whose press went to the seat's UI, so their release goes there too (one set per seat: two seats

@@ -37,6 +37,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <format>
+#include <optional>
 #include <string>
 
 // The tick itself (battle/command_menu_tick.h): the mirrors, each seat's pass, the shields (the world slow,
@@ -77,6 +78,18 @@ constexpr platform::FunctionFact kSetHudMode{L"FieldCommandCtrl_SetBattleHudMode
 // EndUI_SetBattleHudMode, sets it on the game's controller at a battle's start and end, a field exit and the menu API's
 // in-battle switch (research/RE-p2-command-menu-lifecycle.md).
 constexpr std::size_t kSetHudModeFirst = 5;
+// Outside battle the controller's leader type is the party roster's type at 0 (the party order: player 1's character),
+// read by FieldCommandCtrl_GetLeaderType_PM150 with one call of facts::kRosterPlayerType; when that answers "none" the
+// function falls back to the party manager's leader type, the one a seat's leader-type scope answers
+// (research/RE-p2-field-command-menu.md). The call's five bytes cross a 16-byte block: placed from the game thread.
+constexpr std::uintptr_t kFieldLeaderTypeCall = 0x1408901CC;
+// The controller's "menu allowed" setter (ctrl, on, keepPending): off closes its member menus and clears its records,
+// then +0x5E1 = on. Two callers in the game, both on the game's controller (the UI system's call and the on/off
+// table's lock); its entry, `mov [rsp+8], rbx`, lies inside one block.
+constexpr std::uint8_t kMenuAllowedBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x6C, 0x24, 0x10, 0x48,
+                                              0x89, 0x74, 0x24, 0x18, 0x57, 0xB8, 0x20, 0x00, 0x00, 0x00};
+constexpr platform::FunctionFact kMenuAllowed{L"FieldCommandCtrl_SetMenuAllowed5E1", 0x14083A848, kMenuAllowedBytes};
+constexpr std::size_t            kMenuAllowedFirst = 5;
 // The party list's input flag (ctrl+0x4A0 = party list +0x140): while 0 its show timer collapses the field
 // menu every tick. The game sets it through EndUI23_ResumeHudInput(1) / SuspendHudInput(1), which act on
 // its own controller only (research/RE-p2-command-menu-lifecycle.md).
@@ -125,7 +138,7 @@ using facts::kCmdBattleInput;
 using facts::kCmdSwitchingLayer;
 using facts::kCmdHudMode;
 using facts::kCmdBlocked;
-using facts::kCmdReady;
+using facts::kCmdMenuAllowed;
 using facts::kCmdWaitFilter;
 using facts::kCmdGuardLatch;
 constexpr std::uint32_t kHudSoundMode     = 0x774;  // u8
@@ -151,15 +164,18 @@ using SuspendHudInputFn = void (*)(std::uint8_t kind, std::uint8_t reset);
 using PartyListInputFn = void (*)(void* partyList, std::uint8_t on, std::uint8_t applyVisibility);
 using LeaderFn         = void* (*)();
 using SetMenuLayerFn = void (*)(void* controller, std::uint8_t on);
+using MemberTypeFn   = std::uint8_t (*)(std::int32_t index);
+using MenuAllowedFn  = void (*)(void* controller, std::uint8_t on, std::uint8_t keepPending);
 
 // Set once at install.
-platform::CallRedirect  g_tickCall, g_slotCall, g_snapshotCall, g_guideShowCall, g_guideMode8Call;
-platform::EntryRedirect g_hudModeEntry;  // the battle HUD mode's setter, repeated on each seat's controller
+platform::CallRedirect  g_tickCall, g_slotCall, g_snapshotCall, g_guideShowCall, g_guideMode8Call, g_fieldLeaderCall;
+platform::EntryRedirect g_hudModeEntry;      // the battle HUD mode's setter, repeated on each seat's controller
+platform::EntryRedirect g_menuAllowedEntry;  // the menu-allowed setter, the same
 
 /// The calls' targets as Install found them, for the redirects (placed at once, or on 1.005 from the game thread).
 struct Targets
 {
-    std::uintptr_t slot = 0, snapshot = 0, show = 0, mode8 = 0, tick = 0;
+    std::uintptr_t slot = 0, snapshot = 0, show = 0, mode8 = 0, tick = 0, memberType = 0;
 };
 Targets                            g_targets;
 platform::DeferredSites g_placement;  // 1.005: the calls placed from the game thread (platform/deferred_sites.h)
@@ -175,6 +191,7 @@ LeaderFn         g_resolveLeader  = nullptr;
 std::uintptr_t g_endUISystem  = 0;
 std::uintptr_t g_partyManager = 0;  // the address holding the party manager
 SetMenuLayerFn g_setMenuLayer = nullptr;
+MenuAllowedFn  g_menuAllowed  = nullptr;
 
 // The slow-down switch (the menu-slow setting): read by every world-slow write and by the tint's gates, set by the
 // settings file at install and by the page or the console afterwards.
@@ -196,7 +213,22 @@ std::array<unsigned, players::kMaxPlayers> g_snapshotEntries{};  // each seat's 
 std::uint64_t g_passes     = 0;  // the seats' passes run
 // The battle HUD mode each seat's controller last refused (not set up yet), so the refusal is logged once; -1 none.
 std::array<int, players::kMaxPlayers> g_hudModeRefused{-1, -1, -1};
+// The menu-allowed value each seat's controller last did not take at a catch-up, so it is logged once and tried again
+// only every kMenuAllowedRetryGap ticks; -1 none. A seat whose setter faulted is no longer set at all.
+std::array<int, players::kMaxPlayers>  g_menuAllowedRefused{-1, -1, -1};
+std::array<bool, players::kMaxPlayers> g_menuAllowedFaulted{};
+constexpr std::uint64_t                kMenuAllowedRetryGap = 60;
+// The command menu's own calls on a seat's controller in flight outside a pass (OwnMemberScope): while any is, the
+// leader-type read outside battle answers the seat's member, as in a pass.
+int g_ownMember = 0;
 static_assert(players::kMaxPlayers == 3, "g_seatSlots' initialiser names every player");
+// Outside battle (each seat's; index 0 unused): the seats' menus open only with both of their calls in place; the
+// field's first pass and the leader-type answer are logged once per stretch outside battle, then counted.
+bool                                            g_fieldMenus = false;
+std::array<bool, players::kMaxPlayers>          g_fieldTicked{};
+std::array<bool, players::kMaxPlayers>          g_fieldLeaderSaid{};
+std::array<std::uint64_t, players::kMaxPlayers> g_fieldLeaderAnswers{};
+int                                             g_menuAllowedSaid = -1;  // the game's last logged value; -1 none
 
 void WatchLine(const std::wstring& text) noexcept
 {
@@ -210,6 +242,14 @@ void Line(const std::wstring& text, platform::Level level = platform::Level::Inf
     {
         platform::LogAt(level, L"command menu tick: {}", text);
     }
+}
+
+/// A battle is on for a seat's controller `ctrl` beside the game's `ctrl1`: either one's battle HUD mode is set (the
+/// seat's catches up with the game's at its pass).
+bool InBattle(std::uintptr_t ctrl, std::uintptr_t ctrl1) noexcept
+{
+    return (ctrl1 != 0 && ReadAt<std::uint8_t>(ctrl1 + kCmdHudMode) != 0) ||
+           (ctrl != 0 && ReadAt<std::uint8_t>(ctrl + kCmdHudMode) != 0);
 }
 
 }  // namespace
@@ -319,17 +359,30 @@ void CatchUpHudMode(int seat, std::uintptr_t ctrl, std::uintptr_t ctrl1, std::ui
     CopyBattleInput(seat, ctrl, ctrl1);
 }
 
-/// Replaces the battle HUD mode's setter: the game's call, then, for the game's controller, the same call on each
-/// seat's whose player plays a member, inside that seat's focus and leader scopes (the setter pops focus layers and
-/// reads the party leader's type). A seat it cannot reach now is caught up at its next pass.
-void SetHudMode(void* controller, std::uint8_t mode) noexcept
+/// A setter's call on `controller` may be the game's own on its controller: installed, on the game thread, and not
+/// inside a seat's pass or press or the command menu's own call on a seat's controller (there the UI system's
+/// controller slot names the seat's controller).
+bool GameCallHere(const void* controller) noexcept
 {
-    HudModeSetter()(controller, mode);
-    // Inside a seat's pass or press the UI system's controller slot names the seat's controller: no repeat there (the
-    // pass's catch-up covers the seats).
+    return g_installed && g_pass < 2 && g_ownMember == 0 && controller != nullptr &&
+           players::generation::OnGameThread();
+}
+
+/// After a setter's call on the game's controller: `repeat(seat, ctrl, memberType)` on each seat's whose player plays
+/// a member, inside that seat's focus and leader scopes (the setters pop focus layers and read the party leader's
+/// type). A seat it cannot reach now is caught up at its next pass (its wait logged at Debug); a seat `wanted(ctrl)` says
+/// needs nothing is skipped before its scopes. `what` and `value` name the call in the log (the setters are hot: the
+/// text is made only for a line).
+template <class Wanted, class Repeat>
+void RepeatOnSeats(void* controller, const wchar_t* what, int value, Wanted&& wanted, Repeat&& repeat) noexcept
+{
+    // No repeat inside a seat's pass or press or the menu's own call on a seat (the pass's catch-up covers the seats).
+    if (!GameCallHere(controller))
+    {
+        return;
+    }
     const auto ctrl1 = ReadAt<std::uintptr_t>(g_endUISystem + kUICommandController);
-    if (!g_installed || g_pass >= 2 || controller == nullptr || reinterpret_cast<std::uintptr_t>(controller) != ctrl1 ||
-        !players::generation::OnGameThread())
+    if (reinterpret_cast<std::uintptr_t>(controller) != ctrl1)
     {
         return;
     }
@@ -344,7 +397,7 @@ void SetHudMode(void* controller, std::uint8_t mode) noexcept
     {
         const auto ctrl   = reinterpret_cast<std::uintptr_t>(command_menu::Controller(seat));
         void*      member = players::generation::MemberOf(seat);
-        if (!players::generation::Active(seat) || ctrl == 0 || ctrl == ctrl1 || member == nullptr)
+        if (!players::generation::Active(seat) || ctrl == 0 || ctrl == ctrl1 || member == nullptr || !wanted(ctrl))
         {
             continue;
         }
@@ -359,16 +412,142 @@ void SetHudMode(void* controller, std::uint8_t mode) noexcept
         seat_ladder::SeatScopes scopes(seat_ladder::Focus | seat_ladder::Leader | seat_ladder::LeaderType, 0u, args);
         if (!scopes.Held())
         {
-            Line(std::format(L"{}'s battle HUD mode {} waits for its pass: {}", players::SeatName(seat), mode,
-                             scopes.Refusal()));
+            if (platform::Enabled(platform::Level::Debug))
+            {
+                Line(std::format(L"{}'s {} {} waits for its pass: {}", players::SeatName(seat), what, value,
+                                 scopes.Refusal()),
+                     platform::Level::Debug);
+            }
             continue;
         }
-        SetSeatHudMode(seat, ctrl, mode, args.memberType, L"the game's call");
+        const OwnMemberScope own;  // the setter's leader-type read answers the seat's member, as in its pass
+        repeat(seat, ctrl, args.memberType);
     }
     if (manager != 0 && party() != before)
     {
-        Line(L"WARNING: the primary controller or the party leader differs after the battle HUD mode's repeats");
+        Line(std::format(L"WARNING: the primary controller or the party leader differs after the {} {}'s repeats", what,
+                         value));
     }
+}
+
+/// Replaces the battle HUD mode's setter: the game's call, then the same on each seat's controller.
+void SetHudMode(void* controller, std::uint8_t mode) noexcept
+{
+    HudModeSetter()(controller, mode);
+    RepeatOnSeats(controller, L"battle HUD mode", mode, [](std::uintptr_t) { return true; },
+                  [mode](int seat, std::uintptr_t ctrl, std::uint8_t memberType) {
+                      SetSeatHudMode(seat, ctrl, mode, memberType, L"the game's call");
+                  });
+}
+
+/// The menu-allowed setter as the game's own (the redirect's trampoline once placed).
+MenuAllowedFn MenuAllowedSetter() noexcept
+{
+    return g_menuAllowedEntry.IsInstalled() ? reinterpret_cast<MenuAllowedFn>(g_menuAllowedEntry.Original())
+                                            : g_menuAllowed;
+}
+
+/// The game's menu-allowed value set on a seat's controller through the game's setter (off closes the seat's menus).
+/// After a fault the seat's controller is no longer set: its menu keeps the value it had.
+void SetSeatMenuAllowed(int seat, std::uintptr_t ctrl, std::uint8_t on, std::uint8_t keepPending,
+                        const wchar_t* why) noexcept
+{
+    const auto slot = static_cast<std::size_t>(seat);
+    if (g_menuAllowedFaulted[slot])
+    {
+        return;
+    }
+    const bool set   = platform::CallGuarded(MenuAllowedSetter(), reinterpret_cast<void*>(ctrl), on, keepPending);
+    const bool taken = set && ReadAt<std::uint8_t>(ctrl + kCmdMenuAllowed) == on;
+    auto&      tried = g_menuAllowedRefused[slot];
+    if (!set)
+    {
+        g_menuAllowedFaulted[slot] = true;
+        Line(std::format(L"FAILED: the menu-allowed setter faulted on {}'s controller ({} -> {}); its menu no longer "
+                         L"follows where the game allows or forbids player 1's",
+                         players::SeatName(seat), why, on));
+    }
+    else if (taken)
+    {
+        tried = -1;
+        Line(std::format(L"{}'s menu allowed -> {} ({})", players::SeatName(seat), on, why), platform::Level::Debug);
+    }
+    else if (tried != on)
+    {
+        tried = on;
+        Line(std::format(L"{}'s controller did not take menu allowed {} ({}); tried again every {} ticks at its passes",
+                         players::SeatName(seat), on, why, kMenuAllowedRetryGap));
+    }
+}
+
+/// Replaces the menu-allowed setter: the game's call, then the same on each seat's controller, so a seat's menu is
+/// forbidden and allowed again where player 1's is.
+void SetMenuAllowed(void* controller, std::uint8_t on, std::uint8_t keepPending) noexcept
+{
+    MenuAllowedSetter()(controller, on, keepPending);
+    if (!GameCallHere(controller))
+    {
+        return;
+    }
+    if (reinterpret_cast<std::uintptr_t>(controller) == ReadAt<std::uintptr_t>(g_endUISystem + kUICommandController) &&
+        g_menuAllowedSaid != on)
+    {
+        g_menuAllowedSaid = on;
+        Line(std::format(L"menu allowed {} on the game's controller; players 2 and 3's controllers follow", on));
+    }
+    // An allow on a seat's controller that already allows its menu changes nothing (an off still closes what is open).
+    RepeatOnSeats(controller, L"menu allowed", on,
+                  [on](std::uintptr_t ctrl) { return on == 0 || ReadAt<std::uint8_t>(ctrl + kCmdMenuAllowed) != on; },
+                  [on, keepPending](int seat, std::uintptr_t ctrl, std::uint8_t) {
+                      SetSeatMenuAllowed(seat, ctrl, on, keepPending, L"the game's call");
+                  });
+}
+
+/// The seat whose member's player type is `type` (a playing seat), or 0.
+int SeatPlayingType(std::uint8_t type) noexcept
+{
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
+    {
+        void* member = players::generation::Active(seat) ? players::generation::MemberOf(seat) : nullptr;
+        const auto memberType = member != nullptr ? session::party_member::PlayerTypeOf(member) : std::nullopt;
+        if (memberType && *memberType == type)
+        {
+            return seat;
+        }
+    }
+    return 0;
+}
+
+/// Replaces the leader type's read of battle member 0 outside battle: in the command menu's own calls on a seat's
+/// controller (a seat's pass or press, or an OwnMemberScope), inside the seat's leader-type scope (the party manager's
+/// leader type names a playing seat's member, which it never does outside one), it answers "none", so the game's own
+/// fallback gives the seat's member; otherwise the game's answer, other modules' leader-type scopes included. A
+/// written exception (the game's fallback, chosen by the mod; research/RE-p2-field-command-menu.md): no game path gives
+/// a seat's controller its own member outside battle.
+std::uint8_t FieldLeaderType(std::int32_t index) noexcept
+{
+    const std::uint8_t first = reinterpret_cast<MemberTypeFn>(g_fieldLeaderCall.Original())(index);
+    if (!players::generation::OnGameThread() || (g_pass < 2 && g_ownMember == 0))
+    {
+        return first;
+    }
+    const auto manager = ReadAt<std::uintptr_t>(g_partyManager);
+    const auto held    = manager != 0 ? ReadAt<std::uint8_t>(manager + kPartyManagerLeaderType) : first;
+    const int  seat    = held != first ? SeatPlayingType(held) : 0;
+    if (seat < 1)
+    {
+        return first;
+    }
+    const auto slot = static_cast<std::size_t>(seat);
+    ++g_fieldLeaderAnswers[slot];
+    if (!g_fieldLeaderSaid[slot])
+    {
+        g_fieldLeaderSaid[slot] = true;
+        Line(std::format(L"{}'s controller's leader type outside battle: its member (type {}) instead of battle member 0 "
+                         L"(type {})",
+                         players::SeatName(seat), held, first));
+    }
+    return facts::kNoPlayerType;
 }
 
 /// A controller's widget (its FWeakObjectPtr at `offset`), or null.
@@ -470,8 +649,8 @@ void Watch(int seat, std::uintptr_t ctrl, std::uintptr_t ctrl1) noexcept
         return;
     }
     Snapshot now;
-    constexpr std::array<std::uint32_t, 8> kCompared{kCmdSetupDone, kCmdBlocked,     kCmdBattleInput, kCmdMenuLayer,
-                                                     kCmdSwitchingLayer, kCmdReady, kPartyListInput, kCmdSetupPending};
+    constexpr std::array<std::uint32_t, 8> kCompared{kCmdSetupDone,      kCmdBlocked,     kCmdBattleInput, kCmdMenuLayer,
+                                                     kCmdSwitchingLayer, kCmdMenuAllowed, kPartyListInput, kCmdSetupPending};
     for (std::size_t side = 0; side < 2; ++side)
     {
         const auto sideCtrl = side == 0 ? ctrl1 : ctrl;
@@ -491,7 +670,7 @@ void Watch(int seat, std::uintptr_t ctrl, std::uintptr_t ctrl1) noexcept
     {
         now.requests[i] = RequestOf(ctrl, kLoggedRequests[i]);
     }
-    constexpr std::array<std::uint32_t, 7> kBytes{kCmdHudMode,     kCmdBlocked,        kCmdReady,    kCmdReadyB,
+    constexpr std::array<std::uint32_t, 7> kBytes{kCmdHudMode,     kCmdBlocked,        kCmdMenuAllowed, kCmdReadyB,
                                                   kCmdBattleInput, kCmdSwitchingLayer, kHudSoundMode};
     for (std::size_t i = 0; i < kBytes.size(); ++i)
     {
@@ -559,17 +738,67 @@ void Refused(int seat, const wchar_t* why) noexcept
     }
 }
 
+/// The menu-allowed value the game stored on its controller without its setter (the on/off table's lock cleared) or set
+/// while the seat's controller could not take it, made on the seat's through the setter in the seat's pass (a value it
+/// did not take is tried again every kMenuAllowedRetryGap ticks). An off clears the seat's records and pending open
+/// (keepPending 0): a catch-up leaves nothing open that the game has forbidden.
+void CatchUpMenuAllowed(int seat, std::uintptr_t ctrl, std::uintptr_t ctrl1) noexcept
+{
+    const auto want = ReadAt<std::uint8_t>(ctrl1 + kCmdMenuAllowed);
+    if (g_menuAllowed == nullptr || ReadAt<std::uint8_t>(ctrl + kCmdMenuAllowed) == want)
+    {
+        return;
+    }
+    if (g_menuAllowedRefused[static_cast<std::size_t>(seat)] == want && g_frame % kMenuAllowedRetryGap != 0)
+    {
+        return;
+    }
+    SetSeatMenuAllowed(seat, ctrl, want, 0, L"caught up");
+}
+
+/// After a seat's pass outside battle: its first is logged once per stretch outside battle, with the menu member it
+/// resolved (expect the seat's member's type). A leader-type change in the pass means the game's field leader change
+/// ran on the seat's controller: to its member's type when its player's member changed, a WARNING to any other.
+void NoteFieldPass(int seat, std::uintptr_t ctrl, std::uint8_t typeBefore, std::uint8_t memberType) noexcept
+{
+    const auto slot = static_cast<std::size_t>(seat);
+    const auto type = ReadAt<std::uint8_t>(ctrl + kCmdStoredLeaderType);
+    if (type != typeBefore)
+    {
+        Line(std::format(L"{}{}'s controller's leader type changed in its pass outside battle ({} -> {}; its member's "
+                         L"{}): the game's leader change ran on it",
+                         type == memberType ? L"" : L"WARNING: ", players::SeatName(seat), typeBefore, type,
+                         memberType));
+    }
+    if (!g_fieldTicked[slot])
+    {
+        g_fieldTicked[slot] = true;
+        Line(std::format(L"{}'s command menu ticks outside battle (menu member {} type {}, its member's type {}; menu "
+                         L"allowed {}; {} leader-type answer(s) so far)",
+                         players::SeatName(seat), ReadAt<std::int32_t>(ctrl + kCmdMembers), type, memberType,
+                         ReadAt<std::uint8_t>(ctrl + kCmdMenuAllowed), g_fieldLeaderAnswers[slot]));
+    }
+}
+
 /// A seat's controller's tick, inside the seat's scopes.
 void SeatPass(int seat, float deltaTime) noexcept
 {
     const auto ctrl   = reinterpret_cast<std::uintptr_t>(command_menu::Controller(seat));
     const auto ctrl1  = ReadAt<std::uintptr_t>(g_endUISystem + kUICommandController);
     void*      member = players::generation::MemberOf(seat);
-    if (ctrl == 0 || ctrl1 == 0 || ctrl1 == ctrl || member == nullptr ||
-        (ReadAt<std::uint8_t>(ctrl1 + kCmdHudMode) == 0 && ReadAt<std::uint8_t>(ctrl + kCmdHudMode) == 0))
+    const auto slot   = static_cast<std::size_t>(seat);
+    const bool battle = InBattle(ctrl, ctrl1);
+    if (battle)
     {
-        menu_tint::Release(seat, L"released: the menu is not ticked (out of battle)");
-        return;  // out of battle: the seat's controller has nothing to do yet
+        g_fieldTicked[slot]     = false;  // the next stretch outside battle logs its first pass again
+        g_fieldLeaderSaid[slot] = false;
+    }
+    if (ctrl == 0 || ctrl1 == 0 || ctrl1 == ctrl || member == nullptr || !SeatTicks(seat))
+    {
+        menu_tint::Release(seat, battle || g_fieldMenus
+                                     ? L"released: the menu is not ticked (not set up yet)"
+                                     : L"released: the menu is not ticked (out of battle, where it does not open)");
+        return;
     }
     seat_ladder::Args args;
     args.seat          = seat;
@@ -596,8 +825,22 @@ void SeatPass(int seat, float deltaTime) noexcept
         SetPass(2, seat);
         ++g_passes;
         CatchUpHudMode(seat, ctrl, ctrl1, args.memberType);
+        CatchUpMenuAllowed(seat, ctrl, ctrl1);
         CopyPartyListInput(seat, ctrl, ctrl1);
         CopyMenuLayer(seat, ctrl, ctrl1);
+        auto typeBefore = ReadAt<std::uint8_t>(ctrl + kCmdStoredLeaderType);
+        if (!battle && typeBefore != args.memberType && typeBefore == args.leaderType)
+        {
+            // A written exception, the battle one's twin (SetSeatHudMode): a controller set up while the leader-type
+            // answer could not be given (its member not yet known, or before the answer was placed) holds player 1's
+            // type, and the tick's field leader change would clear the battle system's slot for a character player 1
+            // is playing. Its member's type is what the game's Setup writes under the answer.
+            WriteAt(ctrl + kCmdStoredLeaderType, args.memberType);
+            Line(std::format(L"{}'s controller held player 1's leader type (type {}) outside battle: its member's (type "
+                             L"{}) written, as its Setup writes",
+                             players::SeatName(seat), typeBefore, args.memberType));
+            typeBefore = args.memberType;
+        }
         // The seat's requests are the game's own handler's (the pad's presses and releases dispatched in the seat's UI
         // set and clear them, as for player 1), the leader-switch requests included: the tick's switch step runs the
         // game's cycle for the seat inside this pass (session/party_switch.h).
@@ -609,6 +852,10 @@ void SeatPass(int seat, float deltaTime) noexcept
                                                   reinterpret_cast<void*>(ctrl), deltaTime);
         SetPass(0, 0);
         g_passed = ticked;
+        if (ticked && !battle)
+        {
+            NoteFieldPass(seat, ctrl, typeBefore, args.memberType);
+        }
         if (menu_tint::Holds(seat) && ReadAt<std::int32_t>(ctrl + kCmdWaitFilter) == 0)
         {
             menu_tint::Release(seat, L"WARNING: the menu is idle but held a count; released");
@@ -798,6 +1045,11 @@ bool Install(const platform::GameImage& image) noexcept
         g_partyManager    = manager;
         g_setMenuLayer    = reinterpret_cast<SetMenuLayerFn>(*layer);
         g_targets         = {*slot, *snapshot, *show, *mode8, *tick};
+        // Outside battle (optional: without them the seats' menus open in battle only).
+        const auto memberType = find(facts::kRosterPlayerType);
+        const auto allowed    = find(kMenuAllowed);
+        g_targets.memberType  = memberType.value_or(0);
+        g_menuAllowed         = allowed ? reinterpret_cast<MenuAllowedFn>(*allowed) : nullptr;
     }
     if (!ok)
     {
@@ -838,8 +1090,22 @@ bool PlaceSites(const platform::GameImage& image) noexcept
     ok = ok && redirect(g_slotCall, kSlotCall, t.slot, &Slot) &&
          redirect(g_snapshotCall, kSnapshotCall, t.snapshot, &CommandSnapshot) &&
          redirect(g_guideShowCall, kGuideShowCall, t.show, &GuideShow) &&
-         redirect(g_guideMode8Call, kGuideMode8Call, t.mode8, &GuideMode8) &&
-         redirect(g_tickCall, kTickCall, t.tick, &Tick);
+         redirect(g_guideMode8Call, kGuideMode8Call, t.mode8, &GuideMode8);
+    // Outside battle, before the tick: a seat's first pass there already resolves its own member.
+    if (ok && g_menuAllowed != nullptr && t.memberType != 0)
+    {
+        const auto allowedFirst =
+            image.EntryInstruction(kMenuAllowed.address, kMenuAllowed.entryBytes.first(kMenuAllowedFirst));
+        g_fieldMenus = g_menuAllowedEntry.Install(reinterpret_cast<std::uintptr_t>(g_menuAllowed), allowedFirst,
+                                                  reinterpret_cast<std::uintptr_t>(&SetMenuAllowed)) &&
+                       redirect(g_fieldLeaderCall, kFieldLeaderTypeCall, t.memberType, &FieldLeaderType);
+        if (!g_fieldMenus && g_menuAllowedEntry.IsInstalled() && !g_menuAllowedEntry.Restore())
+        {
+            platform::Log(L"command menu tick: the menu-allowed setter was changed after us; left in place (it passes "
+                          L"through)");
+        }
+    }
+    ok = ok && redirect(g_tickCall, kTickCall, t.tick, &Tick);
     g_installed = ok;
     if (!ok)
     {
@@ -847,12 +1113,20 @@ bool PlaceSites(const platform::GameImage& image) noexcept
     }
     else
     {
-        menu_input_route::Install(image);  // a seat's presses to its menu in battle; its releases (optional)
+        menu_input_route::Install(image);  // a seat's presses to its menu; its releases (optional)
     }
-    platform::Log(L"command menu tick: {}", ok ? L"player 2's and 3's command controllers tick in battle and take "
-                                                 L"their attack, guard and dodge; their pads' presses reach their menus in "
-                                                 L"battle (logged)"
+    platform::Log(L"command menu tick: {}", ok ? L"player 2's and 3's command controllers tick and take their attack, "
+                                                 L"guard and dodge in battle; their pads' presses reach their menus "
+                                                 L"(logged)"
                                                : kUnavailable);
+    if (ok)
+    {
+        platform::Log(L"command menu tick: {}",
+                      g_fieldMenus ? L"players 2 and 3's command menus open outside battle too, each with its own "
+                                     L"member's commands, items and magic, where the game allows player 1's (logged)"
+                                   : L"players 2 and 3's command menus open in battle only (a check outside battle "
+                                     L"failed)");
+    }
     return ok;
 }
 
@@ -876,6 +1150,23 @@ bool BattleInputOn(const void* controller) noexcept
 {
     return controller != nullptr &&
            ReadAt<std::uint8_t>(reinterpret_cast<std::uintptr_t>(controller) + kCmdBattleInput) != 0;
+}
+
+bool SeatTicks(int seat) noexcept
+{
+    const auto ctrl  = reinterpret_cast<std::uintptr_t>(command_menu::Controller(seat));
+    const auto ctrl1 = g_endUISystem != 0 ? ReadAt<std::uintptr_t>(g_endUISystem + kUICommandController) : 0;
+    return ctrl != 0 && ctrl1 != 0 && command_menu::Ready(seat) && (g_fieldMenus || InBattle(ctrl, ctrl1));
+}
+
+OwnMemberScope::OwnMemberScope() noexcept
+{
+    ++g_ownMember;
+}
+
+OwnMemberScope::~OwnMemberScope()
+{
+    --g_ownMember;
 }
 
 bool MenuSlow() noexcept
@@ -916,13 +1207,25 @@ void Remove() noexcept
     g_placement.Cancel();  // first: a placement still queued does nothing, and none lands between the restores
     menu_input_route::Remove();
     menu_tint::Remove();
-    g_installed = false;
-    for (auto* call : {&g_tickCall, &g_guideMode8Call, &g_guideShowCall, &g_snapshotCall, &g_slotCall})
+    g_installed          = false;
+    g_fieldMenus         = false;
+    g_menuAllowedFaulted = {};  // a later install starts every seat's follow and its lines afresh
+    g_menuAllowedRefused = {-1, -1, -1};
+    g_menuAllowedSaid    = -1;
+    g_fieldTicked        = {};
+    g_fieldLeaderSaid    = {};
+    g_fieldLeaderAnswers = {};
+    for (auto* call : {&g_tickCall, &g_fieldLeaderCall, &g_guideMode8Call, &g_guideShowCall, &g_snapshotCall, &g_slotCall})
     {
         if (call->IsInstalled() && !call->Restore())
         {
             platform::Log(L"command menu tick: a call was changed after us; left in place (it passes through)");
         }
+    }
+    if (g_menuAllowedEntry.IsInstalled() && !g_menuAllowedEntry.Restore())
+    {
+        platform::Log(L"command menu tick: the menu-allowed setter was changed after us; left in place (it passes "
+                      L"through)");
     }
     if (g_hudModeEntry.IsInstalled() && !g_hudModeEntry.Restore())
     {

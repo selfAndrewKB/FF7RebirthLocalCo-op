@@ -18,13 +18,12 @@ using namespace lss::battle::menu_rules;
 void TestPressGate()
 {
     std::puts("press gate: every condition must hold");
-    EXPECT(PressAllowed(1, 1, 1, 1, true));
-    EXPECT(!PressAllowed(0, 1, 1, 1, true));
-    EXPECT(!PressAllowed(1, 0, 1, 1, true));
-    EXPECT(!PressAllowed(1, 1, 0, 1, true));
-    EXPECT(!PressAllowed(1, 1, 1, 0, true));
-    EXPECT(!PressAllowed(1, 1, 1, 1, false));
-    EXPECT(PressAllowed(2, 7, 3, 1, true));
+    EXPECT(PressAllowed(true, 1, 1, true));
+    EXPECT(!PressAllowed(false, 1, 1, true));
+    EXPECT(!PressAllowed(true, 0, 1, true));
+    EXPECT(!PressAllowed(true, 1, 0, true));
+    EXPECT(!PressAllowed(true, 1, 1, false));
+    EXPECT(PressAllowed(true, 7, 3, true));
 }
 
 void TestTakenKeys()

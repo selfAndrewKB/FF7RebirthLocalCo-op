@@ -47,7 +47,7 @@ using facts::kPartyManagerLeader;
 // The command controller (read only, for the log): its battle-phase gates, guard mode and request array.
 using facts::kCmdHudMode;
 using facts::kCmdBlocked;
-using facts::kCmdReady;
+using facts::kCmdMenuAllowed;
 using facts::kCmdReadyB;
 using facts::kCmdGuardLatch;
 using facts::kCmdRequests;
@@ -233,7 +233,7 @@ void Watch(int seat, void* member, void* state) noexcept
         Read(g_endUISystem + facts::kUICommandController, controller);
         const bool battleHud  = controller != 0 && ReadAt<std::uint8_t>(controller + kCmdHudMode) != 0;
         const bool blocked    = controller != 0 && ReadAt<std::uint8_t>(controller + kCmdBlocked) != 0;
-        const bool ready      = controller != 0 && (ReadAt<std::uint8_t>(controller + kCmdReady) != 0 ||
+        const bool ready      = controller != 0 && (ReadAt<std::uint8_t>(controller + kCmdMenuAllowed) != 0 ||
                                                ReadAt<std::uint8_t>(controller + kCmdReadyB) != 0);
         const auto           memberAddress = reinterpret_cast<std::uintptr_t>(member);
         const Parts          parts         = PartsOf(memberAddress);

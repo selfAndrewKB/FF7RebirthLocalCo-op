@@ -69,7 +69,6 @@ using facts::kUIInput;
 using facts::kPartyManagerLeaderType;
 using facts::kCmdMembers;
 using facts::kCmdBattleInput;
-using facts::kCmdHudMode;
 using facts::kCmdMenuLayer;
 using command_menu_tick::kReqAttack;
 using command_menu_tick::kReqUnique;
@@ -172,8 +171,8 @@ enum class Route
 };
 
 /// Runs `call` (a guarded game call, true when it did not fault) in `seat`'s UI: the seat's focus
-/// context and scopes. A press runs only in battle, with the seat's menu layer in place and player 1's
-/// top layer the command menu's own (a pause menu or popup keeps the seat's pad out of every menu). False,
+/// context and scopes. A press runs only while the seat's controller ticks, with the seat's menu layer in place and
+/// player 1's top layer the command menu's own (a pause menu or popup keeps the seat's pad out of every menu). False,
 /// running nothing, when those do not hold; true once it ran (a fault stops the route for the session).
 template <class Call>
 bool InSeatUi(int seat, Route route, const wchar_t* what, Call&& call) noexcept
@@ -195,11 +194,10 @@ bool InSeatUi(int seat, Route route, const wchar_t* what, Call&& call) noexcept
         return refuse(L"a controller or the player's member is missing");
     }
     if (route == Route::kPress &&
-        !menu_rules::PressAllowed(ReadAt<std::uint8_t>(own + kCmdHudMode), ReadAt<std::uint8_t>(own + kCmdMenuLayer),
-                                  ReadAt<std::uint8_t>(one + kCmdBattleInput),
+        !menu_rules::PressAllowed(command_menu_tick::SeatTicks(seat), ReadAt<std::uint8_t>(own + kCmdMenuLayer),
                                   ReadAt<std::uint8_t>(one + kCmdMenuLayer), focus_scope::PlayerOneTopIsCommandMenu()))
     {
-        return refuse(L"not in the player's battle menu");
+        return refuse(L"the player's menu is not ticking, or another menu is on top");
     }
     seat_ladder::Args args;
     args.seat          = seat;
@@ -369,14 +367,14 @@ bool Find(const platform::GameImage& image) noexcept
 
 void Install(const platform::GameImage& image) noexcept
 {
-    input::pad_buttons::SetSeatRoute(&RouteSeatPad);  // a seat's presses to its menu in battle
+    input::pad_buttons::SetSeatRoute(&RouteSeatPad);  // a seat's presses to its menu
     // A seat's releases: the up route's call redirected, each release's pad from the key-up handler keyboard_keys holds.
     const auto upRoute = platform::FindFunction(image, kUpRoute);
     const auto site    = image.Rebase(kUpRouteCall, 5);
     const bool ok      = upRoute && site && input::keyboard_keys::Installed() &&
                     g_upRouteCall.Install(*site, *upRoute, reinterpret_cast<std::uintptr_t>(&UpRoute));
     platform::Log(L"command menu tick: players 2 and 3's pads' releases {}",
-                  ok ? L"reach their menus in battle" : L"UNAVAILABLE (a check failed): they keep player 1's up route");
+                  ok ? L"reach their menus" : L"UNAVAILABLE (a check failed): they keep player 1's up route");
 }
 
 void Remove() noexcept

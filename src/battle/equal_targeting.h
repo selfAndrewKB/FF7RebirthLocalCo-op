@@ -24,6 +24,7 @@
 // that call, then tells the one observer (battle/target_census, a dev tool) what it answered.
 
 #include "battle/ucpc_choice.h"
+#include "facts/party.h"
 #include "players/seats.h"
 
 #include <cstdint>
@@ -52,7 +53,7 @@ void Tick() noexcept;
 struct Answer
 {
     ucpc_choice::Choice choice;        // choice.player: 0 player 1, s seat s
-    std::uint8_t        type = 16;     // the player type answered as the UCPC (Untouched: not used)
+    std::uint8_t        type = facts::kNoPlayerType;  // the player type answered as the UCPC (Untouched: not used)
     bool                read = false;  // the select built its candidates and read the answer
 };
 
@@ -65,8 +66,7 @@ using SelectObserver = void (*)(void* selector, std::uint64_t reason, std::uint6
 /// The one observer of the Condition selects (null: none). Set before any battle and cleared at unload.
 void SetSelectObserver(SelectObserver observer) noexcept;
 
-/// A player type no player holds.
-inline constexpr std::uint8_t kNoPlayerType = 16;
+using facts::kNoPlayerType;  // a player type no player holds
 
 /// Every player's player type as Tick last saw them, one frame's set: player 1's (the leader's) at index 0, each
 /// seat's member's at its seat (kNoPlayerType for a seat without a member, or whose member's type is the leader's).

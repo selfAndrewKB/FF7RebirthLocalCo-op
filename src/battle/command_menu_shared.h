@@ -16,7 +16,7 @@ namespace lss::battle::command_menu {
 bool CanFollow(int seat, void* gameController, bool needsPlayer) noexcept;
 
 /// The stage is installed and no call of the game's has faulted on `seat`'s controller.
-bool Ready(int seat) noexcept;
+bool Working(int seat) noexcept;
 
 /// The live address of the EndUISystem object (0 before Install, or after one whose check of it failed).
 std::uintptr_t UiSystem() noexcept;
