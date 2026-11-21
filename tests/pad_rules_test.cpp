@@ -44,6 +44,71 @@ void WithPadOnSwaps()
     EXPECT(WithPadOn(kIdentity, 2, 4) == kIdentity);  // no such slot
 }
 
+/// The game's last-device note after a table change: player 1's new device noted as its press would note it (an XInput
+/// slot at once, a PlayStation record at its read); a noted pad that moved, followed to its new slot.
+void TheNoteFollows()
+{
+    const DeviceNote xinputOne{kClassXInput, 0, 0};
+    const DeviceNote sonyOne{kClassPlayStation, 0, 0};
+    // Pad 1 on player 1, the first PlayStation pad on player 2; they trade: the pad's note follows it to slot 1 now,
+    // the PlayStation pad is noted at record 0's read.
+    const auto is = [](const NoteChange& c, bool newDevice, NoteFlag flag, int xinputSlot, int sonySlot) {
+        return c.newDevice == newDevice && c.flag == flag && c.xinputSlot == xinputSlot && c.sonySlot == sonySlot;
+    };
+    const PadTable xbox = WithPadOn(kIdentity, 4, 1);
+    const PadTable ps   = WithPadOn(WithPadOn(xbox, 4, 0), 0, 1);
+    EXPECT(PadOn(ps, 0) == 4 && PadOn(ps, 1) == 0);
+    EXPECT(is(Renoted(xbox, ps, xinputOne), true, NoteFlag::None, 1, 0));
+    // Traded back: pad 1 noted on slot 0 at once, flag raised; the PlayStation record moves before the Tick reads it.
+    EXPECT(is(Renoted(ps, xbox, sonyOne), true, NoteFlag::XInput, 0, -1));
+    // Both in one frame (the Tick not run between): the second change is a new device too, so the first one's XInput
+    // flag is lowered and the PlayStation pad's note waits for record 0.
+    EXPECT(is(Renoted(xbox, ps, sonyOne), true, NoteFlag::None, -1, 0));
+    // The keyboard takes player 1 from the PlayStation pad: the keyboard's flag, a noted pad that stays put kept.
+    PadTable kb = ps;
+    kb.live[1]  = kKeyboard;
+    const PadTable kbOne = WithPadOn(WithKeyboardOn(kb, 0), 4, 1);
+    EXPECT(KeyboardSlot(kbOne) == 0 && PadOn(kbOne, 1) == 4);
+    EXPECT(is(Renoted(kb, kbOne, DeviceNote{kClassXInput, 2, 0}), true, NoteFlag::Keyboard, -1, -1));
+    // From the keyboard to a PlayStation pad, and to an XInput pad (the same lane, only the live reader changes).
+    EXPECT(is(Renoted(kbOne, kb, DeviceNote{kClassKeyboard, 0, 0}), true, NoteFlag::None, -1, 0));
+    const PadTable kbOnPadLane = WithKeyboardOn(kIdentity, 0);
+    EXPECT(is(Renoted(kbOnPadLane, kIdentity, DeviceNote{kClassKeyboard, 0, 0}), true, NoteFlag::XInput, 0, -1));
+    // One PlayStation pad for another on player 1: noted at record 0's read; the noted record moving is not followed.
+    const PadTable sonyA = WithPadOn(kIdentity, 4, 0);
+    const PadTable sonyB = WithPadOn(sonyA, 5, 0);
+    EXPECT(PadOn(sonyB, 0) == 5);
+    EXPECT(is(Renoted(sonyA, sonyB, sonyOne), true, NoteFlag::None, -1, 0));
+    // Players 2 and 3 trade while player 1 keeps the PlayStation pad: a noted XInput pad followed to its new slot.
+    const PadTable two   = WithPadOn(kIdentity, 4, 0);
+    const PadTable three = WithPadOn(WithPadOn(two, 2, 1), 1, 2);
+    EXPECT(PadOn(three, 1) == 2 && PadOn(three, 2) == 1);
+    EXPECT(is(Renoted(two, three, DeviceNote{kClassXInput, 1, 0}), false, NoteFlag::None, 2, -1));
+    EXPECT(is(Renoted(two, three, DeviceNote{kClassXInput, 0, 0}), false, NoteFlag::None, -1, -1));  // nothing moved
+    // ... and a noted PlayStation pad, at its new record's read.
+    const PadTable sonyTwo   = WithPadOn(WithPadOn(kIdentity, 4, 1), 5, 2);
+    const PadTable sonyThree = WithPadOn(WithPadOn(sonyTwo, 5, 1), 4, 2);
+    EXPECT(PadOn(sonyThree, 1) == 5 && PadOn(sonyThree, 2) == 4);
+    EXPECT(is(Renoted(sonyTwo, sonyThree, DeviceNote{kClassPlayStation, 0, 1}), false, NoteFlag::None, -1, 2));
+    // No change, the keyboard or DirectInput noted, or indices the game never writes: nothing.
+    EXPECT(is(Renoted(xbox, xbox, xinputOne), false, NoteFlag::None, -1, -1));
+    EXPECT(is(Renoted(two, three, DeviceNote{}), false, NoteFlag::None, -1, -1));
+    EXPECT(is(Renoted(two, three, DeviceNote{3, 1, 1}), false, NoteFlag::None, -1, -1));
+    EXPECT(is(Renoted(two, three, DeviceNote{kClassXInput, -1, 7}), false, NoteFlag::None, -1, -1));
+    EXPECT(is(Renoted(sonyTwo, sonyThree, DeviceNote{kClassPlayStation, 0, 7}), false, NoteFlag::None, -1, -1));
+    // A note waiting for its record's read, through a second change before that read.
+    const NoteChange none{};
+    const NoteChange newOne{true, NoteFlag::XInput, 0, -1};
+    const NoteChange follows{false, NoteFlag::None, -1, 2};
+    EXPECT(NextWaiting(0, none, true) == 0);       // players 2 and 3 trade: player 1's PlayStation pad still waits
+    EXPECT(NextWaiting(0, follows, true) == 0);    // ... over a record named from the stale index
+    EXPECT(NextWaiting(0, newOne, false) == -1);   // player 1 back on an XInput pad: nothing waits
+    EXPECT(NextWaiting(2, none, false) == 2);      // another record's note kept
+    EXPECT(NextWaiting(1, follows, false) == 2);   // ... or replaced by the one the change names
+    EXPECT(NextWaiting(-1, none, true) == -1);
+    EXPECT(NextWaiting(-1, NoteChange{true, NoteFlag::None, -1, 0}, true) == 0);
+}
+
 /// A pad beside the one that plays a player's slot is muted while that one answers; on a slot no player holds, or
 /// beside an absent pad, it plays on.
 void TheMute()
@@ -216,6 +281,7 @@ int main()
 {
     TheTable();
     WithPadOnSwaps();
+    TheNoteFollows();
     TheMute();
     KeyboardKeys();
     PlayStationButtons();

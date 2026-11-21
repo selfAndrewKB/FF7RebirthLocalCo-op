@@ -1,5 +1,6 @@
 #include "input/pad_table.h"
 
+#include "facts/controller.h"
 #include "facts/engine.h"
 #include "platform/call_redirect.h"
 #include "platform/guarded_read.h"
@@ -7,6 +8,7 @@
 #include "platform/log.h"
 #include "platform/module_folder.h"
 #include "platform/vtable_entry.h"
+#include "players/game_globals.h"
 #include "players/generation.h"
 #include "players/seats.h"
 
@@ -99,6 +101,9 @@ std::uint32_t g_unseenSlots    = 0;      // the slots whose pad answered while t
 std::uint32_t g_unseenRechecks = 0;      // the re-checks set for them
 bool          g_recheckFailing = false;  // the last re-check write failed (its warning said)
 bool          g_sonyLive       = false;  // the PlayStation reader's first read was seen (said once)
+int           g_sonyNote       = -1;     // the record whose next read notes its new pad as the game's last device
+std::uint32_t g_renotes        = 0;
+bool          g_noteUnreadSaid = false;
 std::wstring  g_last           = L"none yet";
 
 bool IsIdle(int pad) noexcept
@@ -471,6 +476,132 @@ std::optional<std::uint32_t> TakeSystemButtons(std::uint8_t* data) noexcept
     return buttons;
 }
 
+std::uint8_t* InputObject() noexcept
+{
+    return static_cast<std::uint8_t*>(players::game_globals::Object(players::game_globals::Global::SquareInputOwner));
+}
+
+/// After a table change: the game's last-device note made again where the change leaves it naming a pad that no longer
+/// answers there (pad_rules::Renoted), as that device's own press would write it.
+void Renote(const rules::PadTable& before, const rules::PadTable& after) noexcept
+{
+    const int waiting         = g_sonyNote;
+    g_sonyNote                = -1;
+    std::uint8_t* const owner = InputObject();
+    std::uint8_t        cls   = 0;
+    rules::DeviceNote   note{};
+    if (owner == nullptr || !platform::Read(owner, facts::kInputDeviceClass, cls) ||
+        !platform::Read(owner, facts::kInputXInputIndex, note.xinput) ||
+        !platform::Read(owner, facts::kInputPlayStationIndex, note.sony))
+    {
+        if (!g_noteUnreadSaid)
+        {
+            g_noteUnreadSaid = true;
+            platform::LogWarning(L"pads: the game's last-device note was unreadable: a player 1 change may read to the "
+                                 L"game as player 1's pad unplugged (its pause menu)");
+        }
+        return;
+    }
+    note.cls                   = cls;
+    const rules::NoteChange c  = rules::Renoted(before, after, note);
+    const auto              put = [owner](std::uint32_t field, const auto& value) {
+        return platform::WriteGuarded(owner + field, &value, sizeof(value));
+    };
+    bool written = true;
+    if (c.newDevice)
+    {
+        // The flags raised since the game's last Tick name earlier devices: the new one's alone reaches it.
+        for (const std::uint32_t flag : {facts::kInputKeyboardUsed, facts::kInputXInputUsed, facts::kInputPlayStationUsed})
+        {
+            written = put(flag, std::uint8_t{0}) && written;
+        }
+    }
+    if (c.flag != rules::NoteFlag::None)
+    {
+        const std::uint32_t flag = c.flag == rules::NoteFlag::Keyboard ? facts::kInputKeyboardUsed : facts::kInputXInputUsed;
+        written                  = put(flag, std::uint8_t{1}) && written;
+    }
+    if (c.xinputSlot >= 0)
+    {
+        written = put(facts::kInputXInputIndex, std::int32_t{c.xinputSlot}) && written;
+    }
+    const int playerOne = rules::PadOn(after, 0);
+    g_sonyNote = rules::NextWaiting(waiting, c, playerOne >= 0 && rules::ReaderOf(playerOne) == rules::kPlayStation);
+    if (!written)
+    {
+        platform::LogWarning(L"pads: the game's last-device note could not be written: a player 1 change may read to the "
+                             L"game as player 1's pad unplugged (its pause menu)");
+        return;
+    }
+    if (c.flag == rules::NoteFlag::None && c.xinputSlot < 0 && c.sonySlot < 0)
+    {
+        return;
+    }
+    ++g_renotes;
+    try
+    {
+        std::wstring said;
+        if (c.flag == rules::NoteFlag::Keyboard)
+        {
+            said = L"the keyboard, player 1's now";
+        }
+        else if (c.flag == rules::NoteFlag::XInput)
+        {
+            said = L"player 1's pad, on player 1's XInput slot";
+        }
+        else if (c.newDevice && c.sonySlot >= 0)
+        {
+            said = L"player 1's PlayStation pad, at player 1's record's next read";
+        }
+        if (c.xinputSlot >= 0 && c.flag != rules::NoteFlag::XInput)
+        {
+            said += std::format(L"{}the noted pad followed to player {}'s XInput slot", said.empty() ? L"" : L"; ",
+                                c.xinputSlot + 1);
+        }
+        if (!c.newDevice && c.sonySlot >= 0)
+        {
+            said += std::format(L"{}the noted PlayStation pad, at player {}'s record's next read", said.empty() ? L"" : L"; ",
+                                c.sonySlot + 1);
+        }
+        platform::Log(L"pads: the game's last device noted again (it was class {}, XInput index {}, PlayStation index {}): "
+                      L"{}",
+                      note.cls, note.xinput, note.sony, said);
+    }
+    catch (...)
+    {
+    }
+}
+
+/// A record's read with its pad placed: the waiting note made, if it is this record's, the pad its lane names, and that
+/// pad answers (an absent one noted would read to the game as unplugged).
+void NoteSony(int slot, std::int32_t handle) noexcept
+{
+    const int lane = rules::Lane(rules::kPlayStation, slot);
+    const int pad  = PlayStationPad(handle);
+    if (slot != g_sonyNote || pad < 0 || pad != g_lanes[static_cast<std::size_t>(lane)].load(std::memory_order_relaxed) ||
+        (g_present.load(std::memory_order_relaxed) >> pad & 1u) == 0)
+    {
+        return;
+    }
+    g_sonyNote                = -1;
+    std::uint8_t* const owner = InputObject();
+    const std::uint8_t  one   = 1;
+    const std::int32_t  index = slot;
+    if (owner == nullptr || !platform::WriteGuarded(owner + facts::kInputPlayStationIndex, &index, sizeof(index)) ||
+        !platform::WriteGuarded(owner + facts::kInputPlayStationUsed, &one, sizeof(one)))
+    {
+        return;
+    }
+    try
+    {
+        platform::Log(L"pads: the game's last device noted as {} on PlayStation record {}, which it answers now",
+                      rules::PadName(PlayStationPad(handle)), slot + 1);
+    }
+    catch (...)
+    {
+    }
+}
+
 /// The PlayStation reader's read of one record: the record's lane's pad, read, then the same rules as XInput's.
 int ReadStateFor(std::int32_t handle, std::uint8_t* data) noexcept
 {
@@ -493,6 +624,7 @@ int ReadStateFor(std::int32_t handle, std::uint8_t* data) noexcept
         return result;
     }
     handle            = Place(record, slot, handle);
+    NoteSony(slot, handle);
     const int  result = g_readState(handle, data);
     const auto taken  = TakeSystemButtons(data);
     const int  pad    = PlayStationPad(handle);
@@ -632,11 +764,11 @@ std::wstring Reading()
     const std::uint32_t idle = g_windowIdle.load();
     return std::format(L"{}{}; {}; muted: {}; answering: {}; slots with a player {:#x}; View held {}, Starts held back {}, "
                        L"waits for a let-go {}, re-checks {} ({} for a pad the engine had not seen; such slots now {:#x}), "
-                       L"changes {}, PlayStation moves {}; last: {}",
+                       L"changes {}, PlayStation moves {}, last-device notes made again {}; last: {}",
                        g_installed ? (g_playStation ? L"on (XInput and PlayStation)" : L"on (XInput only)") : L"not installed",
                        idle != 0 ? std::format(L" (idle to the game: {})", PadsText(idle)) : std::wstring(),
                        TableText(Table()), PadsText(g_muted.load()), PadsText(g_present.load()), g_playing.load(), g_opens,
-                       g_startsHeld, g_waited, g_rechecks, g_unseenRechecks, g_unseenSlots, g_changes, g_sonyMoves, g_last);
+                       g_startsHeld, g_waited, g_rechecks, g_unseenRechecks, g_unseenSlots, g_changes, g_sonyMoves, g_renotes, g_last);
 }
 #endif
 
@@ -686,6 +818,7 @@ try
     {
         g_live[static_cast<std::size_t>(slot)].store(table.live[static_cast<std::size_t>(slot)], std::memory_order_relaxed);
     }
+    Renote(before, table);
     AwaitReleases();
     ++g_waited;
     ++g_changes;
@@ -915,6 +1048,7 @@ void Remove() noexcept
     g_windowIdle.store(0);
     g_muted.store(0);
     g_playing.store(~0u);  // every Start through, should a slot stay ours (a replace not put back)
+    g_sonyNote = -1;
     // The lanes first: a read still in our redirect then places nothing but each record's own pad.
     for (int lane = 0; lane < kPads; ++lane)
     {

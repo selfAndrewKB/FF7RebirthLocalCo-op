@@ -27,7 +27,11 @@
 //     the game, and its Start, heard by the listener, joins (session/player_window); the rest of such a pad still
 //     reaches the game as before;
 //   - B, told to the listener as a tap (let go within a second) or a hold (a second down; pad_rules::Hold): a
-//     window's close and its leave. B itself is not held back.
+//     window's close and its leave. B itself is not held back;
+//   - the game's note of the last device used: its pause menu opens when the noted pad stops answering its slot, as
+//     when it is unplugged. A change that gives player 1 another device, or moves the noted pad, writes the note as that
+//     device's own next press would (pad_rules::Renoted), so the game's Tick makes it the last device (player 1's
+//     button art and rumble with it) and no pause menu opens.
 //
 // PlayStation pads: the game reads them itself, through Sony's scePad library linked into the exe, one record per slot,
 // each record holding a pad's scePad handle (research/RE-playstation-pads.md). The mod takes that reader's one read

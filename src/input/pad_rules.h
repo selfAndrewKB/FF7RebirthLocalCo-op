@@ -296,6 +296,92 @@ constexpr PadTable WithPadOn(PadTable table, int which, int slot) noexcept
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
+// The game's note of the last device used: a class (the PlayStation reader, the keyboard, XInput) and, for a pad, the
+// slot or record it was used on. The game pauses when the noted pad stops answering there, as when it is unplugged, so
+// a table change that gives player 1 another device, or moves the noted pad, notes it again as that device's next press
+// would. An XInput slot answers at once; a PlayStation record takes its new pad at its next read, so that note waits for
+// the read. The game's Tick ranks the flags (keyboard, then XInput, then PlayStation): a new player 1 device lowers the
+// others' flags raised since the last Tick, and a moved XInput pad is re-pointed by its slot alone. The note skips the
+// pad-type rescan the game's own runs for an XInput slot it has not seen before.
+
+// The game's device class values (its byte at facts::kInputDeviceClass).
+inline constexpr int kClassPlayStation = 0;
+inline constexpr int kClassKeyboard    = 1;
+inline constexpr int kClassXInput      = 2;
+
+struct DeviceNote
+{
+    int cls    = kClassKeyboard;
+    int xinput = -1;  // the XInput slot noted
+    int sony   = -1;  // the PlayStation record noted
+};
+
+/// The flag raised now for player 1's new device (a PlayStation pad's waits for its record's read).
+enum class NoteFlag : std::uint8_t
+{
+    None,
+    XInput,
+    Keyboard,
+};
+
+struct NoteChange
+{
+    bool     newDevice  = false;           // player 1's device changed: the flags raised since the last Tick lowered
+    NoteFlag flag       = NoteFlag::None;
+    int      xinputSlot = -1;              // the XInput slot noted from now on, or -1
+    int      sonySlot   = -1;              // the record whose next read notes its new pad (flag and record), or -1
+};
+
+constexpr NoteChange Renoted(const PadTable& before, const PadTable& after, const DeviceNote& note) noexcept
+{
+    const auto movedTo = [&](int reader, int slot) {
+        return slot >= 0 && slot < kSlots ? SlotOf(after, before.lanes[static_cast<std::size_t>(Lane(reader, slot))]) : -1;
+    };
+    NoteChange c{};
+    const int  now     = PadOn(after, 0);
+    const int  nowRead = now == kNoPad ? kKeyboard : ReaderOf(now);
+    c.newDevice        = PadOn(before, 0) != now;  // pad numbers differ by reader: a reader change is a new device
+    if (c.newDevice && nowRead == kXInput)
+    {
+        c.flag       = NoteFlag::XInput;
+        c.xinputSlot = 0;
+    }
+    else if (note.cls == kClassXInput && movedTo(kXInput, note.xinput) != note.xinput)
+    {
+        c.xinputSlot = movedTo(kXInput, note.xinput);
+    }
+    if (c.newDevice && nowRead == kKeyboard)
+    {
+        c.flag = NoteFlag::Keyboard;
+    }
+    if (c.newDevice && nowRead == kPlayStation)
+    {
+        c.sonySlot = 0;
+    }
+    else if (!c.newDevice && note.cls == kClassPlayStation && movedTo(kPlayStation, note.sony) != note.sony)
+    {
+        c.sonySlot = movedTo(kPlayStation, note.sony);
+    }
+    return c;
+}
+
+/// The record whose next read makes the note after change `c`, given the one already waiting (-1: none). The game's
+/// index is stale while one waits, so a waiting note outlives a change without a new player 1 device: player 1's own
+/// (record 0, while player 1 is on a PlayStation pad) always, another unless the change names a record itself.
+constexpr int NextWaiting(int waiting, const NoteChange& c, bool playerOneOnPlayStation) noexcept
+{
+    if (c.newDevice)
+    {
+        return c.sonySlot;
+    }
+    if (waiting == 0 && playerOneOnPlayStation)
+    {
+        return 0;
+    }
+    return c.sonySlot >= 0 ? c.sonySlot : waiting;
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
 // The opener: View held for kOpenHoldMs on one pad opens that player's window (View with Menu raised Steam's on-screen
 // keyboard over the game). View alone opens the map at its press, so a View press is held back from the game: let go
 // before kOpenHoldMs, the game gets it then as a one-poll tap (the map opens at the let-go, a tap's length late); held

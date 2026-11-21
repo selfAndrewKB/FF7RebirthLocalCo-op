@@ -533,7 +533,7 @@ void WatchKeyboardOnTitle()
     {
         return;  // unread: no edge from a failed read
     }
-    const bool keyboard = deviceClass == facts::kDeviceClassKeyboard;
+    const bool keyboard = deviceClass == pad::kClassKeyboard;
     const bool title    = views::AtTitleNow();
     if (rules::KeyboardClaims(keyboard, g_keyboardLast, title, g_titleLast))
     {

@@ -124,8 +124,15 @@ inline constexpr std::uint32_t  kInputMergedSticks     = 0x1210;  // float LX, L
 inline constexpr std::uint32_t  kInputDigitalSticks    = 0x1120;
 /// The last device class (1 keyboard and mouse: a key, a mouse button or the wheel; 2 XInput; 0 the PlayStation reader;
 /// 3 DirectInput), one byte the input Tick keeps from its frame's input flags.
+/// Its values: input/pad_rules kClassPlayStation, kClassKeyboard, kClassXInput.
 inline constexpr std::uint32_t  kInputDeviceClass      = 0x1274;
-inline constexpr std::uint8_t   kDeviceClassKeyboard   = 1;
+/// A pad's key-down notes its pad (SquareInput__NoteLastActiveDevice): "a PlayStation-reader pad was used this frame"
+/// with its record, or "an XInput pad was used" with its slot. The input Tick turns the flags into kInputDeviceClass;
+/// the pause poll's disconnect check asks whether the named pad still answers (RE-pause-menu-any-pad.md).
+inline constexpr std::uint32_t  kInputPlayStationUsed  = 0x5C;
+inline constexpr std::uint32_t  kInputXInputUsed       = 0x5D;
+inline constexpr std::uint32_t  kInputPlayStationIndex = 0x70;  // i32
+inline constexpr std::uint32_t  kInputXInputIndex      = 0x74;  // i32
 /// "A key, a mouse button or the wheel was used this frame": the keyboard and mouse handlers set it, and the input Tick
 /// turns it into the keyboard class for every player's button art and player 1's rumble device.
 inline constexpr std::uint32_t  kInputKeyboardUsed     = 0x5B;
