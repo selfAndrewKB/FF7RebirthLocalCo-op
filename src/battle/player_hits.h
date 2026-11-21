@@ -25,10 +25,17 @@
 // The same answer is held when an enemy senses a seat's attack starting (OnReactionSensing and its TakeAbility
 // variant, whose argument is the attacking character): any thread, since enemy AI may tick on workers.
 //
+// And when a seat's character's voice notify tests whether its hit would kill the target
+// (research/RE-voice-line-hit-test.md): the talk component runs the hit's damage as a dry run, then a lethal test whose one
+// leader read decides whether the target's scripted HP floor stops the hit. Outside the damage slots that test judged
+// the seat's hit as an AI ally's while the real hit counts as the player's, so the finishing-blow line could be lost
+// on a target with a floor. The test's one call is redirected.
+//
 // Each damage or reaction call also records which human it is about (the attacker, or the character hit), the
 // reaction context: battle/target_coin answers an enemy's "who is the leader" with that player there (a counter
 // aims at the player who hit it), and with the enemy's coin everywhere else.
-// Logged: each call that held the answer and each summon-gauge answer (Debug), the install (Info).
+// Logged: each call that held the answer, each summon-gauge answer and each seat's lethal test with its result (Debug),
+// the install (Info).
 
 #include <cstdint>
 
@@ -38,7 +45,8 @@ class GameImage;
 
 namespace lss::battle::player_hits {
 
-/// Replaces the damage slots and places the summon gauge's leader-read and the reaction-sensing redirects (logged).
+/// Replaces the damage slots and places the summon gauge's leader-read, the reaction-sensing and the voice line's
+/// lethal-hit test redirects (logged).
 /// Needs leader_answer's slot. Call from on_unreal_init: one reaction-sensing call crosses a 16-byte block
 /// in both builds, which is safe to change only while no thread can be running it.
 bool Install(const platform::GameImage& image) noexcept;

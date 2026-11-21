@@ -81,14 +81,24 @@ constexpr std::uintptr_t kSensing         = 0x1417F86E0;
 constexpr std::uintptr_t kTakeAbilityCall = 0x140A589AF;  // OnReactionSensingTakeAbilityInvoke(ctrl, causer, handle)
 constexpr std::uintptr_t kTakeAbility     = 0x141850EBC;
 
+// A voice line's lethal-hit test (research/RE-voice-line-hit-test.md): at a voice notify the character's talk component
+// works out whether its hit would kill its target, to choose the finishing-blow line. Its one leader read is the leader
+// test on the attacker (a player's hit skips the target's HP floor), outside every damage slot. One call, inside one
+// 16-byte block; no branch lands inside it.
+constexpr std::uint8_t           kLethalTestBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x48, 0x89, 0x6C,
+                                                       0x24, 0x18, 0x56, 0x57, 0x41, 0x54, 0x41, 0x56};
+constexpr platform::FunctionFact kLethalTest{L"BattleTalk_PredictLethal_HPFloorsIsUCPCAttacker", 0x14151F2B4, kLethalTestBytes};
+constexpr std::uintptr_t         kLethalTestCall = 0x140A53181;  // (victim component, results, attacker) -> bool
+
 using DamageFn = std::uint64_t (*)(std::uint64_t component, std::uint64_t attacker, std::uint64_t hit,
                                    std::uint64_t damage, std::uint64_t e);
+using LethalTestFn = std::uint64_t (*)(std::uint64_t victim, std::uint64_t results, std::uint64_t attacker);
 using LeaderFn = std::uint64_t (*)(std::uint64_t, std::uint64_t, std::uint64_t, std::uint64_t);
 using ResolveFn = void* (*)();
 
 // Set once at install.
 platform::VTableEntry  g_slots[kSlots];
-platform::CallRedirect g_leaderRead, g_sensing, g_takeAbility;
+platform::CallRedirect g_leaderRead, g_sensing, g_takeAbility, g_lethalTest;
 ResolveFn              g_resolveLeader = nullptr;  // ResolvePartyLeaderWeakPtr: player 1's character
 
 std::atomic<bool> g_on{false};
@@ -248,6 +258,23 @@ std::uint64_t Sensing(std::uint64_t controller, std::uint64_t causer, std::uint6
     return scopes::thread_hold::HoldingBy(&Hold, &Restore, who, original, controller, causer, handle, type, direction);
 }
 
+/// A voice line's lethal-hit test with the attacking player's answers held when a seat's character attacks, as its real
+/// hit is applied, so the finishing-blow line follows the hit the target takes. Player 1's and the AI's keep the game's.
+std::uint64_t LethalTest(std::uint64_t victim, std::uint64_t results, std::uint64_t attacker) noexcept
+{
+    const auto        original = reinterpret_cast<LethalTestFn>(g_lethalTest.Original());
+    const Involvement who      = Involved(0, attacker, false);
+    if (who.human < 1)
+    {
+        return original(victim, results, attacker);
+    }
+    const std::uint64_t result = scopes::thread_hold::HoldingBy(&Hold, &Restore, who, original, victim, results, attacker);
+    platform::LogDebug(L"player hits: a voice line's finishing-blow test for {}'s hit, {} counting as the player: {}",
+                       players::SeatName(who.human), players::SeatName(who.human),
+                       (result & 0xFF) != 0 ? L"a finishing blow" : L"not a finishing blow");
+    return result;
+}
+
 constexpr DamageFn kWrappers[kSlots] = {&Damage<0>, &Damage<1>, &Damage<2>, &Damage<3>, &Damage<4>,
                                         &Damage<5>, &Damage<6>, &Damage<7>, &Damage<8>, &Damage<9>};
 
@@ -278,6 +305,10 @@ bool Install(const platform::GameImage& image) noexcept
     const bool takes = takeSite && take &&
                        g_takeAbility.InstallFromOwnThread(*takeSite, *take,
                                                           reinterpret_cast<std::uintptr_t>(&Sensing<g_takeAbility>));
+    const auto lethalSite = image.Rebase(kLethalTestCall, 5);
+    const auto lethal     = platform::FindFunction(image, kLethalTest);
+    const bool finishing  = lethalSite && lethal &&
+                           g_lethalTest.Install(*lethalSite, *lethal, reinterpret_cast<std::uintptr_t>(&LethalTest));
     g_on.store(true, std::memory_order_release);
     std::size_t slots = 0;
     for (std::size_t i = 0; i < kSlots; ++i)
@@ -291,7 +322,7 @@ bool Install(const platform::GameImage& image) noexcept
             platform::Log(L"player hits: the {} damage slot keeps the game's own answers", kSlotNames[i]);
         }
     }
-    if (slots == 0 && !senses && !takes)
+    if (slots == 0 && !senses && !takes && !finishing)
     {
         g_on.store(false, std::memory_order_release);
         platform::Log(L"player hits: UNAVAILABLE (no damage slot or reaction call could be changed); players 2 and 3's hits "
@@ -299,9 +330,10 @@ bool Install(const platform::GameImage& image) noexcept
         return false;
     }
     platform::Log(L"player hits: players 2 and 3's hits and the hits they take count as the player's ({} of {} damage "
-                  L"slots); summon gauge at the player's rate {}; reaction sensing {}",
+                  L"slots); summon gauge at the player's rate {}; reaction sensing {}; finishing-blow voice lines {}",
                   slots, kSlots, gauge ? L"on" : L"UNAVAILABLE (the leader read differs)",
-                  senses && takes ? L"on" : (senses || takes ? L"partly on" : L"UNAVAILABLE"));
+                  senses && takes ? L"on" : (senses || takes ? L"partly on" : L"UNAVAILABLE"),
+                  finishing ? L"on" : L"UNAVAILABLE (the lethal-hit test's call differs)");
     return true;
 }
 
@@ -316,7 +348,7 @@ void Remove() noexcept
                           kSlotNames[i]);
         }
     }
-    for (auto* call : {&g_leaderRead, &g_sensing})
+    for (auto* call : {&g_leaderRead, &g_sensing, &g_lethalTest})
     {
         if (call->IsInstalled() && !call->Restore())
         {
