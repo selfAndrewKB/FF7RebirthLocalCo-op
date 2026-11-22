@@ -148,4 +148,24 @@ struct RulesPart
 using SeatScopes = Ladder<Args, FocusPart, SticksPart, PrimaryPart, ButtonsPart, TargetsPart, LeaderPart,
                           LeaderTypePart, RulesPart>;
 
+/// Runs `call(context)` with `seat` as the game's primary controller and `member` as its party leader (the leader
+/// field itself, so every read of "the leader's chocobo" names the member's), as the game runs player 1. False, calling
+/// nothing, when a scope is refused or the member is not a party character. Game thread.
+inline bool AsPartyLeader(int seat, void* member, void (*call)(void* context), void* context) noexcept
+{
+    Args args;
+    args.seat = seat;
+    if (member == nullptr || !FillMember(args, member))
+    {
+        return false;
+    }
+    const SeatScopes scopes(Primary | Leader, args);
+    if (!scopes.Held())
+    {
+        return false;
+    }
+    call(context);
+    return true;
+}
+
 }  // namespace lss::scopes::seat_ladder

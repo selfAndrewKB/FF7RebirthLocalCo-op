@@ -5,7 +5,6 @@
 #include "facts/party.h"
 #include "facts/vehicles.h"
 #include "hud/passes/pass_opacity.h"
-#include "input/member_movement.h"
 #include "platform/call_redirect.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
@@ -13,6 +12,7 @@
 #include "platform/sparse_array.h"
 #include "platform/verified_code.h"
 #include "players/generation.h"
+#include "players/describe.h"
 #include "players/object_fields.h"
 #include "players/seats.h"
 #include "players/unreal_access.h"
@@ -20,6 +20,7 @@
 #include "players/widget_opacity.h"
 #include "rides/scour_scent.h"
 #include "scopes/leader_scope.h"
+#include "scopes/seat_ladder.h"
 
 #include <array>
 #include <cmath>
@@ -236,7 +237,7 @@ void* RideBody() noexcept
     return platform::CallGuarded(g_fn.rideBody, body, std::uint8_t{1}) ? body : nullptr;
 }
 
-/// Runs `fn` in `player`'s answers: player 1's as the world tick has them; a seat's primary scope and leader answer.
+/// Runs `fn` in `player`'s answers: player 1's as the world tick has them; a seat's as the party leader.
 template <class Fn>
 bool AsPlayer(int player, Fn& fn) noexcept
 {
@@ -245,10 +246,8 @@ bool AsPlayer(int player, Fn& fn) noexcept
         fn();
         return true;
     }
-    void* member = players::generation::MemberOf(player);
-    return member != nullptr &&
-           input::member_movement::InPrimaryScope(
-               player, member, [](void* context) { (*static_cast<Fn*>(context))(); }, &fn);
+    return scopes::seat_ladder::AsPartyLeader(
+        player, players::generation::MemberOf(player), [](void* context) { (*static_cast<Fn*>(context))(); }, &fn);
 }
 
 /// A set removed as the game removes its own: each widget hidden, taken off the overlay, its weak reset.
@@ -877,15 +876,24 @@ void Rider(void* manager, void* session, int player, bool shutDown) noexcept
         g_flags[index] = {};
         return;
     }
-    Flags flags;
-    bool  faulted = false;
-    auto  update  = [&] {
+    Flags       flags;
+    bool        faulted       = false;
+    const void* playerOneBody = player >= 1 && !g_bodySaid ? RideBody() : nullptr;
+    auto        update        = [&] {
         void* body = RideBody();
         if (player >= 1 && body != nullptr && body != players::generation::ChocoboOf(player) && !g_bodySaid)
         {
             g_bodySaid = true;
-            platform::LogWarning(L"treasure hint: {}'s leader answer names another chocobo than theirs (said once)",
-                                 players::SeatName(player));
+            try
+            {
+                platform::LogWarning(L"treasure hint: {}'s leader answer names {} ({}), not their chocobo {} (said once)",
+                                     players::SeatName(player), players::NameOf(body),
+                                     body == playerOneBody ? L"player 1's" : L"not player 1's either",
+                                     players::NameOf(players::generation::ChocoboOf(player)));
+            }
+            catch (...)
+            {
+            }
         }
         flags = Evaluate(manager, body);
         const SwappedIn swapped(session, set);
@@ -966,14 +974,27 @@ bool Install(const platform::GameImage& image) noexcept
     found             = Find(image, facts::kSplineLength, g_fn.splineLength) && found;
     const auto params = image.Rebase(facts::kCraftParams, sizeof(void*));
     g_params          = params ? reinterpret_cast<void*>(*params) : nullptr;
-    g_ready = found && g_params != nullptr && players::weak_object::Known() && players::widget_opacity::Installed() &&
-              g_statusCall.Install(image, facts::kCraftStatusWidgetsCall, reinterpret_cast<std::uintptr_t>(g_fn.statusWidgets),
-                                   reinterpret_cast<std::uintptr_t>(&StatusCall));
+    // The per-view hiding (players/widget_opacity) installs later; ShowOnly asks for it at each use.
+    const wchar_t* failed = !found                           ? L"a game function is not what the research read"
+                            : g_params == nullptr            ? L"the craft's parameter registry is outside the image"
+                            : !players::weak_object::Known() ? L"weak pointers cannot be resolved"
+                            : !g_statusCall.Install(image, facts::kCraftStatusWidgetsCall,
+                                                    reinterpret_cast<std::uintptr_t>(g_fn.statusWidgets),
+                                                    reinterpret_cast<std::uintptr_t>(&StatusCall))
+                                ? L"the craft tick's icon update call is not what the research read"
+                                : nullptr;
+    g_ready = failed == nullptr;
     g_hidden.Reserve(players::kMaxPlayers * 3);
-    platform::Log(L"treasure hint: {}",
-                  g_ready ? L"ready: with Scour and Scent's tick, every rider sees the treasure hint over their own chocobo in "
-                            L"their own view (the game's icon; the mod's reading of the game's test, checked against the game's own)"
-                          : L"UNAVAILABLE (a check failed): only the player the game's tick runs as sees the hint");
+    if (g_ready)
+    {
+        platform::Log(L"treasure hint: ready: with Scour and Scent's tick, every rider sees the treasure hint over their own "
+                      L"chocobo in their own view (the game's icon; the mod's reading of the game's test, checked against the "
+                      L"game's own)");
+    }
+    else
+    {
+        platform::Log(L"treasure hint: UNAVAILABLE ({}): only the player the game's tick runs as sees the hint", failed);
+    }
     return g_ready;
 }
 

@@ -223,20 +223,7 @@ void RunTick(void* context) noexcept
 /// The manager's tick inside `seat`'s primary scope and leader answer; false, nothing called, when refused.
 bool TickAsSeat(int seat, TickCall& call) noexcept
 {
-    void*                  member = players::generation::MemberOf(seat);
-    scopes::seat_ladder::Args args;
-    args.seat = seat;
-    if (member == nullptr || !scopes::seat_ladder::FillMember(args, member))
-    {
-        return false;
-    }
-    const scopes::seat_ladder::SeatScopes scopes(scopes::seat_ladder::Primary | scopes::seat_ladder::Leader, args);
-    if (!scopes.Held())
-    {
-        return false;
-    }
-    RunTick(&call);
-    return true;
+    return scopes::seat_ladder::AsPartyLeader(seat, players::generation::MemberOf(seat), &RunTick, &call);
 }
 
 /// Replaces the manager tick's call: a request with nobody named is player 1's press; a player 2's or 3's session runs

@@ -10,9 +10,9 @@
 //   rides; else player 1. The session's icon set belongs to that player; when the player changes, the sets trade
 //   places, so no icon is rebuilt;
 // - every other rider has an icon set of their own, made, shown, animated, placed and removed by the game's own
-//   ChocoCraft_UpdateStatusWidgets, called in that rider's primary scope and leader answer with their set swapped into
-//   the session for the call (the session's dig, sniff, discover and trail fields read idle, the dug item's widget
-//   empty) and every swapped field put back after;
+//   ChocoCraft_UpdateStatusWidgets, called with that rider as the primary controller and party leader, their set
+//   swapped into the session for the call (the session's dig, sniff, discover and trail fields read idle, the dug
+//   item's widget empty) and every swapped field put back after;
 // - the hint's flags for those riders come from the mod's copy of the game's nearest-point test (the one recreation:
 //   the game's point table, ranges, names and trail splines, read only, through the game's own spline helpers). Every
 //   frame the same copy runs for the tick's player and is compared with the game's own flags, captured at the game's
