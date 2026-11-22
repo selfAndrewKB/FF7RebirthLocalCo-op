@@ -848,6 +848,25 @@ int MemberEntryState(const void* member) noexcept
     return EntryState(RideManager(), member);
 }
 
+int BoardsChocobo(const void* chocobo) noexcept
+{
+    if (chocobo == nullptr || !g_installed || !players::generation::OnGameThread())
+    {
+        return 0;
+    }
+    const std::byte* manager = RideManager();
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
+    {
+        const SeatRide& s      = g_seats[seat];
+        void*           member = players::generation::Active(seat) ? players::generation::MemberOf(seat) : nullptr;
+        if (member != nullptr && !s.stopped && s.heldBack != chocobo && EntryChocobo(manager, member) == chocobo)
+        {
+            return seat;
+        }
+    }
+    return 0;
+}
+
 int SeatRiding(const void* chocobo) noexcept
 {
     for (int seat = 1; chocobo != nullptr && seat <= players::kSeatsBuilt; ++seat)

@@ -63,6 +63,10 @@ const void* RideManagerNow() noexcept;
 /// or -1 (no manager, no player type). Game thread.
 int MemberEntryState(const void* member) noexcept;
 
+/// The player 2 or 3 whose member's chocobo `chocobo` is and who will board it (this module placed, their rides not
+/// stopped, that chocobo not held back), or 0. Game thread.
+int BoardsChocobo(const void* chocobo) noexcept;
+
 /// The built seat whose player rides `chocobo` seated (RiddenChocobo), or drives it (DrivenChocobo), or -1.
 int SeatRiding(const void* chocobo) noexcept;
 int SeatDriving(const void* chocobo) noexcept;

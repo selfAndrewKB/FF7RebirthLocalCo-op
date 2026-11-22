@@ -279,6 +279,45 @@ inline constexpr std::uint8_t kStayLabelBytes[] = {
     0xE0, 0xE8, 0x56, 0x11, 0x2F, 0x00, 0x48, 0x85, 0xC0, 0x74, 0x1A, 0x48};
 inline constexpr FunctionFact   kStayLabel{L"ChocoboCall_LeaderChocoboFollowing_StayLabel", 0x140DB9D04, kStayLabelBytes};
 inline constexpr std::uintptr_t kStayLabelCall = 0x1410E182C;
+/// The summon row's check that the character has the whistle action (N_CallChocobo01, which only Cloud and Tifa have):
+/// the character's actor interface's find-animation-by-name (vtable +0x68; the player characters' and Cait Sith's own
+/// table hold the same function), called through `call r8`, its answer only tested for null later. The call's return
+/// address names this one caller among the function's many.
+inline constexpr std::uint8_t kFindAnimByNameBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x74,
+                                                        0x24, 0x10, 0x57, 0xB8, 0x20, 0x00, 0x00, 0x00};
+inline constexpr SlotFact kFindAnimByNameSlot{
+    L"the player character interface's find-animation slot", 0x1456B5DD0,
+    {L"EndPlayerCharIface4B8_Vt68_FindAnimByName", 0x140E2BB84, kFindAnimByNameBytes}};
+inline constexpr SlotFact kCaitSithFindAnimByNameSlot{
+    L"Cait Sith's character interface's find-animation slot", 0x14565F008,
+    {L"EndPlayerCharIface4B8_Vt68_FindAnimByName", 0x140E2BB84, kFindAnimByNameBytes}};
+inline constexpr std::uintptr_t kWhistleActionCheckReturn = 0x1410E1E27;
+/// ChocoboRideMgr_CanAcceptCall(manager, bool): a call is taken only with the leader's chocobo idle or following, at its
+/// call in FieldSummon_CanCallChocobo (crosses a block).
+inline constexpr std::uint8_t kCanAcceptCallBytes[] = {
+    0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8, 0xFE, 0x48, 0x63, 0x01, 0x48, 0x2B,
+    0xE0, 0xB0, 0x01, 0x38, 0x41, 0x08, 0x75, 0x0E, 0x80, 0xB9, 0xAD, 0x0E};
+inline constexpr FunctionFact   kCanAcceptCall{L"ChocoboRideMgr_CanAcceptCall", 0x140B37278, kCanAcceptCallBytes};
+inline constexpr std::uintptr_t kCanAcceptCallSite = 0x1410E23DE;
+/// The whistle notify's sound: the UI sound asset holding a name (FindUiSoundAsset(const FName*)) and its play
+/// (PlayUiSound(asset, const FName*)).
+inline constexpr std::uint8_t kUiSoundAssetBytes[] = {
+    0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x74, 0x24, 0x10, 0x48, 0x89,
+    0x7C, 0x24, 0x18, 0x41, 0x56, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0x19};
+inline constexpr FunctionFact kUiSoundAsset{L"UiSound_FindAssetByName", 0x141814A4C, kUiSoundAssetBytes};
+inline constexpr std::uint8_t kUiSoundPlayBytes[] = {
+    0x40, 0x55, 0x48, 0x8B, 0xEC, 0xB8, 0x70, 0x00, 0x00, 0x00, 0xE8, 0x4D,
+    0x4A, 0x00, 0x01, 0x48, 0x2B, 0xE0, 0xC5, 0xFA, 0x10, 0x0D, 0xCA, 0x25};
+inline constexpr FunctionFact kUiSoundPlay{L"UiSound_PlayByName", 0x141167124, kUiSoundPlayBytes};
+/// A member chocobo's AI at its ride begin: AICtrl_RequestBrainStateWithParams(ai, 0, followParam, 0), the order to follow
+/// player 1's ride body, at its one call in the mount AI's ride begin; the AI's pawn (a weak reference).
+inline constexpr std::uint8_t kRequestBrainStateBytes[] = {
+    0x48, 0x89, 0x5C, 0x24, 0x10, 0x48, 0x89, 0x74, 0x24, 0x18, 0x48, 0x89,
+    0x7C, 0x24, 0x20, 0x55, 0x41, 0x54, 0x41, 0x55, 0x41, 0x56, 0x41, 0x57};
+inline constexpr FunctionFact   kRequestBrainState{L"AICtrl_RequestBrainStateWithParams", 0x14123B05C, kRequestBrainStateBytes};
+inline constexpr std::uintptr_t kMountAiFollowCall = 0x1410EA274;
+inline constexpr std::uint32_t  kMountAiPawn       = 0x464;
+
 /// ChocoboRideMgr_RequestPartyGetOff(request*): the getoff of every rider, at its call in the chocobo move state's input
 /// slot (the rider's Vehicle press; the call crosses a block).
 inline constexpr std::uint8_t kPartyGetOffBytes[] = {
