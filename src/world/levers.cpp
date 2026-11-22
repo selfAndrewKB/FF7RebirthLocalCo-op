@@ -262,6 +262,7 @@ constexpr int                           kNotifiedNone  = -1;  // no notify runs 
 constexpr int                           kNotifiedOther = -2;  // a notify for a character no player plays
 thread_local int                        t_notified     = kNotifiedNone;  // else the player whose character's notify runs
 std::array<const void*, players::kMaxPlayers> g_execSeen{};  // by seat: the executer last ticked, for the log
+std::uint32_t                           g_setterEdges = 0;  // the game setters' point edges so far
 
 // The chocobo stop's hold reader, redirected at its entry with the stop class's hooks; its move's animation register.
 platform::EntryRedirect g_stopProgress;
@@ -430,6 +431,19 @@ bool InRangeRead(const void* actor, Kind kind, std::uint64_t& weak) noexcept
     return weak != 0 && players::weak_object::ObjectIn(actor, f.inRange) != nullptr;
 }
 
+/// No actor, or off the game thread: the module leaves the call to the game.
+bool OffGameThread(const void* actor) noexcept
+{
+    return actor == nullptr || !players::generation::OnGameThread();
+}
+
+/// The press latch of `kind`'s actor cleared, as the game's off edge clears it.
+void ClearLatch(void* actor, Kind kind) noexcept
+{
+    constexpr std::uint8_t kOff = 0;
+    (void)platform::WriteGuarded(static_cast<std::uint8_t*>(actor) + FactsOf(kind).latch, &kOff, sizeof(kOff));
+}
+
 /// A presser whose wish goes off while the point stays on for another player (they walked away, or left the game): the
 /// game's off edge, which clears the press latch, is what the OR of the wishes holds back here, so its clear is made in
 /// its stead; otherwise the pending press would hold the other player's notifies for as long as they stay.
@@ -439,8 +453,7 @@ void SpendPressAtLeave(void* actor, Record& r, int player) noexcept
     {
         return;
     }
-    constexpr std::uint8_t kOff = 0;
-    (void)platform::WriteGuarded(static_cast<std::uint8_t*>(actor) + FactsOf(r.kind).latch, &kOff, sizeof(kOff));
+    ClearLatch(actor, r.kind);
     r.presser   = -1;
     r.lastLatch = 0;
     try
@@ -470,15 +483,75 @@ void LogWish(const void* actor, Kind kind, int player, bool wish, bool any, cons
     }
 }
 
-/// The game's point setter of `kind`, with a wishing player's arguments.
+/// The game's point setter of `kind`, with a wishing player's arguments. Its edges (the point shown or not, which also
+/// clear the press latch) are counted on the game thread, and a chocobo stop's logged.
 void CallSetter(Kind kind, void* actor, std::uint8_t show, SetterArgs args) noexcept
 {
     const std::uintptr_t original = HooksOf(kind).setter.Original();
+    const auto           before   = ReadField<std::uint8_t>(actor, FactsOf(kind).pointShown);
     switch (kind)
     {
         case Kind::Switch: reinterpret_cast<SwitchSetterFn>(original)(actor, show, args.check, args.ng); break;
         case Kind::Tower: reinterpret_cast<TowerSetterFn>(original)(actor, show, args.check); break;
         case Kind::ChocoboStop: reinterpret_cast<StopSetterFn>(original)(actor, show); break;
+    }
+    const auto after = ReadField<std::uint8_t>(actor, FactsOf(kind).pointShown);
+    if (after == before || !players::generation::OnGameThread())
+    {
+        return;
+    }
+    ++g_setterEdges;
+    if (kind != Kind::ChocoboStop || !platform::Enabled(platform::Level::Debug))
+    {
+        return;
+    }
+    try
+    {
+        platform::LogDebug(L"levers: the chocobo stop {}'s point {} (sign {}, availability {}, suppressed {})",
+                           players::NameOf(actor), after != 0 ? L"on" : L"off",
+                           ReadField<std::uint8_t>(actor, facts::kChocoboStopSignState),
+                           ReadField<std::uint8_t>(actor, facts::kChocoboStopAvailability),
+                           ReadField<std::uint8_t>(actor, facts::kChocoboStopSuppressed));
+    }
+    catch (...)
+    {
+    }
+}
+
+/// A chocobo stop's own state forbids its point: suppressed while its move has a result, its sign cancelling or rising,
+/// or an availability that shows no prompt (the move's start and hold keep it for the presser). The fields the stop's own
+/// update and try-begin decide by. Any thread.
+bool StopForbidsPoint(const void* actor) noexcept
+{
+    const auto sign  = ReadField<std::uint8_t>(actor, facts::kChocoboStopSignState);
+    const auto avail = ReadField<std::uint8_t>(actor, facts::kChocoboStopAvailability);
+    return ReadField<std::uint8_t>(actor, facts::kChocoboStopSuppressed) != 0 || sign == facts::kChocoboStopSignCancel ||
+           sign == facts::kChocoboStopSignSuccess ||
+           (avail != facts::kChocoboStopIdle && avail != facts::kChocoboStopStarting && avail != facts::kChocoboStopHolding);
+}
+
+/// A chocobo stop's off that is everyone's (its own off, or one its state forbids the point for): every player's wish
+/// cleared, and the press with it (the latch cleared as the off edge clears it, also when the point was off already), so
+/// no player's earlier wish puts the point back while the stop forbids it. A player who may use it again turns it on with
+/// their next notify, as the game does. Game thread.
+void ClearWishes(Record& r, void* actor, const wchar_t* why) noexcept
+{
+    const bool any = AnyOn(r.wish);
+    ClearLatch(actor, r.kind);
+    std::fill(std::begin(r.wish), std::end(r.wish), false);
+    r.presser   = -1;
+    r.lastLatch = 0;
+    if (!any)
+    {
+        return;
+    }
+    try
+    {
+        platform::LogDebug(L"levers: the chocobo stop {}'s off is everyone's ({}): every player's wish cleared",
+                           players::NameOf(actor), why);
+    }
+    catch (...)
+    {
     }
 }
 
@@ -507,18 +580,38 @@ bool ActorsOwnOutsideNotify(Kind kind, std::uintptr_t caller) noexcept
 /// game's setter called with the OR of every player's. A player's own on call runs with their own arguments, in their
 /// own context (the setter reads the primary controller's character and the party leader for the point's "not usable"
 /// bit), and the bits it leaves on the point are noted as that player's view. The actor's own off calls (its tick's
-/// point-off request, its EndPlay) go to the game as they are: the point comes back with the next wishing notify.
+/// point-off request, its EndPlay) go to the game as they are: the point comes back with the next wishing notify. A
+/// chocobo stop's own off, and a player's off while its state forbids the point, are everyone's (ClearWishes): its
+/// presser's notify does not run during their move, so their earlier wish would otherwise put the point back.
 void SetterOr(Kind kind, void* actor, std::uint8_t show, SetterArgs args, std::uintptr_t caller) noexcept
 {
-    if (actor == nullptr || !players::generation::OnGameThread() || Among(HooksOf(kind).ownOffReturns, caller))
+    if (OffGameThread(actor))
     {
         CallSetter(kind, actor, show, args);
+        return;
+    }
+    if (Among(HooksOf(kind).ownOffReturns, caller))
+    {
+        CallSetter(kind, actor, show, args);
+        Record* own = kind == Kind::ChocoboStop && show == 0 ? RecordOf(actor, false, kind) : nullptr;
+        if (own != nullptr)
+        {
+            ClearWishes(*own, actor, L"its own off");
+        }
         return;
     }
     Record* r = RecordOf(actor, true, kind);  // player 1's wish recorded alone too: a seat joining later ORs with it
     if (r == nullptr)
     {
         CallSetter(kind, actor, show, args);  // an actor players 2 and 3 do not use: the game's alone
+        return;
+    }
+    if (kind == Kind::ChocoboStop && show == 0 && StopForbidsPoint(actor))
+    {
+        // A player's off while the stop forbids its point: the game's off stands for everyone (the presser's notify, which
+        // would say off too, does not run during their move).
+        CallSetter(kind, actor, 0, args);
+        ClearWishes(*r, actor, L"its state forbids the point");
         return;
     }
     const bool actorsOwn = ActorsOwnOutsideNotify(kind, caller);
@@ -607,7 +700,7 @@ void StopSetter(void* actor, std::uint8_t show) noexcept
 template <Kind K>
 bool BeforeRegister(void* actor) noexcept
 {
-    if (actor == nullptr || !players::generation::OnGameThread() || RecordOf(actor, true, K) == nullptr)
+    if (OffGameThread(actor) || RecordOf(actor, true, K) == nullptr)
     {
         return false;
     }
@@ -683,7 +776,7 @@ template <Kind K>
 void Unregister(void* actor) noexcept
 {
     reinterpret_cast<UnregisterFn>(HooksOf(K).unregister.Original())(actor);
-    if (actor == nullptr || !players::generation::OnGameThread())
+    if (OffGameThread(actor))
     {
         return;
     }
@@ -824,10 +917,12 @@ void NotifyLatched(void* actor, int notified, const NotifyCall& call) noexcept
         CallNotify(call, actor, notified, key, K);
         return;
     }
+    const std::uint32_t edges = g_setterEdges;
     CallNotify(call, actor, notified, key, K);
-    const bool pointOn = ReadField<std::uint8_t>(actor, f.pointShown) != 0;
-    r                  = RecordOf(actor, false, K);  // the call may have made the record idle and another taken it
-    if (pointOn)
+    // The latch goes back only to the point it belonged to: an edge inside the call cleared it, as the game's would.
+    const bool kept = ReadField<std::uint8_t>(actor, f.pointShown) != 0 && g_setterEdges == edges;
+    r               = RecordOf(actor, false, K);  // the call may have made the record idle and another taken it
+    if (kept)
     {
         (void)platform::WriteGuarded(latch, &kOn, sizeof(kOn));
     }
@@ -835,8 +930,8 @@ void NotifyLatched(void* actor, int notified, const NotifyCall& call) noexcept
     {
         return;
     }
-    r->lastLatch = pointOn ? 1 : 0;
-    r->presser   = pointOn ? r->presser : -1;
+    r->lastLatch = kept ? 1 : 0;
+    r->presser   = kept ? r->presser : -1;
     const auto bit = static_cast<std::uint8_t>(1u << (notified >= 0 ? notified : players::kMaxPlayers));
     if ((r->downSaid & bit) != 0 || !platform::Enabled(platform::Level::Debug))
     {
@@ -848,7 +943,7 @@ void NotifyLatched(void* actor, int notified, const NotifyCall& call) noexcept
         platform::LogDebug(L"levers: the {} {}'s press is {}'s: the notify for {}'s character runs with the latch down{}",
                            f.word, players::NameOf(actor), players::SeatName(pressed),
                            notified >= 0 ? players::SeatName(notified) : L"no player",
-                           pointOn ? L"" : L" (the point went off inside: the latch stays down)");
+                           kept ? L"" : L" (the point changed inside: the latch stays down)");
     }
     catch (...)
     {
@@ -858,7 +953,7 @@ void NotifyLatched(void* actor, int notified, const NotifyCall& call) noexcept
 /// A notify the module leaves to the game alone: no actor, off the game thread, or no player 2 or 3 playing.
 bool PassesThrough(const void* actor) noexcept
 {
-    return actor == nullptr || !players::generation::OnGameThread() || !players::generation::AnyActive();
+    return OffGameThread(actor) || !players::generation::AnyActive();
 }
 
 /// The switch's and the tower's notify (actor, the notify pass's context, its character at a fixed offset).
@@ -1073,16 +1168,16 @@ void TickStop(Record& r, void* actor) noexcept
     r.availSaid = avail;
 }
 
-/// The names a member without the stop's animations falls back to, short clips every member has: the treasure crouch
-/// for the hold, the item pickup for the success, the shop stance for the cancel. Short, because the move leaves the
-/// hold, the cancel and the success only as the playing clip ends, so a clip's length is how long the sign lags behind.
-/// None for the start (with no start the hold keeps the stop's own length, as the move's Begin sets it from the start
-/// and hold lengths only when both exist). A name not found yet takes the hold's. Each found once it exists. Game
-/// thread.
+/// The names a member without the stop's animations falls back to, clips every member has: the treasure crouch for the
+/// hold and the shop stance for the cancel, short because the move leaves the hold and the cancel only as the playing
+/// clip ends (a clip's length is how long the sign lags behind a full hold); their idle for the success, their normal
+/// pose while the sign rises, about as long as the stop's own success. None for the start (with no start the hold keeps
+/// the stop's own length, as the move's Begin sets it from the start and hold lengths only when both exist). A name not
+/// found yet takes the hold's. Each found once it exists. Game thread.
 std::array<std::uint64_t, kStopAnims> StopFallbacks() noexcept
 {
     static constexpr std::array<const wchar_t*, kStopAnims> kNames{L"", L"N_Treasure01", L"N_ShopIdle01_0",
-                                                                    L"N_Get_Item00"};  // the start's never looked up
+                                                                    L"N_Idle01_1"};  // the start's never looked up
     static std::array<std::atomic<std::uint64_t>, kStopAnims> found{};  // each name, found once it exists
     std::array<std::uint64_t, kStopAnims>                     names{};
     for (std::size_t i = 1; i < kStopAnims; ++i)
@@ -1103,7 +1198,7 @@ std::array<std::uint64_t, kStopAnims> StopFallbacks() noexcept
 
 /// The stop move's animation register: the game's own register with fallback names (the move's vtable's, the one the
 /// hook rope uses with its own table), so Cloud and Tifa find their own animations first and every other member falls
-/// back to the short clips above. Logged at Debug: the character and what each index found (the move's list holds weak
+/// back to the clips above. Logged at Debug: the character and what each index found (the move's list holds weak
 /// references, 8 bytes each).
 std::uintptr_t StopRegisterAnims(void* move, void* context, const std::uint64_t* names, int count) noexcept
 {
@@ -1127,7 +1222,7 @@ std::uintptr_t StopRegisterAnims(void* move, void* context, const std::uint64_t*
                 found += std::format(L"{}{}", i == 0 ? L"" : L", ", anim != nullptr ? players::NameOf(anim) : std::wstring(L"none"));
             }
             platform::LogDebug(L"levers: the chocobo stop's move for {} plays: {} (start, hold, cancel, success; a member "
-                               L"without the stop's own falls back to short clips of their own)",
+                               L"without the stop's own falls back to clips of their own)",
                                players::NameOf(players::weak_object::ObjectIn(move, facts::kFieldActionMoveCharacter)), found);
         }
         catch (...)
@@ -1263,7 +1358,7 @@ bool InstallKind(const platform::GameImage& image, std::uintptr_t setterHook) no
 /// A delivered actor of `kind` (its first tag is its point's key): the seats' passes admit that point from here on.
 void NoteDelivered(const void* actor, Kind kind) noexcept
 {
-    if (!HooksOf(kind).ready || actor == nullptr || !players::generation::OnGameThread())
+    if (!HooksOf(kind).ready || OffGameThread(actor))
     {
         return;
     }
@@ -1336,7 +1431,7 @@ void Install(const platform::GameImage& image) noexcept
                               platform::ReplaceSlot(image, kStopRegisterAnimsSlot,
                                                     reinterpret_cast<std::uintptr_t>(&StopRegisterAnims), g_stopRegisterAnims);
         platform::Log(L"levers: the chocobo stop's move {}",
-                      fallback ? L"falls back to short clips of the member's own (treasure crouch, shop stance, item pickup) where "
+                      fallback ? L"falls back to clips of the member's own (treasure crouch, shop stance, their idle) where "
                                  L"they have no stop animation (only Cloud and Tifa have them)"
                                : L"keeps the game's animations (its register slot differs): other members than Cloud and Tifa show no pose");
     }

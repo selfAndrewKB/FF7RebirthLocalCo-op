@@ -111,14 +111,23 @@ inline constexpr std::uintptr_t kChocoboStopUnregister = 0x143397520;
 // reference the register sets to the party leader and the unregister clears; nothing reads it), the sign state in use
 // (0 idle, 1 start, 2 hold, 3 cancel, 4 success), the availability (2: the prompt may show), the press latch (the point's
 // listener sets it when the hold completes; the hold reads 1 while it is set; the setter clears it on its edges), the
-// point shown, and the character of the stop's move (a weak reference the move sets at each phase's start).
+// point shown, the point suppressed while the move runs (the hold phase sets it at the hold's result; the stop's update
+// then turns its point off), and the character of the stop's move (a weak reference the move sets at each phase's
+// start). The sign states that forbid the point (cancel, success), and the availabilities that allow it (2 idle, 4 and 5
+// the move's start and hold, while its presser holds).
 inline constexpr std::uint32_t kChocoboStopHubId         = 0x718;
 inline constexpr std::uint32_t kChocoboStopRegistered    = 0x734;
 inline constexpr std::uint32_t kChocoboStopSignState     = 0x7BA;
 inline constexpr std::uint32_t kChocoboStopAvailability  = 0x7BB;
 inline constexpr std::uint32_t kChocoboStopPressLatch    = 0x7BD;
 inline constexpr std::uint32_t kChocoboStopPointShown    = 0x7BE;
+inline constexpr std::uint32_t kChocoboStopSuppressed    = 0x7C0;
 inline constexpr std::uint32_t kChocoboStopMoveCharacter = 0x7E8;
+inline constexpr std::uint8_t  kChocoboStopSignCancel    = 3;
+inline constexpr std::uint8_t  kChocoboStopSignSuccess   = 4;
+inline constexpr std::uint8_t  kChocoboStopIdle          = 2;
+inline constexpr std::uint8_t  kChocoboStopStarting      = 4;
+inline constexpr std::uint8_t  kChocoboStopHolding       = 5;
 // A field action's move: its character (a weak reference), its animations by index (a TArray of the anims its Setup
 // found by name, null for a name the character lacks), and the vtable slot that registers them with fallback names.
 inline constexpr std::uint32_t kFieldActionMoveCharacter        = 0x450;
