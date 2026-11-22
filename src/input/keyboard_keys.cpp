@@ -88,19 +88,22 @@ KeyFn OriginalUp() noexcept
     return reinterpret_cast<KeyFn>(g_upSlot.Original());
 }
 
-/// A keyboard key event's virtual-key code and its system repeat flag; false for a pad button's event (the same
-/// handlers carry those), off the game thread, or unreadable.
+/// A keyboard key event's virtual-key code and its system repeat flag; false, both cleared, for a pad button's event
+/// (the same handlers carry those), off the game thread, or unreadable.
 bool ReadKey(const void* keyEvent, std::uint32_t& keyCode, bool& repeat) noexcept
 {
     std::uint8_t repeatByte = 0;
     if (!players::generation::OnGameThread() ||
         !platform::Read(static_cast<const std::byte*>(keyEvent) + facts::kKeyEventKeyCode, keyCode) ||
-        !platform::Read(static_cast<const std::byte*>(keyEvent) + facts::kKeyEventRepeat, repeatByte))
+        !platform::Read(static_cast<const std::byte*>(keyEvent) + facts::kKeyEventRepeat, repeatByte) ||
+        !rules::IsKeyboardKey(keyCode))
     {
+        keyCode = 0;
+        repeat  = false;
         return false;
     }
     repeat = repeatByte != 0;
-    return rules::IsKeyboardKey(keyCode);
+    return true;
 }
 
 /// Runs `call` (a key, mouse button or wheel event in the game's handler) with the game's "keyboard used" flag put back
@@ -182,6 +185,13 @@ void Tell(std::uint16_t pressed, bool open, bool bTap, bool bHeld) noexcept
     }
 }
 
+/// The period went down: the ask of the player the keyboard plays, taken at the next tick (TakeWarpPress).
+void NoteWarpPress() noexcept
+{
+    g_warpPressed = true;
+    ++g_warps;
+}
+
 /// A key down the mod takes from the game: Tab (the opener, its system repeats too), the period while the keyboard plays
 /// player 2 or 3 (their way back to player 1), and every key while the window is open but a repeat of one held from
 /// before it opened (its down reached the game, so its up must too).
@@ -200,6 +210,11 @@ std::uint8_t KeyDown(void* self, void* application, const void* keyEvent) noexce
     bool          repeat  = false;
     if (!g_installed || !ReadKey(keyEvent, keyCode, repeat) || !TakesDown(keyCode, repeat))
     {
+        // Player 1's period: their ask is noted, and the key reaches the game as it came.
+        if (g_installed && keyCode == rules::kWarpKey && !repeat && !g_idle)
+        {
+            NoteWarpPress();
+        }
         return KeepingKeyboardFlag([&] { return OriginalDown()(self, application, keyEvent); });
     }
     g_heldBack.set(keyCode);
@@ -217,8 +232,7 @@ std::uint8_t KeyDown(void* self, void* application, const void* keyEvent) noexce
     {
         if (!repeat)
         {
-            g_warpPressed = true;
-            ++g_warps;
+            NoteWarpPress();
         }
     }
     else if (!repeat)
