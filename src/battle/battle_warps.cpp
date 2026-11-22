@@ -1,6 +1,7 @@
 #include "battle/battle_warps.h"
 
 #include "battle/battle_warps_rules.h"
+#include "battle/encounter_watch.h"
 #include "platform/build_value.h"
 #include "platform/call_redirect.h"
 #include "platform/deferred_sites.h"
@@ -103,23 +104,36 @@ void NoteGathered(const void* character, bool byData) noexcept
     }
 }
 
-/// Whether the setting keeps `character` where it is (battle/battle_warps_rules.h); its seat in `seat` (0: none). Only
-/// on the game thread: any other thread passes through.
-bool KeepsInPlace(const void* character, int& seat) noexcept
+/// Who plays `character`: a seat while it plays, 0 for player 1's character, -1 for a member no player controls.
+int PlayerPlaying(const void* character) noexcept
 {
-    seat = 0;
+    if (const int seat = SeatPlaying(character); seat != 0)
+    {
+        return seat;
+    }
+    return players::generation::PlayerOfCharacter(character) == 0 ? 0 : -1;
+}
+
+/// Whether the setting keeps `character` where it is (battle/battle_warps_rules.h), the battle's gather standing around
+/// `anchor`'s character; who plays it in `player` (0 player 1, a seat, -1 none). Only on the game thread: any other
+/// thread passes through.
+bool KeepsInPlace(const void* character, int anchor, int& player) noexcept
+{
+    player = -1;
     if (character == nullptr || g_mode == Mode::Game || !players::generation::OnGameThread())
     {
         return false;
     }
-    seat = SeatPlaying(character);
-    return battle_warps_rules::Stays(g_mode, seat);
+    player = PlayerPlaying(character);
+    return battle_warps_rules::Stays(g_mode, player, anchor);
 }
 
 /// Whose character it is, for the log lines.
-std::wstring Whose(int seat)
+std::wstring Whose(int player)
 {
-    return seat != 0 ? std::wstring(players::SeatName(seat)) + L"'s member" : std::wstring(L"a member no player controls");
+    return player > 0    ? std::wstring(players::SeatName(player)) + L"'s member"
+           : player == 0 ? std::wstring(L"player 1's character")
+                         : std::wstring(L"a member no player controls");
 }
 
 /// A seat's member's distance from player 1's character in metres, or -1 if it cannot be read.
@@ -140,12 +154,12 @@ float DistanceFromPlayerOne(void* member) noexcept
 }
 
 /// One kept member's line (Info). Allocates only for the line.
-void LogKept(const wchar_t* when, int seat, void* character) noexcept
+void LogKept(const wchar_t* when, int player, void* character) noexcept
 {
     try
     {
         platform::Log(L"battle warps: battle {} leaves {} where it is ({:.1f} m from player 1's character; -1: unknown)",
-                      when, Whose(seat), DistanceFromPlayerOne(character));
+                      when, Whose(player), DistanceFromPlayerOne(character));
     }
     catch (...)
     {
@@ -153,7 +167,7 @@ void LogKept(const wchar_t* when, int seat, void* character) noexcept
 }
 
 /// One member left to the game's own decision (Debug, game thread only). Allocates only for the line.
-void LogLeft(const wchar_t* when, int seat) noexcept
+void LogLeft(const wchar_t* when, int player) noexcept
 {
     if (!platform::Enabled(platform::Level::Debug) || !players::generation::OnGameThread())
     {
@@ -161,7 +175,7 @@ void LogLeft(const wchar_t* when, int seat) noexcept
     }
     try
     {
-        platform::LogDebug(L"battle warps: battle {} leaves {} to the game's own warp", when, Whose(seat));
+        platform::LogDebug(L"battle warps: battle {} leaves {} to the game's own warp", when, Whose(player));
     }
     catch (...)
     {
@@ -178,13 +192,15 @@ bool BattleInExcluded(void* set, void* const* element) noexcept
     {
         NoteGathered(*element, byData);
     }
-    int seat = 0;
-    if (element != nullptr && KeepsInPlace(*element, seat))
+    // A fight enemies noticed player 2 or 3 for gathers around that player (battle/encounter_watch.h): player 1's
+    // character is then one of the gathered, and stays with the setting off as the other players do.
+    int player = -1;
+    if (element != nullptr && KeepsInPlace(*element, encounter_watch::NoticedPlayer(), player))
     {
-        LogKept(L"start", seat, *element);
+        LogKept(L"start", player, *element);
         return true;
     }
-    LogLeft(L"start", seat);
+    LogLeft(L"start", player);
     return byData;
 }
 
@@ -192,13 +208,14 @@ bool BattleInExcluded(void* set, void* const* element) noexcept
 /// early-outs: no entry, no AI pause).
 void BattleFinishPlace(void* context, void* character, void* location, bool extra) noexcept
 {
-    int seat = 0;
-    if (KeepsInPlace(character, seat))
+    // The battle's end places the members around the field leader, player 1, whoever the fight noticed.
+    int player = -1;
+    if (KeepsInPlace(character, 0, player))
     {
-        LogKept(L"end", seat, character);
+        LogKept(L"end", player, character);
         return;
     }
-    LogLeft(L"end", seat);
+    LogLeft(L"end", player);
     reinterpret_cast<PlaceFn>(g_battleFinishCall.Original())(context, character, location, extra);
 }
 

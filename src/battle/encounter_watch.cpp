@@ -7,6 +7,7 @@
 #include "platform/guarded.h"
 #include "platform/image.h"
 #include "platform/log.h"
+#include "platform/settings.h"
 #include "platform/verified_code.h"
 #include "players/actor_fields.h"
 #include "players/describe.h"
@@ -87,6 +88,10 @@ int                      g_rulePlayer = 0;  // the player the watch rule would h
 std::uint64_t            g_ruleEntry = 0;   // the field enemy (its key) the rule's player stands nearest
 std::uint64_t            g_ruleAt = 0, g_ruleTook = 0;
 std::uint32_t            g_reads = 0, g_starts = 0;
+int                      g_fightBy = 0;  // the player 2 or 3 the starting fight noticed (0: player 1), until the field again
+
+// The option: field enemies notice players 2 and 3 (the console and the page set it; the tick reads it).
+std::atomic<bool> g_noticeOn{false};
 
 const void* Manager() noexcept
 {
@@ -249,11 +254,14 @@ void Rule(const std::vector<const void*>& entries, const std::array<Player, kPla
     g_rulePlayer  = pick;
     g_ruleEntry   = name;
     g_ruleTook    = now;
-    platform::LogDebug(L"encounter watch: the rule would now watch {} ({}; {} {}); the game watches player 1",
-                       players::SeatName(pick),
-                       best == 0.0f ? std::wstring(L"nobody stands in a field enemy's territory")
-                                    : std::format(L"inside {}'s territory, {:.1f} m from it", EntryName(name), best),
-                       players::SeatName(was), held[was].inside ? std::format(L"{:.1f} m", held[was].metres) : std::wstring(L"outside"));
+    const bool         on   = g_noticeOn.load(std::memory_order_relaxed);
+    const std::wstring line = std::format(
+        L"encounter watch: {} {} ({}; {} {}){}", on ? L"field enemies now watch" : L"the rule would now watch", players::SeatName(pick),
+        best == 0.0f ? std::wstring(L"nobody stands in a field enemy's territory")
+                     : std::format(L"inside {}'s territory, {:.1f} m from it", EntryName(name), best),
+        players::SeatName(was), held[was].inside ? std::format(L"{:.1f} m", held[was].metres) : std::wstring(L"outside"),
+        on ? L"" : L"; the game watches player 1 (enemies-notice off)");
+    on ? platform::Log(L"{}", line) : platform::LogDebug(L"{}", line);
 }
 
 /// Each field enemy's force bytes and perception states against last tick's, and players 2 and 3 coming near one.
@@ -326,8 +334,10 @@ try
     if (manager == nullptr)
     {
         g_entries.clear();  // a record at a reused address after a load is a new field enemy
-        g_state  = kUnread;
-        g_prompt = kUnread;
+        g_state      = kUnread;
+        g_prompt     = kUnread;
+        g_fightBy    = 0;  // no fight goes on without the encounter: a later battle gathers around player 1
+        g_rulePlayer = 0;
         return;
     }
     ++g_reads;
@@ -342,8 +352,10 @@ try
                                         ? std::format(L", outside every fight area for {:.2f} s",
                                                       ReadField<float>(manager, facts::kEncounterEscapeTimer))
                                         : std::wstring();
+        const bool noticed = g_noticeOn.load(std::memory_order_relaxed) && g_rulePlayer >= 1;
         platform::Log(L"encounter watch: the field encounter {} -> {} (it watches {}{}); {} field enemies; {}", StateName(g_state),
-                      StateName(state), players::Who(one), escape, entries.size(), NearestText(entries, all));
+                      StateName(state), noticed ? std::wstring(players::SeatName(g_rulePlayer)) : players::Who(one), escape,
+                      entries.size(), NearestText(entries, all));
         g_state = state;
     }
     if (prompt != g_prompt)
@@ -359,25 +371,58 @@ try
         g_prompt = prompt;
     }
     Diff(entries, all);
-    if (state == facts::kEncounterField && platform::Enabled(platform::Level::Debug))
+    if (state == facts::kEncounterField)
     {
-        Rule(entries, all, now);
+        g_fightBy = 0;
+        if (g_noticeOn.load(std::memory_order_relaxed) || platform::Enabled(platform::Level::Debug))
+        {
+            Rule(entries, all, now);  // the watched player changes only in the field state: caution, fight and escape keep it
+        }
     }
 }
 catch (...)
 {
 }
 
-/// Replaces the tick's read of the watched character: the game's answer, unchanged, observed.
+/// Player 1's character: the game's own answer of the read the tick makes (the party leader).
+void* PlayerOne() noexcept
+{
+    return reinterpret_cast<LeaderFn>(g_subjectCall.Original())();
+}
+
+/// With the option on, the character the field enemies watch: the rule's player 2 or 3 while they play; null for player
+/// 1's (the game's answer). A watched player who left falls back to player 1, chosen again in the field state.
+void* Watched() noexcept
+{
+    const int player = g_rulePlayer;
+    void*     member = player >= 1 && players::SeatBuilt(player) && players::generation::Active(player)
+                           ? players::generation::MemberOf(player)
+                           : nullptr;
+    if (member == nullptr && player != 0 && g_state == facts::kEncounterField)
+    {
+        g_rulePlayer = 0;
+    }
+    return member;
+}
+
+/// Replaces the tick's read of the watched character: the game's answer, observed; with enemies-notice on, the rule's
+/// player 2 or 3 instead while one stands nearest a field enemy inside its territory (kept through caution, fight and
+/// escape: the fight follows them and ends when they leave its area).
 void* Subject() noexcept
 {
     const auto original = reinterpret_cast<LeaderFn>(g_subjectCall.Original());
     void*      one      = original();
-    if (players::generation::OnGameThread())
+    if (!players::generation::OnGameThread())
     {
-        Observe(one);
+        return one;
     }
-    return one;
+    Observe(one);
+    if (!g_noticeOn.load(std::memory_order_relaxed))
+    {
+        return one;
+    }
+    void* watched = Watched();
+    return watched != nullptr ? watched : one;
 }
 
 std::wstring InsideText(const std::array<Player, kPlayers>& all)
@@ -405,10 +450,15 @@ void EnterBattle(void* manager, const void* engaged, void* character) noexcept
         return;
     }
     std::array<Player, kPlayers> all{};
+    // The player 2 or 3 the fight noticed, with the option on (the game's own subject otherwise: player 1's).
+    const int subject = character != nullptr ? players::generation::SeatOfMember(character) : -1;
+    g_fightBy = g_noticeOn.load(std::memory_order_relaxed) && players::SeatBuilt(subject) && players::generation::Active(subject)
+                    ? subject
+                    : 0;
     try
     {
         ++g_starts;
-        all                 = Players(character);
+        all                 = Players(g_fightBy != 0 ? PlayerOne() : character);
         const auto*  data   = static_cast<const std::uint8_t*>(ReadPointer(engaged, 0));
         const auto   count  = ReadField<std::int32_t>(engaged, 8);
         std::wstring text;
@@ -453,12 +503,28 @@ void EnterBattle(void* manager, const void* engaged, void* character) noexcept
     }
 }
 
-/// Replaces the battle-in gather's anchor read: the game's answer, unchanged, with each player's distance to it.
+/// Replaces the battle-in gather's anchor read: the game's answer, or for a fight that noticed player 2 or 3 their
+/// character, so the game's own gather places the party around them (the battle-warps setting decides who it moves);
+/// each player's distance to it at Debug.
 void* Anchor(bool fieldLeader) noexcept
 {
     const auto original = reinterpret_cast<FieldLeaderFn>(g_anchorCall.Original());
     void*      anchor   = original(fieldLeader);
-    if (!players::generation::OnGameThread() || !platform::Enabled(platform::Level::Debug))
+    if (!players::generation::OnGameThread())
+    {
+        return anchor;
+    }
+    if (g_fightBy >= 1 && players::generation::Active(g_fightBy))
+    {
+        if (void* member = players::generation::MemberOf(g_fightBy); member != nullptr)
+        {
+            platform::Log(L"encounter watch: the battle-in gather stands around {} (the fight noticed them; the battle-warps "
+                          L"setting decides who it moves)",
+                          players::SeatName(g_fightBy));
+            anchor = member;
+        }
+    }
+    if (!platform::Enabled(platform::Level::Debug))
     {
         return anchor;
     }
@@ -526,6 +592,37 @@ bool Install(const platform::GameImage& image) noexcept
         platform::Log(L"encounter watch: a call site is not what the research read; the field encounter is not watched");
         return false;
     }
+    namespace settings = platform::settings;
+    g_noticeOn.store(settings::Of(settings::kEnemiesNotice).word == L"on", std::memory_order_relaxed);
+    platform::Log(L"encounter watch: enemies-notice {} ({})", g_noticeOn.load(std::memory_order_relaxed) ? L"on" : L"off",
+                  settings::Why(settings::kEnemiesNotice));
+    try
+    {
+        control::RegisterOption(
+            settings::kEnemiesNotice,
+            [](const std::wstring& word) {
+                const bool on = word == L"on";
+                if (!on && word != L"off")
+                {
+                    return control::Outcome{false, L"on or off"};
+                }
+                // Turned on, the watched player is chosen afresh in the field state (the rule may have run for the log
+                // alone): a fight already going on keeps player 1.
+                if (on && !g_noticeOn.load(std::memory_order_relaxed))
+                {
+                    g_rulePlayer = 0;
+                }
+                g_noticeOn.store(on, std::memory_order_relaxed);
+                platform::Log(L"encounter watch: enemies-notice {} (set){}", on ? L"on" : L"off",
+                              on ? L": field enemies watch the player nearest one of them inside its territory" : L"");
+                return control::Outcome{};
+            },
+            [] { return std::wstring(g_noticeOn.load(std::memory_order_relaxed) ? L"on" : L"off"); });
+    }
+    catch (...)
+    {
+        platform::Log(L"encounter watch: the enemies-notice option could not be registered (out of memory?); the page cannot set it");
+    }
 #if LSS_DEV
     try
     {
@@ -543,6 +640,11 @@ bool Install(const platform::GameImage& image) noexcept
                   L"each fight's start are logged with every player's distance and territory{}",
                   g_contains != nullptr ? L"" : L" (the territory test not found: distances only)");
     return true;
+}
+
+int NoticedPlayer() noexcept
+{
+    return players::generation::OnGameThread() ? g_fightBy : 0;
 }
 
 void Remove() noexcept

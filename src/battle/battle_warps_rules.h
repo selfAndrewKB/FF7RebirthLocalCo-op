@@ -14,11 +14,12 @@ enum class Mode : std::uint8_t
     PlayersStay,  // off: every player's own character stays; the others are warped
 };
 
-/// Whether the setting keeps this member where it is: seat 0 is a member player 2 or 3 does not control (player 1's
-/// character included, which the start never warps: it gathers toward the leader).
-constexpr bool Stays(Mode mode, int seat) noexcept
+/// Whether the setting keeps this member where it is: `player` is who plays it (0 player 1, a seat, -1 none: a member no
+/// player controls), `anchor` the player the battle's gather stands around (player 1's, 0, unless enemies noticed
+/// another player; the gather never warps its anchor). Off keeps every player's own character but the anchor's.
+constexpr bool Stays(Mode mode, int player, int anchor = 0) noexcept
 {
-    return mode == Mode::PlayersStay && seat != 0;
+    return mode == Mode::PlayersStay && player >= 0 && player != anchor;
 }
 
 }  // namespace lss::battle::battle_warps_rules

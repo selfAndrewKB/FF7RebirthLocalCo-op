@@ -231,6 +231,14 @@ inline constexpr Option kBattleWarps{  // battle/battle_warps
     L"controls are warped as the game does)",
     false, L"Gather at Battle Start/End", kOnOffLabels,
     L"Whether the game teleports players into place at the beginning and end of a battle encounter."};
+inline constexpr Option kEnemiesNotice{  // battle/encounter_watch
+    L"Battle", L"enemies-notice", kOnOffWords, L"off",
+    L"whether field enemies notice players 2 and 3: on (the enemies watch the player standing nearest one of them inside "
+    L"its territory, as the game's one watched character; their fight gathers around that player as Gather at Battle "
+    L"Start/End decides, and ends when they leave its area) or off (the default: the enemies watch player 1 alone, as in "
+    L"single player)",
+    true, L"Enemies Notice Players 2 and 3", kOnOffLabels,
+    L"Whether field enemies can notice Players 2 and 3 and start a fight with them, not only Player 1."};
 // The battle's rates (battle/battle_rates): each a multiplier from 0.1 to 10.0 in steps of 0.1, written "1.5" in the file
 // and "x1.5" on the Co-op page.
 inline constexpr std::size_t kTenthsMax = 100;  // 10.0
@@ -337,7 +345,7 @@ inline constexpr Option kResponsivenessThree{  // camera/seat_responsiveness
 /// Every option, in the order the settings file lists them.
 inline constexpr std::array kOptions{&kMultiMonitor,     &kMonitors,      &kColumnOrder,
                                      &kTwoPlayerSplit,  &kThreePlayerSplit, &kHorizontalFov,
-                                     &kVerticalFov,     &kHudScale,         &kHudScaleTwo,      &kHudScaleThree,    &kMenuSlow,         &kBattleWarps,
+                                     &kVerticalFov,     &kHudScale,         &kHudScaleTwo,      &kHudScaleThree,    &kMenuSlow,         &kBattleWarps,      &kEnemiesNotice,
                                      &kEnemyDamage,     &kEnemyHp,          &kBossHp,
                                      &kEnemyStagger,    &kExpGain,          &kApGain,
                                      &kLeadHolder,      &kResponsivenessTwo, &kResponsivenessThree};
@@ -354,7 +362,7 @@ consteval bool Listed(const Option& option)
 static_assert(Listed(kMultiMonitor) && Listed(kMonitors) && Listed(kColumnOrder) && Listed(kTwoPlayerSplit) &&
                   Listed(kThreePlayerSplit) && Listed(kHorizontalFov) && Listed(kVerticalFov) && Listed(kHudScale) && Listed(kHudScaleTwo) && Listed(kHudScaleThree) &&
                   Listed(kMenuSlow) &&
-                  Listed(kBattleWarps) &&
+                  Listed(kBattleWarps) && Listed(kEnemiesNotice) &&
                   Listed(kEnemyDamage) && Listed(kEnemyHp) && Listed(kBossHp) && Listed(kEnemyStagger) && Listed(kExpGain) &&
                   Listed(kApGain) && Listed(kLeadHolder) && Listed(kResponsivenessTwo) && Listed(kResponsivenessThree),
               "every option is a row of kOptions");
