@@ -141,6 +141,10 @@ constexpr AdmittedClass kAdmitted[] = {
     // register and unregister; terminals with the tower flag only, the rest of their levers in world/levers.
     {L"tower", facts::kOneShotAccessVTable, 0, facts::kOneShotAccessUnregister, false, false, {0x730, 0x728}, false,
      &levers::NoteTower, &levers::TowerReady, &levers::AdmitsTower},
+    // The chocobo stops (research/RE-chocobo-stop-seats.md): the shared register, an unregister override reading only the
+    // leader; on foot or riding (the stop's own riding hold); every stop, the rest of their levers in world/levers.
+    {L"chocobo stop", facts::kChocoboStopVTable, 0, facts::kChocoboStopUnregister, false, false, {0x730, 0x728}, true,
+     &levers::NoteChocoboStop, &levers::ChocoboStopReady},
     // The mine-cart climbs (research/RE-cart-climb-seats.md): the shared register, an unregister override reading only
     // the leader; carts in the climb mode only (a marker cart's press jumps the party leader), the rest in
     // traversal/cart_climb.

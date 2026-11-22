@@ -19,12 +19,14 @@
 #include "players/seats.h"
 #include "players/unreal_access.h"
 #include "players/weak_object.h"
+#include "rides/chocobo_ride.h"
 #include "scopes/primary_controller.h"
 #include "traversal/traversal_facts.h"
 #include "world/field_pickup.h"
 #include "world/lever_rules.h"
 
 #include <array>
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <format>
@@ -40,13 +42,14 @@ namespace {
 
 using field_rules::PointView;
 
-/// The two classes this module carries: the switches and the tower terminals.
+/// The classes this module carries: the switches, the tower terminals and the chocobo stops.
 enum class Kind : std::uint8_t
 {
     Switch,
     Tower,
+    ChocoboStop,
 };
-constexpr std::size_t kKinds = 2;
+constexpr std::size_t kKinds = 3;
 
 constexpr std::size_t IndexOf(Kind kind) noexcept
 {
@@ -111,14 +114,45 @@ constexpr std::uintptr_t kTowerSetterOwnOffs[] = {0x1433E191C, 0x1412FBB95, 0x14
 // never a player's wish.
 constexpr std::uintptr_t kTowerSetterLeaves[] = {0x1433D8592};
 
-/// What differs between the two classes: their words in the log, their slots and setter, and the actor's own fields.
+// The chocobo stop's slots, its point setter and its hold reader (research/RE-chocobo-stop-seats.md). Its notify is a
+// try-begin (actor, dt, the pawn: a character, or the chocobo it rides) that starts the stop's move (control state 18)
+// once the hold progress is above 0; the move has no executer of the switch's kind, its phases poll the hold through the
+// class's own reader.
+constexpr std::uint8_t kStopTryBeginBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x48, 0x89, 0x74,
+                                               0x24, 0x18, 0x48, 0x89, 0x7C, 0x24, 0x20, 0x41};
+constexpr platform::SlotFact kStopTryBeginSlot{L"the chocobo stop's try-begin slot", 0x14570D530,
+                                               {L"ChocoboStop_Vt748_TryBegin_StartState18OnHoldProgress", 0x14339C1F0,
+                                                kStopTryBeginBytes}};
+constexpr std::uint8_t kStopRegisterBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x74,
+                                               0x24, 0x10, 0x57, 0xB8, 0x20, 0x00, 0x00, 0x00};
+constexpr platform::SlotFact kStopRegisterSlot{L"the chocobo stop's register slot", 0x14570D510,
+                                               {L"ChocoboStop_Vt728_RegisterWithLeaderPC_Store734", 0x143397404,
+                                                kStopRegisterBytes}};
+constexpr std::uint8_t kStopUnregisterBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x57, 0xB8, 0x20,
+                                                 0x00, 0x00, 0x00, 0xE8, 0x50, 0x46, 0xDD, 0xFE};
+constexpr platform::SlotFact kStopUnregisterSlot{L"the chocobo stop's unregister slot", 0x14570D518,
+                                                 {L"ChocoboStop_Vt730_UnregisterLeader_PointOff",
+                                                  facts::kChocoboStopUnregister, kStopUnregisterBytes}};
+// The setter's entry: mov [rsp+18h],rbx (the 5 bytes replaced), inside one 16-byte block.
+constexpr std::uint8_t kStopSetterBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x18, 0x48, 0x89, 0x74,
+                                             0x24, 0x20, 0x57, 0xB8, 0x70, 0x01, 0x00, 0x00};
+constexpr platform::FunctionFact kStopSetter{L"ChocoboStop_SetFieldActionMgrPoint", 0x1418BFCF8, kStopSetterBytes};
+// The actor's own offs: EndPlay's, and its state update's two (in use, done).
+constexpr std::uintptr_t kStopSetterOwnOffs[] = {0x1418BFC3A, 0x1426A36F8, 0x1426A3708};
+// The hold reader, float(actor): 1 while the press latch is up, else the live manager's slot block's progress for the
+// actor's point. Its entry: mov eax,28h (5 bytes, position-independent), inside one 16-byte block.
+constexpr std::uint8_t kStopProgressBytes[] = {0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8, 0xC2, 0x79,
+                                               0xDD, 0xFE, 0x48, 0x2B, 0xE0, 0x33, 0xC0, 0x38};
+constexpr platform::FunctionFact kStopProgress{L"ChocoboStop_GetHoldProgress_7BDOrSlot", 0x1433941B4, kStopProgressBytes};
+
+/// What differs between the classes: their words in the log, their slots and setter, and the actor's own fields.
 struct KindFacts
 {
     const wchar_t*                  word;
     const platform::SlotFact&       notify;
     const platform::SlotFact&       registerSlot;
     const platform::SlotFact&       unregister;
-    const platform::SlotFact&       execTick;
+    const platform::SlotFact*       execTick;  // null: no executer (the chocobo stop's move polls the hold reader)
     const platform::FunctionFact&   setter;
     std::span<const std::uintptr_t> ownOffs;
     // Empty: a call outside a notify is the open scope's player's (the switch: only its unregister calls so). Else the
@@ -130,11 +164,14 @@ struct KindFacts
     std::uint32_t                   pointShown;
 };
 const std::array<KindFacts, kKinds> kKindFacts{{
-    {L"switch", kNotifySlot, kRegisterSlot, kUnregisterSlot, kExecTickSlot, kSetter, kSetterOwnOffs, {},
+    {L"switch", kNotifySlot, kRegisterSlot, kUnregisterSlot, &kExecTickSlot, kSetter, kSetterOwnOffs, {},
      facts::kSwitchInRange, false, facts::kSwitchPressLatch, facts::kSwitchPointShown},
-    {L"tower", kTowerNotifySlot, kTowerRegisterSlot, kTowerUnregisterSlot, kTowerExecTickSlot, kTowerSetter,
+    {L"tower", kTowerNotifySlot, kTowerRegisterSlot, kTowerUnregisterSlot, &kTowerExecTickSlot, kTowerSetter,
      kTowerSetterOwnOffs, kTowerSetterLeaves, facts::kOneShotAccessRegistered, true, facts::kOneShotAccessPressLatch,
      facts::kOneShotAccessPointShown},
+    // The stop's registered character is read by nothing: it stands for the in-range mark as the tower's does.
+    {L"chocobo stop", kStopTryBeginSlot, kStopRegisterSlot, kStopUnregisterSlot, nullptr, kStopSetter, kStopSetterOwnOffs,
+     {}, facts::kChocoboStopRegistered, true, facts::kChocoboStopPressLatch, facts::kChocoboStopPointShown},
 }};
 constexpr std::size_t kMaxOwnOffs = 4;
 constexpr std::size_t kMaxLeaves  = 2;
@@ -142,8 +179,8 @@ constexpr std::size_t kMaxLeaves  = 2;
 // Every listed switch and a few towers can hold a record at once; the refused ring remembers actors of the classes
 // that are not players 2's and 3's, so the admit test runs once per actor. The delivered points' keys have room for
 // every listed switch and every tower terminal (the hub table names 43).
-constexpr std::size_t kMaxRecords  = lever_rules::kSwitches.size() + 6;
-constexpr std::size_t kMaxKeys     = lever_rules::kSwitches.size() + 48;
+constexpr std::size_t kMaxRecords  = lever_rules::kSwitches.size() + 10;
+constexpr std::size_t kMaxKeys     = lever_rules::kSwitches.size() + 80;  // the towers and the chocobo stops too
 constexpr std::size_t kRefusedRing = 16;
 
 using NotifyFn       = void (*)(void* actor, void* context);
@@ -151,6 +188,9 @@ using UnregisterFn   = void (*)(void* actor);
 using ExecTickFn     = void (*)(void* executer, float dt);
 using SwitchSetterFn = void (*)(void* actor, std::uint8_t show, std::uint8_t check, std::uint8_t ng);
 using TowerSetterFn  = void (*)(void* actor, std::uint8_t show, std::uint8_t notUsable);
+using StopSetterFn   = void (*)(void* actor, std::uint8_t show);
+using TryBeginFn     = void (*)(void* actor, float dt, void* pawn);
+using ProgressFn     = float (*)(void* actor);
 
 /// The setter's arguments after `show`, as a wishing player's own call last passed them (the tower's one argument in
 /// `check`).
@@ -178,6 +218,8 @@ struct Record
     int           presser   = -1;
     std::uint8_t  lastLatch = 0;
     std::uint8_t  downSaid  = 0;  // by player bit, for the current press
+    std::uint8_t  signSaid  = 0xFF;  // a chocobo stop's sign state and availability as last logged
+    std::uint8_t  availSaid = 0xFF;
 };
 
 /// One class's replaced slots and redirect, and its actor's own off calls by live return address.
@@ -204,6 +246,24 @@ constexpr int                           kNotifiedOther = -2;  // a notify for a 
 thread_local int                        t_notified     = kNotifiedNone;  // else the player whose character's notify runs
 std::array<const void*, players::kMaxPlayers> g_execSeen{};  // by seat: the executer last ticked, for the log
 
+// The chocobo stop's hold reader, redirected at its entry with the stop class's hooks.
+platform::EntryRedirect g_stopProgress;
+
+/// A chocobo stop's hold progress for each player, as the game's reader gave it on the game thread with that player's
+/// slot block held: what a read made outside that player's notify (the move's phase polls, on the animation worker or
+/// the game thread) is answered with for a stop whose move a player 2's or 3's character runs. Written on the game
+/// thread only; read on any.
+struct StopHold
+{
+    std::atomic<std::uint64_t>                          actor{0};  // the stop's address (0: free)
+    std::uint64_t                                       weak = 0;  // its weak value, to free a gone stop's (game thread)
+    std::array<std::atomic<float>, players::kMaxPlayers> progress{};
+    std::atomic<std::uint8_t>                           saidOff{0};  // by player bit: a read off a notify was logged
+};
+constexpr std::size_t                 kStopHolds = 8;
+std::array<StopHold, kStopHolds>      g_stopHolds;
+std::size_t                           g_nextStopHold = 0;  // game thread
+
 using field_rules::AnyOn;
 using field_rules::FirstOn;
 using players::actor_fields::FirstTag;
@@ -221,7 +281,7 @@ KindHooks& HooksOf(Kind kind) noexcept
 
 bool AnyReady() noexcept
 {
-    return HooksOf(Kind::Switch).ready || HooksOf(Kind::Tower).ready;
+    return HooksOf(Kind::Switch).ready || HooksOf(Kind::Tower).ready || HooksOf(Kind::ChocoboStop).ready;
 }
 
 bool Idle(const Record& r) noexcept
@@ -231,7 +291,8 @@ bool Idle(const Record& r) noexcept
 
 bool AdmitsOf(Kind kind, const void* actor) noexcept
 {
-    return kind == Kind::Switch ? Admits(actor) : AdmitsTower(actor);
+    // Every chocobo stop is a player 2's or 3's: its hub row alone decides whether its prompt shows.
+    return kind == Kind::Switch ? Admits(actor) : kind == Kind::Tower ? AdmitsTower(actor) : true;
 }
 
 /// The record of `actor`: its entry (its key read again while it had none), else (with `make`, for an actor of `kind`
@@ -394,13 +455,11 @@ void LogWish(const void* actor, Kind kind, int player, bool wish, bool any, cons
 void CallSetter(Kind kind, void* actor, std::uint8_t show, SetterArgs args) noexcept
 {
     const std::uintptr_t original = HooksOf(kind).setter.Original();
-    if (kind == Kind::Switch)
+    switch (kind)
     {
-        reinterpret_cast<SwitchSetterFn>(original)(actor, show, args.check, args.ng);
-    }
-    else
-    {
-        reinterpret_cast<TowerSetterFn>(original)(actor, show, args.check);
+        case Kind::Switch: reinterpret_cast<SwitchSetterFn>(original)(actor, show, args.check, args.ng); break;
+        case Kind::Tower: reinterpret_cast<TowerSetterFn>(original)(actor, show, args.check); break;
+        case Kind::ChocoboStop: reinterpret_cast<StopSetterFn>(original)(actor, show); break;
     }
 }
 
@@ -519,6 +578,11 @@ void TowerSetter(void* actor, std::uint8_t show, std::uint8_t notUsable) noexcep
     SetterOr(Kind::Tower, actor, show, {notUsable, 0}, reinterpret_cast<std::uintptr_t>(_ReturnAddress()));
 }
 
+void StopSetter(void* actor, std::uint8_t show) noexcept
+{
+    SetterOr(Kind::ChocoboStop, actor, show, {}, reinterpret_cast<std::uintptr_t>(_ReturnAddress()));
+}
+
 /// Before the game's register: the actor's record, made if new, and its in-range field cleared; false when the actor is
 /// not tracked (the game's register runs alone).
 template <Kind K>
@@ -545,13 +609,14 @@ void AfterRegister(void* actor) noexcept
         r->inRange[player]   = InRangeRead(actor, K, weak);
         r->rangeWeak[player] = r->inRange[player] ? weak : 0;
         WriteInRange(actor, *r);
-        if constexpr (K == Kind::Tower)
+        if constexpr (K != Kind::Switch)
         {
+            constexpr std::uint32_t hub = K == Kind::Tower ? facts::kOneShotAccessHubId : facts::kChocoboStopHubId;
             try
             {
-                platform::LogDebug(L"levers: {} is at the tower {} (hub {}): their register {}", players::SeatName(player),
-                                   players::NameOf(actor),
-                                   players::unreal::NameText(ReadField<std::uint64_t>(actor, facts::kOneShotAccessHubId)),
+                platform::LogDebug(L"levers: {} is at the {} {} (hub {}): their register {}", players::SeatName(player),
+                                   FactsOf(K).word, players::NameOf(actor),
+                                   players::unreal::NameText(ReadField<std::uint64_t>(actor, hub)),
                                    r->inRange[player] ? L"took" : L"did not take (the leader is no player character)");
             }
             catch (...)
@@ -612,16 +677,52 @@ void Unregister(void* actor) noexcept
     }
 }
 
+/// One call of a class's notify: the game's function with its own arguments (run), and for a chocobo stop reached by a
+/// seat's ridden chocobo, that chocobo (its rider's scope is the chocobo's, as the game runs player 1's).
+struct NotifyCall
+{
+    void (*run)(void* context) = nullptr;
+    void*       context        = nullptr;
+    const void* chocobo        = nullptr;
+};
+
+struct SwitchArgs
+{
+    NotifyFn fn;
+    void*    actor;
+    void*    context;
+};
+
+void RunSwitchNotify(void* context) noexcept
+{
+    const auto& a = *static_cast<SwitchArgs*>(context);
+    a.fn(a.actor, a.context);
+}
+
+struct TryArgs
+{
+    TryBeginFn fn;
+    void*      actor;
+    float      dt;
+    void*      pawn;
+};
+
+void RunTryBegin(void* context) noexcept
+{
+    const auto& a = *static_cast<TryArgs*>(context);
+    a.fn(a.actor, a.dt, a.pawn);
+}
+
 /// The game's notify for `notified`'s character (0 player 1, a seat, -1 no player's): a seat's with the seat's slot
-/// block held in the live manager, inside the seat's primary scope and leader answer, the player named for the setter
-/// meanwhile (kNotifiedOther for a character no player plays).
-void CallNotify(NotifyFn original, void* actor, void* context, int notified, std::uint64_t key, Kind kind) noexcept
+/// block held in the live manager, inside the seat's primary scope and leader answer (riding: its chocobo's rider
+/// scope), the player named for the setter meanwhile (kNotifiedOther for a character no player plays).
+void CallNotify(const NotifyCall& call, const void* actor, int notified, std::uint64_t key, Kind kind) noexcept
 {
     const int saved = t_notified;
     t_notified      = notified >= 0 ? notified : kNotifiedOther;
     if (notified < 1)
     {
-        original(actor, context);
+        call.run(call.context);
         t_notified = saved;
         return;
     }
@@ -630,7 +731,11 @@ void CallNotify(NotifyFn original, void* actor, void* context, int notified, std
     {
         NoteNoCopy(notified, actor, kind);
     }
-    if (!input::member_movement::NotifyInPrimaryScope(notified, original, actor, context))
+    const bool scoped = call.chocobo != nullptr
+                            ? rides::chocobo_ride::RunAsRider(call.chocobo, call.run, call.context)
+                            : input::member_movement::InPrimaryScope(notified, players::generation::MemberOf(notified),
+                                                                     call.run, call.context);
+    if (!scoped)
     {
         if (!g_scopeLogged)
         {
@@ -646,7 +751,7 @@ void CallNotify(NotifyFn original, void* actor, void* context, int notified, std
             }
         }
         t_notified = kNotifiedOther;  // player 1's answers: no player's wish
-        original(actor, context);
+        call.run(call.context);
     }
     t_notified = saved;
 }
@@ -667,25 +772,19 @@ void NoteRise(Record& r, int player, const void* actor, const wchar_t* how) noex
     }
 }
 
-/// The class's notify: the game's (CallNotify), with the press latch down for a call whose character is not the
-/// presser's (lever_rules::LatchDownFor). A latch up that no seat's pass named is player 1's (a seat's press runs
-/// inside its pass, which names it at once; player 1's in the game's own input step, which may come before this
-/// notify and the game's update). The latch goes back up after unless the point went off inside the call (its off edge
-/// clears the latch; one put back then would outlive the point and fire a press nobody made at the next on).
+/// A class's notify for `notified`'s character: the game's (CallNotify), with the press latch down for a call whose
+/// character is not the presser's (lever_rules::LatchDownFor). A latch up that no seat's pass named is player 1's (a
+/// seat's press runs inside its pass, which names it at once; player 1's in the game's own input step, which may come
+/// before this notify and the game's update). The latch goes back up after unless the point went off inside the call
+/// (its off edge clears the latch; one put back then would outlive the point and fire a press nobody made at the next
+/// on).
 template <Kind K>
-void Notify(void* actor, void* context) noexcept
+void NotifyLatched(void* actor, int notified, const NotifyCall& call) noexcept
 {
-    const auto original = reinterpret_cast<NotifyFn>(HooksOf(K).notify.Original());
-    if (actor == nullptr || !players::generation::OnGameThread() || !players::generation::AnyActive())
-    {
-        original(actor, context);
-        return;
-    }
-    const KindFacts& f        = FactsOf(K);
-    const int        notified = PlayerOfCharacter(ReadPointer(context, facts::kNotifyContextCharacter));
-    Record*          r        = RecordOf(actor, true, K);
-    const auto       key      = r != nullptr ? r->key : FirstTag(actor);
-    std::uint8_t*    latch    = static_cast<std::uint8_t*>(actor) + f.latch;
+    const KindFacts& f     = FactsOf(K);
+    Record*          r     = RecordOf(actor, true, K);
+    const auto       key   = r != nullptr ? r->key : FirstTag(actor);
+    std::uint8_t*    latch = static_cast<std::uint8_t*>(actor) + f.latch;
     if (r != nullptr && *latch != 0 && r->lastLatch == 0)
     {
         NoteRise(*r, 0, actor, L" (named at the first notify after the game's own input step)");
@@ -697,16 +796,16 @@ void Notify(void* actor, void* context) noexcept
     const int pressed = r != nullptr && *latch != 0 ? r->presser : -1;
     if (!lever_rules::LatchDownFor(pressed, notified))
     {
-        CallNotify(original, actor, context, notified, key, K);
+        CallNotify(call, actor, notified, key, K);
         return;
     }
     constexpr std::uint8_t kOff = 0, kOn = 1;
     if (!platform::WriteGuarded(latch, &kOff, sizeof(kOff)))
     {
-        CallNotify(original, actor, context, notified, key, K);
+        CallNotify(call, actor, notified, key, K);
         return;
     }
-    CallNotify(original, actor, context, notified, key, K);
+    CallNotify(call, actor, notified, key, K);
     const bool pointOn = ReadField<std::uint8_t>(actor, f.pointShown) != 0;
     r                  = RecordOf(actor, false, K);  // the call may have made the record idle and another taken it
     if (pointOn)
@@ -735,6 +834,224 @@ void Notify(void* actor, void* context) noexcept
     catch (...)
     {
     }
+}
+
+/// A notify the module leaves to the game alone: no actor, off the game thread, or no player 2 or 3 playing.
+bool PassesThrough(const void* actor) noexcept
+{
+    return actor == nullptr || !players::generation::OnGameThread() || !players::generation::AnyActive();
+}
+
+/// The switch's and the tower's notify (actor, the notify pass's context, its character at a fixed offset).
+template <Kind K>
+void Notify(void* actor, void* context) noexcept
+{
+    const auto original = reinterpret_cast<NotifyFn>(HooksOf(K).notify.Original());
+    if (PassesThrough(actor))
+    {
+        original(actor, context);
+        return;
+    }
+    SwitchArgs args{original, actor, context};
+    NotifyLatched<K>(actor, PlayerOfCharacter(ReadPointer(context, facts::kNotifyContextCharacter)),
+                     {&RunSwitchNotify, &args, nullptr});
+}
+
+/// The chocobo stop's try-begin (actor, dt, the pawn: a character on foot, or the chocobo it rides): for a seat's
+/// member on foot in the seat's primary scope, for the chocobo a seat's player rides in that rider's scope.
+void StopTryBegin(void* actor, float dt, void* pawn) noexcept
+{
+    const auto original = reinterpret_cast<TryBeginFn>(HooksOf(Kind::ChocoboStop).notify.Original());
+    if (PassesThrough(actor))
+    {
+        original(actor, dt, pawn);
+        return;
+    }
+    const int rider    = rides::chocobo_ride::SeatRiding(pawn);
+    const int notified = rider >= 1 ? rider : PlayerOfCharacter(pawn);
+    TryArgs   args{original, actor, dt, pawn};
+    NotifyLatched<Kind::ChocoboStop>(actor, notified, {&RunTryBegin, &args, rider >= 1 ? pawn : nullptr});
+}
+
+/// The seat whose character runs a chocobo stop's move, from the move's character the stop keeps (a weak value,
+/// compared with the generation's; any thread): a seat's member, or the chocobo a seat's player drives (the
+/// generation's driven chocobo also covers its getting off, so a riding move keeps its player to its end); else 0.
+int SeatOfStopMove(const void* actor) noexcept
+{
+    const auto weak = ReadField<std::uint64_t>(actor, facts::kChocoboStopMoveCharacter);
+    if (weak == 0)
+    {
+        return 0;
+    }
+    if (const int seat = players::generation::SeatOfMemberWeak(weak); seat >= 1)
+    {
+        return seat;
+    }
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
+    {
+        if (players::generation::ChocoboWeakOf(seat) == weak)
+        {
+            return seat;
+        }
+    }
+    return 0;
+}
+
+/// A chocobo stop's press latch is up (its hold reader then answers 1 to everyone). Any thread.
+bool StopLatched(const void* actor) noexcept
+{
+    return ReadField<std::uint8_t>(actor, facts::kChocoboStopPressLatch) != 0;
+}
+
+/// The hold record of the stop at `actor`, or null. Any thread.
+StopHold* HoldOf(const void* actor) noexcept
+{
+    const auto key = reinterpret_cast<std::uint64_t>(actor);
+    for (StopHold& h : g_stopHolds)
+    {
+        if (h.actor.load(std::memory_order_acquire) == key)
+        {
+            return &h;
+        }
+    }
+    return nullptr;
+}
+
+/// A record free for a new stop: an unused one, else one whose stop is gone, else the next in turn. Unpublished
+/// before its fields are reset, so a reader on another thread never takes a reset value for the old stop's. Game
+/// thread.
+StopHold& FreeHold() noexcept
+{
+    StopHold* free = nullptr;
+    for (StopHold& h : g_stopHolds)
+    {
+        if (h.actor.load(std::memory_order_relaxed) == 0 || players::weak_object::ObjectOf(h.weak) == nullptr)
+        {
+            free = &h;
+            break;
+        }
+    }
+    if (free == nullptr)
+    {
+        free           = &g_stopHolds[g_nextStopHold];
+        g_nextStopHold = (g_nextStopHold + 1) % kStopHolds;
+    }
+    free->actor.store(0, std::memory_order_release);
+    for (auto& p : free->progress)
+    {
+        p.store(0.0f, std::memory_order_relaxed);
+    }
+    free->saidOff.store(0, std::memory_order_relaxed);
+    return *free;
+}
+
+/// `player`'s hold progress on the stop at `actor`, as the game's reader gave it in their slot block. Game thread.
+void NoteHold(void* actor, int player, float progress) noexcept
+{
+    StopHold* h = HoldOf(actor);
+    if (h == nullptr)
+    {
+        h       = &FreeHold();
+        h->weak = players::weak_object::WeakOf(actor);
+        h->actor.store(reinterpret_cast<std::uint64_t>(actor), std::memory_order_release);
+    }
+    h->progress[static_cast<std::size_t>(player)].store(progress, std::memory_order_relaxed);
+}
+
+/// The chocobo stop's hold reader. Inside a player's notify on the game thread: the game's, which the notify's slot
+/// hold makes that player's (and noted for them). Elsewhere (the move's phase polls, which read the live slot block,
+/// player 1's): for a stop whose move a player 2's or 3's character runs, that player's progress as last noted, unless
+/// the press latch is up (the game's 1 then). Any thread.
+float StopProgress(void* actor) noexcept
+{
+    const auto original = reinterpret_cast<ProgressFn>(g_stopProgress.Original());
+    if (actor == nullptr || !players::generation::AnyActive())
+    {
+        return original(actor);
+    }
+    const bool gameThread = players::generation::OnGameThread();
+    if (gameThread && t_notified >= 0)
+    {
+        const float progress = original(actor);
+        if (t_notified >= 1)
+        {
+            NoteHold(actor, t_notified, progress);
+        }
+        return progress;
+    }
+    const int seat = SeatOfStopMove(actor);
+    StopHold* h    = seat >= 1 && !StopLatched(actor) ? HoldOf(actor) : nullptr;
+    if (h == nullptr)
+    {
+        return original(actor);
+    }
+    const float progress = h->progress[static_cast<std::size_t>(seat)].load(std::memory_order_relaxed);
+    const auto  bit      = static_cast<std::uint8_t>(1u << seat);
+    if ((h->saidOff.fetch_or(bit, std::memory_order_relaxed) & bit) == 0)
+    {
+        try
+        {
+            platform::LogDebug(L"levers: the chocobo stop's hold read for {}'s move outside their notify, on {}: their "
+                               L"progress {:.2f} (said once a hold)",
+                               players::SeatName(seat), gameThread ? L"the game thread" : L"another thread", progress);
+        }
+        catch (...)
+        {
+        }
+    }
+    return progress;
+}
+
+/// Each tick, for each chocobo stop a player 2 or 3 is at: their hold progress noted from the game's reader with their
+/// slot block held (the move's polls take it from here once the try-begin no longer reads it), and the stop's sign
+/// state and availability logged as they change. Game thread.
+void TickStop(Record& r, void* actor) noexcept
+{
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
+    {
+        if (!players::generation::Active(seat) || !(r.inRange[seat] || r.wish[seat]))
+        {
+            continue;
+        }
+        // The reader answers 1 to everyone while the latch is up: that is only the presser's progress.
+        if (StopLatched(actor) && r.presser != seat)
+        {
+            continue;
+        }
+        const field_pickup::SlotHold slots(seat, r.key);
+        if (slots.Held())
+        {
+            NoteHold(actor, seat, reinterpret_cast<ProgressFn>(g_stopProgress.Original())(actor));
+        }
+    }
+    const auto sign  = ReadField<std::uint8_t>(actor, facts::kChocoboStopSignState);
+    const auto avail = ReadField<std::uint8_t>(actor, facts::kChocoboStopAvailability);
+    if (sign == r.signSaid && avail == r.availSaid)
+    {
+        return;
+    }
+    constexpr std::array<const wchar_t*, 5> kSigns{L"idle", L"start", L"hold", L"cancel", L"success"};
+    const int mover = SeatOfStopMove(actor);
+    try
+    {
+        const std::wstring hub = players::unreal::NameText(ReadField<std::uint64_t>(actor, facts::kChocoboStopHubId));
+        if (avail == 3 && r.availSaid != 3 && r.availSaid != 0xFF)
+        {
+            platform::Log(L"levers: the chocobo stop {} (hub {}) is raised (its move's character: {})", players::NameOf(actor),
+                          hub, mover >= 1 ? players::SeatName(mover) : L"player 1 or none");
+        }
+        else
+        {
+            platform::LogDebug(L"levers: the chocobo stop {} (hub {}): sign {}, availability {} (its move's character: {})",
+                               players::NameOf(actor), hub, sign < kSigns.size() ? kSigns[sign] : L"?", avail,
+                               mover >= 1 ? players::SeatName(mover) : L"player 1 or none");
+        }
+    }
+    catch (...)
+    {
+    }
+    r.signSaid  = sign;
+    r.availSaid = avail;
 }
 
 /// The class's executer tick (its phase update polls the hold progress): a seat's member's with the seat's slot block
@@ -787,6 +1104,10 @@ void RemoveKind(Kind kind) noexcept
 {
     KindHooks& h = HooksOf(kind);
     h.ready      = false;
+    if (kind == Kind::ChocoboStop && g_stopProgress.IsInstalled())
+    {
+        (void)g_stopProgress.Restore();
+    }
     if (h.setter.IsInstalled())
     {
         (void)h.setter.Restore();
@@ -800,6 +1121,20 @@ void RemoveKind(Kind kind) noexcept
     }
     h.ownOffReturns.fill(0);
     h.leaveReturns.fill(0);
+}
+
+/// The replacement of a class's notify slot: the chocobo stop's is a try-begin of its own shape.
+template <Kind K>
+std::uintptr_t NotifyHook() noexcept
+{
+    if constexpr (K == Kind::ChocoboStop)
+    {
+        return reinterpret_cast<std::uintptr_t>(&StopTryBegin);
+    }
+    else
+    {
+        return reinterpret_cast<std::uintptr_t>(&Notify<K>);
+    }
 }
 
 /// One class's hooks, all or none: each own-off return address trusted only once its site is checked as a call of
@@ -826,8 +1161,9 @@ bool InstallKind(const platform::GameImage& image, std::uintptr_t setterHook) no
     ready = ready && platform::InstallAtEntryOrSecond(h.setter, image, f.setter, setterHook) &&
             platform::ReplaceSlot(image, f.registerSlot, reinterpret_cast<std::uintptr_t>(&Register<K>), h.registerSlot) &&
             platform::ReplaceSlot(image, f.unregister, reinterpret_cast<std::uintptr_t>(&Unregister<K>), h.unregister) &&
-            platform::ReplaceSlot(image, f.notify, reinterpret_cast<std::uintptr_t>(&Notify<K>), h.notify) &&
-            platform::ReplaceSlot(image, f.execTick, reinterpret_cast<std::uintptr_t>(&ExecTick<K>), h.execTick);
+            platform::ReplaceSlot(image, f.notify, NotifyHook<K>(), h.notify) &&
+            (f.execTick == nullptr ||
+             platform::ReplaceSlot(image, *f.execTick, reinterpret_cast<std::uintptr_t>(&ExecTick<K>), h.execTick));
     if (!ready)
     {
         RemoveKind(K);
@@ -899,12 +1235,33 @@ void Install(const platform::GameImage& image) noexcept
         platform::LogWarning(L"levers: towers NOT placed (a slot, the setter or one of its callers is not as the research "
                              L"read it): the towers stay player 1's");
     }
+    // The stop's hold reader with its class: a seat's move would cancel at once without it.
+    const auto progress = platform::FindFunction(image, kStopProgress);
+    if (InstallKind<Kind::ChocoboStop>(image, reinterpret_cast<std::uintptr_t>(&StopSetter)) && progress &&
+        g_stopProgress.Install(*progress, image.EntryInstruction(kStopProgress.address, kStopProgress.entryBytes.first(5)),
+                               reinterpret_cast<std::uintptr_t>(&StopProgress)))
+    {
+        platform::Log(L"levers: chocobo stops ready; players 2 and 3 raise the chocobo stops' signs on their own character "
+                      L"or their own chocobo, with their own hold (the point takes every player's wish, the press latch is "
+                      L"the presser's, the stop's move reads its player's hold)");
+    }
+    else
+    {
+        RemoveKind(Kind::ChocoboStop);
+        platform::LogWarning(L"levers: chocobo stops NOT placed (a slot, the setter, one of its callers or the hold reader is "
+                             L"not as the research read it): the stops stay player 1's");
+    }
 }
 
 void Remove() noexcept
 {
     RemoveKind(Kind::Switch);
     RemoveKind(Kind::Tower);
+    RemoveKind(Kind::ChocoboStop);
+    for (StopHold& h : g_stopHolds)
+    {
+        h.actor.store(0, std::memory_order_release);
+    }
     g_records.fill({});
     g_keys.fill(0);
     g_refused.fill(0);
@@ -952,6 +1309,10 @@ void Tick() noexcept
         {
             WriteInRange(actor, r);
         }
+        if (r.kind == Kind::ChocoboStop)
+        {
+            TickStop(r, actor);
+        }
         if (wished && !AnyOn(r.wish) && ReadField<std::uint8_t>(actor, FactsOf(r.kind).pointShown) != 0)
         {
             CallSetter(r.kind, actor, 0, {});
@@ -975,6 +1336,11 @@ bool Ready() noexcept
 bool TowerReady() noexcept
 {
     return HooksOf(Kind::Tower).ready;
+}
+
+bool ChocoboStopReady() noexcept
+{
+    return HooksOf(Kind::ChocoboStop).ready;
 }
 
 bool Admits(const void* actor) noexcept
@@ -1006,6 +1372,11 @@ void NoteSwitch(const void* actor) noexcept
 void NoteTower(const void* actor) noexcept
 {
     NoteDelivered(actor, Kind::Tower);
+}
+
+void NoteChocoboStop(const void* actor) noexcept
+{
+    NoteDelivered(actor, Kind::ChocoboStop);
 }
 
 bool AdmitsPoint(std::uint64_t key) noexcept

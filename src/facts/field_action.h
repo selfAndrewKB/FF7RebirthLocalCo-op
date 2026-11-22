@@ -102,4 +102,22 @@ inline constexpr std::uint32_t kOneShotAccessRegistered = 0x8B0;
 inline constexpr std::uint32_t kOneShotAccessPressLatch = 0x8E0;
 inline constexpr std::uint32_t kOneShotAccessPointShown = 0x8E1;
 
+// The chocobo stops (AEndFieldActionChocoboStopActor; RE-chocobo-stop-seats.md): the native vtable placed Blueprint stops
+// keep, and the class's unregister override (the leave: the leader's list, the point off, the registered character
+// cleared).
+inline constexpr std::uintptr_t kChocoboStopVTable     = 0x14570CDE8;
+inline constexpr std::uintptr_t kChocoboStopUnregister = 0x143397520;
+// The actor's own fields, one per actor: the hub row it activates (FName), the character that registered (a weak
+// reference the register sets to the party leader and the unregister clears; nothing reads it), the sign state in use
+// (0 idle, 1 start, 2 hold, 3 cancel, 4 success), the availability (2: the prompt may show), the press latch (the point's
+// listener sets it when the hold completes; the hold reads 1 while it is set; the setter clears it on its edges), the
+// point shown, and the character of the stop's move (a weak reference the move sets at each phase's start).
+inline constexpr std::uint32_t kChocoboStopHubId         = 0x718;
+inline constexpr std::uint32_t kChocoboStopRegistered    = 0x734;
+inline constexpr std::uint32_t kChocoboStopSignState     = 0x7BA;
+inline constexpr std::uint32_t kChocoboStopAvailability  = 0x7BB;
+inline constexpr std::uint32_t kChocoboStopPressLatch    = 0x7BD;
+inline constexpr std::uint32_t kChocoboStopPointShown    = 0x7BE;
+inline constexpr std::uint32_t kChocoboStopMoveCharacter = 0x7E8;
+
 }  // namespace lss::facts

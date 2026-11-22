@@ -43,6 +43,16 @@
 // activation and what it shows are the game's, for every player alike. Every terminal with the tower flag is admitted;
 // the class's other actors (life springs, story terminals) stay player 1's.
 //
+// The chocobo stops (AEndFieldActionChocoboStopActor; research/RE-chocobo-stop-seats.md) go the same way, on foot or on
+// the player's own chocobo: their notify is a try-begin (run for a seat's member in the seat's primary scope, for the
+// chocobo a seat's player rides in that rider's scope) that starts the stop's move (control state 18), and their
+// registered character stands for the in-range mark. The move has no executer; its phases poll the class's own hold
+// reader, which reads the live slot block (player 1's) and may run off the game thread. The reader, redirected at its
+// entry, answers a read made outside a player's notify for a stop whose move a player 2's or 3's character runs with
+// that player's progress, as the game's reader gave it in their slot block on the game thread (inside their try-begin,
+// and each tick while they are at the stop). The sign, the feather, the hub's activation and what it shows are the
+// game's, for every player alike.
+//
 // Per seat (players/seats.h): the seat comes from the notified character, the executer's character or the open scope;
 // the wishes, views and in-range marks are per actor and player.
 
@@ -71,6 +81,9 @@ bool Ready() noexcept;
 /// The towers' hooks are placed (world/seat_triggers delivers a seat's tower enter only then).
 bool TowerReady() noexcept;
 
+/// The chocobo stops' hooks are placed (world/seat_triggers delivers a seat's stop enter only then).
+bool ChocoboStopReady() noexcept;
+
 /// The switch `actor` is one players 2 and 3 may use (world/lever_rules.h, by its name or its point's key).
 bool Admits(const void* actor) noexcept;
 
@@ -83,7 +96,11 @@ void NoteSwitch(const void* actor) noexcept;
 /// A delivered tower terminal's actor, the same way.
 void NoteTower(const void* actor) noexcept;
 
-/// Whether a field-action point is a noted switch's or tower's (by `key`): the seat's pass leaves it open. Game thread.
+/// A delivered chocobo stop's actor, the same way.
+void NoteChocoboStop(const void* actor) noexcept;
+
+/// Whether a field-action point is a noted switch's, tower's or chocobo stop's (by `key`): the seat's pass leaves it
+/// open. Game thread.
 bool AdmitsPoint(std::uint64_t key) noexcept;
 
 /// After a selection update ran for `player` (0: the game's own; a seat: its pass): a switch whose press latch came up
