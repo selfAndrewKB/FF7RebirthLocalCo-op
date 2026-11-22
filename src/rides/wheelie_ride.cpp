@@ -108,7 +108,6 @@ constexpr platform::SlotFact kDetachNotifySlot{
     L"the End DetachFromSBScooter notify's Notify slot", 0x14574D9B8,
     {L"AnimNotify_DetachFromRideObject_Notify_FieldLeaderSwapBack", 0x14302A2A4, kDetachNotifyBytes}};
 constexpr std::uintptr_t kDetachLeaderSite = 0x14302A610;  // its field-leader test: call ResolveFieldLeaderCharOrLeader
-constexpr std::uintptr_t kResolveLeader    = 0x140764048;  // PartyManager_ResolveFieldLeaderCharOrLeader(selector)
 
 using facts::kSwitchAiControlAsync;
 using facts::kScooterUpdateTarget;
@@ -1226,7 +1225,7 @@ bool Install(const platform::GameImage& image) noexcept
     g_detachLeaderSite = rebase(kDetachLeaderSite);
     g_updateTargetSite = rebase(facts::kScooterUpdateTargetCall);
     g_markerLeaderSite = rebase(facts::kScooterMarkerLeaderCall);
-    g_resolveLeader    = reinterpret_cast<ResolveLeaderFn>(rebase(kResolveLeader));
+    g_resolveLeader    = reinterpret_cast<ResolveLeaderFn>(find(facts::kResolveFieldLeader));
     const auto swap    = platform::FindFunction(image, kSwapBackSlot.target);
     g_swapBackOriginal = swap ? reinterpret_cast<SwapBackFn>(*swap) : nullptr;
     const auto detach  = platform::FindFunction(image, kDetachNotifySlot.target);

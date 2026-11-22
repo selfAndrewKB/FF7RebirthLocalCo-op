@@ -189,6 +189,7 @@ add_library(LocalSplitScreen SHARED
     src/battle/command_menu_view.cpp
     src/battle/shortcut_follow.cpp
     src/battle/command_menu_tick.cpp
+    src/battle/encounter_watch.cpp
     src/battle/keyboard_menu_keys.cpp
     src/battle/menu_input_route.cpp
     src/battle/menu_tint.cpp

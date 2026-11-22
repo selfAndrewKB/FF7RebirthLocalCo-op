@@ -158,6 +158,12 @@ inline void* RootGameState(const void* root) noexcept
     return platform::ReadPointer(root, facts::kRootGameState);
 }
 
+/// The field root's mode holder, the field encounter's manager (its state at facts::kEncounterState), or null.
+inline void* RootEncounter(const void* root) noexcept
+{
+    return platform::ReadPointer(root, facts::kRootModeHolder);
+}
+
 /// The field root's trigger manager, or null.
 inline void* RootTriggerManager(const void* root) noexcept
 {

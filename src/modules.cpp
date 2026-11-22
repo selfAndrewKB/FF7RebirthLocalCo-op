@@ -8,6 +8,7 @@
 #include "battle/command_menu.h"
 #include "battle/command_menu_tick.h"
 #include "battle/command_rules.h"
+#include "battle/encounter_watch.h"
 #include "battle/enemy_leader.h"
 #include "battle/equal_targeting.h"
 #include "battle/keyboard_menu_keys.h"
@@ -204,6 +205,8 @@ constexpr std::array kModules{
     // who a battle warps at its start and end, by the setting
     Module{Call<&battle::battle_warps::Install>, &battle::battle_warps::Remove},
     Module{Call<&battle::battle_rates::Install>, &battle::battle_rates::Remove},
+    // the field encounter logged: who it watches, its field enemies, each fight's start (changes nothing)
+    Module{Call<&battle::encounter_watch::Install>, &battle::encounter_watch::Remove},
     // each seat's command controller: built, follows the game's
     Module{Call<&battle::command_menu::Install>, &battle::command_menu::Remove},
     // a seat's menu offers Summon by the party's gauge, as player 1's

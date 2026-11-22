@@ -60,7 +60,7 @@ const void* Root() noexcept
 
 std::uint8_t EncounterState() noexcept
 {
-    return ReadField<std::uint8_t>(ReadPointer(Root(), facts::kRootModeHolder), facts::kEncounterState);
+    return ReadField<std::uint8_t>(players::actor_fields::RootEncounter(Root()), facts::kEncounterState);
 }
 
 bool EventHoldsParty() noexcept
