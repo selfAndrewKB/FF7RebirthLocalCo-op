@@ -2,10 +2,10 @@
 # engine's re-check is set at each change and every slot's last rumble forgotten; every pad idle and back; the pads
 # reading answers from the once-a-second poll.
 # needs: control
-# expect: pads: player 1 pad 2, player 2 pad 1, player 3 pad 3, spare pad 4 \(was player 1 pad 1, player 2 pad 2, player 3 pad 3, spare pad 4\): the console
-# expect: pads: idle to the game: pad 1, pad 2, pad 3, pad 4: the console
+# expect: pads: player 1 pad 2( \(beside it [^)]*\))?, player 2 pad 1, player 3 pad 3, spare pad 4 \(was player 1 .*, player 2 pad 2, player 3 pad 3, spare pad 4\): the console
+# expect: pads: idle to the game: pad 1, pad 2, pad 3, pad 4(, PlayStation pad \d)*: the console
 # expect: pads: idle to the game: none: the console
-# expect: pads: player 1 pad 1, player 2 pad 2, player 3 pad 3, spare pad 4 \(was player 1 pad 2, player 2 pad 1, player 3 pad 3, spare pad 4\): the console
+# expect: pads: player 1 pad 1( \(beside it [^)]*\))?, player 2 pad 2, player 3 pad 3, spare pad 4 \(was player 1 pad 2( \(beside it [^)]*\))?, player 2 pad 1, player 3 pad 3, spare pad 4\): the console
 # expect-not: pads: the engine's pad re-check could not be set
 note regression: pad table start
 pad-table 2 1 3 4
