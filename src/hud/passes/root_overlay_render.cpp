@@ -200,6 +200,7 @@ void ColumnPass(int column, int seat, bool another, SeatPassKind kind) noexcept
     // The seat's minimap (hud/minimap/minimap.h); without it (and for player 1's HUD), player 1's pass alone renders
     // the minimap's map (hud/minimap/minimap_once.h).
     BeginMinimapSeatPass(minimap::BeginPaint(shown));
+    SizeForPass(column, seat);  // the roots at the view's own player's HUD size (a copy too: the size is the view's)
     RenderColumnImage();  // on a fault the minimap's target field and held slot are still put back below
     EndMinimapSeatPass();
     minimap::EndPaint();
@@ -317,6 +318,7 @@ void RenderRootOverlay(void* application) noexcept
     if (gameThread)
     {
         lead_mark::BeforePlayerOnePaint();  // the other players' kept-walk markers withheld from player 1's view
+        SizeForPass(0, 0);                  // the roots back at player 1's HUD size for the game's own pass
     }
     // The entry redirect's trampoline is set before its first call can arrive; only one of the two is ever installed.
     reinterpret_cast<RenderFn>(g_entry.Original() != 0 ? g_entry.Original() : g_call.Original())(application);

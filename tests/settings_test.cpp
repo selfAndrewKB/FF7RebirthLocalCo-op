@@ -56,7 +56,7 @@ void TableConsistent()
             open = option->section;
         }
     }
-    EXPECT(kOptions.size() == 19);
+    EXPECT(kOptions.size() == 21);
     // The six battle rates: multipliers from 0.1 to 10.0 in tenths, each default the game's own 1.0.
     for (const Option* rate : {&kEnemyDamage, &kEnemyHp, &kBossHp, &kEnemyStagger, &kExpGain, &kApGain})
     {

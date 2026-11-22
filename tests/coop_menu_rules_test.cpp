@@ -68,7 +68,7 @@ void PageFromTheTable()
     }
     EXPECT(rows.size() == onPage);
     EXPECT(std::wcscmp(page[0].text.label, L"Screens") == 0);
-    EXPECT(page[0].options == (std::vector<int>{0, 2, 3, 4, 5, 6, 7}));  // 1 is the monitors, set by the setup app
+    EXPECT(page[0].options == (std::vector<int>{0, 2, 3, 4, 5, 6, 7, 8, 9}));  // 1 is the monitors, set by the setup app
 }
 
 /// A row's byte is above every game setting (0..0x54) and names its option back; game bytes name none.
@@ -123,8 +123,8 @@ void CommandValues()
     EXPECT(!WordOfReading(control::Value{}).has_value());
 }
 
-/// The split FOV's two weights (21 values each), the HUD size (16) and the six battle rates (100 each) are sliders; the
-/// short lists stay lists.
+/// The split FOV's two weights (21 values each), the three players' HUD sizes (16) and the six battle rates (100 each)
+/// are sliders; the short lists stay lists.
 void SlidersAreTheLongRows()
 {
     std::puts("coop menu: the long rows are sliders");
@@ -134,7 +134,7 @@ void SlidersAreTheLongRows()
         EXPECT(IsSlider(*option) == (option->wordLabels.size() > kListLongest));
         sliders += IsSlider(*option) ? 1 : 0;
     }
-    EXPECT(sliders == 9);
+    EXPECT(sliders == 11);
 }
 
 /// Reset All gives each row its option's default word.

@@ -26,7 +26,8 @@
 // ("Call Chocobo"), which the game places itself at points of the frame, keep their corner through
 // their own base instead (hud/field/action_icon_base.h).
 //
-// The HUD size (the settings file's [Views] hud-scale) scales these roots alone, each about the corner it
+// The HUD size (the settings file's [Views] hud-scale, and its keys for players 2 and 3: each player's in their own
+// view, the roots being one set painted again in each view's pass, SizeForPass) scales these roots alone, each about the corner it
 // is anchored to (SetRenderTransformPivot at that corner, allowing for a root's own render translation,
 // and SetRenderScale), so each stays in its corner of the view; the summon gauges, which stand between
 // the minimap and the Members panel, scale about a height between the two so they keep their share of it:
@@ -56,8 +57,15 @@ LayoutPoint GlowAnchor() noexcept;
 /// The point of that widget's 1920x1080 area (fractions of it) the HUD size scales it about: its glow's box with it.
 LayoutPoint GlowScaleCentre() noexcept;
 
-/// The HUD size that widget is drawn at now (1 while it is not placed or not sized): the particles' boxes scale with it.
-float GlowSize() noexcept;
+/// The HUD size that widget was drawn at in `column`'s pass this frame (1 while it is not placed or not sized): the
+/// particles' boxes scale with it.
+float GlowSizeOf(int column) noexcept;
+
+/// Game thread, in the overlay render: just before `column`'s pass paints, the held roots take `player`'s size (the
+/// view's own player's, 0 for player 1's pass and a mirror's), each set through the game's setter only when it differs
+/// and only while the root still shows the scale the mod set last (a root the game set during the frame is left to the
+/// next tick's hand-back). The game's own pass, the frame's last, is given player 1's, so every tick sees player 1's.
+void SizeForPass(int column, int player) noexcept;
 
 /// Reads the HUD size from the settings file and registers its console option.
 void InstallHudSize() noexcept;
