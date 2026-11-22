@@ -776,9 +776,9 @@ void CatchUpMenuAllowed(int seat, std::uintptr_t ctrl, std::uintptr_t ctrl1) noe
     auto       want    = ownLock ? std::uint8_t{0} : ReadAt<std::uint8_t>(ctrl1 + kCmdMenuAllowed);
     // Player 1's menu shut only by player 1's own action (the action lock its sole shut, held by player 1 alone, and the
     // game's own systems allowing it) is not the seat's to follow.
-    if (!ownLock && want == 0 && g_systemsAllowed != 0 &&
-        (ReadAt<std::uint64_t>(g_endUISystem + kUIMenuLocks) & ~kUIMenuActionLock) == 0 &&
-        action_locks::OnlyPlayerOneHolds())
+    const auto locks      = ReadAt<std::uint8_t>(g_endUISystem + kUIMenuLocks);
+    const bool playerOnes = !ownLock && want == 0 && action_locks::OnlyPlayerOneHolds();
+    if (playerOnes && g_systemsAllowed != 0 && (locks & ~kUIMenuActionLock) == 0)
     {
         want = 1;
     }
@@ -789,6 +789,13 @@ void CatchUpMenuAllowed(int seat, std::uintptr_t ctrl, std::uintptr_t ctrl1) noe
     if (g_menuAllowedRefused[static_cast<std::size_t>(seat)] == want && g_frame % kMenuAllowedRetryGap != 0)
     {
         return;
+    }
+    if (playerOnes && want == 0)
+    {
+        Line(std::format(L"{}'s menu follows player 1's shut while the action locks hold only player 1's own: the game's "
+                         L"own setter calls last {} the menu, the UI system's lock bits {:#04x}",
+                         players::SeatName(seat), g_systemsAllowed != 0 ? L"allowed" : L"forbade", locks),
+             platform::Level::Debug);
     }
     SetSeatMenuAllowed(seat, ctrl, want, 0, ownLock ? L"their own action" : L"caught up");
 }
