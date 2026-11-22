@@ -8,6 +8,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <span>
 
 namespace lss::platform {
@@ -38,6 +39,25 @@ std::uintptr_t PlaceCodeNear(std::uintptr_t site, std::size_t size, Fill fill) n
             return (*static_cast<Fill*>(context))(address, code);
         },
         &fill);
+}
+
+/// A stub near `site` for a call redirect whose replacement needs a register the call does not pass: `moves` (register
+/// moves into argument registers, at most 8 bytes; no stack use, no call), then a jump to `handler` (jmp [rip+0] and the
+/// address). The call arrives at `handler` as it would at the target, return address included. 0 when no room.
+inline std::uintptr_t PlaceMoveAndJump(std::uintptr_t site, std::span<const std::uint8_t> moves, std::uintptr_t handler) noexcept
+{
+    static constexpr std::uint8_t kJump[] = {0xFF, 0x25, 0x00, 0x00, 0x00, 0x00};  // jmp [rip+0]
+    if (moves.size() > 8)
+    {
+        return 0;
+    }
+    return PlaceCodeNear(site, moves.size() + sizeof(kJump) + sizeof(handler),
+                         [moves, handler](std::uintptr_t, std::span<std::uint8_t> code) noexcept {
+                             std::memcpy(code.data(), moves.data(), moves.size());
+                             std::memcpy(code.data() + moves.size(), kJump, sizeof(kJump));
+                             std::memcpy(code.data() + moves.size() + sizeof(kJump), &handler, sizeof(handler));
+                             return true;
+                         });
 }
 
 /// What the pool holds so far (for the log).

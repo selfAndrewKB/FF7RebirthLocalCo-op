@@ -9,6 +9,7 @@
 #include "players/actor_fields.h"
 #include "players/generation.h"
 #include "players/object_fields.h"
+#include "rides/chocobo_call.h"
 #include "rides/wheelie_ride.h"
 #include "world/field_rules.h"
 
@@ -116,10 +117,12 @@ void SummonBody(void* state, float deltaTime) noexcept
 {
     if (state != nullptr && state == g_memberState && Acts(kFixSummonBody) && players::generation::OnGameThread())
     {
-        ++g_counts.summonSkips;
-        // Its key-4 part, the Wheelie walk-in question, asked for the ticked seat instead (rides/wheelie_ride.h).
+        ++g_counts.summonSkips;  // the body as the game runs it for player 1 skipped; the parts below run instead
+        // Its key-4 part, the Wheelie walk-in question, asked for the ticked seat instead (rides/wheelie_ride.h); its
+        // chocobo part, the player's own whistle, run under the own-call rules (rides/chocobo_call.h), or nothing.
         rides::wheelie_ride::Ask(state);
-        return;  // as for any character the game does not tick
+        (void)rides::chocobo_call::RunSeatSummon(reinterpret_cast<SummonBodyFn>(g_summonCall.Original()), state, deltaTime);
+        return;
     }
     reinterpret_cast<SummonBodyFn>(g_summonCall.Original())(state, deltaTime);
 }

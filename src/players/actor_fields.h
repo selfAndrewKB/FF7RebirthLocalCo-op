@@ -152,6 +152,12 @@ inline void* WidgetSlot(const void* widget) noexcept
     return platform::ReadPointer(widget, facts::kWidgetSlot);
 }
 
+/// An actor component's owner (the actor it belongs to), or null.
+inline void* ComponentOwner(const void* component) noexcept
+{
+    return platform::ReadPointer(component, facts::kActorComponentOwner);
+}
+
 /// The field root's game state (the on/off table's owner), or null.
 inline void* RootGameState(const void* root) noexcept
 {

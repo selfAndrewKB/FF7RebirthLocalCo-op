@@ -157,7 +157,7 @@ std::uintptr_t BeginPlay(void* component) noexcept
     {
         return result;
     }
-    void* owner = ReadPointer(component, facts::kActorComponentOwner);
+    void* owner = players::actor_fields::ComponentOwner(component);
     Gauge noted{players::weak_object::WeakOf(component), players::weak_object::WeakOf(owner)};
     if (noted.component == 0 || noted.owner == 0)
     {

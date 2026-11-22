@@ -29,6 +29,7 @@
 #include "players/object_fields.h"
 #include "players/seats.h"
 #include "players/unreal_access.h"
+#include "rides/chocobo_call.h"
 #include "rides/own_ride.h"
 #include "scopes/leader_scope.h"
 #include "session/party_member.h"
@@ -782,8 +783,9 @@ bool Tick(void* controller, void* member, const input::move_state::EngineTicks& 
         End(s, L"the chocobo's move state changed", false);
         return s.phase != Phase::Idle;
     }
-    // The seat's pad's Vehicle button is kept out while it rides: player 1 owns mounting (it would dismount the party).
-    switch (own_ride::TickVehicle(s.ride, state, engine, VehicleKey()))
+    // The seat's pad's Vehicle button is kept out while it rides on the party's ride: player 1 owns mounting (it would
+    // dismount the party). On a chocobo of their own call the press is theirs: it ends their call (rides/chocobo_call.h).
+    switch (own_ride::TickVehicle(s.ride, state, engine, chocobo_call::OwnCall(seat) ? 0 : VehicleKey()))
     {
         case own_ride::VehicleTick::Waiting: return true;  // the field ticker is idle: the seat's chocobo waits too
         case own_ride::VehicleTick::Faulted:
@@ -834,6 +836,16 @@ const void* DrivenMoveState(int seat) noexcept
     const void* state = players::actor_fields::MoveState(s->ride.vehicle);
     return VTableOf(state) == g_moveVt && players::actor_fields::MoveStateCharacter(state) == s->ride.vehicle ? state
                                                                                                             : nullptr;
+}
+
+const void* RideManagerNow() noexcept
+{
+    return RideManager();
+}
+
+int MemberEntryState(const void* member) noexcept
+{
+    return EntryState(RideManager(), member);
 }
 
 int SeatRiding(const void* chocobo) noexcept

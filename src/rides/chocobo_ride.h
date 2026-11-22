@@ -55,6 +55,14 @@ const void* RiddenChocobo(int seat) noexcept;
 /// hud/field/prompt_rows.h), or null when not driving or it no longer checks out. Game thread.
 const void* DrivenMoveState(int seat) noexcept;
 
+/// The chocobo ride manager now (the field root's slot), or null. Any thread may read the pointer; its fields are the
+/// game thread's.
+const void* RideManagerNow() noexcept;
+
+/// The ride manager's member entry state of `member` (0 idle, 1 named, 2 spawning, 3 placed, 4 riding, 5 dismounting),
+/// or -1 (no manager, no player type). Game thread.
+int MemberEntryState(const void* member) noexcept;
+
 /// The built seat whose player rides `chocobo` seated (RiddenChocobo), or drives it (DrivenChocobo), or -1.
 int SeatRiding(const void* chocobo) noexcept;
 int SeatDriving(const void* chocobo) noexcept;

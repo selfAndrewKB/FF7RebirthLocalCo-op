@@ -297,14 +297,8 @@ void EndDeactivate(std::uint8_t slot, const void* action) noexcept
 /// The redirect's target: `mov rdx, rbx` (the action), then a jump to EndDeactivate. No call, no stack use.
 std::uintptr_t BuildEndStub(std::uintptr_t site) noexcept
 {
-    const auto handler = reinterpret_cast<std::uintptr_t>(&EndDeactivate);
-    return platform::PlaceCodeNear(site, 3 + 6 + 8, [handler](std::uintptr_t, std::span<std::uint8_t> code) noexcept {
-        static constexpr std::uint8_t kMoveAndJump[] = {0x48, 0x89, 0xDA,                     // mov rdx, rbx
-                                                        0xFF, 0x25, 0x00, 0x00, 0x00, 0x00};  // jmp [rip+0]
-        std::memcpy(code.data(), kMoveAndJump, sizeof(kMoveAndJump));
-        std::memcpy(code.data() + sizeof(kMoveAndJump), &handler, sizeof(handler));
-        return true;
-    });
+    static constexpr std::uint8_t kMove[] = {0x48, 0x89, 0xDA};  // mov rdx, rbx
+    return platform::PlaceMoveAndJump(site, kMove, reinterpret_cast<std::uintptr_t>(&EndDeactivate));
 }
 
 }  // namespace

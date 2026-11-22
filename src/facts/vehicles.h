@@ -221,4 +221,69 @@ inline constexpr FunctionFact   kLeaderRideBody{L"PrimaryPC_ChocoboCoord_LeaderR
 inline constexpr std::uintptr_t kCraftLocksOnRideCall  = 0x1432C64C4;
 inline constexpr std::uintptr_t kCraftLocksOffRideCall = 0x1432C6563;
 
+// ---------------------------------------------------------------------------------------------
+// The chocobo call (the whistle; research/RE-chocobo-summon-seats.md)
+// ---------------------------------------------------------------------------------------------
+
+/// The ride manager's asset state (u8; 2 loaded): a member entry spawns no chocobo before it.
+inline constexpr std::uint32_t kRideManagerAssets = 0xC80;
+inline constexpr std::uint8_t  kRideAssetsLoaded  = 2;
+/// The summon body's calls the own call answers for a player 2's or 3's member: MoveState_ChocoboWhistleOrDismiss(state,
+/// stay) (stay: the "stay" order to the leader's chocobo), PrimaryPCMode_Vt300_ForKey(request) for keys 1 (the walk-in
+/// ride), 4 (the scooter) and 2 (the buggy), FieldSummon_CanCallBuggy(character, ...) for the buggy's row and press.
+inline constexpr std::uint8_t kWhistleOrDismissBytes[] = {
+    0x48, 0x89, 0x5C, 0x24, 0x08, 0x57, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8,
+    0x68, 0x4F, 0x00, 0xFF, 0x48, 0x2B, 0xE0, 0x48, 0x8B, 0xD9, 0x84, 0xD2};
+inline constexpr FunctionFact   kWhistleOrDismiss{L"MoveState_ChocoboWhistleOrDismiss", 0x143166C08, kWhistleOrDismissBytes};
+inline constexpr std::uintptr_t kWhistleOrDismissCall = 0x1410E1F9B;
+inline constexpr std::uint8_t kRideForKeyBytes[] = {
+    0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0x70, 0x98, 0x08, 0x01,
+    0x48, 0x2B, 0xE0, 0x48, 0x8B, 0xD9, 0x8A, 0x09, 0x84, 0xC9, 0x74, 0x2F};
+inline constexpr FunctionFact   kRideForKey{L"PrimaryPCMode_Vt300_ForKey", 0x1410E2304, kRideForKeyBytes};
+inline constexpr std::uintptr_t kSummonRideForKeyCalls[] = {0x1410E1DB6, 0x1410E1FB2, 0x1410E20D7};
+inline constexpr std::uint8_t kCanCallBuggyBytes[] = {
+    0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0xD4, 0x94, 0x08, 0x01,
+    0x48, 0x2B, 0xE0, 0x48, 0x8B, 0xD9, 0xE8, 0x71, 0x00, 0x00, 0x00, 0x84};
+inline constexpr FunctionFact   kCanCallBuggy{L"FieldSummon_CanCallBuggy", 0x1410E26A0, kCanCallBuggyBytes};
+inline constexpr std::uintptr_t kSummonCanCallBuggyCalls[] = {0x1410E201A, 0x1410E20B6};
+/// UEndAnimNotifyCallChocobo's Notify (its vtable slot): the whistle sound, then the party's call
+/// ChocoboCall_RequestCall_FromWhistle(bool) at one call.
+inline constexpr std::uint8_t kCallNotifyBytes[] = {
+    0x48, 0x89, 0x5C, 0x24, 0x10, 0x48, 0x89, 0x7C, 0x24, 0x18, 0x41, 0x56,
+    0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0xBE, 0xD7, 0x13, 0xFF, 0x48, 0x2B};
+inline constexpr SlotFact kCallNotifySlot{
+    L"the chocobo call notify's Notify slot", 0x146529A10, {L"UEndAnimNotifyCallChocobo__Notify", 0x14302E3AC, kCallNotifyBytes}};
+inline constexpr std::uint8_t kCallFromWhistleBytes[] = {
+    0x40, 0x55, 0x48, 0x8D, 0x6C, 0x24, 0xA9, 0xB8, 0xA0, 0x00, 0x00, 0x00,
+    0xE8, 0x4B, 0x81, 0x70, 0xFE, 0x48, 0x2B, 0xE0, 0x48, 0x8B, 0x05, 0xC1};
+inline constexpr FunctionFact   kCallFromWhistle{L"ChocoboCall_RequestCall_FromWhistle", 0x143A63A24, kCallFromWhistleBytes};
+inline constexpr std::uintptr_t kCallFromWhistleCall = 0x14302E438;
+/// ChocoboRideMgr_IsPartyRideActive(manager) at its four calls in the member entries' tick, where r15 holds the entry's
+/// offset (0x2C * player type) from the first entry.
+inline constexpr std::uint8_t kPartyRideActiveBytes[] = {
+    0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0xE8, 0x57, 0xB4, 0x00,
+    0x48, 0x2B, 0xE0, 0x48, 0x8B, 0xD9, 0xE8, 0x21, 0x00, 0x00, 0x00, 0x84};
+inline constexpr FunctionFact   kPartyRideActive{L"ChocoboRideMgr_IsPartyRideActive", 0x14162638C, kPartyRideActiveBytes};
+inline constexpr std::uintptr_t kEntryPartyRideCalls[] = {0x140B36674, 0x1424CC406, 0x1424CC72B, 0x1424CCD8B};
+/// The rest of that answer, without the party's ride flag: ChocoboRideMgr_IsSuspended_BattleOrAbort(manager) (a fight, an
+/// abort, the getoff in progress) and the manager's ride-off byte.
+inline constexpr std::uint8_t kRideSuspendedBytes[] = {
+    0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8, 0xB2, 0x57, 0xB4, 0x00, 0x48, 0x2B,
+    0xE0, 0x80, 0xB9, 0xB6, 0x0E, 0x00, 0x00, 0x00, 0x75, 0x18, 0x80, 0xB9};
+inline constexpr FunctionFact  kRideSuspended{L"ChocoboRideMgr_IsSuspended_BattleOrAbort", 0x1416263C4, kRideSuspendedBytes};
+inline constexpr std::uint32_t kRideManagerRideOff = 0xC90;  // u8: set, no member rides
+/// ChocoboCall_LeaderChocoboFollowing_StayLabel(state): the summon row reads "stay" while the leader's chocobo follows,
+/// at its call in the summon body (the call crosses a block).
+inline constexpr std::uint8_t kStayLabelBytes[] = {
+    0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8, 0x72, 0x1E, 0x3B, 0x01, 0x48, 0x2B,
+    0xE0, 0xE8, 0x56, 0x11, 0x2F, 0x00, 0x48, 0x85, 0xC0, 0x74, 0x1A, 0x48};
+inline constexpr FunctionFact   kStayLabel{L"ChocoboCall_LeaderChocoboFollowing_StayLabel", 0x140DB9D04, kStayLabelBytes};
+inline constexpr std::uintptr_t kStayLabelCall = 0x1410E182C;
+/// ChocoboRideMgr_RequestPartyGetOff(request*): the getoff of every rider, at its call in the chocobo move state's input
+/// slot (the rider's Vehicle press; the call crosses a block).
+inline constexpr std::uint8_t kPartyGetOffBytes[] = {
+    0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8, 0x16, 0x82, 0x70, 0xFE, 0x48, 0x2B,
+    0xE0, 0x48, 0x8B, 0x05, 0x44, 0xEC, 0x4C, 0x05, 0x48, 0x85, 0xC0, 0x74};
+inline constexpr FunctionFact   kPartyGetOff{L"ChocoboRideMgr_RequestPartyGetOff", 0x143A63960, kPartyGetOffBytes};
+inline constexpr std::uintptr_t kPartyGetOffCall = 0x14317088E;
 }  // namespace lss::facts

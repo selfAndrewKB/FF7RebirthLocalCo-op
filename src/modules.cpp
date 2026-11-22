@@ -82,6 +82,7 @@
 #include "renderer/frame_generation.h"
 #include "renderer/me_feedback_once.h"
 #include "renderer/submit_hints.h"
+#include "rides/chocobo_call.h"
 #include "rides/chocobo_exits.h"
 #include "rides/chocobo_ride.h"
 #include "rides/scour_scent.h"
@@ -343,6 +344,8 @@ constexpr std::array kModules{
     Module{Call<&rides::chocobo_ride::Install>, nullptr},
     // players 2 and 3's Scent and Scour run the game's own for their chocobo, one session at a time
     Module{Call<&rides::scour_scent::Install>, &rides::scour_scent::Remove},
+    // players 2 and 3 whistle for their own chocobo; their Vehicle press dismounts them alone
+    Module{Call<&rides::chocobo_call::Install>, &rides::chocobo_call::Remove},
     // the buggy and the bronco: the seats' players stand aside, every pad drives
     Module{Call<&rides::shared_ride::Install>, nullptr},
     // a seat's player boards a Wheelie of their own by walking into it
@@ -572,6 +575,7 @@ void TickAfterSession(const Frame& frame) noexcept
     input::walk_limits::Tick();  // after the session's tick: a take's copy is overwritten this frame
     world::nav_strand::Tick(frame.splitShown);  // a stranded player is warped back to the party
     battle::arena_warp::Tick();  // an ask made in a fight: the character brought into the fight's area
+    rides::chocobo_call::Tick();  // the players' own calls followed, one given up when no chocobo came
     hud::lead_mark::Tick();  // each kept walk's marker added, moved or removed
     hud::low_health::Tick(plays, frame.splitShown);  // each seat's danger decided outside a fight
     camera::camera_repair::Tick();
