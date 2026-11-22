@@ -26,6 +26,7 @@
 #include "players/object_fields.h"
 #include "rides/chocobo_ride.h"
 #include "rides/own_ride.h"
+#include "rides/scour_scent.h"
 #include "rides/wheelie_ride.h"
 #include "scopes/leader_answer.h"
 #include "scopes/primary_controller.h"
@@ -463,6 +464,7 @@ RideTick TickRide(int seat, void* controller, void* member, void* state, const v
     const scopes::leader_answer::Scope         leader(type, component);
     const move_state::OwnTick          own;
     const scopes::scope_leaks::MemberTickScope leaks(state, controller, deltaTime);
+    const rides::scour_scent::PressWatch       press(seat);  // a Scent or Scour request rising here is this seat's
     counters.Act();
     if (!GuardedTick(state, deltaTime))
     {

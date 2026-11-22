@@ -9,6 +9,7 @@
 #include "hud/view_window.h"
 #include "players/weak_object.h"
 #include "players/widget_opacity.h"
+#include "rides/scour_scent.h"
 
 namespace lss::hud {
 
@@ -80,6 +81,7 @@ void ShowOnly(int seat, bool copy) noexcept
     field_markers::ShowOnly(seat);
     search_pins::ShowOnly(seat);
     jet_gauges::ShowOnly(seat);
+    rides::scour_scent::ShowOnly(seat);
     wheelie_tops::ShowOnly(seat);
     battle::command_menu_view::ShowOnly(seat);
     view_window::ShowOnly(copy ? view_window::kNoView : seat);
@@ -91,6 +93,7 @@ void RestoreAll() noexcept
     field_markers::Restore();
     search_pins::Restore();
     jet_gauges::Restore();
+    rides::scour_scent::Restore();
     wheelie_tops::Restore();
     battle::command_menu_view::Restore();
     view_window::RestoreAll();

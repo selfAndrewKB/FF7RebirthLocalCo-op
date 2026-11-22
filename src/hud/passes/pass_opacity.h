@@ -2,6 +2,7 @@
 
 // Widgets taken out of one overlay pass's image: the other players' prompt rows (hud/field/prompt_rows.h), point
 // markers (hud/field/field_markers.h), search pins (hud/field/search_pins.h), chocobo jet gauges (hud/field/jet_gauges.h),
+// Scour and Scent's filter, status icon and arrows (rides/scour_scent.h),
 // target marks (hud/battle/target_views.h), command menu (battle/command_menu_view.h) and windows (hud/view_window.h)
 // are made transparent through the game's
 // own setter (players/widget_opacity.h) and given their own opacity back after the pass. Not Hidden: a UMG widget is

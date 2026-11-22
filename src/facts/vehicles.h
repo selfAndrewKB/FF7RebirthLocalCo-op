@@ -174,4 +174,51 @@ inline constexpr SlotFact kScooterMoveStateUpdateInput{
     L"the scooter move state's input-update slot (16)", 0x1465478D8,
     {L"SBScooterMoveState_Slot16_UpdateInput_GetOff", 0x143170920, kScooterMoveStateUpdateInputBytes}};
 
+// ---------------------------------------------------------------------------------------------
+// Scour and Scent: the chocobo craft (research/RE-chocobo-scour-scent-seats.md)
+// ---------------------------------------------------------------------------------------------
+
+/// The chocobo craft manager (the field root's slot, facts/world.h kRootChocoboCraft): the chocobo's input slot writes
+/// a request byte, the manager's tick in the world tick consumes it and runs the one session, always for the party
+/// leader's chocobo. Its session struct and the session's fields (offsets into the session):
+inline constexpr std::uint32_t kCraftScourRequest = 0x8B;  // u8, the manager's: Scour pressed
+inline constexpr std::uint32_t kCraftScentRequest = 0x8C;  // u8: Scent pressed
+inline constexpr std::uint32_t kCraftSession      = 0x88;
+inline constexpr std::uint32_t kCraftFilter       = 0x8;    // weak: the full-screen smell filter
+inline constexpr std::uint32_t kCraftItemTimer    = 0x160;  // f32: the dug item's message timer
+inline constexpr std::uint32_t kCraftDoneTimer    = 0x164;  // f32: the dig's completion timer
+inline constexpr std::uint32_t kCraftStatusIcon   = 0x340;  // weak: the status icon over the chocobo
+inline constexpr std::uint32_t kCraftArrowA       = 0x35C;  // weak: the two screen-edge arrows
+inline constexpr std::uint32_t kCraftArrowB       = 0x364;
+inline constexpr std::uint32_t kCraftSmellMode    = 0x378;  // u8: Scent's smell mode on
+/// ChocoCraftMgr_Tick(manager, float dt), at its one call in the world tick's subsystems (the call crosses a block).
+inline constexpr std::uint8_t kCraftMgrTickBytes[] = {
+    0x48, 0x8B, 0xC4, 0x48, 0x89, 0x58, 0x08, 0x48, 0x89, 0x68, 0x10, 0x48,
+    0x89, 0x70, 0x18, 0x48, 0x89, 0x78, 0x20, 0x41, 0x55, 0x41, 0x56, 0x41};
+inline constexpr FunctionFact   kCraftMgrTick{L"ChocoCraftMgr_Tick", 0x140D2FC90, kCraftMgrTickBytes};
+inline constexpr std::uintptr_t kCraftMgrTickCall = 0x140826A0E;
+/// The chocobo move state's input slot's two row gates, bool(): Scent and Scour available for the leader's chocobo.
+inline constexpr std::uint8_t kCraftSmellGateBytes[] = {
+    0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8, 0x8E, 0xA0, 0xEA, 0xFE, 0x48, 0x2B,
+    0xE0, 0xE8, 0x2A, 0xE9, 0xA6, 0xFD, 0x48, 0x8D, 0x88, 0x88, 0x00, 0x00};
+inline constexpr FunctionFact   kCraftSmellGate{L"ChocoboCraft_SmellAvailable_Wrap", 0x1432C1AE8, kCraftSmellGateBytes};
+inline constexpr std::uintptr_t kCraftSmellGateCall = 0x143170827;
+inline constexpr std::uint8_t kCraftDigGateBytes[] = {
+    0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8, 0xB2, 0xA0, 0xEA, 0xFE, 0x48, 0x2B,
+    0xE0, 0xE8, 0x4E, 0xE9, 0xA6, 0xFD, 0x48, 0x8D, 0x88, 0x88, 0x00, 0x00};
+inline constexpr FunctionFact   kCraftDigGate{L"ChocoboCraft_DigAvailable_Wrap", 0x1432C1AC4, kCraftDigGateBytes};
+inline constexpr std::uintptr_t kCraftDigGateCall = 0x143170837;
+/// The sniff action's three reads of the party leader (ResolveFieldLeaderCharOrLeader(0); its state 1 enter, state 3
+/// enter and finish set and clear move flags on that character), on the animation worker or the game thread.
+inline constexpr std::uintptr_t kCraftSniffLeaderCalls[] = {0x142F969B6, 0x142F95C27, 0x142F95498};
+/// PrimaryPC_ChocoboCoord_LeaderRideBody(u8 seatedOnly): the party leader's chocobo through the primary controller's
+/// chocobo coordinator; its two calls in ChocoCraft_SetCraftLocks (the on branch, the off branch: the forced walk set and
+/// released), some of whose callers run outside the manager's tick.
+inline constexpr std::uint8_t kLeaderRideBodyBytes[] = {
+    0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x74, 0x24, 0x10, 0x57, 0xB8,
+    0x20, 0x00, 0x00, 0x00, 0xE8, 0xBF, 0x88, 0xA0, 0x01, 0x48, 0x2B, 0xE0};
+inline constexpr FunctionFact   kLeaderRideBody{L"PrimaryPC_ChocoboCoord_LeaderRideBody", 0x1407632AC, kLeaderRideBodyBytes};
+inline constexpr std::uintptr_t kCraftLocksOnRideCall  = 0x1432C64C4;
+inline constexpr std::uintptr_t kCraftLocksOffRideCall = 0x1432C6563;
+
 }  // namespace lss::facts

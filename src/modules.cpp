@@ -84,6 +84,7 @@
 #include "renderer/submit_hints.h"
 #include "rides/chocobo_exits.h"
 #include "rides/chocobo_ride.h"
+#include "rides/scour_scent.h"
 #include "rides/shared_ride.h"
 #include "rides/wheelie_ride.h"
 #include "scopes/leader_scope.h"
@@ -340,6 +341,8 @@ constexpr std::array kModules{
     // Rides, pickups, rumble, sound, shops.
     // each seat's player drives their own chocobo while the party rides
     Module{Call<&rides::chocobo_ride::Install>, nullptr},
+    // players 2 and 3's Scent and Scour run the game's own for their chocobo, one session at a time
+    Module{Call<&rides::scour_scent::Install>, &rides::scour_scent::Remove},
     // the buggy and the bronco: the seats' players stand aside, every pad drives
     Module{Call<&rides::shared_ride::Install>, nullptr},
     // a seat's player boards a Wheelie of their own by walking into it
