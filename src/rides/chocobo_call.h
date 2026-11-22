@@ -26,9 +26,18 @@
 //   the player), and player 1's mount and getoff leave them as they are; as their member mounts, their chocobo is not
 //   sent to follow player 1 (it waits by them);
 // - the getoff: their Vehicle press, the game's party getoff, ends their own call instead (it would dismount
-//   everyone), and the entry's answer goes back to no, which dismounts their member alone.
-// Player 1's whistle and ride, and the AI members' rides, are the game's. Logged: Info at install, per call, per getoff
-// and per call given up; Debug per entry state change of a calling player's member, per whistle and per follow held back.
+//   everyone), and the entry's answer goes back to no, which dismounts their member alone;
+// - a ride the game puts them on on purpose becomes their own call once it seats them: a story party mount (their entry
+//   takes the game's answer while the story waits for every member's chocobo; a ride of their own already under them ends
+//   first, or the story would wait for it), a ride restored with a loaded save, and a ride already under them as they join
+//   or take a member.
+// Whatever the option: a rider without the rider's stop animations (all but Cloud and Tifa) pulls the reins at a chocobo
+// stop instead of showing no pose (the rider's action asks the rider's interface for the chocobo's animation by name;
+// the slot answers a riding clip of theirs, once per new name), and players 2 and 3's idle coordinators show no walk-in
+// mount icon over player 1's chocobo (that question, in their input pass, is about the party leader).
+// Player 1's whistle and ride, and the AI members' rides, are the game's. Logged: Info at install, per call, per getoff,
+// per ride kept and per call given up; Debug per entry state change of a calling player's member, per whistle, per follow
+// held back, per story mount, per rider pose answered and once per player for the icon.
 namespace lss::platform {
 class GameImage;
 }

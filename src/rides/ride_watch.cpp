@@ -60,7 +60,7 @@ using facts::kScooterCoordinatorVTable;
 // The chocobo ride manager [[game root]+0x270]: state, getoff request, party ride, in battle; member
 // entries at +0x40 + 0x2C * player type (state byte +0, weak chocobo +0x20).
 using facts::kRootChocoboRideManager;
-constexpr std::uint32_t kManagerState    = 0x8;  // u8 (the next byte read the same value live: 0x0707 riding)
+constexpr std::uint32_t kManagerState    = facts::kRideManagerLeaderState;  // the next byte read the same value live
 using facts::kRideManagerGetOff;
 constexpr std::uint32_t kManagerParty    = 0xEB5;
 constexpr std::uint32_t kManagerBattle   = 0xEB6;

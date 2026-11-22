@@ -272,6 +272,27 @@ inline constexpr std::uint8_t kRideSuspendedBytes[] = {
     0xE0, 0x80, 0xB9, 0xB6, 0x0E, 0x00, 0x00, 0x00, 0x75, 0x18, 0x80, 0xB9};
 inline constexpr FunctionFact  kRideSuspended{L"ChocoboRideMgr_IsSuspended_BattleOrAbort", 0x1416263C4, kRideSuspendedBytes};
 inline constexpr std::uint32_t kRideManagerRideOff = 0xC90;  // u8: set, no member rides
+/// The ride manager's leader state (u8: 0 at a field start, 5 its chocobo arrived, 7 mounting, 8 riding); the story's
+/// party mount pending (u8: from the story's request until its cutscene seated everyone; the members' entries wait for it
+/// in state 3); the last call's instant mount (u8: 1 for a ride restored from a save, 0 for player 1's own mount).
+inline constexpr std::uint32_t kRideManagerLeaderState = 0x8;
+inline constexpr std::uint8_t  kRideLeaderFieldStart   = 0;
+inline constexpr std::uint8_t  kRideLeaderArrived      = 5;
+inline constexpr std::uint8_t  kRideLeaderMounting     = 7;
+inline constexpr std::uint8_t  kRideLeaderRiding       = 8;
+inline constexpr std::uint32_t kRideManagerStoryMount  = 0xEB7;
+inline constexpr std::uint32_t kRideManagerInstant     = 0xEC1;
+/// The rider's pose at a chocobo stop: the rider's stop action looks the chocobo's stop animation name up on the rider,
+/// last through the character interface's find-animation slot (below); the return address of that call.
+inline constexpr std::uintptr_t kRiderStopAnimReturn = 0x1425C7C7E;
+/// The chocobo coordinator's walk-in ride icon test for a character
+/// (ChocoboCoordinator_ShouldVisibleRideAutoIcon(coordinator, character, trace, bool* blocked)), at its one call in the
+/// idle coordinator's tick, which asks it about the field leader.
+inline constexpr std::uint8_t kAutoRideIconBytes[] = {
+    0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x74, 0x24, 0x18, 0x55, 0x57,
+    0x41, 0x54, 0x41, 0x56, 0x41, 0x57, 0x48, 0x8D, 0x6C, 0x24, 0xC9, 0xB8};
+inline constexpr FunctionFact   kAutoRideIcon{L"ChocoboCoordinator_ShouldVisibleRideAutoIcon", 0x143B1BA08, kAutoRideIconBytes};
+inline constexpr std::uintptr_t kAutoRideIconCall = 0x143B1FCD9;
 /// ChocoboCall_LeaderChocoboFollowing_StayLabel(state): the summon row reads "stay" while the leader's chocobo follows,
 /// at its call in the summon body (the call crosses a block).
 inline constexpr std::uint8_t kStayLabelBytes[] = {

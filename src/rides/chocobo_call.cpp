@@ -53,12 +53,24 @@ using AcceptFn     = bool (*)(void* manager, bool fromWhistle);
 using SoundAssetFn = void* (*)(const std::uint64_t* name);
 using SoundPlayFn  = void (*)(void* asset, const std::uint64_t* name);
 using BrainFn      = void (*)(void* ai, int kind, void* params, int extra);
+using IconFn       = bool (*)(void* coordinator, void* character, bool trace, std::uint8_t* blocked);
 
 constexpr std::size_t   kForKeys     = std::size(facts::kSummonRideForKeyCalls);
 constexpr std::size_t   kBuggies     = std::size(facts::kSummonCanCallBuggyCalls);
 constexpr std::size_t   kEntryCalls  = std::size(facts::kEntryPartyRideCalls);
 constexpr std::uint64_t kGiveUpMs    = 15000;  // a call whose member is not riding by then is given up
-constexpr std::uint8_t  kEntryRiding = 4;
+constexpr std::uint64_t kRestoreMs   = 10000;  // after a field start, how long a restored ride may still be taking them
+// A member entry's states.
+constexpr int kEntryIdle = 0, kEntryNamed = 1, kEntryPlaced = 3, kEntryRiding = 4, kEntryDismounting = 5;
+
+// The rider's pose at a chocobo stop, for a rider without the rider's stop animations (all but Cloud and Tifa): the
+// chocobo's stop animation names, start, hold, success and cancel, and what each falls back to, the rein pull of
+// every member's riding set (its start, its hold loop, its end).
+constexpr std::array<const wchar_t*, 4> kRiderStopNames{L"N_ChocoboStop02_0", L"N_ChocoboStop02_1", L"N_ChocoboStop02_2",
+                                                        L"N_ChocoboStop02_3"};
+constexpr std::array<const wchar_t*, 4> kRiderStopFallbacks{L"N_Brake01_0", L"N_Brake01_1", L"N_Brake01_2", L"N_Brake01_2"};
+constexpr std::uint64_t kRiderAskGapMs   = 500;   // the rider's action asks each tick; a gap this long starts a new pose
+constexpr std::uint64_t kRiderAskStaleMs = 2000;  // a rider record unasked this long is free for another rider
 
 // What Install found, placed from the game thread (the party getoff's call crosses a block).
 struct Sites
@@ -66,6 +78,7 @@ struct Sites
     std::uintptr_t whistle = 0, whistleCall = 0, forKey = 0, buggy = 0, fromWhistle = 0, fromWhistleCall = 0;
     std::uintptr_t partyRide = 0, suspended = 0, getOff = 0, getOffCall = 0, stayLabel = 0, stayLabelCall = 0;
     std::uintptr_t findAnim = 0, rowReturn = 0, accept = 0, acceptCall = 0, soundAsset = 0, soundPlay = 0, brain = 0, followCall = 0;
+    std::uintptr_t riderReturn = 0, icon = 0, iconCall = 0;
     std::array<std::uintptr_t, kForKeys>    forKeyCalls{};
     std::array<std::uintptr_t, kBuggies>    buggyCalls{};
     std::array<std::uintptr_t, kEntryCalls> entryCalls{};
@@ -75,7 +88,7 @@ std::optional<platform::GameImage> g_image;  // for the notify slot, placed with
 platform::DeferredSites g_placement;
 
 platform::CallRedirect                         g_whistleCall, g_fromWhistleCall, g_getOffCall, g_stayLabelCall;
-platform::CallRedirect                         g_acceptCall, g_followCall;
+platform::CallRedirect                         g_acceptCall, g_followCall, g_iconCall;
 platform::VTableEntry                          g_findAnimSlot, g_caitSithFindAnimSlot;
 std::array<platform::CallRedirect, kForKeys>    g_forKeyCalls;
 std::array<platform::CallRedirect, kBuggies>    g_buggyCalls;
@@ -91,6 +104,30 @@ std::array<int, players::kMaxPlayers>           g_entrySaid{-2, -2, -2};  // a c
 std::array<bool, players::kMaxPlayers>          g_riddenSaid{};             // their member rode in this call
 std::array<const void*, players::kMaxPlayers>   g_calledMember{};           // the member their call is for
 
+// By seat, a ride the game put them on that becomes their own call (game thread): the member the join window was opened
+// for (null while they are out of the game), that window (a ride already under them as they join or take a member),
+// the end of a field start's window (a ride restored with a save, still seating them), and a story party mount pending.
+std::array<const void*, players::kMaxPlayers>   g_windowMember{};
+std::array<bool, players::kMaxPlayers>          g_window{};
+std::array<std::uint64_t, players::kMaxPlayers> g_restoreUntil{};
+std::array<bool, players::kMaxPlayers>          g_story{};
+std::array<int, players::kMaxPlayers>           g_leaderSeen{-1, -1, -1};  // the leader state at their last answer
+std::array<bool, players::kMaxPlayers>          g_iconSaid{};  // their idle coordinator's icon question answered, said once
+
+// The rider's stop pose names (index as kRiderStopNames): found on the game thread once each exists, read by the rider's
+// action on any thread.
+std::array<std::atomic<std::uint64_t>, kRiderStopNames.size()> g_riderAsked{}, g_riderFallback{};
+
+// One record per rider whose stop pose the mod answered (any thread): the rider's character interface, the name last
+// answered, the time of its last ask.
+struct RiderAsk
+{
+    std::atomic<std::uintptr_t> rider{0};
+    std::atomic<std::uint64_t>  name{0};
+    std::atomic<std::uint64_t>  at{0};
+};
+std::array<RiderAsk, players::kMaxPlayers + 1> g_riderAsks{};
+
 // The option own-chocobo (the console and the page set it, on the game thread; off: players 2 and 3 ride along with
 // player 1's party ride, as in single player).
 std::atomic<bool> g_ownOn{false};
@@ -100,11 +137,25 @@ int  g_summonSeat = 0;
 int  g_notifySeat = 0;
 bool g_rowByMod   = false;  // the summon row's action check was the mod's answer (the member has no whistle action)
 
+/// The player whose scope is open on the game thread (0 for none, or off it).
+int OpenSeatHere() noexcept
+{
+    return players::generation::OnGameThread() ? scopes::primary_controller::OpenSeat() : 0;
+}
+
 /// A seat's member's player type, or -1.
 int TypeOf(int seat) noexcept
 {
     const auto type = session::party_member::PlayerTypeOf(players::generation::MemberOf(seat));
     return type ? static_cast<int>(*type) : -1;
+}
+
+/// `seat`'s windows for a ride the game put them on close: their own press, or the end of their call, decides from here.
+void CloseWindows(int seat) noexcept
+{
+    const auto index      = static_cast<std::size_t>(seat);
+    g_window[index]       = false;
+    g_restoreUntil[index] = 0;
 }
 
 void EndCall(int seat, const wchar_t* why) noexcept
@@ -114,6 +165,7 @@ void EndCall(int seat, const wchar_t* why) noexcept
     {
         return;
     }
+    CloseWindows(seat);
     g_called[index]       = false;
     g_entrySaid[index]    = -2;
     g_riddenSaid[index]   = false;
@@ -128,6 +180,7 @@ void StartCall(int seat, const wchar_t* how) noexcept
 {
     const auto index = static_cast<std::size_t>(seat);
     const bool again = g_called[index];
+    CloseWindows(seat);
     g_called[index]       = true;
     g_calledAt[index]     = GetTickCount64();
     g_calledMember[index] = players::generation::MemberOf(seat);
@@ -136,6 +189,83 @@ void StartCall(int seat, const wchar_t* how) noexcept
                   again ? L" again" : L"", how,
                   ReadField<std::uint8_t>(manager, facts::kRideManagerAssets) == facts::kRideAssetsLoaded ? L"loaded"
                                                                                                             : L"NOT loaded yet");
+}
+
+/// `seat`'s member already rides a chocobo the game seated them on: it becomes their own call (their Vehicle press gets
+/// them off, player 1's getoff leaves them on).
+void AdoptCall(int seat, const wchar_t* why) noexcept
+{
+    const auto index      = static_cast<std::size_t>(seat);
+    g_called[index]       = true;
+    g_calledAt[index]     = GetTickCount64();
+    g_calledMember[index] = players::generation::MemberOf(seat);
+    g_riddenSaid[index]   = true;
+    g_entrySaid[index]    = kEntryRiding;
+    g_story[index]        = false;
+    CloseWindows(seat);
+    platform::Log(L"chocobo call: {} keeps the ride the game seated them on ({}): it is their own now (their Vehicle press "
+                  L"gets them off)",
+                  players::SeatName(seat), why);
+}
+
+/// The rider's stop pose for a rider without the rider's stop animations: the fallback for the name the rider's action
+/// asked, looked up on the same character interface, once for each new name (the action asks each tick while its pose
+/// differs from the chocobo's, and every answer would start the clip again); null for a repeat, so the clip it plays keeps
+/// on. Any thread.
+void* RiderStopFallback(void* actorInterface, std::uint64_t asked) noexcept
+{
+    std::size_t which = kRiderStopNames.size();
+    for (std::size_t i = 0; i < kRiderStopNames.size(); ++i)
+    {
+        if (asked != 0 && g_riderAsked[i].load(std::memory_order_relaxed) == asked)
+        {
+            which = i;
+        }
+    }
+    const std::uint64_t fallback = which < kRiderStopNames.size() ? g_riderFallback[which].load(std::memory_order_relaxed) : 0;
+    if (fallback == 0)
+    {
+        return nullptr;
+    }
+    const std::uint64_t now  = GetTickCount64();
+    const auto          key  = reinterpret_cast<std::uintptr_t>(actorInterface);
+    RiderAsk*           slot = nullptr;
+    for (RiderAsk& r : g_riderAsks)
+    {
+        if (slot == nullptr && r.rider.load(std::memory_order_acquire) == key)
+        {
+            slot = &r;
+        }
+    }
+    for (RiderAsk& r : g_riderAsks)
+    {
+        std::uintptr_t      held  = r.rider.load(std::memory_order_acquire);
+        const std::uint64_t asked = r.at.load(std::memory_order_relaxed);
+        const bool          stale = held == 0 || (asked < now && now - asked > kRiderAskStaleMs);
+        if (slot == nullptr && stale && r.rider.compare_exchange_strong(held, key, std::memory_order_acq_rel))
+        {
+            r.at.store(now, std::memory_order_relaxed);  // at once: another rider never takes it as stale
+            r.name.store(0, std::memory_order_relaxed);
+            slot = &r;
+        }
+    }
+    if (slot == nullptr)
+    {
+        return nullptr;  // more riders than records: nothing played for this one
+    }
+    const bool repeat = slot->name.load(std::memory_order_relaxed) == asked &&
+                        now - slot->at.load(std::memory_order_relaxed) < kRiderAskGapMs;
+    slot->at.store(now, std::memory_order_relaxed);
+    if (repeat)
+    {
+        return nullptr;
+    }
+    slot->name.store(asked, std::memory_order_relaxed);
+    // A rider without the fallback either shows no pose, as before; its repeats answer null like any other.
+    void* anim = reinterpret_cast<ActionFn>(g_sites.findAnim)(actorInterface, fallback);
+    platform::LogDebug(L"chocobo call: a rider without the rider's chocobo stop animations asked {}: {} {}", kRiderStopNames[which],
+                       anim != nullptr ? L"plays" : L"has no", kRiderStopFallbacks[which]);
+    return anim;
 }
 
 /// The whistle notify's sound, for a whistle without its animation (and so without its notify).
@@ -153,14 +283,19 @@ void PlayWhistleSound() noexcept
     platform::CallGuarded(reinterpret_cast<SoundPlayFn>(g_sites.soundPlay), asset, static_cast<const std::uint64_t*>(&name));
 }
 
-/// The character interface's find-animation-by-name (its vtable slot): the game's answer, or for the summon row's check
-/// that the character has the whistle action (known by the return address), inside a player 2's or 3's summon body,
-/// "found" when their member has none (the answer is only tested for null), so their row and press work like Cloud's
-/// and Tifa's.
+/// The character interface's find-animation-by-name (its vtable slot), known by the return address: the game's answer;
+/// for the summon row's check that the character has the whistle action, inside a player 2's or 3's summon body, "found"
+/// when their member has none (the answer is only tested for null), so their row and press work like Cloud's and
+/// Tifa's; for a rider's pose at a chocobo stop, a riding clip of their own when they have none of the stop's.
 void* FindAnim(void* actorInterface, std::uint64_t name) noexcept
 {
-    void* found = reinterpret_cast<ActionFn>(g_sites.findAnim)(actorInterface, name);
-    if (reinterpret_cast<std::uintptr_t>(_ReturnAddress()) != g_sites.rowReturn || g_summonSeat < 1 ||
+    void*      found = reinterpret_cast<ActionFn>(g_sites.findAnim)(actorInterface, name);
+    const auto from  = reinterpret_cast<std::uintptr_t>(_ReturnAddress());
+    if (from == g_sites.riderReturn && from != 0)
+    {
+        return found != nullptr ? found : RiderStopFallback(actorInterface, name);
+    }
+    if (from != g_sites.rowReturn || g_summonSeat < 1 ||
         !players::generation::OnGameThread())
     {
         return found;
@@ -256,10 +391,104 @@ void FromWhistle(bool rideOnArrival) noexcept
     StartCall(seat, L"their whistle; the party's call skipped");
 }
 
+/// The ride manager's leader is boarding or riding.
+bool LeaderRides(std::uint8_t leader) noexcept
+{
+    return leader == facts::kRideLeaderArrived || leader == facts::kRideLeaderMounting || leader == facts::kRideLeaderRiding;
+}
+
+/// A playing player 2's or 3's member's entry asks "the party rides" (`game`: the game's answer). Their own call stands
+/// for it, never player 1's ride, except where the game puts them on a ride on purpose, which then becomes their own:
+/// - a story party mount: every member's chocobo spawns and waits for the story's cutscene, which seats them all. They
+///   take the game's answer meanwhile; a ride already under them would keep the story waiting, so it ends first and the
+///   game spawns them a chocobo like the others'. The cutscene's seat becomes their own call.
+/// - a ride under them as they join or take a member (they joined on it), or a ride restored with a loaded save, which
+///   seats the members after the field starts: the game's answer while it seats them, their own call once seated.
+bool SeatAnswer(void* manager, int seat, bool game) noexcept
+{
+    const auto          index  = static_cast<std::size_t>(seat);
+    const void*         member = players::generation::MemberOf(seat);
+    const int           entry  = chocobo_ride::MemberEntryState(member);
+    const auto          leader = ReadField<std::uint8_t>(manager, facts::kRideManagerLeaderState);
+    const std::uint64_t now    = GetTickCount64();
+    if (member != g_windowMember[index])
+    {
+        g_windowMember[index] = member;
+        g_window[index]       = !g_called[index];
+        platform::LogDebug(L"chocobo call: {} joined or took a member: a ride already under them is theirs (their entry "
+                           L"state {}, the leader's {})",
+                           players::SeatName(seat), entry, leader);
+    }
+    // A field start (the leader entering its first state): a ride restored with the save may seat them next.
+    if (leader == facts::kRideLeaderFieldStart && g_leaderSeen[index] != facts::kRideLeaderFieldStart && !g_called[index])
+    {
+        g_restoreUntil[index] = now + kRestoreMs;
+        platform::LogDebug(L"chocobo call: the field starts: a ride restored with the save may seat {} in the next {} s",
+                           players::SeatName(seat), kRestoreMs / 1000);
+    }
+    g_leaderSeen[index] = leader;
+    if (ReadField<std::uint8_t>(manager, facts::kRideManagerStoryMount) != 0)
+    {
+        if (!g_story[index])
+        {
+            platform::LogDebug(L"chocobo call: the story mounts the party: {} is seated with everyone (their entry state {})",
+                               players::SeatName(seat), entry);
+        }
+        g_story[index] = true;
+        if (entry == kEntryRiding || entry == kEntryDismounting)
+        {
+            EndCall(seat, L"the story mounts the party: they get off to be seated with everyone");
+            return false;
+        }
+        return game;
+    }
+    if (g_story[index])
+    {
+        if (entry == kEntryRiding)
+        {
+            AdoptCall(seat, L"the story seated them");
+        }
+        else if (entry == kEntryPlaced)
+        {
+            return game;
+        }
+        else
+        {
+            g_story[index] = false;
+        }
+    }
+    if (!g_called[index] && (g_window[index] || now < g_restoreUntil[index]))
+    {
+        const bool restored = ReadField<std::uint8_t>(manager, facts::kRideManagerInstant) != 0;
+        if (entry == kEntryRiding)
+        {
+            AdoptCall(seat, restored ? L"a ride restored with the save" : L"they joined, or took this member, on a ride");
+        }
+        else if (restored && entry >= kEntryNamed && entry <= kEntryPlaced)
+        {
+            return game;
+        }
+        else if (restored && entry == kEntryIdle && now < g_restoreUntil[index] && LeaderRides(leader))
+        {
+            return game;
+        }
+        else if (g_window[index])
+        {
+            g_window[index] = false;
+            platform::LogDebug(L"chocobo call: no ride under {} (their entry state {}): their own call decides",
+                               players::SeatName(seat), entry);
+        }
+    }
+    // Once their member rode, only while that ride lasts: an ended ride's entry asks again before the tick ends the call.
+    return g_called[index] && !reinterpret_cast<PartyRideFn>(g_sites.suspended)(manager) &&
+           ReadField<std::uint8_t>(manager, facts::kRideManagerRideOff) == 0 &&
+           (!g_riddenSaid[index] || entry == kEntryRiding);
+}
+
 /// The member entries' "the party rides" question, for the entry at `offset` from the first. For a playing player 2's or
-/// 3's member's entry the party's ride flag is that player's own call, never player 1's ride (no mounting and no
-/// dismounting with player 1); the rest of the game's answer stands (no fight, abort or getoff in progress, the
-/// manager's ride-off byte clear). Every other entry (the AI members'), the game's answer.
+/// 3's member's entry, SeatAnswer (no mounting and no dismounting with player 1); the rest of the game's answer stands
+/// there (no fight, abort or getoff in progress, the manager's ride-off byte clear). Every other entry (the AI
+/// members'), the game's answer.
 bool EntryPartyRide(void* manager, std::uintptr_t offset) noexcept
 {
     const bool game = reinterpret_cast<PartyRideFn>(g_sites.partyRide)(manager);
@@ -274,17 +503,39 @@ bool EntryPartyRide(void* manager, std::uintptr_t offset) noexcept
     const auto type = static_cast<int>(offset / facts::kRideManagerEntrySize);
     for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
     {
-        const auto index = static_cast<std::size_t>(seat);
-        if (!players::generation::Active(seat) || TypeOf(seat) != type)
+        if (players::generation::Active(seat) && TypeOf(seat) == type)
         {
-            continue;
+            return SeatAnswer(manager, seat, game);
         }
-        // Once their member rode, only while that ride lasts: an ended ride's entry asks again before the tick ends the call.
-        return g_called[index] && !reinterpret_cast<PartyRideFn>(g_sites.suspended)(manager) &&
-               ReadField<std::uint8_t>(manager, facts::kRideManagerRideOff) == 0 &&
-               (!g_riddenSaid[index] || chocobo_ride::MemberEntryState(players::generation::MemberOf(seat)) == kEntryRiding);
     }
     return game;
+}
+
+/// The idle chocobo coordinator's walk-in ride icon test, asked about the field leader. Inside a player 2's or 3's input
+/// pass (their own coordinator, idle while they walk): "blocked", no icon, as the walk-in ride is player 1's and the
+/// leader it asks about is player 1's member, whose chocobo would show the prompt under player 1. Player 1's coordinator
+/// (outside any player's scope): the game's.
+bool AutoRideIcon(void* coordinator, void* character, bool trace, std::uint8_t* blocked) noexcept
+{
+    const auto original = reinterpret_cast<IconFn>(g_iconCall.Original());
+    const int  seat     = OpenSeatHere();
+    if (!players::SeatBuilt(seat))
+    {
+        return original(coordinator, character, trace, blocked);
+    }
+    if (blocked != nullptr)
+    {
+        *blocked = 1;
+    }
+    const auto index = static_cast<std::size_t>(seat);
+    if (!g_iconSaid[index])
+    {
+        g_iconSaid[index] = true;
+        platform::LogDebug(L"chocobo call: {}'s idle chocobo coordinator asked for the walk-in mount icon over the party "
+                           L"leader's chocobo: no icon (the walk-in ride is player 1's; said once)",
+                           players::SeatName(seat));
+    }
+    return false;
 }
 
 /// A member chocobo's AI at its ride begin sends it to follow player 1's ride body: not the chocobo a player 2 or 3 is
@@ -325,7 +576,7 @@ std::uintptr_t BuildEntryStub(std::uintptr_t site) noexcept
 void GetOff(void* request) noexcept
 {
     const auto original = reinterpret_cast<GetOffFn>(g_getOffCall.Original());
-    const int  seat     = players::generation::OnGameThread() ? scopes::primary_controller::OpenSeat() : 0;
+    const int  seat     = OpenSeatHere();
     if (seat >= 1 && g_called[static_cast<std::size_t>(seat)])
     {
         EndCall(seat, L"their Vehicle press");
@@ -368,7 +619,8 @@ void RestoreAll() noexcept
     {
         left = (slot->Original() != 0 && !slot->Restore()) || left;
     }
-    for (platform::CallRedirect* call : {&g_whistleCall, &g_fromWhistleCall, &g_getOffCall, &g_stayLabelCall, &g_acceptCall, &g_followCall})
+    for (platform::CallRedirect* call :
+         {&g_whistleCall, &g_fromWhistleCall, &g_getOffCall, &g_stayLabelCall, &g_acceptCall, &g_followCall, &g_iconCall})
     {
         left = (call->IsInstalled() && !call->Restore()) || left;
     }
@@ -415,12 +667,22 @@ bool PlaceSites(const platform::GameImage&) noexcept
     if (!ok)
     {
         RestoreAll();
+        platform::Log(L"chocobo call: UNAVAILABLE (a check failed): players 2 and 3 do not whistle; they ride with the party as "
+                      L"before");
+        return false;
     }
-    platform::Log(L"chocobo call: {}",
-                  ok ? L"ready: with own-chocobo on, players 2 and 3 whistle for their own chocobo (the game seats their member at "
-                       L"their side; their Vehicle press dismounts them alone); player 1's whistle and the party's ride are the game's"
-                     : L"UNAVAILABLE (a check failed): players 2 and 3 do not whistle; they ride with the party as before");
-    return ok;
+    // Apart from the rest: the icon question stands alone (the walk-in ride's icon under player 1).
+    const bool icon = s.icon != 0 && s.iconCall != 0 &&
+                      g_placement.Place(g_iconCall, s.iconCall, s.icon, reinterpret_cast<std::uintptr_t>(&AutoRideIcon));
+    platform::Log(L"chocobo call: {}", icon ? L"players 2 and 3's idle chocobo coordinators show no walk-in mount icon over "
+                                              L"player 1's chocobo"
+                                            : L"the walk-in mount icon question NOT placed (its call is not as the research "
+                                              L"read it): the icon may show over player 1's chocobo while player 2 or 3 walks");
+    platform::Log(L"chocobo call: ready: with own-chocobo on, players 2 and 3 whistle for their own chocobo (the game seats "
+                  L"their member at their side; their Vehicle press dismounts them alone), keep a ride the game seats them on "
+                  L"(a story mount, a loaded save, joining on a ride); player 1's whistle and the party's ride are the game's; "
+                  L"a rider without the rider's chocobo stop animations pulls the reins at a stop");
+    return true;
 }
 
 }  // namespace
@@ -447,6 +709,9 @@ bool Install(const platform::GameImage& image) noexcept
     s.followCall      = site(facts::kMountAiFollowCall);
     s.findAnim        = find(facts::kFindAnimByNameSlot.target);
     s.rowReturn       = image.Rebase(facts::kWhistleActionCheckReturn, 1).value_or(0);
+    s.riderReturn     = image.Rebase(facts::kRiderStopAnimReturn, 1).value_or(0);
+    s.icon            = find(facts::kAutoRideIcon);
+    s.iconCall        = site(facts::kAutoRideIconCall);
     s.whistleCall     = site(facts::kWhistleOrDismissCall);
     s.fromWhistleCall = site(facts::kCallFromWhistleCall);
     s.getOffCall      = site(facts::kPartyGetOffCall);
@@ -484,6 +749,12 @@ bool Install(const platform::GameImage& image) noexcept
                     for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
                     {
                         EndCall(seat, L"own-chocobo turned off");
+                        // Turned on again, a ride already under them is theirs, as at a join.
+                        const auto index      = static_cast<std::size_t>(seat);
+                        g_windowMember[index] = nullptr;
+                        g_story[index]        = false;
+                        g_leaderSeen[index]   = -1;
+                        CloseWindows(seat);
                     }
                 }
                 platform::Log(L"chocobo call: own-chocobo {} (set): {}", on ? L"on" : L"off",
@@ -497,7 +768,7 @@ bool Install(const platform::GameImage& image) noexcept
     {
         platform::Log(L"chocobo call: the own-chocobo option could not be registered (out of memory?); the page cannot set it");
     }
-    // The party getoff's call crosses a 16-byte block in 1.005: every site is placed from the game thread, between its
+    // The party getoff's call crosses a 16-byte block: every site is placed from the game thread, between its
     // ticks (platform/deferred_sites.h).
     const bool placed = g_placement.Install(image, &PlaceSites);
     if (g_placement.FromGameThread() && !placed)
@@ -516,7 +787,7 @@ void Remove() noexcept
 
 bool RunSeatSummon(void (*body)(void* state, float deltaTime), void* state, float deltaTime) noexcept
 {
-    const int seat = players::generation::OnGameThread() ? scopes::primary_controller::OpenSeat() : 0;
+    const int seat = OpenSeatHere();
     if (seat < 1 || !g_ownOn.load(std::memory_order_relaxed) || !g_whistleCall.IsInstalled() || g_summonSeat != 0)
     {
         return false;
@@ -542,10 +813,32 @@ void Tick() noexcept
     }
     g_summonSeat = 0;  // set only inside a summon body; a fault there may have left it
     g_notifySeat = 0;
-    const std::uint64_t now = GetTickCount64();
+    const std::uint64_t  now      = GetTickCount64();
+    static std::uint64_t namesTry = 0;  // the rider's stop pose names: tried once a second until each exists
+    if (now - namesTry >= 1000)
+    {
+        namesTry = now;
+        for (std::size_t i = 0; i < kRiderStopNames.size(); ++i)
+        {
+            if (g_riderAsked[i].load(std::memory_order_relaxed) == 0)
+            {
+                g_riderAsked[i].store(world::data_rows::FindName(kRiderStopNames[i]), std::memory_order_relaxed);
+            }
+            if (g_riderFallback[i].load(std::memory_order_relaxed) == 0)
+            {
+                g_riderFallback[i].store(world::data_rows::FindName(kRiderStopFallbacks[i]), std::memory_order_relaxed);
+            }
+        }
+    }
     for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
     {
         const auto index = static_cast<std::size_t>(seat);
+        if (!players::generation::Active(seat))
+        {
+            g_windowMember[index] = nullptr;  // a ride under them when they join again is theirs
+            g_story[index]        = false;
+            g_iconSaid[index]     = false;
+        }
         if (!g_called[index])
         {
             continue;
