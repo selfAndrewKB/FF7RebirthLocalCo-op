@@ -157,7 +157,7 @@ constexpr std::uint32_t kOneShotUseA     = 0x848;  // OneShotMove fields its reg
 constexpr std::uint32_t kOneShotUseB     = 0x86C;
 inline constexpr platform::PerBuild<std::uint32_t> kEnterSlot{0x718, 0x710};
 constexpr std::size_t   kVtableSpan = 0x750;  // the slots read below, the climb's unregister (+0x740) included
-constexpr std::uint64_t kNoWeak = 0x00000000FFFFFFFFull;  // FWeakObjectPtr reset: index -1, serial 0
+using players::weak_object::kNoWeak;
 
 // The wall-run move state's camera pick (research/RE-p2-traversal-classes.md): LeaderActionComp_FindWallRunActorEntered_Flag2A1(lac) returns the
 // first actor on the LeaderActionComp's wall-run list (+0x14F0) whose REAL entered flag is set. Its only call

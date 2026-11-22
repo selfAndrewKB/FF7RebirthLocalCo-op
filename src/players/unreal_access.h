@@ -137,4 +137,8 @@ std::optional<ViewportSize> ViewportSizeOf(UObject* playerController) noexcept;
 /// a structured-exception guard; "?" if it faulted.
 std::wstring NameText(std::uint64_t name) noexcept;
 
+/// The FName with this text as the engine stores it (comparison index, then number), or 0 when the name pool has no
+/// such name yet (found, never added).
+std::uint64_t NameValue(const wchar_t* text) noexcept;
+
 }  // namespace lss::players::unreal

@@ -86,6 +86,7 @@
 #include "rides/chocobo_exits.h"
 #include "rides/chocobo_ride.h"
 #include "rides/scour_scent.h"
+#include "rides/treasure_hint.h"
 #include "rides/shared_ride.h"
 #include "rides/wheelie_ride.h"
 #include "scopes/leader_scope.h"
@@ -343,6 +344,7 @@ constexpr std::array kModules{
     // each seat's player drives their own chocobo while the party rides
     Module{Call<&rides::chocobo_ride::Install>, nullptr},
     // players 2 and 3's Scent and Scour run the game's own for their chocobo, one session at a time
+    Module{Call<&rides::treasure_hint::Install>, &rides::treasure_hint::Remove},
     Module{Call<&rides::scour_scent::Install>, &rides::scour_scent::Remove},
     // players 2 and 3 whistle for their own chocobo; their Vehicle press dismounts them alone
     Module{Call<&rides::chocobo_call::Install>, &rides::chocobo_call::Remove},

@@ -221,6 +221,104 @@ inline constexpr FunctionFact   kLeaderRideBody{L"PrimaryPC_ChocoboCoord_LeaderR
 inline constexpr std::uintptr_t kCraftLocksOnRideCall  = 0x1432C64C4;
 inline constexpr std::uintptr_t kCraftLocksOffRideCall = 0x1432C6563;
 
+// The treasure hint: the status icon a rider sees near a treasure before any press
+// (research/RE-chocobo-treasure-hint-seats.md). The craft tick decides it inline for the leader's chocobo alone.
+
+/// The manager's points: a TMap<FName, TSharedPtr<point>> at the manager's start (a sparse array of 32-byte elements:
+/// the key, then the point), and the quest lock count (i32; above zero only points with a field point count).
+inline constexpr std::uint32_t kCraftPoints        = 0x0;
+inline constexpr std::uint32_t kCraftPointElement  = 32;
+inline constexpr std::uint32_t kCraftPointObject   = 0x8;
+inline constexpr std::uint32_t kCraftQuestLocks    = 0x80;
+/// A point's fields.
+inline constexpr std::uint32_t kPointKey         = 0x10;   // FName: the row's name, also its field point's
+inline constexpr std::uint32_t kPointFieldPoint  = 0x18;   // FName: a static point's field point (None: a trail's point)
+inline constexpr std::uint32_t kPointActivation  = 0x20;   // FName: the story flag that keeps the point in the table
+inline constexpr std::uint32_t kPointType        = 0x30;   // i32: 1 an animal's burrow, 0 a treasure or a quest
+inline constexpr std::uint32_t kPointRange       = 0x78;   // f32: the hint's range
+inline constexpr std::uint32_t kPointDone        = 0x98;   // i32: 1 shows no hint
+inline constexpr std::uint32_t kPointCompletion  = 0xA0;   // FName: the story flag that completes the point
+inline constexpr std::uint32_t kPointPath        = 0xB8;   // TArray of 48-byte path points (a location first)
+inline constexpr std::uint32_t kPointPathCount   = 0xC0;   // i32: its count
+inline constexpr std::uint32_t kPointPathElement = 48;
+inline constexpr std::uint32_t kPointRevealed    = 0xD4;   // f32: the trail's revealed distance
+inline constexpr std::uint32_t kPointSpline      = 0x178;  // weak: the bound quest trail (AEndChocoboCraftQuestSpline)
+inline constexpr std::uint32_t kPointRelay       = 0x180;  // u8: the trail is revealed as the walker passes its waypoints
+inline constexpr std::uint32_t kPointHint        = 0x1A8;  // u8: the point shows a hint (the keep rule without the lock)
+/// The session's fields the icon functions read besides the icon set (offsets into the session).
+inline constexpr std::uint32_t kCraftDigging      = 0x0;    // u8: the owner's dig in progress
+inline constexpr std::uint32_t kCraftLifecycle    = 0x5;    // u8: 2 shut down
+inline constexpr std::uint8_t  kCraftShutDown     = 2;
+inline constexpr std::uint32_t kCraftSniffAction  = 0xA8;   // the sniff action (8 bytes; 0 none)
+inline constexpr std::uint32_t kCraftDiscoverMode = 0x1F8;  // i32: the discover effect's mode
+inline constexpr std::uint32_t kCraftItemGet      = 0x350;  // weak: the dug item's widget
+inline constexpr std::uint32_t kCraftTrailEffect  = 0x35B;  // u8: a trail's point effect alive
+inline constexpr std::uint32_t kCraftIconMode     = 0x37C;  // i32: the icon's last mode (the icon picture below)
+inline constexpr std::uint32_t kCraftIconAnim     = 0x380;  // u8: the icon's animation state
+/// The icon's pictures by mode: a treasure or a burrow, a quest or a trail, both.
+inline constexpr std::int32_t kCraftIconTreasure = 9;
+inline constexpr std::int32_t kCraftIconQuest    = 10;
+inline constexpr std::int32_t kCraftIconBoth     = 11;
+/// The quest trail actor's spline component, and the spline's fields the trail test reads.
+inline constexpr std::uint32_t kQuestSplineComponent = 0x228;
+inline constexpr std::uint32_t kSplinePointCount     = 0x488;  // i32: the position curve's points
+inline constexpr std::uint32_t kSplineReparam        = 0x4C8;  // FInterpCurveFloat: distance to input key
+inline constexpr std::uint32_t kSplineReparamElement = 20;     // its points: the distance first
+inline constexpr std::uint32_t kSplineReparamSteps   = 0x554;  // i32: reparam steps per segment
+inline constexpr std::uint32_t kSplineClosedLoop     = 0x568;  // u8
+/// The craft's parameter registry (a DataObjRegistry object) and the trail's hint distance row (f32 at the row's +8;
+/// the game's fallback when the row is missing).
+inline constexpr std::uintptr_t kCraftParams         = 0x149060470;
+inline constexpr std::uint32_t  kCraftParamValue     = 0x8;
+inline constexpr float          kIconDistanceDefault = 2000.0f;
+/// ChocoCraft_UpdateStatusWidgets(session, near, null, trail, quest, treasure, burrow): makes, shows, hides and places
+/// the icon for LeaderRideBody(1) through the primary controller; its one call in the craft tick.
+inline constexpr std::uint8_t kCraftStatusWidgetsBytes[] = {
+    0x48, 0x89, 0x5C, 0x24, 0x18, 0x88, 0x54, 0x24, 0x10, 0x55, 0x56, 0x57,
+    0x41, 0x54, 0x41, 0x55, 0x41, 0x56, 0x41, 0x57, 0x48, 0x8B, 0xEC, 0xB8};
+inline constexpr FunctionFact   kCraftStatusWidgets{L"ChocoCraft_UpdateStatusWidgets", 0x140D30368, kCraftStatusWidgetsBytes};
+inline constexpr std::uintptr_t kCraftStatusWidgetsCall = 0x140D3B657;
+/// ChocoCraft_PlaceStatusIcon_PrimaryPC(session, icon, mode): places the icon over LeaderRideBody(1), projected through
+/// the primary controller, and runs its animation.
+inline constexpr std::uint8_t kCraftPlaceIconBytes[] = {
+    0x48, 0x8B, 0xC4, 0x48, 0x89, 0x58, 0x08, 0x48, 0x89, 0x70, 0x10, 0x48,
+    0x89, 0x78, 0x18, 0x4C, 0x89, 0x60, 0x20, 0x41, 0x56, 0xB8, 0x70, 0x01};
+inline constexpr FunctionFact kCraftPlaceIcon{L"ChocoCraft_PlaceStatusIcon_PrimaryPC", 0x1432CF60C, kCraftPlaceIconBytes};
+/// The icon set's removal as the game's own (hide through the widget's visibility slot, then this).
+inline constexpr std::uint8_t kRemoveFromParentClearZBytes[] = {
+    0x40, 0x53, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8, 0x00, 0xEF, 0x08, 0x01,
+    0x48, 0x2B, 0xE0, 0x48, 0x8B, 0x01, 0x48, 0x8B, 0xD9, 0xFF, 0x90, 0x98};
+inline constexpr FunctionFact kRemoveFromParentClearZ{L"EndUserWidget_RemoveFromParent_ClearZ", 0x1410DCC74,
+                                                      kRemoveFromParentClearZBytes};
+inline constexpr std::uint32_t kWidgetVisibilitySlot = 0x288;  // UWidget::SetVisibility(widget, u8)
+inline constexpr std::uint8_t  kWidgetHidden         = 2;
+/// The spline helpers the trail test calls: the input key closest to a world location, the world location at an input
+/// key, the reparam table's distance to input key, the world location at a distance, and the spline's length.
+inline constexpr std::uint8_t kSplineClosestKeyBytes[] = {
+    0xB8, 0x88, 0x00, 0x00, 0x00, 0xE8, 0xE2, 0x22, 0x23, 0x01, 0x48, 0x2B,
+    0xE0, 0xC5, 0xF8, 0x10, 0xA9, 0xE0, 0x01, 0x00, 0x00, 0xC5, 0xFB, 0x10};
+inline constexpr FunctionFact kSplineClosestKey{L"USplineComponent::FindInputKeyClosestToWorldLocation", 0x140F39894,
+                                                kSplineClosestKeyBytes};
+inline constexpr std::uint8_t kSplineLocationAtKeyBytes[] = {
+    0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x74, 0x24, 0x10, 0x57, 0xB8,
+    0x30, 0x00, 0x00, 0x00, 0xE8, 0x87, 0xDD, 0x91, 0x01, 0x48, 0x2B, 0xE0};
+inline constexpr FunctionFact kSplineLocationAtKey{L"USplineComponent::GetLocationAtSplineInputKey", 0x14084DDE4,
+                                                   kSplineLocationAtKeyBytes};
+inline constexpr std::uint8_t kSplineReparamEvalBytes[] = {
+    0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x6C, 0x24, 0x10, 0x48, 0x89,
+    0x74, 0x24, 0x18, 0x57, 0xB8, 0x40, 0x00, 0x00, 0x00, 0xE8, 0x16, 0xE2};
+inline constexpr FunctionFact kSplineReparamEval{L"FInterpCurveFloat::Eval", 0x14084D950, kSplineReparamEvalBytes};
+inline constexpr std::uint8_t kSplineLocationAtDistanceBytes[] = {
+    0x48, 0x8B, 0xC4, 0x48, 0x89, 0x58, 0x08, 0x48, 0x89, 0x68, 0x10, 0x48,
+    0x89, 0x70, 0x18, 0x48, 0x89, 0x78, 0x20, 0x41, 0x56, 0xB8, 0x50, 0x00};
+inline constexpr FunctionFact kSplineLocationAtDistance{L"USplineComponent::GetLocationAtDistanceAlongSpline", 0x14084DEC4,
+                                                        kSplineLocationAtDistanceBytes};
+inline constexpr std::uint8_t kSplineLengthBytes[] = {
+    0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8, 0x1A, 0xE2, 0x9A, 0xFF, 0x48, 0x2B,
+    0xE0, 0x48, 0x81, 0xC1, 0x80, 0x04, 0x00, 0x00, 0x48, 0x83, 0xC4, 0x28};
+inline constexpr FunctionFact kSplineLength{L"USplineComponent::GetSplineLength", 0x1427BD95C, kSplineLengthBytes};
+inline constexpr int          kSplineWorldSpace = 1;
+
 // ---------------------------------------------------------------------------------------------
 // The chocobo call (the whistle; research/RE-chocobo-summon-seats.md)
 // ---------------------------------------------------------------------------------------------

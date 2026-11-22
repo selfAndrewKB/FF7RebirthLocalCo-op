@@ -1,6 +1,7 @@
 #include "battle/battle_rates.h"
 
 #include "battle/battle_rates_rules.h"
+#include "facts/level_state.h"
 #include "platform/build_value.h"
 #include "platform/call_redirect.h"
 #include "platform/guarded.h"
@@ -62,8 +63,7 @@ constexpr std::uint8_t kExpValueBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x57, 0
 constexpr FunctionFact kExpValue{L"EnemyEXP_GetValueAtLevel_WithExpUpBonus", 0x141534A34, kExpValueBytes};
 constexpr std::uintptr_t kExpCall = 0x1415365F1;
 // The award's AP bonus: its gate and its row read, and the second bonus gate (none in 1.004).
-constexpr std::uint8_t kStoryFlagBytes[] = {0x48, 0x8B, 0xC4, 0x48, 0x89, 0x58, 0x08, 0x48, 0x89, 0x68, 0x10};
-constexpr FunctionFact kStoryFlag{L"StoryFlag_GetByName", 0x14092B5C8, kStoryFlagBytes};
+using facts::kStoryFlag;
 constexpr std::uint8_t kGetIntBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x6C, 0x24, 0x10, 0x48};
 constexpr FunctionFact kGetInt{L"EndParam__GetIntByKey", 0x140C2854C, kGetIntBytes};
 constexpr std::uintptr_t kApGateCall = 0x14127780B;

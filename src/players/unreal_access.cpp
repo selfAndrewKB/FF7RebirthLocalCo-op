@@ -301,6 +301,20 @@ UObject* ObjectProperty(UObject* object, const wchar_t* name)
     return *object->GetValuePtrByPropertyNameInChain<UObject*>(name);
 }
 
+std::uint64_t NameValue(const wchar_t* text) noexcept
+{
+    try
+    {
+        const RC::Unreal::FName name(text, RC::Unreal::FNAME_Find);
+        return static_cast<std::uint64_t>(static_cast<std::uint32_t>(name.GetComparisonIndex())) |
+               static_cast<std::uint64_t>(static_cast<std::uint32_t>(name.GetNumber())) << 32;
+    }
+    catch (...)
+    {
+        return 0;
+    }
+}
+
 std::wstring NameText(std::uint64_t name) noexcept
 {
     wchar_t    text[128] = {};

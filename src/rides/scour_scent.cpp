@@ -15,6 +15,7 @@
 #include "players/seats.h"
 #include "players/weak_object.h"
 #include "players/widget_opacity.h"
+#include "rides/treasure_hint.h"
 #include "scopes/leader_scope.h"
 #include "scopes/primary_controller.h"
 #include "scopes/seat_ladder.h"
@@ -29,6 +30,17 @@
 #include <Windows.h>
 
 namespace lss::rides::scour_scent {
+
+void* Manager() noexcept
+{
+    return ReadPointer(players::game_globals::Object(players::game_globals::Global::GameRoot), facts::kRootChocoboCraft);
+}
+
+void* Session(const void* manager) noexcept
+{
+    return manager != nullptr ? const_cast<std::uint8_t*>(static_cast<const std::uint8_t*>(manager)) + facts::kCraftSession
+                              : nullptr;
+}
 
 namespace {
 
@@ -95,16 +107,6 @@ bool          g_scopeSaid  = false, g_refusedSaid = false;
 int           g_dimSaid    = kNobody;  // the owner whose session last dimmed another player's rows (logged once)
 std::uint8_t  g_smellSaid  = 0;
 hud::HiddenSet g_hidden;
-
-void* Manager() noexcept
-{
-    return ReadPointer(players::game_globals::Object(players::game_globals::Global::GameRoot), facts::kRootChocoboCraft);
-}
-
-const std::uint8_t* Session(const void* manager) noexcept
-{
-    return manager != nullptr ? static_cast<const std::uint8_t*>(manager) + facts::kCraftSession : nullptr;
-}
 
 const wchar_t* OwnerName(int owner) noexcept
 {
@@ -173,7 +175,7 @@ void FollowRelease(const void* manager) noexcept
     {
         return;
     }
-    const std::uint8_t* session = Session(manager);
+    const void*         session = Session(manager);
     const std::uint8_t  smell   = ReadField<std::uint8_t>(session, facts::kCraftSmellMode);
     if (smell != g_smellSaid)
     {
@@ -254,11 +256,13 @@ void MgrTick(void* manager, float dt) noexcept
         Own(0, L"pressed Scent or Scour");
     }
     TickCall  call{original, manager, dt};
-    const int seat = SeatOwner();
+    const int seat  = treasure_hint::BeforeTick(manager, Owner());
+    int       ranAs = 0;  // whose answers the tick ran in (player 1's when a seat's were refused)
     if (seat >= 1 && players::generation::Active(seat))
     {
         if (TickAsSeat(seat, call))
         {
+            ranAs = seat;
             if (!g_scopeSaid)
             {
                 g_scopeSaid = true;
@@ -284,6 +288,7 @@ void MgrTick(void* manager, float dt) noexcept
         original(manager, dt);
     }
     FollowRelease(manager);
+    treasure_hint::AfterTick(manager, ranAs);
 }
 
 /// A row gate in a chocobo's input slot: for the rider whose scope is open, the game's answer in their leader answer;
@@ -506,13 +511,12 @@ void ShowOnly(int seat) noexcept
     // A copy of player 1's picture (a mirror, a seat on player 1's camera) is taken as its seat's pass, as the jet
     // gauges take it: the owner's widgets are placed from the owner's view, so they belong in that one view alone.
     Restore();
-    const int owner = Owner();
-    if (seat == (owner == kNobody ? 0 : owner) || !players::widget_opacity::Installed() ||
+    if (seat == treasure_hint::SessionSetPlayer() || !players::widget_opacity::Installed() ||
         !players::generation::OnGameThread())
     {
         return;
     }
-    const std::uint8_t* session = Session(Manager());
+    const void* session = Session(Manager());
     if (session == nullptr)
     {
         return;

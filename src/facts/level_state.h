@@ -153,6 +153,10 @@ inline constexpr std::uint8_t  kFieldPointFindBytes[] = {0x48, 0x89, 0x5C, 0x24,
 inline constexpr FunctionFact  kFieldPointFind{L"FieldPoint_FindByNameGlobal", 0x140F50EBC, kFieldPointFindBytes};
 inline constexpr std::uint32_t kFieldPointLocation = 0x10;  // the transform's translation
 
+// ---- The story flags (StoryFlag_GetByName(const FName*): whether the named flag is set) ----
+inline constexpr std::uint8_t kStoryFlagBytes[] = {0x48, 0x8B, 0xC4, 0x48, 0x89, 0x58, 0x08, 0x48, 0x89, 0x68, 0x10};
+inline constexpr FunctionFact kStoryFlag{L"StoryFlag_GetByName", 0x14092B5C8, kStoryFlagBytes};
+
 // ---- The field icons (g_FieldIconSystem, a pointer; its +0x500 the icon manager) ----
 inline constexpr std::uintptr_t kFieldIconSystem   = 0x1491D8488;
 inline constexpr std::uint32_t  kIconSystemManager = 0x500;

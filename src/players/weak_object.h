@@ -17,6 +17,9 @@ class GameImage;
 
 namespace lss::players::weak_object {
 
+/// A weak that names nothing, as the game's own code resets one: index -1, serial 0.
+inline constexpr std::uint64_t kNoWeak = 0x00000000FFFFFFFFull;
+
 /// Finds the two functions. False (every resolve answers null, Known false) if their bytes are not what the
 /// research read.
 bool Install(const platform::GameImage& image) noexcept;

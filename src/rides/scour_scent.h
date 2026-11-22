@@ -23,7 +23,7 @@
 //   second; at once when the owner leaves the game or stops riding; after ten quiet seconds whatever the locks say) and
 //   the owner is free again;
 // - before each view's render the session's filter, status icon and arrows are made transparent in every view but the
-//   owner's (player 1's when nobody's session runs).
+//   view of the player the tick runs as (rides/treasure_hint: the owner during a session).
 // The sniff, the dig, the effects, the item, the game-wide field locks and the messages are the game's. Logged: Info at
 // install, per press and per session's end; Debug per scope, per answer (once a session), per rows dimmed.
 
@@ -35,6 +35,12 @@ namespace lss::rides::scour_scent {
 
 bool Install(const platform::GameImage& image) noexcept;
 void Remove() noexcept;
+
+/// The Scour and Scent manager now (the field root's slot), or null; read again at each use (it goes with the field).
+void* Manager() noexcept;
+
+/// The manager's session struct (the icon set, the dig, the sniff), or null for a null manager.
+void* Session(const void* manager) noexcept;
 
 /// Around a seat's ride tick (its chocobo's input slot runs inside): a Scent or Scour request that rises during it was
 /// that seat's press. Game thread.
@@ -50,7 +56,7 @@ private:
     int seat_ = -1;  // the seat watched (-1: nothing to name)
 };
 
-/// Hides, for the render pass about to run, the session's filter, status icon and arrows unless the seat (0 player 1's) owns it.
+/// Hides, for the render pass about to run, the session's filter, status icon and arrows unless the tick runs as the seat (0 player 1).
 /// Restores first. Game thread.
 void ShowOnly(int seat) noexcept;
 

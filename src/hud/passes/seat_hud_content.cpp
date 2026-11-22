@@ -29,6 +29,7 @@
 #include "players/generation.h"
 #include "players/seats.h"
 #include "players/unreal_access.h"
+#include "rides/treasure_hint.h"
 #include "scopes/primary_controller.h"
 
 #if LSS_DEV
@@ -656,6 +657,7 @@ bool EnterSeatLevers(int column, int seat, bool copy) noexcept
         if (!copy)
         {
             jet_gauges::Place(seat);  // the seat's chocobo's jet gauge from the seat's view (hud/field/jet_gauges.h)
+            rides::treasure_hint::Place(seat);  // and its treasure hint (rides/treasure_hint.h)
         }
         Charge(kTicksSeat, start);
         if (!runs)
