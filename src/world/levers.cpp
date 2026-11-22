@@ -23,6 +23,7 @@
 #include "scopes/primary_controller.h"
 #include "traversal/traversal_facts.h"
 #include "world/field_pickup.h"
+#include "world/data_rows.h"
 #include "world/lever_rules.h"
 
 #include <array>
@@ -144,6 +145,19 @@ constexpr std::uintptr_t kStopSetterOwnOffs[] = {0x1418BFC3A, 0x1426A36F8, 0x142
 constexpr std::uint8_t kStopProgressBytes[] = {0xB8, 0x28, 0x00, 0x00, 0x00, 0xE8, 0xC2, 0x79,
                                                0xDD, 0xFE, 0x48, 0x2B, 0xE0, 0x33, 0xC0, 0x38};
 constexpr platform::FunctionFact kStopProgress{L"ChocoboStop_GetHoldProgress_7BDOrSlot", 0x1433941B4, kStopProgressBytes};
+// The stop move's animation register (its vtable's), which names the four animations with no fallback names: only Cloud
+// and Tifa have them, so another member's move plays nothing and their body shows no pose.
+constexpr std::uint8_t kStopRegisterAnimsBytes[] = {0xB8, 0x38, 0x00, 0x00, 0x00, 0xE8, 0xA6, 0x6A,
+                                                    0xC5, 0x00, 0x48, 0x2B, 0xE0, 0x48, 0x8B, 0x01};
+constexpr platform::SlotFact kStopRegisterAnimsSlot{L"the chocobo stop move's animation register slot", 0x14651EED0,
+                                                    {L"FieldActionMove_Vt108_RegisterAnimsByName", 0x1415150D0,
+                                                     kStopRegisterAnimsBytes}};
+constexpr std::size_t kStopAnims = 4;  // start, hold, cancel, success
+// The register with fallback names its slot calls through the move's vtable (+0x110), checked before it is used.
+constexpr std::uint8_t kRegisterFallbackBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x48, 0x89, 0x6C,
+                                                   0x24, 0x18, 0x48, 0x89, 0x74, 0x24, 0x20, 0x57};
+constexpr platform::FunctionFact kRegisterFallback{L"FieldActionMove_Vt110_RegisterAnimsByName_Fallback", 0x140F31528,
+                                                   kRegisterFallbackBytes};
 
 /// What differs between the classes: their words in the log, their slots and setter, and the actor's own fields.
 struct KindFacts
@@ -191,6 +205,9 @@ using TowerSetterFn  = void (*)(void* actor, std::uint8_t show, std::uint8_t not
 using StopSetterFn   = void (*)(void* actor, std::uint8_t show);
 using TryBeginFn     = void (*)(void* actor, float dt, void* pawn);
 using ProgressFn     = float (*)(void* actor);
+using RegisterFn     = std::uintptr_t (*)(void* move, void* context, const std::uint64_t* names, int count);
+using FallbackFn     = std::uintptr_t (*)(void* move, void* context, const std::uint64_t* names, const std::uint64_t* fallbacks,
+                                      int count);
 
 /// The setter's arguments after `show`, as a wishing player's own call last passed them (the tower's one argument in
 /// `check`).
@@ -246,8 +263,10 @@ constexpr int                           kNotifiedOther = -2;  // a notify for a 
 thread_local int                        t_notified     = kNotifiedNone;  // else the player whose character's notify runs
 std::array<const void*, players::kMaxPlayers> g_execSeen{};  // by seat: the executer last ticked, for the log
 
-// The chocobo stop's hold reader, redirected at its entry with the stop class's hooks.
+// The chocobo stop's hold reader, redirected at its entry with the stop class's hooks; its move's animation register.
 platform::EntryRedirect g_stopProgress;
+platform::VTableEntry   g_stopRegisterAnims;
+std::uintptr_t          g_registerFallback = 0;  // the game's register with fallbacks (found at install)
 
 /// A chocobo stop's hold progress for each player, as the game's reader gave it on the game thread with that player's
 /// slot block held: what a read made outside that player's notify (the move's phase polls, on the animation worker or
@@ -1054,6 +1073,56 @@ void TickStop(Record& r, void* actor) noexcept
     r.availSaid = avail;
 }
 
+/// The names a member without the stop's animations falls back to: their own idle loop for the hold, the cancel and the
+/// success, so they keep their normal pose; none for the start (with no start the hold keeps the stop's own length, as
+/// the move's Begin sets it from the start and hold lengths only when both exist). Found once the name exists. Game thread.
+std::array<std::uint64_t, kStopAnims> StopFallbacks() noexcept
+{
+    static std::atomic<std::uint64_t> idle{0};  // the idle's name, found once it exists
+    std::uint64_t                     name = idle.load(std::memory_order_relaxed);
+    if (name == 0)
+    {
+        name = world::data_rows::FindName(L"N_Idle01_1");
+        idle.store(name, std::memory_order_relaxed);
+    }
+    return {0, name, name, name};
+}
+
+/// The stop move's animation register: the game's own register with fallback names (the move's vtable's, the one the
+/// hook rope uses with its own table), so Cloud and Tifa find their own animations first and every other member falls
+/// back to their idle. Logged at Debug: the character and what each index found.
+std::uintptr_t StopRegisterAnims(void* move, void* context, const std::uint64_t* names, int count) noexcept
+{
+    const auto original  = reinterpret_cast<RegisterFn>(g_stopRegisterAnims.Original());
+    const auto fallbacks = StopFallbacks();
+    const auto slot = reinterpret_cast<std::uintptr_t>(ReadPointer(ReadPointer(move, 0), facts::kFieldActionMoveRegisterFallback));
+    if (count != static_cast<int>(kStopAnims) || fallbacks[1] == 0 || slot == 0 || slot != g_registerFallback)
+    {
+        return original(move, context, names, count);
+    }
+    const std::uintptr_t result = reinterpret_cast<FallbackFn>(slot)(move, context, names, fallbacks.data(), count);
+    if (platform::Enabled(platform::Level::Debug))
+    {
+        try
+        {
+            const void*  anims = ReadPointer(move, facts::kFieldActionMoveAnims);
+            std::wstring found;
+            for (std::size_t i = 0; i < kStopAnims; ++i)
+            {
+                const void* anim = ReadPointer(anims, static_cast<std::uint32_t>(8 * i));
+                found += std::format(L"{}{}", i == 0 ? L"" : L", ", anim != nullptr ? players::NameOf(anim) : std::wstring(L"none"));
+            }
+            platform::LogDebug(L"levers: the chocobo stop's move for {} plays: {} (start, hold, cancel, success; a member "
+                               L"without the stop's own falls back to their idle)",
+                               players::NameOf(players::weak_object::ObjectIn(move, facts::kFieldActionMoveCharacter)), found);
+        }
+        catch (...)
+        {
+        }
+    }
+    return result;
+}
+
 /// The class's executer tick (its phase update polls the hold progress): a seat's member's with the seat's slot block
 /// held in the live manager for the call, so the hold the seat's pass keeps is the one it polls. Each seat's executer
 /// is logged as it starts.
@@ -1107,6 +1176,10 @@ void RemoveKind(Kind kind) noexcept
     if (kind == Kind::ChocoboStop && g_stopProgress.IsInstalled())
     {
         (void)g_stopProgress.Restore();
+    }
+    if (kind == Kind::ChocoboStop && g_stopRegisterAnims.Original() != 0)
+    {
+        (void)g_stopRegisterAnims.Restore();
     }
     if (h.setter.IsInstalled())
     {
@@ -1244,6 +1317,13 @@ void Install(const platform::GameImage& image) noexcept
         platform::Log(L"levers: chocobo stops ready; players 2 and 3 raise the chocobo stops' signs on their own character "
                       L"or their own chocobo, with their own hold (the point takes every player's wish, the press latch is "
                       L"the presser's, the stop's move reads its player's hold)");
+        g_registerFallback  = platform::FindFunction(image, kRegisterFallback).value_or(0);
+        const bool fallback = g_registerFallback != 0 &&
+                              platform::ReplaceSlot(image, kStopRegisterAnimsSlot,
+                                                    reinterpret_cast<std::uintptr_t>(&StopRegisterAnims), g_stopRegisterAnims);
+        platform::Log(L"levers: the chocobo stop's move {}",
+                      fallback ? L"falls back to the member's idle where they have no stop animation (only Cloud and Tifa have them)"
+                               : L"keeps the game's animations (its register slot differs): other members than Cloud and Tifa show no pose");
     }
     else
     {

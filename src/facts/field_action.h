@@ -119,5 +119,9 @@ inline constexpr std::uint32_t kChocoboStopAvailability  = 0x7BB;
 inline constexpr std::uint32_t kChocoboStopPressLatch    = 0x7BD;
 inline constexpr std::uint32_t kChocoboStopPointShown    = 0x7BE;
 inline constexpr std::uint32_t kChocoboStopMoveCharacter = 0x7E8;
-
+// A field action's move: its character (a weak reference), its animations by index (a TArray of the anims its Setup
+// found by name, null for a name the character lacks), and the vtable slot that registers them with fallback names.
+inline constexpr std::uint32_t kFieldActionMoveCharacter        = 0x450;
+inline constexpr std::uint32_t kFieldActionMoveAnims            = 0x470;
+inline constexpr std::uint32_t kFieldActionMoveRegisterFallback = 0x110;
 }  // namespace lss::facts
