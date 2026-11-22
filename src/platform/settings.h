@@ -204,23 +204,19 @@ inline constexpr Option kHudScale{  // hud/layout/hud_placement
     L"of 0.05 (1.00 is the game's); what hangs over characters and enemies keeps the game's size, as do the single view, "
     L"the menus and scenes and a row of monitors; from the next frame",
     false, L"Split-Screen HUD Size (Player 1)", kHudScaleLabels,
-    L"Controls the size of the HUD in Player 1's view during split-screen in one window: the minimap, command menu, "
-    L"party list and summon gauges. Markers over characters and enemies keep their size. Does not affect multi-monitor "
-    L"mode."};
+    L"Controls the size of the HUD in Player 1's view during single monitor split-screen mode."};
 inline constexpr Option kHudScaleTwo{  // hud/layout/hud_placement
     L"Views", L"hud-scale.player-2", kHudScaleWords, L"1.00",
     L"player 2's HUD size in their own view in a split window, as hud-scale sets player 1's: 0.75 to 1.50 in steps of 0.05 "
     L"(1.00 is the game's); a settings file from before it takes player 1's size once; from the next frame",
     false, L"Split-Screen HUD Size (Player 2)", kHudScaleLabels,
-    L"Controls the size of the HUD in Player 2's view during split-screen in one window. Does not affect multi-monitor "
-    L"mode."};
+    L"Controls the size of the HUD in Player 2's view during single monitor split-screen mode."};
 inline constexpr Option kHudScaleThree{  // hud/layout/hud_placement
     L"Views", L"hud-scale.player-3", kHudScaleWords, L"1.00",
     L"player 3's HUD size in their own view in a split window, as hud-scale sets player 1's: 0.75 to 1.50 in steps of 0.05 "
     L"(1.00 is the game's); a settings file from before it takes player 1's size once; from the next frame",
     false, L"Split-Screen HUD Size (Player 3)", kHudScaleLabels,
-    L"Controls the size of the HUD in Player 3's view during split-screen in one window. Does not affect multi-monitor "
-    L"mode."};
+    L"Controls the size of the HUD in Player 3's view during single monitor split-screen mode."};
 inline constexpr Option kMenuSlow{  // battle/command_menu_tick
     L"Battle", L"menu-slow", kOnOffWords, L"off",
     L"off (the default): no grey and no muffled sound, and the world and the ATB gauges run on at full speed while a battle "
@@ -325,16 +321,16 @@ inline constexpr Option kOwnChocobo{  // rides/chocobo_call
     L"whether players 2 and 3 handle their own chocobo: on (each calls their own with the summon row, mounts it and gets "
     L"off by their own press; player 1's ride never mounts or dismounts them) or off (the default: they ride along with "
     L"player 1's party ride, as in single player)",
-    true, L"Own Chocobos for Players 2 and 3", kOnOffLabels,
-    L"Lets Players 2 and 3 call, mount and dismount their own chocobo instead of riding along with Player 1."};
+    true, L"Independent Chocobos", kOnOffLabels,
+    L"Lets Players 2 and 3 call, mount and dismount their own chocobo instead of Player 1 deciding for the group."};
 inline constexpr Option kEnemiesNotice{  // battle/encounter_watch
     L"Experimental", L"enemies-notice", kOnOffWords, L"off",
     L"whether field enemies notice players 2 and 3: on (the enemies watch the player standing nearest one of them inside "
     L"its territory, as the game's one watched character; their fight gathers around that player as Gather at Battle "
     L"Start/End decides, and ends when they leave its area) or off (the default: the enemies watch player 1 alone, as in "
     L"single player)",
-    true, L"Enemies Notice Players 2 and 3", kOnOffLabels,
-    L"Whether field enemies can notice Players 2 and 3 and start a fight with them, not only Player 1.",
+    true, L"Initiate Battles", kOnOffLabels,
+    L"Allows Players 2 and 3 to initiate battle encounters when roaming the world.",
     false, false, L"Battle"};
 // Players 2 and 3's camera responsiveness (camera/seat_responsiveness): the game's own Responsiveness levels, 1 to 5,
 // player 1's being the game's option.
