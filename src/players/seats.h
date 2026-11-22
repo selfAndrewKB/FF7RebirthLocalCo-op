@@ -44,6 +44,12 @@ constexpr bool SeatBuilt(int seat) noexcept
     return seat >= 1 && seat <= kSeatsBuilt;
 }
 
+/// A player of the built ones: player 1 (0) or a built seat.
+constexpr bool PlayerBuilt(int player) noexcept
+{
+    return player == 0 || SeatBuilt(player);
+}
+
 /// The mirror views' controller ids (views/mirror_player.h: a local player of the mod's that shows player 1's camera
 /// in a column no player has), at most one per column beside player 1's. Never a seat's id: a view draws the HUD of
 /// the seat its controller id names (hud/passes/column_hud_images.h). And past XInput's four users (0 to 3): the engine

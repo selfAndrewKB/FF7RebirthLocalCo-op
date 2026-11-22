@@ -127,6 +127,10 @@ inline constexpr std::uintptr_t kBattlePlayerComponentVTable = 0x145611740;
 /// (RE-yuffie-box-throw.md).
 inline constexpr std::uint32_t kCharCtrlHolderCharacter = 0x8;
 inline constexpr std::uint32_t kCharActionCtrlHolder    = 0x8;
+/// The holder's control state (u8, EEndCharacterControllerStateType, written by its state switch): 1 Idle; an attack,
+/// ability, guard, dodge or hit reaction is another (RE-p1-warp-to-fight.md).
+inline constexpr std::uint32_t kCharCtrlHolderState = 0x68;
+inline constexpr std::uint8_t  kControlStateIdle    = 1;
 inline constexpr std::uint8_t  kCharActionCtrlBeginFieldAttackBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x74,
                                                                          0x24, 0x10, 0x57, 0xB8, 0x70, 0x00, 0x00, 0x00};
 inline constexpr FunctionFact kCharActionCtrlBeginFieldAttack{L"CharActionCtrl_Vt70_BeginFieldAttack_SetsThrow21", 0x14150F718,

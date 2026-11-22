@@ -190,15 +190,21 @@ inline std::array<Reading, kOptions.size()> ReadSettings(const std::wstring& pat
 {
     const bool                           exists = !path.empty() && GetFileAttributesW(path.c_str()) != INVALID_FILE_ATTRIBUTES;
     std::array<Reading, kOptions.size()> readings;
+    const auto read = [&path](const wchar_t* section, const wchar_t* key) {
+        wchar_t    buffer[1024]{};  // room for every monitor's device path
+        const auto length = GetPrivateProfileStringW(section, key, L"", buffer, static_cast<DWORD>(std::size(buffer)), path.c_str());
+        return std::wstring(buffer, length);
+    };
     for (std::size_t i = 0; i < kOptions.size(); ++i)
     {
         std::wstring text;
         if (exists)
         {
-            wchar_t    buffer[1024]{};  // room for every monitor's device path
-            const auto length = GetPrivateProfileStringW(kOptions[i]->section, kOptions[i]->key, L"", buffer,
-                                                         static_cast<DWORD>(std::size(buffer)), path.c_str());
-            text.assign(buffer, length);
+            text = read(kOptions[i]->section, kOptions[i]->key);
+            if (text.empty() && kOptions[i]->formerSection != nullptr)
+            {
+                text = read(kOptions[i]->formerSection, kOptions[i]->key);
+            }
         }
         readings[i] = Judge(*kOptions[i], text);
     }

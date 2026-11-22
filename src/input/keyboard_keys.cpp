@@ -16,6 +16,7 @@
 #include "platform/command_registry.h"
 #endif
 
+#include <algorithm>
 #include <array>
 #include <atomic>
 #include <bitset>
@@ -430,7 +431,7 @@ void SetIdle(bool idle) noexcept
 int TakeWarpPress() noexcept
 {
     const int seat = pad_table::KeyboardSeat();
-    return std::exchange(g_warpPressed, false) && seat > 0 ? seat : -1;
+    return std::exchange(g_warpPressed, false) ? std::max(seat, 0) : -1;
 }
 
 std::int32_t ReleaseUser() noexcept

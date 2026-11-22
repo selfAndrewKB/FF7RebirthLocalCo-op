@@ -756,6 +756,7 @@ void Remove() noexcept
         g_consoleAsk[seat] = false;
         g_askWaiting[seat] = nullptr;
     }
+    g_clicks[0] = {};  // player 1's own ask
 }
 
 void Tick(bool splitShown) noexcept
@@ -770,6 +771,23 @@ void Tick(bool splitShown) noexcept
     float                 seconds[players::kMaxPlayers] = {};
     const auto            now   = std::chrono::steady_clock::now();
     const int             keyed = input::keyboard_keys::TakeWarpPress();  // taken every tick: none carried over
+    const auto            nowMs = static_cast<std::uint64_t>(
+        std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count());
+    // Player 1's ask: in a fight player 2 or 3 started, player 1's character to that player's (battle/arena_warp); outside
+    // a fight theirs is the character the others are brought to, so it asks nothing.
+    const bool oneClicked = input::pad_buttons::TakeLeftThumbPress(0) && g_clicks[0].Press(nowMs);
+    if (oneClicked || keyed == 0)
+    {
+        const wchar_t* how = oneClicked ? L"L3 twice" : L"the period key";
+        if (battle::arena_warp::InBattle())
+        {
+            battle::arena_warp::Ask(0, how);
+        }
+        else
+        {
+            platform::LogDebug(L"nav strand: player 1's {} outside a fight asks nothing (the others are brought to them)", how);
+        }
+    }
     for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
     {
         Subject&   memberSubject = g_members[seat];
@@ -795,9 +813,7 @@ void Tick(bool splitShown) noexcept
             g_clicks[seat]     = {};  // a new player or member starts afresh
             g_askWaiting[seat] = nullptr;
         }
-        const bool clicked = member != nullptr && pressed &&
-                             g_clicks[seat].Press(static_cast<std::uint64_t>(
-                                 std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count()));
+        const bool clicked = member != nullptr && pressed && g_clicks[seat].Press(nowMs);
         const bool key   = member != nullptr && keyed == seat;
         const bool asked = std::exchange(g_consoleAsk[seat], false);
         if (clicked || key || asked)

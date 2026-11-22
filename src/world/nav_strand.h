@@ -37,8 +37,9 @@
 // the character already stands beside player 1's (within 10 m on the same level, wider than where the warp itself lands
 // a follower: a stray double click moves nothing);
 // every other refusal is party_warp's (the split not on screen, a ride, a battle, no follow state, the party busy),
-// logged. Player 1's double click does nothing: theirs is the character the others are brought to. The asks need only
-// the warp, not the three redirects. Logged at Info: each ask and its answer.
+// logged. Player 1's double click (or the period key when the keyboard plays player 1) asks only in a fight: their
+// character to the player 2 or 3 who started it (battle/arena_warp); outside one theirs is the character the others are
+// brought to. The asks need only the warp, not the three redirects. Logged at Info: each ask and its answer.
 
 #include "platform/dev_switch.h"
 

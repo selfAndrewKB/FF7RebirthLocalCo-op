@@ -285,6 +285,26 @@ void FileWrittenAndReadBack()
     DeleteFileW(path.c_str());
 }
 
+/// An option with a second section: a file holding its key only there reads its word, and the file written from the
+/// readings holds it in the option's own section.
+void SecondSectionRead()
+{
+    std::puts("settings: a key in an option's second section is read and written into its own");
+    wchar_t folder[MAX_PATH]{};
+    EXPECT(GetTempPathW(MAX_PATH, folder) > 0);
+    const std::wstring path = std::wstring(folder) + L"lss_rebirth_settings_second.ini";
+    EXPECT(kEnemiesNotice.formerSection != nullptr);
+    {
+        std::ofstream file(path, std::ios::binary | std::ios::trunc);
+        file << "[Battle]\r\nenemies-notice = on\r\n";
+    }
+    auto readings = ReadSettings(path);
+    EXPECT(readings[PlaceOf(kEnemiesNotice)].word == L"on" && readings[PlaceOf(kEnemiesNotice)].source == Source::File);
+    EXPECT(WriteFileBytes(path.c_str(), Utf8(FileText(readings))) == 0);
+    EXPECT(ReadBack(path, kEnemiesNotice).word == L"on");  // its own section now
+    DeleteFileW(path.c_str());
+}
+
 }  // namespace
 
 int main()
@@ -295,5 +315,6 @@ int main()
     WordIndexes();
     FileTextFromTable();
     FileWrittenAndReadBack();
+    SecondSectionRead();
     return lss::test::Report();
 }

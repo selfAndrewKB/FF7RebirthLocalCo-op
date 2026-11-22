@@ -60,8 +60,11 @@ std::wstring KeysNotInTable(const std::wstring& path)
     {
         for (const std::wstring& key : list(section.c_str(), path))
         {
+            // A key in an option's second section is that option's, read and written into its own section.
             const bool known = std::any_of(kOptions.begin(), kOptions.end(), [&](const Option* o) {
-                return _wcsicmp(o->section, section.c_str()) == 0 && _wcsicmp(o->key, key.c_str()) == 0;
+                const bool sectionMatches = _wcsicmp(o->section, section.c_str()) == 0 ||
+                                            (o->formerSection != nullptr && _wcsicmp(o->formerSection, section.c_str()) == 0);
+                return sectionMatches && _wcsicmp(o->key, key.c_str()) == 0;
             });
             if (!known)
             {

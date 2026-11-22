@@ -488,7 +488,7 @@ void SplitTable(const std::byte* owner, std::size_t which, unsigned seats, int k
         table.views[i].Advance(element.held, element.sources, seats, keyboardSeat);
         if (which == 0 && g_leftThumb != 0 && element.name == g_leftThumb)
         {
-            for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
+            for (int seat = 0; seat <= players::kSeatsBuilt; ++seat)  // player 1's too: their own move's double click
             {
                 if (table.views[i].now[seat] && !table.views[i].previous[seat])
                 {
@@ -825,7 +825,7 @@ void SetSeatRoute(SeatRouteFn route) noexcept
 
 bool TakeLeftThumbPress(int seat) noexcept
 {
-    if (!players::SeatBuilt(seat) || !players::generation::OnGameThread())
+    if (!players::PlayerBuilt(seat) || !players::generation::OnGameThread())
     {
         return false;
     }

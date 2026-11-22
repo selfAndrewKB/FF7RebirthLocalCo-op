@@ -48,6 +48,9 @@ struct Option
     // A row in the game's own Options screen instead of the Co-op page (Camera & Controls, after the game's
     // Responsiveness): a Range row over `words`, its values counted from 1 (menu/coop_menu_rules.h RowMin).
     bool                            gameScreen = false;
+    // A second section the file may hold the option's key in (null: none): read there when its own section has no value,
+    // so the word is kept, and the file then written with it in its own section.
+    const wchar_t*                  formerSection = nullptr;
 };
 
 /// The option has a row in the game's own Options screen, not on the Co-op page.
@@ -231,14 +234,6 @@ inline constexpr Option kBattleWarps{  // battle/battle_warps
     L"controls are warped as the game does)",
     false, L"Gather at Battle Start/End", kOnOffLabels,
     L"Whether the game teleports players into place at the beginning and end of a battle encounter."};
-inline constexpr Option kEnemiesNotice{  // battle/encounter_watch
-    L"Battle", L"enemies-notice", kOnOffWords, L"off",
-    L"whether field enemies notice players 2 and 3: on (the enemies watch the player standing nearest one of them inside "
-    L"its territory, as the game's one watched character; their fight gathers around that player as Gather at Battle "
-    L"Start/End decides, and ends when they leave its area) or off (the default: the enemies watch player 1 alone, as in "
-    L"single player)",
-    true, L"Enemies Notice Players 2 and 3", kOnOffLabels,
-    L"Whether field enemies can notice Players 2 and 3 and start a fight with them, not only Player 1."};
 // The battle's rates (battle/battle_rates): each a multiplier from 0.1 to 10.0 in steps of 0.1, written "1.5" in the file
 // and "x1.5" on the Co-op page.
 inline constexpr std::size_t kTenthsMax = 100;  // 10.0
@@ -332,6 +327,15 @@ inline constexpr Option kOwnChocobo{  // rides/chocobo_call
     L"player 1's party ride, as in single player)",
     true, L"Own Chocobos for Players 2 and 3", kOnOffLabels,
     L"Lets Players 2 and 3 call, mount and dismount their own chocobo instead of riding along with Player 1."};
+inline constexpr Option kEnemiesNotice{  // battle/encounter_watch
+    L"Experimental", L"enemies-notice", kOnOffWords, L"off",
+    L"whether field enemies notice players 2 and 3: on (the enemies watch the player standing nearest one of them inside "
+    L"its territory, as the game's one watched character; their fight gathers around that player as Gather at Battle "
+    L"Start/End decides, and ends when they leave its area) or off (the default: the enemies watch player 1 alone, as in "
+    L"single player)",
+    true, L"Enemies Notice Players 2 and 3", kOnOffLabels,
+    L"Whether field enemies can notice Players 2 and 3 and start a fight with them, not only Player 1.",
+    false, false, L"Battle"};
 // Players 2 and 3's camera responsiveness (camera/seat_responsiveness): the game's own Responsiveness levels, 1 to 5,
 // player 1's being the game's option.
 inline constexpr std::array<const wchar_t*, 5> kResponsivenessWords{L"1", L"2", L"3", L"4", L"5"};
@@ -352,10 +356,10 @@ inline constexpr Option kResponsivenessThree{  // camera/seat_responsiveness
 /// Every option, in the order the settings file lists them.
 inline constexpr std::array kOptions{&kMultiMonitor,     &kMonitors,      &kColumnOrder,
                                      &kTwoPlayerSplit,  &kThreePlayerSplit, &kHorizontalFov,
-                                     &kVerticalFov,     &kHudScale,         &kHudScaleTwo,      &kHudScaleThree,    &kMenuSlow,         &kBattleWarps,      &kEnemiesNotice,
+                                     &kVerticalFov,     &kHudScale,         &kHudScaleTwo,      &kHudScaleThree,    &kMenuSlow,         &kBattleWarps,
                                      &kEnemyDamage,     &kEnemyHp,          &kBossHp,
                                      &kEnemyStagger,    &kExpGain,          &kApGain,
-                                     &kLeadHolder,      &kOwnChocobo,       &kResponsivenessTwo, &kResponsivenessThree};
+                                     &kLeadHolder,      &kOwnChocobo,       &kEnemiesNotice,    &kResponsivenessTwo, &kResponsivenessThree};
 
 /// The option is a row of the table (Of and Why answer by the row).
 consteval bool Listed(const Option& option)
