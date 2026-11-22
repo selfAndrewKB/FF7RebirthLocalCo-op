@@ -11,7 +11,7 @@
 # expect: Co-op menu: a Co-op row in the title menu below Options
 # expect-not: Co-op menu: an engine check failed
 # expect: command menu: an open battle menu (slows the world|leaves the battle at full speed)
-# expect: command menu tick: player 2's and 3's command controllers tick in battle
+# expect: command menu tick: player 2's and 3's command controllers tick (and take their attack, guard and dodge )?in battle
 # expect-not: command menu tick: UNAVAILABLE
 # expect: enemy leader: installed; in co-op, while player 1's character is down
 # expect-not: enemy leader: UNAVAILABLE
