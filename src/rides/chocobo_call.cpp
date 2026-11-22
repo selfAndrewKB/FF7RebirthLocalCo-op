@@ -6,7 +6,9 @@
 #include "platform/deferred_sites.h"
 #include "platform/guarded.h"
 #include "platform/image.h"
+#include "platform/command_registry.h"
 #include "platform/log.h"
+#include "platform/settings.h"
 #include "platform/verified_code.h"
 #include "platform/vtable_entry.h"
 #include "players/actor_fields.h"
@@ -22,6 +24,7 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -88,7 +91,11 @@ std::array<int, players::kMaxPlayers>           g_entrySaid{-2, -2, -2};  // a c
 std::array<bool, players::kMaxPlayers>          g_riddenSaid{};             // their member rode in this call
 std::array<const void*, players::kMaxPlayers>   g_calledMember{};           // the member their call is for
 
-// Game thread: the seat whose summon body runs (0: none), and the seat whose member's whistle notify runs (0: none).
+// The option own-chocobo (the console and the page set it, on the game thread; off: players 2 and 3 ride along with
+// player 1's party ride, as in single player).
+std::atomic<bool> g_ownOn{false};
+
+// Game thread: the player whose summon body runs (0: none), and the player whose member's whistle notify runs (0: none).
 int  g_summonSeat = 0;
 int  g_notifySeat = 0;
 bool g_rowByMod   = false;  // the summon row's action check was the mod's answer (the member has no whistle action)
@@ -111,8 +118,9 @@ void EndCall(int seat, const wchar_t* why) noexcept
     g_entrySaid[index]    = -2;
     g_riddenSaid[index]   = false;
     g_calledMember[index] = nullptr;
-    platform::Log(L"chocobo call: {}'s own call ends ({}): they ride again when they call their own chocobo", players::SeatName(seat),
-                  why);
+    platform::Log(L"chocobo call: {}'s own call ends ({}): {}", players::SeatName(seat), why,
+                  g_ownOn.load(std::memory_order_relaxed) ? L"they ride again when they call their own chocobo"
+                                                          : L"they ride along with player 1's party ride");
 }
 
 /// `seat`'s own call starts (or starts again): their member's entry asks for a chocobo of its own.
@@ -225,7 +233,10 @@ void Notify(void* self, void* mesh, void* animation, void* extra) noexcept
     const int  saved    = g_notifySeat;
     if (players::generation::OnGameThread() && players::generation::AnyActive())
     {
-        const int seat = players::generation::SeatOfMember(players::actor_fields::ComponentOwner(mesh));
+        // With own-chocobo off a player 2's or 3's whistle (a story one) is the game's party call, as player 1's.
+        const int seat = g_ownOn.load(std::memory_order_relaxed)
+                             ? players::generation::SeatOfMember(players::actor_fields::ComponentOwner(mesh))
+                             : -1;
         g_notifySeat   = players::SeatBuilt(seat) && players::generation::Active(seat) ? seat : 0;
     }
     original(self, mesh, animation, extra);
@@ -253,6 +264,10 @@ bool EntryPartyRide(void* manager, std::uintptr_t offset) noexcept
 {
     const bool game = reinterpret_cast<PartyRideFn>(g_sites.partyRide)(manager);
     if (!players::generation::OnGameThread() || offset % facts::kRideManagerEntrySize != 0)
+    {
+        return game;
+    }
+    if (!g_ownOn.load(std::memory_order_relaxed))
     {
         return game;
     }
@@ -402,8 +417,8 @@ bool PlaceSites(const platform::GameImage&) noexcept
         RestoreAll();
     }
     platform::Log(L"chocobo call: {}",
-                  ok ? L"players 2 and 3 whistle for their own chocobo (the game seats their member at their side; their Vehicle "
-                       L"press dismounts them alone); player 1's whistle and the party's ride are the game's"
+                  ok ? L"ready: with own-chocobo on, players 2 and 3 whistle for their own chocobo (the game seats their member at "
+                       L"their side; their Vehicle press dismounts them alone); player 1's whistle and the party's ride are the game's"
                      : L"UNAVAILABLE (a check failed): players 2 and 3 do not whistle; they ride with the party as before");
     return ok;
 }
@@ -449,6 +464,39 @@ bool Install(const platform::GameImage& image) noexcept
     }
     g_sites = s;
     g_image.emplace(image);
+    namespace settings = platform::settings;
+    g_ownOn.store(settings::Of(settings::kOwnChocobo).word == L"on", std::memory_order_relaxed);
+    platform::Log(L"chocobo call: own-chocobo {} ({})", g_ownOn.load(std::memory_order_relaxed) ? L"on" : L"off",
+                  settings::Why(settings::kOwnChocobo));
+    try
+    {
+        control::RegisterOption(
+            settings::kOwnChocobo,
+            [](const std::wstring& word) {
+                const bool on = word == L"on";
+                if (!on && word != L"off")
+                {
+                    return control::Outcome{false, L"on or off"};
+                }
+                g_ownOn.store(on, std::memory_order_relaxed);
+                if (!on)
+                {
+                    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
+                    {
+                        EndCall(seat, L"own-chocobo turned off");
+                    }
+                }
+                platform::Log(L"chocobo call: own-chocobo {} (set): {}", on ? L"on" : L"off",
+                              on ? L"players 2 and 3 call, mount and get off their own chocobo"
+                                 : L"players 2 and 3 ride along with player 1's party ride");
+                return control::Outcome{};
+            },
+            [] { return std::wstring(g_ownOn.load(std::memory_order_relaxed) ? L"on" : L"off"); });
+    }
+    catch (...)
+    {
+        platform::Log(L"chocobo call: the own-chocobo option could not be registered (out of memory?); the page cannot set it");
+    }
     // The party getoff's call crosses a 16-byte block in 1.005: every site is placed from the game thread, between its
     // ticks (platform/deferred_sites.h).
     const bool placed = g_placement.Install(image, &PlaceSites);
@@ -469,7 +517,7 @@ void Remove() noexcept
 bool RunSeatSummon(void (*body)(void* state, float deltaTime), void* state, float deltaTime) noexcept
 {
     const int seat = players::generation::OnGameThread() ? scopes::primary_controller::OpenSeat() : 0;
-    if (seat < 1 || !g_whistleCall.IsInstalled() || g_summonSeat != 0)
+    if (seat < 1 || !g_ownOn.load(std::memory_order_relaxed) || !g_whistleCall.IsInstalled() || g_summonSeat != 0)
     {
         return false;
     }

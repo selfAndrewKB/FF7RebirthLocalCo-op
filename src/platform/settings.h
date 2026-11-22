@@ -325,6 +325,13 @@ inline constexpr Option kLeadHolder{  // session/lead_gate
     L"Determines whether additional players get to control their selected characters during certain scripted segments.\r\n"
     L"AI-controlled: The game takes over and automatically drives the party members as required.\r\nPlayer-controlled: the "
     L"player directs the party member to marked locations."};
+inline constexpr Option kOwnChocobo{  // rides/chocobo_call
+    L"Experimental", L"own-chocobo", kOnOffWords, L"off",
+    L"whether players 2 and 3 handle their own chocobo: on (each calls their own with the summon row, mounts it and gets "
+    L"off by their own press; player 1's ride never mounts or dismounts them) or off (the default: they ride along with "
+    L"player 1's party ride, as in single player)",
+    true, L"Own Chocobos for Players 2 and 3", kOnOffLabels,
+    L"Lets Players 2 and 3 call, mount and dismount their own chocobo instead of riding along with Player 1."};
 // Players 2 and 3's camera responsiveness (camera/seat_responsiveness): the game's own Responsiveness levels, 1 to 5,
 // player 1's being the game's option.
 inline constexpr std::array<const wchar_t*, 5> kResponsivenessWords{L"1", L"2", L"3", L"4", L"5"};
@@ -348,7 +355,7 @@ inline constexpr std::array kOptions{&kMultiMonitor,     &kMonitors,      &kColu
                                      &kVerticalFov,     &kHudScale,         &kHudScaleTwo,      &kHudScaleThree,    &kMenuSlow,         &kBattleWarps,      &kEnemiesNotice,
                                      &kEnemyDamage,     &kEnemyHp,          &kBossHp,
                                      &kEnemyStagger,    &kExpGain,          &kApGain,
-                                     &kLeadHolder,      &kResponsivenessTwo, &kResponsivenessThree};
+                                     &kLeadHolder,      &kOwnChocobo,       &kResponsivenessTwo, &kResponsivenessThree};
 
 /// The option is a row of the table (Of and Why answer by the row).
 consteval bool Listed(const Option& option)
@@ -364,7 +371,7 @@ static_assert(Listed(kMultiMonitor) && Listed(kMonitors) && Listed(kColumnOrder)
                   Listed(kMenuSlow) &&
                   Listed(kBattleWarps) && Listed(kEnemiesNotice) &&
                   Listed(kEnemyDamage) && Listed(kEnemyHp) && Listed(kBossHp) && Listed(kEnemyStagger) && Listed(kExpGain) &&
-                  Listed(kApGain) && Listed(kLeadHolder) && Listed(kResponsivenessTwo) && Listed(kResponsivenessThree),
+                  Listed(kApGain) && Listed(kLeadHolder) && Listed(kOwnChocobo) && Listed(kResponsivenessTwo) && Listed(kResponsivenessThree),
               "every option is a row of kOptions");
 
 /// Where an option's word came from.

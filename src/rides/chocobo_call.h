@@ -1,8 +1,10 @@
 #pragma once
 
-// Each player's own chocobo: player 2 or 3 calls a chocobo with their own press, mounts it and gets off by their own
+// Each player's own chocobo, with the experimental option own-chocobo on (off by default: players 2 and 3 ride along
+// with player 1's party ride): player 2 or 3 calls a chocobo with their own press, mounts it and gets off by their own
 // press; player 1's ride never mounts or dismounts them, and the AI members ride with player 1 as the game has them
-// (research/RE-chocobo-summon-seats.md, RE-chocobo-gaps-seats.md).
+// (research/RE-chocobo-summon-seats.md, RE-chocobo-gaps-seats.md). Whatever the option, a chocobo a player 2 or 3 is
+// about to drive is not sent to follow player 1 as their member mounts.
 //
 // The game's whistle is party-level: the summon row's press plays the whistle on the character, its anim notify sends a
 // call that names no character, and the ride manager brings one chocobo to the field leader. The members ride only on
