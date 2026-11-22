@@ -1073,24 +1073,38 @@ void TickStop(Record& r, void* actor) noexcept
     r.availSaid = avail;
 }
 
-/// The names a member without the stop's animations falls back to: their own idle loop for the hold, the cancel and the
-/// success, so they keep their normal pose; none for the start (with no start the hold keeps the stop's own length, as
-/// the move's Begin sets it from the start and hold lengths only when both exist). Found once the name exists. Game thread.
+/// The names a member without the stop's animations falls back to, short clips every member has: the treasure crouch
+/// for the hold, the item pickup for the success, the shop stance for the cancel. Short, because the move leaves the
+/// hold, the cancel and the success only as the playing clip ends, so a clip's length is how long the sign lags behind.
+/// None for the start (with no start the hold keeps the stop's own length, as the move's Begin sets it from the start
+/// and hold lengths only when both exist). A name not found yet takes the hold's. Each found once it exists. Game
+/// thread.
 std::array<std::uint64_t, kStopAnims> StopFallbacks() noexcept
 {
-    static std::atomic<std::uint64_t> idle{0};  // the idle's name, found once it exists
-    std::uint64_t                     name = idle.load(std::memory_order_relaxed);
-    if (name == 0)
+    static constexpr std::array<const wchar_t*, kStopAnims> kNames{L"", L"N_Treasure01", L"N_ShopIdle01_0",
+                                                                    L"N_Get_Item00"};  // the start's never looked up
+    static std::array<std::atomic<std::uint64_t>, kStopAnims> found{};  // each name, found once it exists
+    std::array<std::uint64_t, kStopAnims>                     names{};
+    for (std::size_t i = 1; i < kStopAnims; ++i)
     {
-        name = world::data_rows::FindName(L"N_Idle01_1");
-        idle.store(name, std::memory_order_relaxed);
+        names[i] = found[i].load(std::memory_order_relaxed);
+        if (names[i] == 0)
+        {
+            names[i] = world::data_rows::FindName(kNames[i]);
+            found[i].store(names[i], std::memory_order_relaxed);
+        }
     }
-    return {0, name, name, name};
+    for (std::size_t i = 2; i < kStopAnims; ++i)
+    {
+        names[i] = names[i] != 0 ? names[i] : names[1];
+    }
+    return names;
 }
 
 /// The stop move's animation register: the game's own register with fallback names (the move's vtable's, the one the
 /// hook rope uses with its own table), so Cloud and Tifa find their own animations first and every other member falls
-/// back to their idle. Logged at Debug: the character and what each index found.
+/// back to the short clips above. Logged at Debug: the character and what each index found (the move's list holds weak
+/// references, 8 bytes each).
 std::uintptr_t StopRegisterAnims(void* move, void* context, const std::uint64_t* names, int count) noexcept
 {
     const auto original  = reinterpret_cast<RegisterFn>(g_stopRegisterAnims.Original());
@@ -1109,11 +1123,11 @@ std::uintptr_t StopRegisterAnims(void* move, void* context, const std::uint64_t*
             std::wstring found;
             for (std::size_t i = 0; i < kStopAnims; ++i)
             {
-                const void* anim = ReadPointer(anims, static_cast<std::uint32_t>(8 * i));
+                const void* anim = players::weak_object::ObjectIn(anims, static_cast<std::uint32_t>(8 * i));
                 found += std::format(L"{}{}", i == 0 ? L"" : L", ", anim != nullptr ? players::NameOf(anim) : std::wstring(L"none"));
             }
             platform::LogDebug(L"levers: the chocobo stop's move for {} plays: {} (start, hold, cancel, success; a member "
-                               L"without the stop's own falls back to their idle)",
+                               L"without the stop's own falls back to short clips of their own)",
                                players::NameOf(players::weak_object::ObjectIn(move, facts::kFieldActionMoveCharacter)), found);
         }
         catch (...)
@@ -1322,7 +1336,8 @@ void Install(const platform::GameImage& image) noexcept
                               platform::ReplaceSlot(image, kStopRegisterAnimsSlot,
                                                     reinterpret_cast<std::uintptr_t>(&StopRegisterAnims), g_stopRegisterAnims);
         platform::Log(L"levers: the chocobo stop's move {}",
-                      fallback ? L"falls back to the member's idle where they have no stop animation (only Cloud and Tifa have them)"
+                      fallback ? L"falls back to short clips of the member's own (treasure crouch, shop stance, item pickup) where "
+                                 L"they have no stop animation (only Cloud and Tifa have them)"
                                : L"keeps the game's animations (its register slot differs): other members than Cloud and Tifa show no pose");
     }
     else
