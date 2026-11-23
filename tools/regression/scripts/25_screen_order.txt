@@ -1,6 +1,7 @@
 # The screen order (plan/remake-alignment.md step 5): by player number whatever the joins' order. With player 2 in, 213
 # puts player 2 on the first screen (the two-player entry's two records swapped, the stock halves arranged), 123 puts the
-# stock entry back; the option reads back as its word.
+# stock entry back; the option reads back as its word. The script starts from 123 itself: a settings file's other order may
+# already have swapped the halves at the join, and 213 would then write nothing.
 # needs: control
 # expect: column layout: the screen order is 2 1 3, left to right \(by player number; the console\)
 # expect: column layout: the engine's two-player layout \(side by side\) now shows its halves in the screen order 213
@@ -8,6 +9,8 @@
 # expect: column layout: the engine's two-player layout \(side by side\) put back to equal halves
 # expect-not: column layout: the engine's two-player layout \(side by side\) holds neither
 note regression: screen order start
+column-order 123
+wait-until column-order == 123 60
 join
 wait-until p2.state == playing 1800
 wait 60
