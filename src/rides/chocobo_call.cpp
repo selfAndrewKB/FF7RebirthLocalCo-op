@@ -801,16 +801,30 @@ bool RunSeatSummon(void (*body)(void* state, float deltaTime), void* state, floa
     return true;
 }
 
-void EndForForcedGetOff(const wchar_t* what) noexcept
+void EndForForcedGetOff(const wchar_t* what, bool instant) noexcept
 {
-    if (OpenSeatHere() != 0 || !players::generation::OnGameThread() ||
-        std::none_of(g_called.begin(), g_called.end(), [](bool called) { return called; }))
+    if (OpenSeatHere() != 0 || !players::generation::OnGameThread())
+    {
+        return;
+    }
+    bool any = std::any_of(g_called.begin(), g_called.end(), [](bool called) { return called; });
+    for (int seat = 1; instant && seat <= players::kSeatsBuilt; ++seat)
+    {
+        any = any || chocobo_ride::Driving(seat);
+    }
+    if (!any)
     {
         return;
     }
     const std::wstring why = std::wstring(L"the game's forced getoff from ") + what;
     for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
     {
+        if (instant && chocobo_ride::Driving(seat))
+        {
+            // An instant getoff removes the chocobos before the ride's own end would run on the next tick: the
+            // game's end of their coordinator runs now, while their chocobo is still there.
+            chocobo_ride::Release(seat, why.c_str());
+        }
         EndCall(seat, why.c_str());
     }
 }

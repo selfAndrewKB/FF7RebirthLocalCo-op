@@ -62,7 +62,10 @@ bool OwnCall(int seat) noexcept;
 void Tick() noexcept;
 
 /// After one of the game's forced getoffs (`what` names its caller), outside every player's scope, whatever player 1
-/// rode: each player 2's or 3's own call ends, so the game dismounts their member. Logged per call ended. Game thread.
-void EndForForcedGetOff(const wchar_t* what) noexcept;
+/// rode: each player 2's or 3's own call ends, so the game dismounts their member. An `instant` getoff removes the
+/// chocobos at once, so each player 2 or 3 who drives a chocobo, on their own call or the party's ride, has their ride
+/// ended first by the game's end of their coordinator (rides/chocobo_ride Release), while the chocobo is still there.
+/// Logged per call and ride ended. Game thread.
+void EndForForcedGetOff(const wchar_t* what, bool instant) noexcept;
 
 }  // namespace lss::rides::chocobo_call
