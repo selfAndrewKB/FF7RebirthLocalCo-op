@@ -33,8 +33,11 @@
 //   1's coordinator answers "riding" until every member's entry is idle, and a fast travel's field step waits for that;
 // - a ride the game puts them on on purpose becomes their own call once it seats them: a story party mount (their entry
 //   takes the game's answer while the story waits for every member's chocobo; a ride of their own already under them ends
-//   first, or the story would wait for it), a ride restored with a loaded save, and a ride already under them as they join
-//   or take a member.
+//   first, or the story would wait for it); a party mount of the game's that seats everyone, told at the rise of the
+//   ride manager's party flag by its instant byte (a fast travel with the chocobos, a ride restored with a save, the
+//   chocobo time attack) or by the story's script ride of the leader (a call redirect notes its request, which otherwise
+//   reads as player 1's walk-in); and a ride already under them as they join or take a member. Player 1's own whistle,
+//   walk-in and re-ride leave them as they are;
 // Whatever the option: a rider without the rider's stop animations (all but Cloud and Tifa) pulls the reins at a chocobo
 // stop instead of showing no pose (the rider's action asks the rider's interface for the chocobo's animation by name;
 // the slot answers a riding clip of theirs, once per new name), and players 2 and 3's idle coordinators show no walk-in

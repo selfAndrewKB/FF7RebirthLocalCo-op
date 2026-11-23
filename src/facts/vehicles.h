@@ -372,14 +372,57 @@ inline constexpr FunctionFact  kRideSuspended{L"ChocoboRideMgr_IsSuspended_Battl
 inline constexpr std::uint32_t kRideManagerRideOff = 0xC90;  // u8: set, no member rides
 /// The ride manager's leader state (u8: 0 at a field start, 5 its chocobo arrived, 7 mounting, 8 riding); the story's
 /// party mount pending (u8: from the story's request until its cutscene seated everyone; the members' entries wait for it
-/// in state 3); the last call's instant mount (u8: 1 for a ride restored from a save, 0 for player 1's own mount).
+/// in state 3); the last accepted call's instant mount (u8: below, at the party ride flag).
 inline constexpr std::uint32_t kRideManagerLeaderState = 0x8;
-inline constexpr std::uint8_t  kRideLeaderFieldStart   = 0;
 inline constexpr std::uint8_t  kRideLeaderArrived      = 5;
 inline constexpr std::uint8_t  kRideLeaderMounting     = 7;
 inline constexpr std::uint8_t  kRideLeaderRiding       = 8;
 inline constexpr std::uint32_t kRideManagerStoryMount  = 0xEB7;
 inline constexpr std::uint32_t kRideManagerInstant     = 0xEC1;
+/// The party ride flag (u8): set once per party mount, as the leader is seated (or the story's mount seats everyone),
+/// cleared at the party's getoff. Every accepted ride request writes the instant byte above before it, so at the flag's
+/// rise that byte says who mounted the party: 1 for the game's mounts that seat everyone (a fast travel with the
+/// chocobos, a ride restored with a save, the chocobo time attack), 0 for player 1's own whistle, walk-in or re-ride
+/// (research/RE-chocobo-scripted-mounts-seats.md).
+inline constexpr std::uint32_t kRideManagerPartyRide   = 0xEB5;
+
+/// The vehicle request's dispatch by type (type 1 the chocobo's call) and the story's level action that rides the
+/// leader's chocobo: its call of the dispatch. That request reads as player 1's walk-in, so the call itself tells it.
+inline constexpr std::uint8_t kVehicleDispatchBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x57, 0xB8, 0x20,
+                                                         0x00, 0x00, 0x00, 0xE8, 0xF0, 0x80, 0x70, 0xFE,
+                                                         0x48, 0x2B, 0xE0, 0x8A, 0x01, 0x48, 0x8B, 0xD9};
+inline constexpr FunctionFact   kVehicleDispatch{L"Vehicle_BeginByType_Dispatch", 0x143A63A80, kVehicleDispatchBytes};
+inline constexpr std::uintptr_t kScriptRideDispatchCall = 0x14320D2D0;
+
+/// The game's forced getoffs: each caller of Vehicle_RequestGetOff_PrimaryActive that is not the driver's own button
+/// and can reach the chocobo or the scooter. In single player each one dismounts the whole party.
+struct ForcedGetOffSite
+{
+    std::uintptr_t address;
+    const wchar_t* what;
+};
+inline constexpr ForcedGetOffSite kForcedGetOffSites[] = {
+    {0x1410DA1BB, L"the field step"},
+    {0x140956BFF, L"a fast travel"},
+    {0x1415DC2EC, L"an interaction (A)"},
+    {0x1415DC50B, L"an interaction (D)"},
+    {0x1433443CC, L"an interaction (B)"},
+    {0x1433445C8, L"an interaction (C)"},
+    {0x14274A8AB, L"an event"},
+    {0x14320CFB6, L"an event node (1)"},
+    {0x14320D042, L"an event node (2)"},
+    {0x14320D106, L"an event node (3)"},
+    {0x14320D227, L"an event node (4)"},
+    {0x14320D2EB, L"an event node (5)"},
+    {0x143283B58, L"the Wheelie level command"},
+    {0x143283C0D, L"a level command"},
+    {0x1431803C0, L"a cutscene clip (A)"},
+    {0x14318065C, L"a cutscene clip (B)"},
+    {0x1432AD65B, L"a level action's vehicle ride (A)"},
+    {0x1432AD968, L"a level action's vehicle ride (B)"},
+    {0x1434575A5, L"a ladder"},
+    {0x1434A6C10, L"a gimmick"},
+};
 /// The rider's pose at a chocobo stop: the rider's stop action looks the chocobo's stop animation name up on the rider,
 /// last through the character interface's find-animation slot (below); the return address of that call.
 inline constexpr std::uintptr_t kRiderStopAnimReturn = 0x1425C7C7E;

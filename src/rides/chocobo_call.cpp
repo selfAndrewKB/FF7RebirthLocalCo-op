@@ -55,12 +55,13 @@ using SoundAssetFn = void* (*)(const std::uint64_t* name);
 using SoundPlayFn  = void (*)(void* asset, const std::uint64_t* name);
 using BrainFn      = void (*)(void* ai, int kind, void* params, int extra);
 using IconFn       = bool (*)(void* coordinator, void* character, bool trace, std::uint8_t* blocked);
+using DispatchFn   = void (*)(void* request);
 
 constexpr std::size_t   kForKeys     = std::size(facts::kSummonRideForKeyCalls);
 constexpr std::size_t   kBuggies     = std::size(facts::kSummonCanCallBuggyCalls);
 constexpr std::size_t   kEntryCalls  = std::size(facts::kEntryPartyRideCalls);
 constexpr std::uint64_t kGiveUpMs    = 15000;  // a call whose member is not riding by then is given up
-constexpr std::uint64_t kRestoreMs   = 10000;  // after a field start, how long a restored ride may still be taking them
+constexpr std::uint64_t kScriptRideMs = 5000;  // how long the story's ride request may take to mount the party
 // A member entry's states.
 constexpr int kEntryIdle = 0, kEntryNamed = 1, kEntryPlaced = 3, kEntryRiding = 4, kEntryDismounting = 5;
 
@@ -79,7 +80,7 @@ struct Sites
     std::uintptr_t whistle = 0, whistleCall = 0, forKey = 0, buggy = 0, fromWhistle = 0, fromWhistleCall = 0;
     std::uintptr_t partyRide = 0, suspended = 0, getOff = 0, getOffCall = 0, stayLabel = 0, stayLabelCall = 0;
     std::uintptr_t findAnim = 0, rowReturn = 0, accept = 0, acceptCall = 0, soundAsset = 0, soundPlay = 0, brain = 0, followCall = 0;
-    std::uintptr_t riderReturn = 0, icon = 0, iconCall = 0;
+    std::uintptr_t riderReturn = 0, icon = 0, iconCall = 0, dispatch = 0, scriptRideCall = 0;
     std::array<std::uintptr_t, kForKeys>    forKeyCalls{};
     std::array<std::uintptr_t, kBuggies>    buggyCalls{};
     std::array<std::uintptr_t, kEntryCalls> entryCalls{};
@@ -89,7 +90,7 @@ std::optional<platform::GameImage> g_image;  // for the notify slot, placed with
 platform::DeferredSites g_placement;
 
 platform::CallRedirect                         g_whistleCall, g_fromWhistleCall, g_getOffCall, g_stayLabelCall;
-platform::CallRedirect                         g_acceptCall, g_followCall, g_iconCall;
+platform::CallRedirect                         g_acceptCall, g_followCall, g_iconCall, g_scriptRideCall;
 platform::VTableEntry                          g_findAnimSlot, g_caitSithFindAnimSlot;
 std::array<platform::CallRedirect, kForKeys>    g_forKeyCalls;
 std::array<platform::CallRedirect, kBuggies>    g_buggyCalls;
@@ -107,13 +108,20 @@ std::array<const void*, players::kMaxPlayers>   g_calledMember{};           // t
 
 // By seat, a ride the game put them on that becomes their own call (game thread): the member the join window was opened
 // for (null while they are out of the game), that window (a ride already under them as they join or take a member),
-// the end of a field start's window (a ride restored with a save, still seating them), and a story party mount pending.
+// a story party mount pending, the party ride flag at their last answer, and a party mount of the game's seating them.
 std::array<const void*, players::kMaxPlayers>   g_windowMember{};
 std::array<bool, players::kMaxPlayers>          g_window{};
-std::array<std::uint64_t, players::kMaxPlayers> g_restoreUntil{};
 std::array<bool, players::kMaxPlayers>          g_story{};
-std::array<int, players::kMaxPlayers>           g_leaderSeen{-1, -1, -1};  // the leader state at their last answer
+std::array<std::uint8_t, players::kMaxPlayers>  g_partySeen{};
+std::array<bool, players::kMaxPlayers>          g_gameSeats{};
 std::array<bool, players::kMaxPlayers>          g_iconSaid{};  // their idle coordinator's icon question answered, said once
+
+// The story's script asked the leader's chocobo ride at this tick (game thread; 0 none): the party mount it starts reads
+// as player 1's walk-in, so this note is what tells it. At the party flag's rise (seen once per engine tick) the note
+// is taken for that mount and kept until the flag falls.
+std::uint64_t g_scriptRideAt = 0;
+bool          g_mountByScript = false;
+std::uint8_t  g_partyTick     = 0;  // the party flag at the last engine tick
 
 // The rider's stop pose names (index as kRiderStopNames): found on the game thread once each exists, read by the rider's
 // action on any thread.
@@ -154,9 +162,9 @@ int TypeOf(int seat) noexcept
 /// `seat`'s windows for a ride the game put them on close: their own press, or the end of their call, decides from here.
 void CloseWindows(int seat) noexcept
 {
-    const auto index      = static_cast<std::size_t>(seat);
-    g_window[index]       = false;
-    g_restoreUntil[index] = 0;
+    const auto index   = static_cast<std::size_t>(seat);
+    g_window[index]    = false;
+    g_gameSeats[index] = false;
 }
 
 void EndCall(int seat, const wchar_t* why) noexcept
@@ -398,13 +406,58 @@ bool LeaderRides(std::uint8_t leader) noexcept
     return leader == facts::kRideLeaderArrived || leader == facts::kRideLeaderMounting || leader == facts::kRideLeaderRiding;
 }
 
+/// The story's script ride was asked within the time its request may take to mount the party.
+bool ScriptRideFresh(std::uint64_t now) noexcept
+{
+    return g_scriptRideAt != 0 && now - g_scriptRideAt < kScriptRideMs;
+}
+
+/// The story's level action that rides the leader's chocobo: its request is noted, then dispatched as the game's. The
+/// party mount it starts reads as player 1's walk-in, so the note is what tells it (GameSeatsParty).
+void ScriptRide(void* request) noexcept
+{
+    if (players::generation::OnGameThread())
+    {
+        const std::uint64_t now = GetTickCount64();
+        if (!ScriptRideFresh(now))
+        {
+            platform::LogDebug(L"chocobo call: the story's script asks the leader's chocobo ride (the party mount it starts "
+                               L"seats every player)");
+        }
+        g_scriptRideAt = now;
+    }
+    reinterpret_cast<DispatchFn>(g_scriptRideCall.Original())(request);
+}
+
+/// A party mount began (the party ride flag rose) or was found under way at `seat`'s first answer: whether it is one of
+/// the game's that seats everyone (the instant byte: a fast travel with the chocobos, a ride restored with a save, the
+/// chocobo time attack; or the story's script ride of the leader, noted at its call), not player 1's own mount. Logged.
+bool GameSeatsParty(const void* manager, int seat, std::uint8_t leader, std::uint64_t now) noexcept
+{
+    const bool instant = ReadField<std::uint8_t>(manager, facts::kRideManagerInstant) != 0;
+    const bool script  = g_mountByScript || ScriptRideFresh(now);
+    const bool seats   = instant || script;
+    platform::LogDebug(L"chocobo call: the party mounts (the leader's state {}, instant {}, the story's script ride {}): {}",
+                       leader, instant ? 1 : 0, script ? 1 : 0,
+                       seats ? L"the game's mount, which seats everyone" : L"player 1's own mount");
+    if (seats)
+    {
+        platform::Log(L"chocobo call: the game mounts the party ({}): {} is seated with everyone, and the ride is their own "
+                      L"once seated",
+                      script ? L"the story's script ride" : L"a fast travel with the chocobos, a restored save or the time attack",
+                      players::SeatName(seat));
+    }
+    return seats;
+}
+
 /// A playing player 2's or 3's member's entry asks "the party rides" (`game`: the game's answer). Their own call stands
 /// for it, never player 1's ride, except where the game puts them on a ride on purpose, which then becomes their own:
 /// - a story party mount: every member's chocobo spawns and waits for the story's cutscene, which seats them all. They
 ///   take the game's answer meanwhile; a ride already under them would keep the story waiting, so it ends first and the
 ///   game spawns them a chocobo like the others'. The cutscene's seat becomes their own call.
-/// - a ride under them as they join or take a member (they joined on it), or a ride restored with a loaded save, which
-///   seats the members after the field starts: the game's answer while it seats them, their own call once seated.
+/// - a party mount of the game's that seats everyone (GameSeatsParty), told at the party ride flag's rise: the game's
+///   answer while it seats them, their own call once seated. Player 1's own mounts leave them as they are.
+/// - a ride under them as they join or take a member (they joined on it).
 bool SeatAnswer(void* manager, int seat, bool game) noexcept
 {
     const auto          index  = static_cast<std::size_t>(seat);
@@ -416,18 +469,14 @@ bool SeatAnswer(void* manager, int seat, bool game) noexcept
     {
         g_windowMember[index] = member;
         g_window[index]       = !g_called[index];
+        g_partySeen[index]    = 0;  // a party mount under way counts as begun at their first answer
         platform::LogDebug(L"chocobo call: {} joined or took a member: a ride already under them is theirs (their entry "
                            L"state {}, the leader's {})",
                            players::SeatName(seat), entry, leader);
     }
-    // A field start (the leader entering its first state): a ride restored with the save may seat them next.
-    if (leader == facts::kRideLeaderFieldStart && g_leaderSeen[index] != facts::kRideLeaderFieldStart && !g_called[index])
-    {
-        g_restoreUntil[index] = now + kRestoreMs;
-        platform::LogDebug(L"chocobo call: the field starts: a ride restored with the save may seat {} in the next {} s",
-                           players::SeatName(seat), kRestoreMs / 1000);
-    }
-    g_leaderSeen[index] = leader;
+    const auto party    = ReadField<std::uint8_t>(manager, facts::kRideManagerPartyRide);
+    const bool began   = party != 0 && g_partySeen[index] == 0;
+    g_partySeen[index] = party;
     if (ReadField<std::uint8_t>(manager, facts::kRideManagerStoryMount) != 0)
     {
         if (!g_story[index])
@@ -458,22 +507,32 @@ bool SeatAnswer(void* manager, int seat, bool game) noexcept
             g_story[index] = false;
         }
     }
-    if (!g_called[index] && (g_window[index] || now < g_restoreUntil[index]))
+    if (began && !g_called[index] && GameSeatsParty(manager, seat, leader, now))
     {
-        const bool restored = ReadField<std::uint8_t>(manager, facts::kRideManagerInstant) != 0;
+        g_gameSeats[index] = true;
+    }
+    if (g_gameSeats[index] && (party == 0 || !LeaderRides(leader)))
+    {
+        g_gameSeats[index] = false;
+        platform::LogDebug(L"chocobo call: the game's party mount ended before it seated {} (the party flag {}, the leader's "
+                           L"state {}): their own call decides",
+                           players::SeatName(seat), party, leader);
+    }
+    if (g_gameSeats[index])
+    {
+        if (entry != kEntryRiding)
+        {
+            return game;
+        }
+        AdoptCall(seat, L"the game's party mount seated them");
+    }
+    if (!g_called[index] && g_window[index])
+    {
         if (entry == kEntryRiding)
         {
-            AdoptCall(seat, restored ? L"a ride restored with the save" : L"they joined, or took this member, on a ride");
+            AdoptCall(seat, L"they joined, or took this member, on a ride");
         }
-        else if (restored && entry >= kEntryNamed && entry <= kEntryPlaced)
-        {
-            return game;
-        }
-        else if (restored && entry == kEntryIdle && now < g_restoreUntil[index] && LeaderRides(leader))
-        {
-            return game;
-        }
-        else if (g_window[index])
+        else
         {
             g_window[index] = false;
             platform::LogDebug(L"chocobo call: no ride under {} (their entry state {}): their own call decides",
@@ -621,7 +680,8 @@ void RestoreAll() noexcept
         left = (slot->Original() != 0 && !slot->Restore()) || left;
     }
     for (platform::CallRedirect* call :
-         {&g_whistleCall, &g_fromWhistleCall, &g_getOffCall, &g_stayLabelCall, &g_acceptCall, &g_followCall, &g_iconCall})
+         {&g_whistleCall, &g_fromWhistleCall, &g_getOffCall, &g_stayLabelCall, &g_acceptCall, &g_followCall, &g_iconCall,
+          &g_scriptRideCall})
     {
         left = (call->IsInstalled() && !call->Restore()) || left;
     }
@@ -679,9 +739,15 @@ bool PlaceSites(const platform::GameImage&) noexcept
                                               L"player 1's chocobo"
                                             : L"the walk-in mount icon question NOT placed (its call is not as the research "
                                               L"read it): the icon may show over player 1's chocobo while player 2 or 3 walks");
+    // Apart from the rest too: without it the story's script ride reads as player 1's walk-in.
+    const bool script = s.dispatch != 0 && s.scriptRideCall != 0 &&
+                        g_placement.Place(g_scriptRideCall, s.scriptRideCall, s.dispatch, reinterpret_cast<std::uintptr_t>(&ScriptRide));
+    platform::Log(L"chocobo call: {}", script ? L"the story's script ride of the leader seats players 2 and 3 with everyone"
+                                              : L"the story's script ride NOT watched (its call is not as the research read it): "
+                                                L"it mounts players 2 and 3 only on their own call");
     platform::Log(L"chocobo call: ready: with own-chocobo on, players 2 and 3 whistle for their own chocobo (the game seats "
                   L"their member at their side; their Vehicle press dismounts them alone), keep a ride the game seats them on "
-                  L"(a story mount, a loaded save, joining on a ride); player 1's whistle and the party's ride are the game's; "
+                  L"(a story mount, a fast travel with the chocobos, a loaded save, joining on a ride); player 1's whistle and the party's ride are the game's; "
                   L"a rider without the rider's chocobo stop animations pulls the reins at a stop");
     return true;
 }
@@ -713,6 +779,8 @@ bool Install(const platform::GameImage& image) noexcept
     s.riderReturn     = image.Rebase(facts::kRiderStopAnimReturn, 1).value_or(0);
     s.icon            = find(facts::kAutoRideIcon);
     s.iconCall        = site(facts::kAutoRideIconCall);
+    s.dispatch        = find(facts::kVehicleDispatch);
+    s.scriptRideCall  = site(facts::kScriptRideDispatchCall);
     s.whistleCall     = site(facts::kWhistleOrDismissCall);
     s.fromWhistleCall = site(facts::kCallFromWhistleCall);
     s.getOffCall      = site(facts::kPartyGetOffCall);
@@ -754,7 +822,6 @@ bool Install(const platform::GameImage& image) noexcept
                         const auto index      = static_cast<std::size_t>(seat);
                         g_windowMember[index] = nullptr;
                         g_story[index]        = false;
-                        g_leaderSeen[index]   = -1;
                         CloseWindows(seat);
                     }
                 }
@@ -843,6 +910,21 @@ void Tick() noexcept
     g_summonSeat = 0;  // set only inside a summon body; a fault there may have left it
     g_notifySeat = 0;
     const std::uint64_t  now      = GetTickCount64();
+    // The party flag, once per engine tick: while it is down every player's next answer sees its rise (an entry that is
+    // not asking then would miss a fall and rise between two of its answers); at its rise the script ride's note is
+    // taken for that mount.
+    const auto party = ReadField<std::uint8_t>(chocobo_ride::RideManagerNow(), facts::kRideManagerPartyRide);
+    if (party == 0)
+    {
+        g_partySeen.fill(0);
+        g_mountByScript = false;
+    }
+    else if (g_partyTick == 0)
+    {
+        g_mountByScript = g_mountByScript || ScriptRideFresh(now);
+        g_scriptRideAt  = 0;
+    }
+    g_partyTick = party;
     static std::uint64_t namesTry = 0;  // the rider's stop pose names: tried once a second until each exists
     if (now - namesTry >= 1000)
     {

@@ -62,7 +62,7 @@ using facts::kScooterCoordinatorVTable;
 using facts::kRootChocoboRideManager;
 constexpr std::uint32_t kManagerState    = facts::kRideManagerLeaderState;  // the next byte read the same value live
 using facts::kRideManagerGetOff;
-constexpr std::uint32_t kManagerParty    = 0xEB5;
+using facts::kRideManagerPartyRide;
 constexpr std::uint32_t kManagerBattle   = 0xEB6;
 using facts::kRideManagerEntries;
 using facts::kRideManagerEntrySize;
@@ -310,7 +310,7 @@ Sample Read(void* playerOne, void* seatController, void* member) noexcept
     {
         s.manager = ReadField<std::uint8_t>(manager, kManagerState);
         s.getOff  = ReadField<std::uint8_t>(manager, kRideManagerGetOff);
-        s.party   = ReadField<std::uint8_t>(manager, kManagerParty);
+        s.party   = ReadField<std::uint8_t>(manager, kRideManagerPartyRide);
         s.battle  = ReadField<std::uint8_t>(manager, kManagerBattle);
         const auto type = member != nullptr && session::party_member::Installed() ? session::party_member::PlayerTypeOf(member) : std::nullopt;
         if (type && *type < kRideManagerPlayerTypes)

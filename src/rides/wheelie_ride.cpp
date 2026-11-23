@@ -68,10 +68,7 @@ constexpr std::uint8_t kLookupBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x8
 constexpr platform::FunctionFact kLookup{L"EndPC_LookupMap5C0", 0x1407648A0, kLookupBytes};
 
 using facts::kGetOrCreateVehicleCoordinator;
-
-constexpr std::uint8_t kDispatchBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x57, 0xB8, 0x20, 0x00, 0x00, 0x00, 0xE8,
-                                           0xF0, 0x80, 0x70, 0xFE, 0x48, 0x2B, 0xE0, 0x8A, 0x01, 0x48, 0x8B, 0xD9};
-constexpr platform::FunctionFact kDispatch{L"Vehicle_BeginByType_Dispatch", 0x143A63A80, kDispatchBytes};
+using facts::kVehicleDispatch;
 
 constexpr std::uint8_t kBeginBytes[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x48, 0x89, 0x6C, 0x24, 0x18, 0x56, 0x57,
                                         0x41, 0x54, 0x41, 0x56, 0x41, 0x57, 0xB8, 0x30, 0x00, 0x00, 0x00, 0xE8};
@@ -205,32 +202,13 @@ constexpr auto     kSummaryEvery = std::chrono::seconds(10);
 constexpr int      kIdleTicks    = 4;          // the coordinator's own ticks run to bring it to idle on a forced end
 constexpr float    kIdleTickTime = 1.0f / 30.0f;
 
-// The game's forced getoffs: each caller of Vehicle_RequestGetOff_PrimaryActive that is not the driver's own
-// button and can reach the scooter. The call is followed by the same call for each riding seat's coordinator, and
+// The game's forced getoffs (the callers in facts/vehicles.h). Each call is followed by the same call for each riding
+// seat's coordinator, and
 // by the end of every player 2's and 3's own chocobo call at every site, whatever player 1 rode: a fast travel's field
 // step waits until every member's chocobo entry is idle, on foot too, and the others end a ride as the game ends the
 // whole party's.
-struct Site
-{
-    std::uintptr_t  address;
-    const wchar_t*  what;
-};
-constexpr std::array<Site, 14> kForcedSites = {{
-    {0x1410DA1BB, L"the field step"},
-    {0x140956BFF, L"a fast travel"},
-    {0x1415DC2EC, L"an interaction (A)"},
-    {0x1415DC50B, L"an interaction (D)"},
-    {0x1433443CC, L"an interaction (B)"},
-    {0x1433445C8, L"an interaction (C)"},
-    {0x14274A8AB, L"an event"},
-    {0x14320CFB6, L"an event node (1)"},
-    {0x14320D042, L"an event node (2)"},
-    {0x14320D106, L"an event node (3)"},
-    {0x14320D227, L"an event node (4)"},
-    {0x14320D2EB, L"an event node (5)"},
-    {0x143283B58, L"the Wheelie level command"},
-    {0x143283C0D, L"a level command"},
-}};
+using facts::kForcedGetOffSites;
+constexpr std::size_t kForcedCount = std::size(kForcedGetOffSites);
 constexpr std::uintptr_t kOwnGetOffSite = 0x143170A3F;  // the driver's getoff button, scooter slot 16
 
 struct Functions
@@ -264,8 +242,8 @@ void*                 g_detachFor  = nullptr;  // a seat's member, while her det
 int                   g_detachSeat = -1;       // ... that seat (one notify at a time: a nested one passes through)
 
 // Installed from the game thread on the first tick (some of the calls cross a 16-byte block).
-std::array<platform::CallRedirect, kForcedSites.size()> g_forcedCalls;
-std::array<std::uintptr_t, kForcedSites.size()>        g_forcedSites{};
+std::array<platform::CallRedirect, kForcedCount> g_forcedCalls;
+std::array<std::uintptr_t, kForcedCount>        g_forcedSites{};
 platform::CallRedirect                                 g_ownCall;
 std::uintptr_t                                         g_ownSite   = 0;
 platform::CallRedirect                                 g_detachLeaderCall;  // the detach notify's field-leader test
@@ -1008,11 +986,11 @@ std::uintptr_t SwapBack(void* coordinator, void* a2, void* a3, void* a4)
 
 const wchar_t* SiteName(std::uintptr_t returnAddress) noexcept
 {
-    for (std::size_t i = 0; i < kForcedSites.size(); ++i)
+    for (std::size_t i = 0; i < kForcedCount; ++i)
     {
         if (g_forcedSites[i] != 0 && returnAddress == g_forcedSites[i] + 5)
         {
-            return kForcedSites[i].what;
+            return kForcedGetOffSites[i].what;
         }
     }
     return L"an unlisted caller";
@@ -1210,7 +1188,7 @@ bool Install(const platform::GameImage& image) noexcept
     g_fn.inputBasis    = reinterpret_cast<InputBasisFn>(find(kInputBasis));
     g_fn.lookup        = reinterpret_cast<LookupFn>(find(kLookup));
     g_fn.getOrCreate   = reinterpret_cast<LookupFn>(find(kGetOrCreateVehicleCoordinator));
-    g_fn.dispatch      = reinterpret_cast<DispatchFn>(find(kDispatch));
+    g_fn.dispatch      = reinterpret_cast<DispatchFn>(find(kVehicleDispatch));
     g_fn.begin         = reinterpret_cast<BeginFn>(find(kBegin));
     g_fn.flush         = reinterpret_cast<FlushFn>(find(kFlush));
     g_fn.requestGetOff = reinterpret_cast<RequestGetOffFn>(find(kRequestGetOff));
@@ -1224,9 +1202,9 @@ bool Install(const platform::GameImage& image) noexcept
     g_coordVt          = rebase(kScooterCoordinatorVTable);
     g_scooterVt        = rebase(kScooterCharacterVTable);
     g_moveVt           = rebase(kScooterMoveVt);
-    for (std::size_t i = 0; i < kForcedSites.size(); ++i)
+    for (std::size_t i = 0; i < kForcedCount; ++i)
     {
-        g_forcedSites[i] = rebase(kForcedSites[i].address);
+        g_forcedSites[i] = rebase(kForcedGetOffSites[i].address);
     }
     g_ownSite          = rebase(kOwnGetOffSite);
     g_detachLeaderSite = rebase(kDetachLeaderSite);
@@ -1508,7 +1486,7 @@ void InstallSites() noexcept
 {
     g_sitesTried = true;
     int forced   = 0;
-    for (std::size_t i = 0; i < kForcedSites.size(); ++i)
+    for (std::size_t i = 0; i < kForcedCount; ++i)
     {
         forced += g_forcedSites[i] != 0 &&
                           g_forcedCalls[i].InstallFromOwnThread(g_forcedSites[i], reinterpret_cast<std::uintptr_t>(g_fn.getOffPrimary),
@@ -1520,7 +1498,7 @@ void InstallSites() noexcept
                                                                       reinterpret_cast<std::uintptr_t>(&OwnGetOff));
     platform::Log(L"wheelie ride: the game's forced getoffs followed for players 2 and 3 at {} of {} callers; their getoff "
                   L"button {}",
-                  forced, kForcedSites.size(),
+                  forced, kForcedCount,
                   own ? L"made instant when player 1 is more than 50 m away (the rental-return warp)"
                       : L"UNWATCHED (an animated getoff may meet the rental-return warp)");
     // The detach notify's field-leader test (in one block).
