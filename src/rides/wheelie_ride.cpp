@@ -1256,7 +1256,9 @@ bool Install(const platform::GameImage& image) noexcept
     platform::Log(L"wheelie ride: {}", g_installed ? L"installed (player 2 or 3 boards a Wheelie by walking into a marked "
                                                      L"scooter, with their own coordinator; their own mark follows at the "
                                                      L"first tick)"
-                                                   : L"UNAVAILABLE (a check failed; players 2 and 3 cannot board, as before)");
+                                                   : L"UNAVAILABLE (a check failed; players 2 and 3 cannot board, and the "
+                                                     L"game's forced getoffs reach player 1's ride only: a fast travel "
+                                                     L"waits forever while a player 2 or 3 rides their own chocobo)");
     return g_installed;
 }
 
@@ -1576,15 +1578,19 @@ void LogSummary(SeatRide& s) noexcept
 
 }  // namespace
 
+void PlaceSites() noexcept
+{
+    if (g_installed && !g_sitesTried && players::generation::OnGameThread())
+    {
+        InstallSites();
+    }
+}
+
 bool Tick(void* controller, void* member, const input::move_state::EngineTicks& engine) noexcept
 {
     if (!g_installed || !players::generation::OnGameThread())
     {
         return false;
-    }
-    if (!g_sitesTried)
-    {
-        InstallSites();
     }
     // The seat from its controller (the member's tick hands the seat's own).
     const int seat = players::generation::SeatOfController(controller);

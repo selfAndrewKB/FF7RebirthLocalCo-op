@@ -73,6 +73,10 @@ bool Install(const platform::GameImage& image) noexcept;
 /// Puts the swap-back slot and the getoff call redirects back.
 void Remove() noexcept;
 
+/// Each engine tick, game thread, outside the game's ticks: the getoff call redirects placed once (logged), so the
+/// game's forced getoffs are followed from the start, whatever the players ride.
+void PlaceSites() noexcept;
+
 /// From scope_leaks' skip of the field-summon step for a seat's member (`state`, its on-foot move state), inside the
 /// member tick's scopes: the game's ride question for that seat (found from the state's character). Records a yes for
 /// AfterMemberTick.

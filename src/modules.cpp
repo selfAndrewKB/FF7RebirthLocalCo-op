@@ -577,6 +577,7 @@ void TickAfterSession(const Frame& frame) noexcept
     input::walk_limits::Tick();  // after the session's tick: a take's copy is overwritten this frame
     world::nav_strand::Tick(frame.splitShown);  // a stranded player is warped back to the party
     battle::arena_warp::Tick();  // an ask made in a fight: the character brought into the fight's area
+    rides::wheelie_ride::PlaceSites();  // the forced getoffs' redirects, which also end the players' own chocobo calls
     rides::chocobo_call::Tick();  // the players' own calls followed, one given up when no chocobo came
     hud::lead_mark::Tick();  // each kept walk's marker added, moved or removed
     hud::low_health::Tick(plays, frame.splitShown);  // each seat's danger decided outside a fight
