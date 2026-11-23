@@ -35,7 +35,8 @@
 // the coordinator's vt+0x2F0 is run inside a seat's scopes for that seat's coordinator (a replaced vtable slot). The
 // game's forced getoffs (fast travel, events, level commands, interactions, the field step) reach the primary
 // controller's ride only: each call is followed by the same call for a seat's coordinator inside the seat's scope
-// (call redirects at the callers). A seat's getoff is made instant only when player 1's leader is more than 50 m from
+// (call redirects at the callers), and by the end of every player 2's and 3's own chocobo call
+// (rides/chocobo_call), so the game dismounts their member too. A seat's getoff is made instant only when player 1's leader is more than 50 m from
 // the scooter: the game's rental-return rule would otherwise warp it home during the dismount.
 //
 // The ride's distance counter (the Wheelie_Top widget, the save's one mileage total every rider's scooter adds to) is

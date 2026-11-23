@@ -27,6 +27,10 @@
 //   sent to follow player 1 (it waits by them);
 // - the getoff: their Vehicle press, the game's party getoff, ends their own call instead (it would dismount
 //   everyone), and the entry's answer goes back to no, which dismounts their member alone;
+// - the game's forced getoffs (a fast travel, the field step, an event, an interaction, a level command; seen by
+//   rides/wheelie_ride's redirects, which reach player 1's ride) end every player 2's and 3's own call too, so the ride
+//   manager dismounts their member as it dismounts the whole party in single player: while the party ride is on, player
+//   1's coordinator answers "riding" until every member's entry is idle, and a fast travel's field step waits for that;
 // - a ride the game puts them on on purpose becomes their own call once it seats them: a story party mount (their entry
 //   takes the game's answer while the story waits for every member's chocobo; a ride of their own already under them ends
 //   first, or the story would wait for it), a ride restored with a loaded save, and a ride already under them as they join
@@ -56,5 +60,9 @@ bool OwnCall(int seat) noexcept;
 
 /// Each engine tick, game thread: the calling players' entries followed (logged), a call given up when no chocobo came.
 void Tick() noexcept;
+
+/// After one of the game's forced getoffs (`what` names its caller), outside every player's scope, whatever player 1
+/// rode: each player 2's or 3's own call ends, so the game dismounts their member. Logged per call ended. Game thread.
+void EndForForcedGetOff(const wchar_t* what) noexcept;
 
 }  // namespace lss::rides::chocobo_call

@@ -31,6 +31,7 @@
 #include <iterator>
 #include <optional>
 #include <span>
+#include <string>
 #include <utility>
 
 #include <Windows.h>
@@ -798,6 +799,20 @@ bool RunSeatSummon(void (*body)(void* state, float deltaTime), void* state, floa
     body(state, deltaTime);
     g_summonSeat = 0;
     return true;
+}
+
+void EndForForcedGetOff(const wchar_t* what) noexcept
+{
+    if (OpenSeatHere() != 0 || !players::generation::OnGameThread() ||
+        std::none_of(g_called.begin(), g_called.end(), [](bool called) { return called; }))
+    {
+        return;
+    }
+    const std::wstring why = std::wstring(L"the game's forced getoff from ") + what;
+    for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
+    {
+        EndCall(seat, why.c_str());
+    }
 }
 
 bool OwnCall(int seat) noexcept

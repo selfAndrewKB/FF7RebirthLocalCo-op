@@ -23,6 +23,7 @@
 #include "players/seats.h"
 #include "players/unreal_access.h"
 #include "players/weak_object.h"
+#include "rides/chocobo_call.h"
 #include "rides/own_ride.h"
 #include "rides/ride_rules.h"
 #include "scopes/leader_scope.h"
@@ -205,7 +206,10 @@ constexpr int      kIdleTicks    = 4;          // the coordinator's own ticks ru
 constexpr float    kIdleTickTime = 1.0f / 30.0f;
 
 // The game's forced getoffs: each caller of Vehicle_RequestGetOff_PrimaryActive that is not the driver's own
-// button and can reach the scooter. The call is followed by the same call for each riding seat's coordinator.
+// button and can reach the scooter. The call is followed by the same call for each riding seat's coordinator, and
+// by the end of every player 2's and 3's own chocobo call at every site, whatever player 1 rode: a fast travel's field
+// step waits until every member's chocobo entry is idle, on foot too, and the others end a ride as the game ends the
+// whole party's.
 struct Site
 {
     std::uintptr_t  address;
@@ -1050,9 +1054,10 @@ void FollowForcedGetOff(int seat, const GetOffParams* params, std::uintptr_t fro
 }
 
 /// A forced getoff's call of Vehicle_RequestGetOff_PrimaryActive: the game's call as it is (it reaches the
-/// primary controller's ride), then the same getoff for each riding seat's coordinator in turn, in seat order, each
-/// inside its own scope (FollowForcedGetOff). Called inside a seat's scope, nothing follows: the game's call reached
-/// that seat's coordinator, and player 1's ride was not the one ended.
+/// primary controller's ride), then every player 2's and 3's own chocobo call ended (chocobo_call), then the same
+/// getoff for each riding seat's coordinator in turn, in seat order, each inside its own scope (FollowForcedGetOff).
+/// Called inside a seat's scope, nothing follows: the game's call reached that seat's ride, and player 1's ride was
+/// not the one ended.
 std::uint8_t ForcedGetOff(const GetOffParams* params)
 {
     const auto         from   = reinterpret_cast<std::uintptr_t>(_ReturnAddress());
@@ -1062,11 +1067,12 @@ std::uint8_t ForcedGetOff(const GetOffParams* params)
         return result;
     }
     // Called inside a seat's scope (a seat's player is the primary one): the game's call reached that seat's ride and
-    // player 1's was not ended, so no other seat follows (the old rule's meaning).
+    // player 1's was not ended, so no other seat follows.
     if (scopes::primary_controller::OpenSeat() != 0)
     {
         return result;
     }
+    chocobo_call::EndForForcedGetOff(SiteName(from));
     for (int seat = 1; seat <= players::kSeatsBuilt; ++seat)
     {
         if (g_seats[seat].active)
